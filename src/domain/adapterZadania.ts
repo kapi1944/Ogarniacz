@@ -1,3 +1,4 @@
+import { godzinaZadaniaNaOsi } from './logikaTerminuZadania'
 import { noweId, terazIso, utworzMetadane } from './fabryki'
 import type { ElementZadania, PriorytetElementu, StatusElementu, TrybTerminuElementu } from './elementyOgarniacza'
 import type { Priorytet, RegulaPowtarzania, Zadanie } from './typy'
@@ -123,6 +124,7 @@ export function zadanieLegacyNaElement(wartosc: unknown): ElementZadania {
     id,
     typ: 'zadanie',
     tytul: tekst(rekord.tytul).trim() || 'Bez tytułu',
+    godzina: godzinaZadaniaNaOsi({ deadlineMode: rekord.deadlineMode, date: rekord.termin, time: rekord.time }),
     ...(opis ? { opis } : {}),
     referencjaZrodla: { modul: 'zadania', encjaId: id },
     ...(data ? { data } : {}),
@@ -180,3 +182,5 @@ export function elementNaZadanieLegacy(element: ElementZadania, istniejacy?: Zad
     updatedAt: element.updatedAt,
   }
 }
+
+// OGARNIACZ_TASK_DEADLINE_TIME_2026_08_27_V3: AT_TIME przekazuje deadline zadania na oś czasu.

@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Lokalne kopie tworzone przez patche Ogarniacza
+.patch-backups/

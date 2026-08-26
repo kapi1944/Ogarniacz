@@ -10,6 +10,7 @@ export const nazwyTabel: NazwaTabeli[] = [
   'blokiCzasu',
   'grafikPracy',
   'wyjatkiGrafiku',
+  'urlopy',
   'nawyki',
   'dziennikNawykow',
   'leki',
@@ -90,6 +91,11 @@ class BazaOgarniacza extends Dexie {
           zadanie.powiazania ??= []
         })
       })
+
+    this.version(3).stores({
+      ...schematPelny,
+      urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
+    })
   }
 
   tabela<K extends NazwaTabeli>(nazwa: K): Table<MapaTabel[K], string> {

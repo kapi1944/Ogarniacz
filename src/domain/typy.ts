@@ -48,6 +48,9 @@ export interface Zadanie extends EncjaBazowa {
   dostepnoscPlanistyczna?: DostepnoscPlanistyczna
   pokazNaPulpicie?: boolean
   zasobyIds?: Id[]
+
+  deadlineMode?: 'AT_TIME' | 'END_OF_DAY' | 'NO_TIME'
+  time?: string
 }
 
 export interface Projekt extends EncjaBazowa {
@@ -94,6 +97,26 @@ export interface WyjatekGrafiku extends EncjaBazowa {
   dojazdDoPracyMinuty?: number
   powrotZPracyMinuty?: number
   dostepnoscDojazdu?: DostepnoscPlanistyczna
+}
+
+
+export type TypUrlopu =
+  | 'wypoczynkowy'
+  | 'na_zadanie'
+  | 'bezplatny'
+  | 'okolicznosciowy'
+  | 'opieka'
+  | 'chorobowe'
+  | 'inny'
+
+export type StatusUrlopu = 'planowany' | 'potwierdzony' | 'anulowany'
+
+export interface Urlop extends EncjaBazowa {
+  dataOd: string
+  dataDo: string
+  typ: TypUrlopu
+  status: StatusUrlopu
+  opis?: string
 }
 
 export interface Nawyk extends EncjaBazowa {
@@ -413,6 +436,7 @@ export interface MapaTabel {
   blokiCzasu: BlokCzasu
   grafikPracy: GrafikPracy
   wyjatkiGrafiku: WyjatekGrafiku
+  urlopy: Urlop
   nawyki: Nawyk
   dziennikNawykow: DziennikNawyku
   leki: Lek

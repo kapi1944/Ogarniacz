@@ -1719,3 +1719,64 @@ input[type="radio"] {
     animation: none;
   }
 }
+
+
+/* OGARNIACZ_URLOPY_SWIETA_PL_2026_08_NODE_V2 */
+.sekcja-kalendarza-grafiku { display: grid; gap: 16px; }
+.kalendarz-grafiku__naglowek { align-items: center; }
+.kalendarz-grafiku__naglowek h2 svg { color: var(--akcent); }
+.kalendarz-grafiku__nawigacja { display: flex; align-items: center; gap: 7px; }
+.kalendarz-grafiku__nawigacja > strong { min-width: 150px; text-align: center; text-transform: capitalize; }
+.kalendarz-grafiku__legenda { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin: 6px 0 12px; color: var(--tekst-2); font-size: .75rem; }
+.kalendarz-grafiku__legenda span { display: inline-flex; align-items: center; gap: 6px; }
+.legenda-kalendarza { width: 10px; height: 10px; border: 1px solid var(--obramowanie-mocne); border-radius: 999px; }
+.legenda-kalendarza--swieto { background: var(--blad-tlo); border-color: color-mix(in srgb, var(--blad) 55%, var(--obramowanie)); }
+.legenda-kalendarza--urlop { background: var(--sukces-tlo); border-color: color-mix(in srgb, var(--sukces) 55%, var(--obramowanie)); }
+.legenda-kalendarza--wyjatek { background: var(--informacja-tlo); border-color: color-mix(in srgb, var(--informacja) 55%, var(--obramowanie)); }
+.kalendarz-grafiku__scroll { min-width: 0; overflow-x: auto; padding-bottom: 2px; }
+.kalendarz-grafiku__dni-tygodnia,
+.kalendarz-grafiku__siatka { display: grid; min-width: 840px; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.kalendarz-grafiku__dni-tygodnia { color: var(--tekst-2); background: var(--panel-2); border: 1px solid var(--obramowanie); border-bottom: 0; border-radius: var(--promien-pola) var(--promien-pola) 0 0; }
+.kalendarz-grafiku__dni-tygodnia span { padding: 7px 9px; text-align: center; font-size: .7rem; font-weight: 760; letter-spacing: .04em; text-transform: uppercase; }
+.kalendarz-grafiku__siatka { border-top: 1px solid var(--obramowanie); border-left: 1px solid var(--obramowanie); }
+.kalendarz-grafiku__dzien { min-height: 118px; padding: 8px; background: var(--panel); border-right: 1px solid var(--obramowanie); border-bottom: 1px solid var(--obramowanie); }
+.kalendarz-grafiku__dzien--poza { opacity: .46; background: var(--panel-2); }
+.kalendarz-grafiku__dzien--dzisiaj { box-shadow: inset 0 0 0 2px var(--akcent); }
+.kalendarz-grafiku__dzien--swieto { background: color-mix(in srgb, var(--blad-tlo) 42%, var(--panel)); }
+.kalendarz-grafiku__dzien--urlop { background: color-mix(in srgb, var(--sukces-tlo) 48%, var(--panel)); }
+.kalendarz-grafiku__dzien--swieto.kalendarz-grafiku__dzien--urlop {
+  background: linear-gradient(145deg, color-mix(in srgb, var(--blad-tlo) 58%, var(--panel)), color-mix(in srgb, var(--sukces-tlo) 58%, var(--panel)));
+}
+.kalendarz-grafiku__data { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; margin-bottom: 7px; }
+.kalendarz-grafiku__data strong { font-size: .86rem; }
+.kalendarz-grafiku__data small { color: var(--tekst-2); font-size: .65rem; }
+.kalendarz-grafiku__zdarzenia { display: grid; gap: 4px; }
+.kalendarz-grafiku__znacznik { display: block; padding: 3px 5px; overflow: hidden; border: 1px solid var(--obramowanie); border-radius: 5px; font-size: .64rem; font-weight: 680; line-height: 1.25; text-overflow: ellipsis; }
+.kalendarz-grafiku__znacznik--swieto { color: var(--blad); background: var(--blad-tlo); border-color: color-mix(in srgb, var(--blad) 30%, var(--obramowanie)); }
+.kalendarz-grafiku__znacznik--urlop { color: var(--sukces); background: var(--sukces-tlo); border-color: color-mix(in srgb, var(--sukces) 30%, var(--obramowanie)); }
+.kalendarz-grafiku__znacznik--wyjatek { color: var(--informacja); background: var(--informacja-tlo); border-color: color-mix(in srgb, var(--informacja) 30%, var(--obramowanie)); }
+.lista-urlopow { display: grid; gap: 7px; }
+.lista-urlopow__wiersz { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 9px; padding: 9px 0; border-bottom: 1px solid var(--obramowanie); }
+.lista-urlopow__wiersz:last-child { border-bottom: 0; }
+.lista-urlopow__wiersz > div { min-width: 0; display: grid; gap: 2px; }
+.lista-urlopow__wiersz small { color: var(--tekst-2); font-size: .76rem; }
+.lista-urlopow__wiersz select { min-width: 122px; }
+
+@media (max-width: 760px) {
+  .kalendarz-grafiku__naglowek { display: grid; }
+  .kalendarz-grafiku__nawigacja { width: 100%; flex-wrap: wrap; }
+  .kalendarz-grafiku__nawigacja > strong { min-width: 120px; }
+  .lista-urlopow__wiersz { grid-template-columns: minmax(0, 1fr) auto; }
+  .lista-urlopow__wiersz select { grid-column: 1 / -1; width: 100%; }
+}
+
+/* OGARNIACZ_KALENDARZ_TLO_DNI_PRACUJACE_2026_08_27_V1
+   Zwykły dzień pracujący otrzymuje subtelne tło.
+   Urlop i święto są wykluczane już po stronie logiki widoku. */
+.kalendarz-dzien--pracujacy {
+  background-color: color-mix(
+    in srgb,
+    var(--kolor-akcent, var(--accent, #4f8cff)) 12%,
+    transparent
+  );
+}

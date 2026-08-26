@@ -7,7 +7,7 @@ import { utworzZadanie } from './ZadaniaService'
 const data = '2026-08-17'
 const grafik: GrafikPracy[] = [{ ...utworzMetadane('grafik-1'), dzienTygodnia: 1, aktywny: true, od: '08:00', do: '16:00' }]
 const zadanie = (tytul: string, priorytet: Zadanie['priorytet'], minuty?: number) => utworzZadanie({ tytul, opis: '', priorytet, termin: data, szacowanyCzasMin: minuty })
-const dane = (zmiany: Partial<DanePlanera> = {}): DanePlanera => ({ data, tryb: 'dzien', zadania: [zadanie('Zadanie', 'normalny', 60)], nawyki: [], wizyty: [], bloki: [], grafik, wyjatkiGrafiku: [], ...zmiany })
+const dane = (zmiany: Partial<DanePlanera> = {}): DanePlanera => ({ data, tryb: 'dzien', zadania: [zadanie('Zadanie', 'normalny', 60)], nawyki: [], wizyty: [], bloki: [], grafik, wyjatkiGrafiku: [], urlopy: [], ...zmiany })
 
 describe('planer', () => {
   it('respektuje godziny pracy', () => {
@@ -38,4 +38,29 @@ describe('planer', () => {
     const blok = wynik.propozycje.find((element) => element.typ === 'zadanie')!
     expect((Date.parse(blok.koniec) - Date.parse(blok.poczatek)) / 60000).toBe(30)
   })
+
+  it('traktuje urlop jako dzień bez bloku pracy', () => {
+    const wynik = zaproponujPlan(dane({
+      odGodziny: '09:00',
+      urlopy: [{
+        ...utworzMetadane('urlop-planer'),
+        dataOd: data,
+        dataDo: data,
+        typ: 'wypoczynkowy',
+        status: 'potwierdzony',
+      }],
+    }))
+    expect(wynik.propozycje.find((blok) => blok.typ === 'zadanie')?.poczatek).toBe(`${data}T09:00:00`)
+  })
+
+  it('traktuje polskie święto jako dzień bez standardowej pracy', () => {
+    const dataSwieta = '2026-11-11'
+    const wynik = zaproponujPlan(dane({
+      data: dataSwieta,
+      odGodziny: '09:00',
+      grafik: [{ ...utworzMetadane('grafik-3'), dzienTygodnia: 3, aktywny: true, od: '08:00', do: '16:00' }],
+    }))
+    expect(wynik.propozycje.find((blok) => blok.typ === 'zadanie')?.poczatek).toBe(`${dataSwieta}T09:00:00`)
+  })
+
 })

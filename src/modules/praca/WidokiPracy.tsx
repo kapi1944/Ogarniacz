@@ -47,6 +47,12 @@ export function WidokZadan() {
     ] },
     { klucz: 'priorytet', etykieta: 'Priorytet', typ: 'select', wymagane: true, opcje: opcjePriorytetu },
     { klucz: 'termin', etykieta: 'Termin', typ: 'date' },
+      { klucz: 'deadlineMode', etykieta: 'Tryb terminu', typ: 'select', wymagane: true, opcje: [
+        { wartosc: 'AT_TIME', etykieta: 'O konkretnej godzinie' },
+        { wartosc: 'END_OF_DAY', etykieta: 'Do końca dnia' },
+        { wartosc: 'NO_TIME', etykieta: 'Bez godziny' }
+      ] },
+      { klucz: 'time', etykieta: 'Godzina deadline', typ: 'time' },
     { klucz: 'dataStartu', etykieta: 'Najwcześniej od', typ: 'date' },
     { klucz: 'szacowanyCzasMin', etykieta: 'Szacowany czas (min)', typ: 'number', min: 1 },
     { klucz: 'projektId', etykieta: 'Projekt', typ: 'select', opcje: projekty.map((projekt) => ({ wartosc: projekt.id, etykieta: projekt.nazwa })) },
@@ -183,3 +189,5 @@ export function WidokSkrzynki() {
     </article>)}</div>}
   </div>
 }
+
+// OGARNIACZ_TASK_DEADLINE_TIME_2026_08_27_V3: Zadanie obsługuje tryb terminu i godzinę deadline.

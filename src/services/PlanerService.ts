@@ -1,7 +1,9 @@
 import { format, getDay, parseISO } from 'date-fns'
 import { utworzMetadane } from '../domain/fabryki'
-import type { BlokCzasu, GrafikPracy, Nawyk, Wizyta, WyjatekGrafiku, Zadanie } from '../domain/typy'
+import type { BlokCzasu, GrafikPracy, Nawyk, Urlop, Wizyta, WyjatekGrafiku, Zadanie } from '../domain/typy'
 import { czyNawykNaDzien } from './NawykiService'
+import { czyPolskieSwieto } from './PolskieSwietaService'
+import { czyDataWUrlopie } from './UrlopyService'
 
 interface Przedzial {
   od: number
@@ -17,6 +19,7 @@ export interface DanePlanera {
   bloki: BlokCzasu[]
   grafik: GrafikPracy[]
   wyjatkiGrafiku: WyjatekGrafiku[]
+  urlopy: Urlop[]
   odGodziny?: string
 }
 
@@ -59,6 +62,7 @@ function odejmijZajete(zakres: Przedzial, zajete: Przedzial[]): Przedzial[] {
 function pracaDnia(dane: DanePlanera): Przedzial | undefined {
   const wyjatek = dane.wyjatkiGrafiku.find((element) => element.data === dane.data)
   if (wyjatek) return wyjatek.pracuje && wyjatek.od && wyjatek.do ? { od: naMinuty(wyjatek.od), do: naMinuty(wyjatek.do) } : undefined
+  if (czyPolskieSwieto(dane.data) || dane.urlopy.some((urlop) => czyDataWUrlopie(urlop, dane.data))) return undefined
   const dzien = getDay(parseISO(dane.data))
   const wpis = dane.grafik.find((element) => element.dzienTygodnia === dzien && element.aktywny)
   return wpis ? { od: naMinuty(wpis.od), do: naMinuty(wpis.do) } : undefined

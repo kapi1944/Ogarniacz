@@ -90,7 +90,7 @@ export function sekcjaDlaElementuPulpitu(
 
 function wagaPriorytetu(priority: string | undefined): number {
   switch (String(priority || '').toUpperCase()) {
-    case 'ASAP': return 500
+    case 'ASAP': return 800
     case 'URGENT':
     case 'HIGH': return 350
     case 'NORMAL':
