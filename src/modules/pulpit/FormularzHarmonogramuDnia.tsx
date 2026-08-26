@@ -50,7 +50,7 @@ export function FormularzHarmonogramuDnia({
         {edycja.pracuje && <>
           <label className="pole"><span>Praca od</span><input type="time" value={edycja.odPracy} onChange={(zdarzenie) => ustawEdycje({ ...edycja, odPracy: zdarzenie.target.value })} /></label>
           <label className="pole"><span>Praca do</span><input type="time" value={edycja.doPracy} onChange={(zdarzenie) => ustawEdycje({ ...edycja, doPracy: zdarzenie.target.value })} /></label>
-          <label className="pole"><span>Dojazd do pracy</span><input type="number" min="0" max="180" value={edycja.dojazdDoPracyMinuty} onChange={(zdarzenie) => ustawEdycje({ ...edycja, dojazdDoPracyMinuty: Number(zdarzenie.target.value) })} /><small>0 minut oznacza brak dojazdu.</small></label>
+          <label className="pole"><span>Dojazd</span><input type="number" min="0" max="180" value={edycja.dojazdDoPracyMinuty} onChange={(zdarzenie) => ustawEdycje({ ...edycja, dojazdDoPracyMinuty: Number(zdarzenie.target.value) })} /><small>0 minut oznacza brak dojazdu.</small></label>
           <label className="pole"><span>Powrót</span><input type="number" min="0" max="180" value={edycja.powrotZPracyMinuty} onChange={(zdarzenie) => ustawEdycje({ ...edycja, powrotZPracyMinuty: Number(zdarzenie.target.value) })} /></label>
           <label className="pole pole--pelne"><span>Dostępność podczas dojazdów</span><select value={edycja.dostepnoscDojazdu} disabled={!zezwalajNaPelnaDostepnosc} onChange={(zdarzenie) => ustawEdycje({ ...edycja, dostepnoscDojazdu: zdarzenie.target.value as EdycjaHarmonogramuDnia['dostepnoscDojazdu'] })}><option value="czesciowa">Częściowa — bez zwykłych zadań ekranowych</option><option value="pelna">Pełna</option></select></label>
         </>}

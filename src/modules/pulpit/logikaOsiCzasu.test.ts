@@ -19,7 +19,7 @@ describe('oś czasu Pulpitu', () => {
     const harmonogram = utworzHarmonogramDnia('2026-08-26', DOMYSLNE_USTAWIENIA.harmonogram)
 
     expect(harmonogram.przedzialy).toEqual([
-      { id: 'dojazd-do-pracy', etykieta: 'Dojazd do pracy', od: '07:05', do: '07:45', dostepnosc: 'czesciowa' },
+      { id: 'dojazd-do-pracy', etykieta: 'Dojazd', od: '07:05', do: '07:45', dostepnosc: 'czesciowa' },
       { id: 'praca', etykieta: 'Praca', od: '07:45', do: '16:00' },
       { id: 'powrot', etykieta: 'Powrót', od: '16:00', do: '16:40', dostepnosc: 'czesciowa' },
     ])

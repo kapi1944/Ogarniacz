@@ -1,39 +1,41 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from 'vitest'
 import {
-  DOMYSLNE_USTAWIENIA_SNU_OSI,
-  KOMPRESJA_SNU,
-  czasNaMinuty,
-  normalizujUstawieniaSnuOsi,
-} from "./skalaSnu";
+  DOMYSLNY_ZAKRES_SNU,
+  pozycjaGodzinyNaOsiZeSnem,
+} from './logikaOsiCzasu'
 
-describe("skala snu osi czasu", () => {
-  it("ma domyślny sen 22:30–06:30 i kompresję 50%", () => {
-    expect(DOMYSLNE_USTAWIENIA_SNU_OSI).toEqual({
-      poczatek: "22:30",
-      koniec: "06:30",
-    });
-    expect(KOMPRESJA_SNU).toBe(0.5);
-  });
+function szerokosc(od: string, doGodziny: string): number {
+  return pozycjaGodzinyNaOsiZeSnem(doGodziny, DOMYSLNY_ZAKRES_SNU)
+    - pozycjaGodzinyNaOsiZeSnem(od, DOMYSLNY_ZAKRES_SNU)
+}
 
-  it("rozpoznaje poprawne godziny", () => {
-    expect(czasNaMinuty("06:30")).toBe(390);
-    expect(czasNaMinuty("22:30")).toBe(1350);
-    expect(czasNaMinuty("24:00")).toBeNull();
-  });
+describe('oś czasu z kompresją snu', () => {
+  it('mapuje początek i koniec doby na 0% i 100%', () => {
+    expect(pozycjaGodzinyNaOsiZeSnem('00:00')).toBe(0)
+    expect(pozycjaGodzinyNaOsiZeSnem('23:59')).toBe(100)
+  })
 
-  it("odrzuca zerowy lub uszkodzony zakres snu", () => {
-    expect(
-      normalizujUstawieniaSnuOsi({
-        poczatek: "10:00",
-        koniec: "10:00",
-      }),
-    ).toEqual(DOMYSLNE_USTAWIENIA_SNU_OSI);
+  it('kompresuje godzinę snu do połowy szerokości godziny dziennej', () => {
+    const godzinaDnia = szerokosc('12:00', '13:00')
+    const godzinaSnu = szerokosc('22:30', '23:30')
 
-    expect(
-      normalizujUstawieniaSnuOsi({
-        poczatek: "xx",
-        koniec: "06:30",
-      }),
-    ).toEqual(DOMYSLNE_USTAWIENIA_SNU_OSI);
-  });
-});
+    expect(godzinaSnu / godzinaDnia).toBeCloseTo(0.5, 5)
+  })
+
+  it('kompresuje także nocną część snu po północy', () => {
+    const godzinaDnia = szerokosc('12:00', '13:00')
+    const godzinaSnu = szerokosc('05:30', '06:30')
+
+    expect(godzinaSnu / godzinaDnia).toBeCloseTo(0.5, 5)
+  })
+
+  it('obsługuje edytowany sen przechodzący przez północ', () => {
+    const zakres = { od: '23:30', do: '07:00' }
+    const dzien = pozycjaGodzinyNaOsiZeSnem('13:00', zakres)
+      - pozycjaGodzinyNaOsiZeSnem('12:00', zakres)
+    const sen = pozycjaGodzinyNaOsiZeSnem('06:00', zakres)
+      - pozycjaGodzinyNaOsiZeSnem('05:00', zakres)
+
+    expect(sen / dzien).toBeCloseTo(0.5, 5)
+  })
+})

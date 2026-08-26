@@ -9,6 +9,11 @@ export interface ZakresAktywnegoDnia {
   do: string
 }
 
+export interface ZakresSnuDnia {
+  od: string
+  do: string
+}
+
 export interface PrzedzialHarmonogramuDnia {
   id: 'dojazd-do-pracy' | 'praca' | 'powrot'
   etykieta: string
@@ -40,7 +45,13 @@ export interface EdycjaHarmonogramuDnia {
   opis?: string
 }
 
-const SKALA_CZASU_POZA_AKTYWNYM_DNIEM = 0.5
+export const DOMYSLNY_ZAKRES_SNU: ZakresSnuDnia = {
+  od: '22:30',
+  do: '06:30',
+}
+
+export const SKALA_SNU = 0.5
+
 const MINUTY_OSTATNIEJ_GODZINY = 23 * 60 + 59
 const ZAKRES_DNIA_BEZ_PRACY: ZakresAktywnegoDnia = { od: '07:00', do: '22:00' }
 
@@ -67,7 +78,74 @@ function dzienTygodnia(data: string): number {
   return new Date(`${data}T12:00:00`).getDay()
 }
 
-export function pozycjaGodzinyNaOsi(godzina: string, zakres: ZakresAktywnegoDnia): number {
+function czyMinutaNalezyDoSnu(
+  minuta: number,
+  poczatekSnu: number,
+  koniecSnu: number,
+): boolean {
+  if (poczatekSnu === koniecSnu) return false
+
+  if (poczatekSnu < koniecSnu) {
+    return minuta >= poczatekSnu && minuta < koniecSnu
+  }
+
+  return minuta >= poczatekSnu || minuta < koniecSnu
+}
+
+function wagaOdPoczatkuDoby(
+  doMinuty: number,
+  zakresSnu: ZakresSnuDnia,
+): number {
+  const limit = Math.min(MINUTY_OSTATNIEJ_GODZINY, Math.max(0, Math.round(doMinuty)))
+  const poczatekSnu = minutyDnia(zakresSnu.od)
+  const koniecSnu = minutyDnia(zakresSnu.do)
+
+  let waga = 0
+
+  for (let minuta = 0; minuta < limit; minuta += 1) {
+    waga += czyMinutaNalezyDoSnu(minuta, poczatekSnu, koniecSnu)
+      ? SKALA_SNU
+      : 1
+  }
+
+  return waga
+}
+
+/**
+ * Główne mapowanie osi Pulpitu.
+ *
+ * Cała doba 00:00–23:59 jest zachowana. Wyłącznie minuty należące
+ * do zaplanowanego snu mają wagę 0.5. Pozostały czas ma wagę 1.0.
+ *
+ * Obsługiwany jest również zakres przechodzący przez północ,
+ * np. 22:30–06:30 albo 23:30–07:00.
+ */
+export function pozycjaGodzinyNaOsiZeSnem(
+  godzina: string,
+  zakresSnu: ZakresSnuDnia = DOMYSLNY_ZAKRES_SNU,
+): number {
+  const minuta = minutyDnia(godzina)
+
+  if (minuta <= 0) return 0
+  if (minuta >= MINUTY_OSTATNIEJ_GODZINY) return 100
+
+  const calosc = wagaOdPoczatkuDoby(MINUTY_OSTATNIEJ_GODZINY, zakresSnu)
+  const pozycja = wagaOdPoczatkuDoby(minuta, zakresSnu)
+
+  return calosc > 0
+    ? Math.min(100, Math.max(0, pozycja / calosc * 100))
+    : 0
+}
+
+/**
+ * Zachowane dla kompatybilności istniejących testów i ewentualnych
+ * pozostałych widoków. Oś Pulpitu korzysta z pozycjaGodzinyNaOsiZeSnem().
+ */
+export function pozycjaGodzinyNaOsi(
+  godzina: string,
+  zakres: ZakresAktywnegoDnia,
+): number {
+  const SKALA_CZASU_POZA_AKTYWNYM_DNIEM = 0.5
   const minuta = minutyDnia(godzina)
   const poczatek = minutyDnia(zakres.od)
   const koniec = Math.max(poczatek, minutyDnia(zakres.do))
@@ -80,7 +158,10 @@ export function pozycjaGodzinyNaOsi(godzina: string, zakres: ZakresAktywnegoDnia
     : minuta <= koniec
       ? przed + minuta - poczatek
       : przed + aktywne + (minuta - koniec) * SKALA_CZASU_POZA_AKTYWNYM_DNIEM
-  return calosc > 0 ? Math.min(100, Math.max(0, pozycja / calosc * 100)) : 0
+
+  return calosc > 0
+    ? Math.min(100, Math.max(0, pozycja / calosc * 100))
+    : 0
 }
 
 export function utworzHarmonogramDnia(
@@ -98,9 +179,25 @@ export function utworzHarmonogramDnia(
   const koniecPowrotu = godzinaZMinut(minutyDnia(doPracy) + powrotZPracyMinuty)
   const przedzialy: PrzedzialHarmonogramuDnia[] = pracuje
     ? [
-        ...(dojazdDoPracyMinuty > 0 ? [{ id: 'dojazd-do-pracy' as const, etykieta: 'Dojazd do pracy', od: poczatekDojazdu, do: odPracy, dostepnosc: dostepnoscDojazdu }] : []),
+        ...(dojazdDoPracyMinuty > 0
+          ? [{
+              id: 'dojazd-do-pracy' as const,
+              etykieta: 'Dojazd',
+              od: poczatekDojazdu,
+              do: odPracy,
+              dostepnosc: dostepnoscDojazdu,
+            }]
+          : []),
         { id: 'praca', etykieta: 'Praca', od: odPracy, do: doPracy },
-        ...(powrotZPracyMinuty > 0 ? [{ id: 'powrot' as const, etykieta: 'Powrót', od: doPracy, do: koniecPowrotu, dostepnosc: dostepnoscDojazdu }] : []),
+        ...(powrotZPracyMinuty > 0
+          ? [{
+              id: 'powrot' as const,
+              etykieta: 'Powrót',
+              od: doPracy,
+              do: koniecPowrotu,
+              dostepnosc: dostepnoscDojazdu,
+            }]
+          : []),
       ]
     : []
 
@@ -112,7 +209,9 @@ export function utworzHarmonogramDnia(
     dojazdDoPracyMinuty,
     powrotZPracyMinuty,
     dostepnoscDojazdu,
-    zakresAktywny: pracuje ? { od: poczatekDojazdu, do: koniecPowrotu } : ZAKRES_DNIA_BEZ_PRACY,
+    zakresAktywny: pracuje
+      ? { od: poczatekDojazdu, do: koniecPowrotu }
+      : ZAKRES_DNIA_BEZ_PRACY,
     przedzialy,
     jestWyjatkiem: Boolean(wyjatek),
   }
@@ -127,6 +226,7 @@ export function utworzNowaReguleHarmonogramu(
   const dniPracy = edycja.pracuje
     ? [...new Set([...ustawienia.dniPracy, wybranyDzien])].sort()
     : ustawienia.dniPracy.filter((dzien) => dzien !== wybranyDzien)
+
   return {
     ...ustawienia,
     dniPracy,
