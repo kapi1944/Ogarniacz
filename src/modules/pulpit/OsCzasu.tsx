@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { CarFront, Clock3, RotateCcw, Settings2 } from 'lucide-react'
 import { dzisiajIso } from '../../domain/fabryki'
 import type { ElementOgarniacza } from '../../domain/elementyOgarniacza'
@@ -9,27 +9,38 @@ import type {
 } from './logikaOsiCzasu'
 import {
   minutyDnia,
-  pozycjaGodzinyNaOsiZeSnem,
+  pozycjaGodzinyNaOsi,
+  rozmiarZakresuNaOsi,
 } from './logikaOsiCzasu'
-import { KontrolkaSnuOsi } from './KontrolkaSnuOsi'
-import { wczytajZakresSnuOsi } from './ustawieniaSnuOsi'
 
-function stylPrzedzialu(
+const GODZINY_ETYKIET = [
+  '00:00', '03:00', '06:00', '09:00', '12:00', '15:00', '18:00', '21:00', '24:00',
+]
+
+function stylePrzedzialu(
   przedzial: PrzedzialHarmonogramuDnia,
   zakresSnu: ZakresSnuDnia,
-): CSSProperties {
-  const od = pozycjaGodzinyNaOsiZeSnem(przedzial.od, zakresSnu)
-  const doGodziny = pozycjaGodzinyNaOsiZeSnem(przedzial.do, zakresSnu)
+): CSSProperties[] {
+  const od = pozycjaGodzinyNaOsi(przedzial.od, zakresSnu)
+  const doGodziny = pozycjaGodzinyNaOsi(przedzial.do, zakresSnu)
 
-  return {
-    left: `${od}%`,
-    width: `${Math.max(0, doGodziny - od)}%`,
+  if (minutyDnia(przedzial.do) > minutyDnia(przedzial.od)) {
+    return [{
+      left: `${od}%`,
+      width: `${rozmiarZakresuNaOsi(przedzial.od, przedzial.do, zakresSnu)}%`,
+    }]
   }
+
+  return [
+    { left: `${od}%`, width: `${100 - od}%` },
+    { left: '0%', width: `${doGodziny}%` },
+  ]
 }
 
 export function OsCzasu({
   data,
   harmonogram,
+  zakresSnu,
   elementy,
   zezwalajNaPelnaDostepnosc,
   edytujHarmonogram,
@@ -38,6 +49,7 @@ export function OsCzasu({
 }: {
   data: string
   harmonogram: HarmonogramDnia
+  zakresSnu: ZakresSnuDnia
   elementy: ElementOgarniacza[]
   zezwalajNaPelnaDostepnosc: boolean
   edytujHarmonogram: () => void
@@ -45,9 +57,7 @@ export function OsCzasu({
   usunWyjatek: () => void
 }) {
   const [teraz, ustawTeraz] = useState(new Date())
-  const [zakresSnu, ustawZakresSnu] = useState<ZakresSnuDnia>(
-    () => wczytajZakresSnuOsi(),
-  )
+  const [wybranyElementOsi, ustawWybranyElementOsi] = useState<string | null>(null)
 
   useEffect(() => {
     const interwal = window.setInterval(() => ustawTeraz(new Date()), 60_000)
@@ -57,22 +67,11 @@ export function OsCzasu({
   const jestDzisiaj = data === dzisiajIso(teraz)
   const godzinaTeraz = `${String(teraz.getHours()).padStart(2, '0')}:${String(teraz.getMinutes()).padStart(2, '0')}`
 
-  const godzinyEtykiet = useMemo(() => [...new Set([
-    '00:00',
-    zakresSnu.od,
-    zakresSnu.do,
-    ...harmonogram.przedzialy.flatMap((przedzial) => [przedzial.od, przedzial.do]),
-    '23:59',
-  ])].sort((a, b) => minutyDnia(a) - minutyDnia(b)), [
-    harmonogram.przedzialy,
-    zakresSnu,
-  ])
-
-  const poczatekAktywny = pozycjaGodzinyNaOsiZeSnem(
+  const poczatekAktywny = pozycjaGodzinyNaOsi(
     harmonogram.zakresAktywny.od,
     zakresSnu,
   )
-  const koniecAktywny = pozycjaGodzinyNaOsiZeSnem(
+  const koniecAktywny = pozycjaGodzinyNaOsi(
     harmonogram.zakresAktywny.do,
     zakresSnu,
   )
@@ -82,7 +81,7 @@ export function OsCzasu({
       <div className="naglowek-karty naglowek-osi-czasu">
         <div>
           <h2><Clock3 aria-hidden="true" /> Oś czasu</h2>
-          <p>Pełna doba 00:00–23:59. Tylko zaplanowany sen jest skompresowany do 50%.</p>
+          <p>Pełna doba 00:00–24:00. Sen {zakresSnu.od}–{zakresSnu.do} jest skompresowany do {Math.round(zakresSnu.skala * 100)}%.</p>
         </div>
         <div>
           {harmonogram.jestWyjatkiem && (
@@ -105,11 +104,6 @@ export function OsCzasu({
           </button>
         </div>
       </div>
-
-      <KontrolkaSnuOsi
-        zakres={zakresSnu}
-        onChange={ustawZakresSnu}
-      />
 
       <div className="podsumowanie-harmonogramu">
         <span>
@@ -144,30 +138,33 @@ export function OsCzasu({
 
           <div className="os-czasu__linia" />
 
-          {harmonogram.przedzialy.map((przedzial) => (
-            <div
-              key={przedzial.id}
+          {harmonogram.przedzialy.flatMap((przedzial) => stylePrzedzialu(przedzial, zakresSnu).map((styl, indeksFragmentu) => (
+            <button
+              type="button"
+              key={`${przedzial.id}:${indeksFragmentu}`}
               className={`os-czasu__pas os-czasu__pas--${przedzial.id}`}
-              style={stylPrzedzialu(przedzial, zakresSnu)}
+              style={styl}
               title={`${przedzial.etykieta}: ${przedzial.od}–${przedzial.do}`}
+              aria-pressed={wybranyElementOsi === `przedzial:${przedzial.id}`}
+              onClick={() => ustawWybranyElementOsi(`przedzial:${przedzial.id}`)}
             >
               <strong>{przedzial.etykieta}</strong>
               <small>{przedzial.od}–{przedzial.do}</small>
-            </div>
-          ))}
+            </button>
+          )))}
 
-          {godzinyEtykiet.map((godzina) => (
+          {GODZINY_ETYKIET.map((godzina) => (
             <span
               key={godzina}
               className={`os-czasu__etykieta ${
                 godzina === '00:00'
                   ? 'os-czasu__etykieta--poczatek'
-                  : godzina === '23:59'
+                  : godzina === '24:00'
                     ? 'os-czasu__etykieta--koniec'
                     : ''
               }`}
               style={{
-                left: `${pozycjaGodzinyNaOsiZeSnem(godzina, zakresSnu)}%`,
+                left: `${pozycjaGodzinyNaOsi(godzina, zakresSnu)}%`,
               }}
             >
               {godzina}
@@ -175,25 +172,28 @@ export function OsCzasu({
           ))}
 
           {elementy.map((element, indeks) => element.godzina && (
-            <div
+            <button
+              type="button"
               key={element.id}
               className="os-czasu__marker"
               style={{
-                left: `${pozycjaGodzinyNaOsiZeSnem(element.godzina, zakresSnu)}%`,
+                left: `${pozycjaGodzinyNaOsi(element.godzina, zakresSnu)}%`,
                 top: `${122 + indeks % 3 * 24}px`,
               }}
               title={`${element.godzina} ${element.tytul}`}
+              aria-pressed={wybranyElementOsi === `element:${element.id}`}
+              onClick={() => ustawWybranyElementOsi(`element:${element.id}`)}
             >
               <span />
               <strong>{element.tytul}</strong>
-            </div>
+            </button>
           ))}
 
           {jestDzisiaj && (
             <div
               className="os-czasu__teraz"
               style={{
-                left: `${pozycjaGodzinyNaOsiZeSnem(godzinaTeraz, zakresSnu)}%`,
+                left: `${pozycjaGodzinyNaOsi(godzinaTeraz, zakresSnu)}%`,
               }}
             >
               <span>Teraz {godzinaTeraz}</span>

@@ -12,6 +12,7 @@ export interface ZakresAktywnegoDnia {
 export interface ZakresSnuDnia {
   od: string
   do: string
+  skala: number
 }
 
 export interface PrzedzialHarmonogramuDnia {
@@ -48,11 +49,11 @@ export interface EdycjaHarmonogramuDnia {
 export const DOMYSLNY_ZAKRES_SNU: ZakresSnuDnia = {
   od: '22:30',
   do: '06:30',
+  skala: 0.5,
 }
 
-export const SKALA_SNU = 0.5
-
-const MINUTY_OSTATNIEJ_GODZINY = 23 * 60 + 59
+const MINUTY_DOBY = 24 * 60
+const OSTATNIA_MINUTA_DOBY = MINUTY_DOBY - 1
 const ZAKRES_DNIA_BEZ_PRACY: ZakresAktywnegoDnia = { od: '07:00', do: '22:00' }
 
 function poprawnaGodzina(godzina: string | undefined): godzina is string {
@@ -66,11 +67,15 @@ function ograniczMinuty(wartosc: number): number {
 export function minutyDnia(godzina: string): number {
   const dopasowanie = /^(\d{2}):(\d{2})$/.exec(godzina)
   if (!dopasowanie) return 0
-  return Math.min(MINUTY_OSTATNIEJ_GODZINY, Math.max(0, Number(dopasowanie[1]) * 60 + Number(dopasowanie[2])))
+  const godziny = Number(dopasowanie[1])
+  const minuty = Number(dopasowanie[2])
+  if (godziny === 24 && minuty === 0) return MINUTY_DOBY
+  if (godziny > 23 || minuty > 59) return 0
+  return godziny * 60 + minuty
 }
 
 function godzinaZMinut(minuty: number): string {
-  const bezpieczneMinuty = Math.min(MINUTY_OSTATNIEJ_GODZINY, Math.max(0, Math.round(minuty)))
+  const bezpieczneMinuty = Math.min(OSTATNIA_MINUTA_DOBY, Math.max(0, Math.round(minuty)))
   return `${String(Math.floor(bezpieczneMinuty / 60)).padStart(2, '0')}:${String(bezpieczneMinuty % 60).padStart(2, '0')}`
 }
 
@@ -78,90 +83,82 @@ function dzienTygodnia(data: string): number {
   return new Date(`${data}T12:00:00`).getDay()
 }
 
-function czyMinutaNalezyDoSnu(
-  minuta: number,
-  poczatekSnu: number,
-  koniecSnu: number,
-): boolean {
-  if (poczatekSnu === koniecSnu) return false
-
-  if (poczatekSnu < koniecSnu) {
-    return minuta >= poczatekSnu && minuta < koniecSnu
-  }
-
-  return minuta >= poczatekSnu || minuta < koniecSnu
-}
-
-function wagaOdPoczatkuDoby(
-  doMinuty: number,
-  zakresSnu: ZakresSnuDnia,
-): number {
-  const limit = Math.min(MINUTY_OSTATNIEJ_GODZINY, Math.max(0, Math.round(doMinuty)))
+function fragmentySnu(zakresSnu: ZakresSnuDnia): [number, number][] {
   const poczatekSnu = minutyDnia(zakresSnu.od)
   const koniecSnu = minutyDnia(zakresSnu.do)
 
-  let waga = 0
+  if (poczatekSnu === koniecSnu) return []
+  if (poczatekSnu < koniecSnu) return [[poczatekSnu, koniecSnu]]
+  return [[0, koniecSnu], [poczatekSnu, MINUTY_DOBY]]
+}
 
-  for (let minuta = 0; minuta < limit; minuta += 1) {
-    waga += czyMinutaNalezyDoSnu(minuta, poczatekSnu, koniecSnu)
-      ? SKALA_SNU
-      : 1
-  }
+function dlugoscPrzeciecia(
+  od: number,
+  doMinuty: number,
+  odSnu: number,
+  doSnu: number,
+): number {
+  return Math.max(0, Math.min(doMinuty, doSnu) - Math.max(od, odSnu))
+}
 
-  return waga
+function wagaZakresu(
+  od: number,
+  doMinuty: number,
+  zakresSnu: ZakresSnuDnia,
+): number {
+  const bezpieczneOd = Math.min(MINUTY_DOBY, Math.max(0, od))
+  const bezpieczneDo = Math.min(MINUTY_DOBY, Math.max(bezpieczneOd, doMinuty))
+  const skalaSnu = Math.min(1, Math.max(0.1, zakresSnu.skala))
+  const dlugosc = bezpieczneDo - bezpieczneOd
+  const minutySnu = fragmentySnu(zakresSnu).reduce(
+    (suma, [odSnu, doSnu]) => suma + dlugoscPrzeciecia(bezpieczneOd, bezpieczneDo, odSnu, doSnu),
+    0,
+  )
+
+  return dlugosc - minutySnu + minutySnu * skalaSnu
 }
 
 /**
  * Główne mapowanie osi Pulpitu.
  *
- * Cała doba 00:00–23:59 jest zachowana. Wyłącznie minuty należące
- * do zaplanowanego snu mają wagę 0.5. Pozostały czas ma wagę 1.0.
+ * Cała doba 00:00–24:00 jest zachowana. Wyłącznie minuty należące
+ * do ustawionego snu mają zmniejszoną wagę. Pozostały czas ma wagę 1.0.
  *
  * Obsługiwany jest również zakres przechodzący przez północ,
  * np. 22:30–06:30 albo 23:30–07:00.
  */
-export function pozycjaGodzinyNaOsiZeSnem(
+export function pozycjaGodzinyNaOsi(
   godzina: string,
   zakresSnu: ZakresSnuDnia = DOMYSLNY_ZAKRES_SNU,
 ): number {
   const minuta = minutyDnia(godzina)
 
   if (minuta <= 0) return 0
-  if (minuta >= MINUTY_OSTATNIEJ_GODZINY) return 100
+  if (minuta >= MINUTY_DOBY) return 100
 
-  const calosc = wagaOdPoczatkuDoby(MINUTY_OSTATNIEJ_GODZINY, zakresSnu)
-  const pozycja = wagaOdPoczatkuDoby(minuta, zakresSnu)
+  const calosc = wagaZakresu(0, MINUTY_DOBY, zakresSnu)
+  const pozycja = wagaZakresu(0, minuta, zakresSnu)
 
   return calosc > 0
     ? Math.min(100, Math.max(0, pozycja / calosc * 100))
     : 0
 }
 
-/**
- * Zachowane dla kompatybilności istniejących testów i ewentualnych
- * pozostałych widoków. Oś Pulpitu korzysta z pozycjaGodzinyNaOsiZeSnem().
- */
-export function pozycjaGodzinyNaOsi(
-  godzina: string,
-  zakres: ZakresAktywnegoDnia,
+export function rozmiarZakresuNaOsi(
+  od: string,
+  doGodziny: string,
+  zakresSnu: ZakresSnuDnia = DOMYSLNY_ZAKRES_SNU,
 ): number {
-  const SKALA_CZASU_POZA_AKTYWNYM_DNIEM = 0.5
-  const minuta = minutyDnia(godzina)
-  const poczatek = minutyDnia(zakres.od)
-  const koniec = Math.max(poczatek, minutyDnia(zakres.do))
-  const przed = poczatek * SKALA_CZASU_POZA_AKTYWNYM_DNIEM
-  const aktywne = koniec - poczatek
-  const po = (MINUTY_OSTATNIEJ_GODZINY - koniec) * SKALA_CZASU_POZA_AKTYWNYM_DNIEM
-  const calosc = przed + aktywne + po
-  const pozycja = minuta <= poczatek
-    ? minuta * SKALA_CZASU_POZA_AKTYWNYM_DNIEM
-    : minuta <= koniec
-      ? przed + minuta - poczatek
-      : przed + aktywne + (minuta - koniec) * SKALA_CZASU_POZA_AKTYWNYM_DNIEM
+  const minutaOd = minutyDnia(od)
+  const minutaDo = minutyDnia(doGodziny)
+  const calosc = wagaZakresu(0, MINUTY_DOBY, zakresSnu)
+  if (minutaOd === minutaDo || calosc <= 0) return 0
 
-  return calosc > 0
-    ? Math.min(100, Math.max(0, pozycja / calosc * 100))
-    : 0
+  const rozmiar = minutaDo > minutaOd
+    ? wagaZakresu(minutaOd, minutaDo, zakresSnu)
+    : wagaZakresu(minutaOd, MINUTY_DOBY, zakresSnu) + wagaZakresu(0, minutaDo, zakresSnu)
+
+  return rozmiar / calosc * 100
 }
 
 export function utworzHarmonogramDnia(

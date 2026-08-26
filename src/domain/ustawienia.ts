@@ -47,6 +47,9 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
     dniPracy: [1, 2, 3, 4, 5],
     godzinaRozpoczecia: '07:45',
     godzinaZakonczenia: '16:00',
+    poczatekSnu: '22:30',
+    koniecSnu: '06:30',
+    skalaSnuNaOsi: 0.5,
     dojazdDoPracyMinuty: 40,
     powrotZPracyMinuty: 40,
     dostepnoscDojazdu: 'czesciowa',
@@ -104,6 +107,11 @@ function liczba(wartosc: unknown, minimum: number, maksimum: number, domyslna: n
   return Math.min(maksimum, Math.max(minimum, Math.round(wartosc)))
 }
 
+function liczbaDziesietna(wartosc: unknown, minimum: number, maksimum: number, domyslna: number): number {
+  if (typeof wartosc !== 'number' || !Number.isFinite(wartosc)) return domyslna
+  return Math.min(maksimum, Math.max(minimum, wartosc))
+}
+
 function poprawnaGodzina(wartosc: unknown): wartosc is string {
   return typeof wartosc === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(wartosc)
 }
@@ -148,6 +156,17 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
     godzinaZakonczenia = domyslne.harmonogram.godzinaZakonczenia
   }
 
+  let poczatekSnu = poprawnaGodzina(harmonogram.poczatekSnu)
+    ? harmonogram.poczatekSnu
+    : domyslne.harmonogram.poczatekSnu
+  let koniecSnu = poprawnaGodzina(harmonogram.koniecSnu)
+    ? harmonogram.koniecSnu
+    : domyslne.harmonogram.koniecSnu
+  if (poczatekSnu === koniecSnu) {
+    poczatekSnu = domyslne.harmonogram.poczatekSnu
+    koniecSnu = domyslne.harmonogram.koniecSnu
+  }
+
   const staryMotyw = zrodlo.motyw
 
   return {
@@ -184,6 +203,9 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
       dniPracy: dniPracy(harmonogram.dniPracy),
       godzinaRozpoczecia,
       godzinaZakonczenia,
+      poczatekSnu,
+      koniecSnu,
+      skalaSnuNaOsi: liczbaDziesietna(harmonogram.skalaSnuNaOsi, 0.1, 1, domyslne.harmonogram.skalaSnuNaOsi),
       dojazdDoPracyMinuty: liczba(harmonogram.dojazdDoPracyMinuty, 0, 180, domyslne.harmonogram.dojazdDoPracyMinuty),
       powrotZPracyMinuty: liczba(harmonogram.powrotZPracyMinuty, 0, 180, domyslne.harmonogram.powrotZPracyMinuty),
       dostepnoscDojazdu: enumWartosci<DostepnoscPlanistyczna>(harmonogram.dostepnoscDojazdu, ['czesciowa', 'pelna'], domyslne.harmonogram.dostepnoscDojazdu),
@@ -214,7 +236,11 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
   }
 }
 
-export function zastosujUstawieniaInterfejsu(ustawienia: Ustawienia, ciemnyMotywSystemowy: boolean): void {
+export function zastosujUstawieniaInterfejsu(
+  ustawienia: Ustawienia,
+  ciemnyMotywSystemowy: boolean,
+  ograniczRuchSystemowo = false,
+): void {
   const korzen = document.documentElement
   const motyw = ustawienia.wyglad.motyw === 'systemowy'
     ? (ciemnyMotywSystemowy ? 'ciemny' : 'jasny')
@@ -228,5 +254,9 @@ export function zastosujUstawieniaInterfejsu(ustawienia: Ustawienia, ciemnyMotyw
   korzen.style.setProperty('--czas-animacji', `${ustawienia.dostepnosc.ograniczRuch ? 0 : ustawienia.wyglad.czasAnimacjiMs}ms`)
   korzen.style.setProperty('--szerokosc-menu', `${ustawienia.nawigacja.szerokoscMenu}px`)
   korzen.style.setProperty('--wysokosc-pozycji-menu', `${ustawienia.nawigacja.wysokoscPozycji}px`)
-  zastosujPersonalizacje(ustawienia.wyglad.personalizacja, korzen, ustawienia.dostepnosc.ograniczRuch)
+  zastosujPersonalizacje(
+    ustawienia.wyglad.personalizacja,
+    korzen,
+    ustawienia.dostepnosc.ograniczRuch || ograniczRuchSystemowo,
+  )
 }

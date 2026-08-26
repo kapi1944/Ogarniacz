@@ -1,20 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DOMYSLNE_USTAWIENIA } from '../../domain/ustawienia'
 import type { WyjatekGrafiku } from '../../domain/typy'
-import { pozycjaGodzinyNaOsi, utworzHarmonogramDnia } from './logikaOsiCzasu'
+import { utworzHarmonogramDnia } from './logikaOsiCzasu'
 
 describe('oś czasu Pulpitu', () => {
-  it('mapuje pełną dobę z kompresją czasu poza aktywnym dniem', () => {
-    const zakres = { od: '07:05', do: '16:40' }
-
-    expect(pozycjaGodzinyNaOsi('00:00', zakres)).toBe(0)
-    expect(pozycjaGodzinyNaOsi('07:05', zakres)).toBeCloseTo(21.1, 1)
-    expect(pozycjaGodzinyNaOsi('07:45', zakres)).toBeCloseTo(25.07, 1)
-    expect(pozycjaGodzinyNaOsi('16:00', zakres)).toBeCloseTo(74.23, 1)
-    expect(pozycjaGodzinyNaOsi('16:40', zakres)).toBeCloseTo(78.2, 1)
-    expect(pozycjaGodzinyNaOsi('23:59', zakres)).toBe(100)
-  })
-
   it('wylicza pracę i dojazdy z ustawień', () => {
     const harmonogram = utworzHarmonogramDnia('2026-08-26', DOMYSLNE_USTAWIENIA.harmonogram)
 

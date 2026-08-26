@@ -337,6 +337,9 @@ export interface UstawieniaHarmonogramu {
   dniPracy: number[]
   godzinaRozpoczecia: string
   godzinaZakonczenia: string
+  poczatekSnu: string
+  koniecSnu: string
+  skalaSnuNaOsi: number
   dojazdDoPracyMinuty: number
   powrotZPracyMinuty: number
   dostepnoscDojazdu: DostepnoscPlanistyczna

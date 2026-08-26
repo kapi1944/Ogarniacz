@@ -15,6 +15,12 @@ export type ProfilRuchu =
   | 'dynamiczne'
   | 'wlasne'
 
+export type PoziomHover = 'wylaczony' | 'subtelny' | 'normalny' | 'wyrazny' | 'wlasny'
+export type PoziomReakcji = 'subtelny' | 'normalny' | 'wyrazny' | 'wlasny'
+export type PoziomFocus = 'subtelny' | 'standardowy' | 'wyrazny' | 'wlasny'
+export type PoziomObramowania = 'brak' | 'subtelne' | 'standardowe' | 'wyrazne'
+export type GlebiaKomponentow = 'plaska' | 'lekko-podniesiona' | 'przestrzenna'
+
 export interface PaletaPersonalizacji {
   tlo: string
   panel: string
@@ -52,13 +58,27 @@ export interface PaletaPersonalizacji {
 
 export interface InterakcjePersonalizacji {
   autoStany: boolean
+  hoverPoziom: PoziomHover
   hoverJasnosc: number
+  hoverKrycie: number
   hoverSkala: number
   hoverPrzesuniecieY: number
+  hoverCien: number
+  hoverObramowanie: number
+  activePoziom: PoziomReakcji
+  activeJasnosc: number
+  activeKrycie: number
   activeSkala: number
   activePrzesuniecieY: number
+  activeCien: number
+  selectedPoziom: PoziomReakcji
+  selectedIntensywnosc: number
+  selectedObramowanie: number
   selectedGlow: number
+  focusPoziom: PoziomFocus
   focusGrubosc: number
+  focusKrycie: number
+  disabledKrycie: number
 }
 
 export interface AnimacjePersonalizacji {
@@ -72,9 +92,19 @@ export interface AnimacjePersonalizacji {
   kartaMs: number
   dragMs: number
   easing: string
+  animujHover: boolean
+  animujPrzyciski: boolean
+  animujKarty: boolean
+  animujDropdowny: boolean
+  animujModale: boolean
+  animujZakladki: boolean
+  animujPanele: boolean
+  animujPojawianie: boolean
 }
 
 export interface KomponentyPersonalizacji {
+  obramowanie: PoziomObramowania
+  glebia: GlebiaKomponentow
   kartaCien: 'brak' | 'lekki' | 'sredni' | 'mocny'
   kartaObramowanie: number
   kartaHoverUniesienie: number
@@ -289,13 +319,27 @@ export const DOMYSLNA_PERSONALIZACJA: PersonalizacjaUI = {
   paleta: PALETA_DARK,
   interakcje: {
     autoStany: true,
+    hoverPoziom: 'normalny',
     hoverJasnosc: 1.04,
+    hoverKrycie: 1,
     hoverSkala: 1,
     hoverPrzesuniecieY: 0,
+    hoverCien: 0,
+    hoverObramowanie: 35,
+    activePoziom: 'normalny',
+    activeJasnosc: 0.96,
+    activeKrycie: 1,
     activeSkala: 0.98,
     activePrzesuniecieY: 1,
+    activeCien: 0,
+    selectedPoziom: 'normalny',
+    selectedIntensywnosc: 16,
+    selectedObramowanie: 48,
     selectedGlow: 0,
+    focusPoziom: 'standardowy',
     focusGrubosc: 3,
+    focusKrycie: 58,
+    disabledKrycie: 48,
   },
   animacje: {
     profil: 'standardowe',
@@ -308,8 +352,18 @@ export const DOMYSLNA_PERSONALIZACJA: PersonalizacjaUI = {
     kartaMs: 180,
     dragMs: 140,
     easing: 'ease',
+    animujHover: true,
+    animujPrzyciski: true,
+    animujKarty: true,
+    animujDropdowny: true,
+    animujModale: true,
+    animujZakladki: true,
+    animujPanele: true,
+    animujPojawianie: true,
   },
   komponenty: {
+    obramowanie: 'standardowe',
+    glebia: 'lekko-podniesiona',
     kartaCien: 'lekki',
     kartaObramowanie: 1,
     kartaHoverUniesienie: 0,
@@ -330,6 +384,31 @@ const PROFILE_RUCHU: Record<Exclude<ProfilRuchu, 'wlasne'>, Partial<AnimacjePers
   standardowe: { hoverMs: 160, activeMs: 80, modalMs: 180, dropdownMs: 150, tooltipMs: 120, pageMs: 180, kartaMs: 180, dragMs: 140, easing: 'ease' },
   plynne: { hoverMs: 220, activeMs: 100, modalMs: 260, dropdownMs: 210, tooltipMs: 160, pageMs: 240, kartaMs: 240, dragMs: 190, easing: 'cubic-bezier(.2,.8,.2,1)' },
   dynamiczne: { hoverMs: 120, activeMs: 60, modalMs: 160, dropdownMs: 120, tooltipMs: 90, pageMs: 160, kartaMs: 150, dragMs: 110, easing: 'cubic-bezier(.2,.9,.25,1.15)' },
+}
+
+const PROFILE_HOVER: Record<Exclude<PoziomHover, 'wlasny'>, Partial<InterakcjePersonalizacji>> = {
+  wylaczony: { hoverJasnosc: 1, hoverKrycie: 1, hoverSkala: 1, hoverPrzesuniecieY: 0, hoverCien: 0, hoverObramowanie: 0 },
+  subtelny: { hoverJasnosc: 1.02, hoverKrycie: 1, hoverSkala: 1, hoverPrzesuniecieY: 0, hoverCien: 0, hoverObramowanie: 22 },
+  normalny: { hoverJasnosc: 1.04, hoverKrycie: 1, hoverSkala: 1, hoverPrzesuniecieY: 0, hoverCien: 0, hoverObramowanie: 35 },
+  wyrazny: { hoverJasnosc: 1.08, hoverKrycie: 1, hoverSkala: 1.01, hoverPrzesuniecieY: -1, hoverCien: 10, hoverObramowanie: 58 },
+}
+
+const PROFILE_ACTIVE: Record<Exclude<PoziomReakcji, 'wlasny'>, Partial<InterakcjePersonalizacji>> = {
+  subtelny: { activeJasnosc: 0.98, activeKrycie: 1, activeSkala: 0.99, activePrzesuniecieY: 0, activeCien: 0 },
+  normalny: { activeJasnosc: 0.96, activeKrycie: 1, activeSkala: 0.98, activePrzesuniecieY: 1, activeCien: 0 },
+  wyrazny: { activeJasnosc: 0.91, activeKrycie: 1, activeSkala: 0.96, activePrzesuniecieY: 2, activeCien: 5 },
+}
+
+const PROFILE_SELECTED: Record<Exclude<PoziomReakcji, 'wlasny'>, Partial<InterakcjePersonalizacji>> = {
+  subtelny: { selectedIntensywnosc: 9, selectedObramowanie: 30, selectedGlow: 0 },
+  normalny: { selectedIntensywnosc: 16, selectedObramowanie: 48, selectedGlow: 0 },
+  wyrazny: { selectedIntensywnosc: 25, selectedObramowanie: 72, selectedGlow: 10 },
+}
+
+const PROFILE_FOCUS: Record<Exclude<PoziomFocus, 'wlasny'>, Partial<InterakcjePersonalizacji>> = {
+  subtelny: { focusGrubosc: 2, focusKrycie: 46 },
+  standardowy: { focusGrubosc: 3, focusKrycie: 58 },
+  wyrazny: { focusGrubosc: 4, focusKrycie: 78 },
 }
 
 function rekord(value: unknown): Record<string, unknown> {
@@ -356,6 +435,10 @@ function enumValue<T extends string>(value: unknown, allowed: readonly T[], fall
   return typeof value === 'string' && allowed.includes(value as T) ? value as T : fallback
 }
 
+function maPole(source: Record<string, unknown>, pola: string[]): boolean {
+  return pola.some((pole) => Object.prototype.hasOwnProperty.call(source, pole))
+}
+
 function kolor(value: unknown, fallback: string): string {
   return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback
 }
@@ -373,15 +456,33 @@ function normalizujPalete(value: unknown): PaletaPersonalizacji {
 function normalizujInterakcje(value: unknown): InterakcjePersonalizacji {
   const source = rekord(value)
   const d = DOMYSLNA_PERSONALIZACJA.interakcje
+  const starszyHover = source.hoverPoziom === undefined && maPole(source, ['hoverJasnosc', 'hoverSkala', 'hoverPrzesuniecieY'])
+  const starszyActive = source.activePoziom === undefined && maPole(source, ['activeSkala', 'activePrzesuniecieY'])
+  const starszySelected = source.selectedPoziom === undefined && maPole(source, ['selectedGlow'])
+  const starszyFocus = source.focusPoziom === undefined && maPole(source, ['focusGrubosc'])
   return {
     autoStany: bool(source.autoStany, d.autoStany),
+    hoverPoziom: starszyHover ? 'wlasny' : enumValue(source.hoverPoziom, ['wylaczony', 'subtelny', 'normalny', 'wyrazny', 'wlasny'], d.hoverPoziom),
     hoverJasnosc: num(source.hoverJasnosc, 0.8, 1.3, d.hoverJasnosc),
+    hoverKrycie: num(source.hoverKrycie, 0.65, 1, d.hoverKrycie),
     hoverSkala: num(source.hoverSkala, 0.94, 1.08, d.hoverSkala),
     hoverPrzesuniecieY: num(source.hoverPrzesuniecieY, -8, 8, d.hoverPrzesuniecieY),
+    hoverCien: num(source.hoverCien, 0, 24, d.hoverCien),
+    hoverObramowanie: num(source.hoverObramowanie, 0, 100, d.hoverObramowanie),
+    activePoziom: starszyActive ? 'wlasny' : enumValue(source.activePoziom, ['subtelny', 'normalny', 'wyrazny', 'wlasny'], d.activePoziom),
+    activeJasnosc: num(source.activeJasnosc, 0.75, 1.1, d.activeJasnosc),
+    activeKrycie: num(source.activeKrycie, 0.65, 1, d.activeKrycie),
     activeSkala: num(source.activeSkala, 0.9, 1.04, d.activeSkala),
     activePrzesuniecieY: num(source.activePrzesuniecieY, -4, 6, d.activePrzesuniecieY),
+    activeCien: num(source.activeCien, 0, 18, d.activeCien),
+    selectedPoziom: starszySelected ? 'wlasny' : enumValue(source.selectedPoziom, ['subtelny', 'normalny', 'wyrazny', 'wlasny'], d.selectedPoziom),
+    selectedIntensywnosc: num(source.selectedIntensywnosc, 6, 40, d.selectedIntensywnosc),
+    selectedObramowanie: num(source.selectedObramowanie, 20, 100, d.selectedObramowanie),
     selectedGlow: num(source.selectedGlow, 0, 32, d.selectedGlow),
+    focusPoziom: starszyFocus ? 'wlasny' : enumValue(source.focusPoziom, ['subtelny', 'standardowy', 'wyrazny', 'wlasny'], d.focusPoziom),
     focusGrubosc: num(source.focusGrubosc, 1, 6, d.focusGrubosc),
+    focusKrycie: num(source.focusKrycie, 35, 100, d.focusKrycie),
+    disabledKrycie: num(source.disabledKrycie, 30, 75, d.disabledKrycie),
   }
 }
 
@@ -399,6 +500,14 @@ function normalizujAnimacje(value: unknown): AnimacjePersonalizacji {
     kartaMs: num(source.kartaMs, 0, 1000, d.kartaMs),
     dragMs: num(source.dragMs, 0, 1000, d.dragMs),
     easing: tekst(source.easing, d.easing),
+    animujHover: bool(source.animujHover, d.animujHover),
+    animujPrzyciski: bool(source.animujPrzyciski, d.animujPrzyciski),
+    animujKarty: bool(source.animujKarty, d.animujKarty),
+    animujDropdowny: bool(source.animujDropdowny, d.animujDropdowny),
+    animujModale: bool(source.animujModale, d.animujModale),
+    animujZakladki: bool(source.animujZakladki, d.animujZakladki),
+    animujPanele: bool(source.animujPanele, d.animujPanele),
+    animujPojawianie: bool(source.animujPojawianie, d.animujPojawianie),
   }
 }
 
@@ -406,6 +515,8 @@ function normalizujKomponenty(value: unknown): KomponentyPersonalizacji {
   const source = rekord(value)
   const d = DOMYSLNA_PERSONALIZACJA.komponenty
   return {
+    obramowanie: enumValue(source.obramowanie, ['brak', 'subtelne', 'standardowe', 'wyrazne'], d.obramowanie),
+    glebia: enumValue(source.glebia, ['plaska', 'lekko-podniesiona', 'przestrzenna'], d.glebia),
     kartaCien: enumValue(source.kartaCien, ['brak', 'lekki', 'sredni', 'mocny'], d.kartaCien),
     kartaObramowanie: num(source.kartaObramowanie, 0, 4, d.kartaObramowanie),
     kartaHoverUniesienie: num(source.kartaHoverUniesienie, 0, 10, d.kartaHoverUniesienie),
@@ -459,6 +570,13 @@ export function normalizujPersonalizacje(value: unknown): PersonalizacjaUI {
   }
 }
 
+export function przywrocBazowaPersonalizacje(obecna: PersonalizacjaUI): PersonalizacjaUI {
+  return {
+    ...normalizujPersonalizacje(DOMYSLNA_PERSONALIZACJA),
+    motywyWlasne: normalizujPersonalizacje(obecna).motywyWlasne,
+  }
+}
+
 export function zastosujPresetMotywu(
   obecna: PersonalizacjaUI,
   id: DefinicjaPresetu['id'],
@@ -485,6 +603,117 @@ export function zastosujProfilRuchu(
 ): AnimacjePersonalizacji {
   if (profil === 'wlasne') return { ...obecne, profil }
   return { ...obecne, ...PROFILE_RUCHU[profil], profil }
+}
+
+export function zastosujPoziomHover(
+  obecne: InterakcjePersonalizacji,
+  poziom: PoziomHover,
+): InterakcjePersonalizacji {
+  if (poziom === 'wlasny') return { ...obecne, hoverPoziom: poziom }
+  return { ...obecne, ...PROFILE_HOVER[poziom], hoverPoziom: poziom }
+}
+
+export function zastosujPoziomActive(
+  obecne: InterakcjePersonalizacji,
+  poziom: PoziomReakcji,
+): InterakcjePersonalizacji {
+  if (poziom === 'wlasny') return { ...obecne, activePoziom: poziom }
+  return { ...obecne, ...PROFILE_ACTIVE[poziom], activePoziom: poziom }
+}
+
+export function zastosujPoziomSelected(
+  obecne: InterakcjePersonalizacji,
+  poziom: PoziomReakcji,
+): InterakcjePersonalizacji {
+  if (poziom === 'wlasny') return { ...obecne, selectedPoziom: poziom }
+  return { ...obecne, ...PROFILE_SELECTED[poziom], selectedPoziom: poziom }
+}
+
+export function zastosujPoziomFocus(
+  obecne: InterakcjePersonalizacji,
+  poziom: PoziomFocus,
+): InterakcjePersonalizacji {
+  if (poziom === 'wlasny') return { ...obecne, focusPoziom: poziom }
+  return { ...obecne, ...PROFILE_FOCUS[poziom], focusPoziom: poziom }
+}
+
+function rozwiazInterakcje(interakcje: InterakcjePersonalizacji): InterakcjePersonalizacji {
+  return {
+    ...interakcje,
+    ...(interakcje.hoverPoziom === 'wlasny' ? {} : PROFILE_HOVER[interakcje.hoverPoziom]),
+    ...(interakcje.activePoziom === 'wlasny' ? {} : PROFILE_ACTIVE[interakcje.activePoziom]),
+    ...(interakcje.selectedPoziom === 'wlasny' ? {} : PROFILE_SELECTED[interakcje.selectedPoziom]),
+    ...(interakcje.focusPoziom === 'wlasny' ? {} : PROFILE_FOCUS[interakcje.focusPoziom]),
+  }
+}
+
+export const WERSJA_SCHEMATU_MOTYWU = 2 as const
+
+export interface ZaimportowanyMotyw {
+  motyw: 'jasny' | 'ciemny' | 'systemowy'
+  personalizacja: PersonalizacjaUI
+}
+
+export function normalizujImportMotywu(
+  value: unknown,
+  motywDomyslny: ZaimportowanyMotyw['motyw'] = 'systemowy',
+): ZaimportowanyMotyw {
+  const source = rekord(value)
+  if (source.format !== 'ogarniacz-theme') throw new Error('Nieprawidłowy format motywu.')
+  const wersja = source.wersja === undefined ? 1 : source.wersja
+  if (!Number.isInteger(wersja) || Number(wersja) < 1 || Number(wersja) > WERSJA_SCHEMATU_MOTYWU) {
+    throw new Error('Nieobsługiwana wersja motywu.')
+  }
+  if (Object.keys(rekord(source.personalizacja)).length === 0) {
+    throw new Error('Brak konfiguracji personalizacji.')
+  }
+  return {
+    motyw: enumValue(source.motyw, ['jasny', 'ciemny', 'systemowy'], motywDomyslny),
+    personalizacja: normalizujPersonalizacje(source.personalizacja),
+  }
+}
+
+function kanalLiniowy(value: number): number {
+  const kanal = value / 255
+  return kanal <= 0.04045 ? kanal / 12.92 : ((kanal + 0.055) / 1.055) ** 2.4
+}
+
+function luminancja(kolorHex: string): number {
+  const kolor = kolorHex.replace('#', '')
+  const [r, g, b] = [0, 2, 4].map((indeks) => kanalLiniowy(Number.parseInt(kolor.slice(indeks, indeks + 2), 16)))
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+export function obliczKontrast(kolorA: string, kolorB: string): number {
+  const jasniejszy = Math.max(luminancja(kolorA), luminancja(kolorB))
+  const ciemniejszy = Math.min(luminancja(kolorA), luminancja(kolorB))
+  return (jasniejszy + 0.05) / (ciemniejszy + 0.05)
+}
+
+export function wybierzCzytelnyTekst(kolorTla: string): '#ffffff' | '#08130f' {
+  return obliczKontrast('#ffffff', kolorTla) >= obliczKontrast('#08130f', kolorTla)
+    ? '#ffffff'
+    : '#08130f'
+}
+
+export interface OcenaKontrastu {
+  id: 'tekst-tlo' | 'tekst-panel' | 'przycisk-primary' | 'sidebar'
+  etykieta: string
+  wspolczynnik: number
+  niski: boolean
+}
+
+export function ocenKontrastPalety(paleta: PaletaPersonalizacji): OcenaKontrastu[] {
+  const pary: { id: OcenaKontrastu['id']; etykieta: string; tekst: string; tlo: string }[] = [
+    { id: 'tekst-tlo', etykieta: 'Tekst główny / tło aplikacji', tekst: paleta.tekst, tlo: paleta.tlo },
+    { id: 'tekst-panel', etykieta: 'Tekst główny / karta', tekst: paleta.tekst, tlo: paleta.panel },
+    { id: 'przycisk-primary', etykieta: 'Tekst przycisku / primary', tekst: wybierzCzytelnyTekst(paleta.akcent), tlo: paleta.akcent },
+    { id: 'sidebar', etykieta: 'Tekst menu / tło menu', tekst: paleta.sidebarTekst, tlo: paleta.sidebar },
+  ]
+  return pary.map((para) => {
+    const wspolczynnik = obliczKontrast(para.tekst, para.tlo)
+    return { id: para.id, etykieta: para.etykieta, wspolczynnik, niski: wspolczynnik < 4.5 }
+  })
 }
 
 const KOLORY_CSS: Record<keyof Pick<
@@ -535,6 +764,19 @@ const CIENIE = {
   mocny: '0 8px 22px rgb(0 0 0 / 20%), 0 24px 54px rgb(0 0 0 / 17%)',
 } as const
 
+const CIENIE_GLEBI: Record<GlebiaKomponentow, string> = {
+  plaska: 'none',
+  'lekko-podniesiona': CIENIE.lekki,
+  przestrzenna: CIENIE.mocny,
+}
+
+const OBRAMOWANIA: Record<PoziomObramowania, string> = {
+  brak: 'transparent',
+  subtelne: 'color-mix(in srgb, var(--obramowanie) 58%, transparent)',
+  standardowe: 'var(--obramowanie)',
+  wyrazne: 'var(--obramowanie-mocne)',
+}
+
 export function zastosujPersonalizacje(
   value: PersonalizacjaUI,
   root: HTMLElement,
@@ -542,6 +784,12 @@ export function zastosujPersonalizacje(
 ): void {
   const p = normalizujPersonalizacje(value)
   const style = root.style
+  const interakcje = rozwiazInterakcje(p.interakcje)
+
+  root.dataset.uiHover = p.interakcje.hoverPoziom
+  root.dataset.uiActive = p.interakcje.activePoziom
+  root.dataset.uiSelected = p.interakcje.selectedPoziom
+  root.dataset.uiFocus = p.interakcje.focusPoziom
 
   if (p.uzyjWlasnejPalety) {
     for (const [key, css] of Object.entries(KOLORY_CSS) as [keyof typeof KOLORY_CSS, string][]) {
@@ -559,9 +807,16 @@ export function zastosujPersonalizacje(
       : p.paleta.sidebarActive)
     style.setProperty('--ui-sidebar-tekst', p.paleta.sidebarTekst)
     style.setProperty('--ui-focus', p.paleta.focus)
+    style.setProperty('--ui-text-on-accent', wybierzCzytelnyTekst(p.paleta.akcent))
+    style.setProperty('--ui-text-on-danger', wybierzCzytelnyTekst(p.paleta.blad))
+    style.setProperty('--ui-text-on-success', wybierzCzytelnyTekst(p.paleta.sukces))
+    style.setProperty('--ui-text-on-warning', wybierzCzytelnyTekst(p.paleta.ostrzezenie))
   } else {
     for (const css of Object.values(KOLORY_CSS)) style.removeProperty(css)
-    for (const css of ['--ui-sidebar-bg', '--ui-sidebar-hover', '--ui-sidebar-active', '--ui-sidebar-tekst', '--ui-focus']) {
+    for (const css of [
+      '--ui-sidebar-bg', '--ui-sidebar-hover', '--ui-sidebar-active', '--ui-sidebar-tekst', '--ui-focus',
+      '--ui-text-on-accent', '--ui-text-on-danger', '--ui-text-on-success', '--ui-text-on-warning',
+    ]) {
       style.removeProperty(css)
     }
   }
@@ -576,30 +831,52 @@ export function zastosujPersonalizacje(
   style.setProperty('--timeline-linia', p.paleta.timeline)
   style.setProperty('--timeline-teraz', p.paleta.timelineTeraz)
 
-  style.setProperty('--ui-hover-brightness', String(p.interakcje.hoverJasnosc))
-  style.setProperty('--ui-hover-scale', String(p.interakcje.hoverSkala))
-  style.setProperty('--ui-hover-y', `${p.interakcje.hoverPrzesuniecieY}px`)
-  style.setProperty('--ui-active-scale', String(p.interakcje.activeSkala))
-  style.setProperty('--ui-active-y', `${p.interakcje.activePrzesuniecieY}px`)
-  style.setProperty('--ui-selected-glow', `${p.interakcje.selectedGlow}px`)
-  style.setProperty('--ui-focus-width', `${p.interakcje.focusGrubosc}px`)
+  style.setProperty('--ui-hover-brightness', String(interakcje.hoverJasnosc))
+  style.setProperty('--ui-hover-opacity', String(interakcje.hoverKrycie))
+  style.setProperty('--ui-hover-scale', String(interakcje.hoverSkala))
+  style.setProperty('--ui-hover-y', `${interakcje.hoverPrzesuniecieY}px`)
+  style.setProperty('--ui-hover-shadow', interakcje.hoverCien === 0 ? 'none' : `0 ${Math.max(2, interakcje.hoverCien / 2)}px ${interakcje.hoverCien}px rgb(0 0 0 / 18%)`)
+  style.setProperty('--ui-card-hover-shadow', interakcje.hoverCien === 0 ? 'var(--ui-card-shadow)' : `0 ${Math.max(2, interakcje.hoverCien / 2)}px ${interakcje.hoverCien}px rgb(0 0 0 / 18%), var(--ui-card-shadow)`)
+  style.setProperty('--ui-hover-border', `color-mix(in srgb, var(--akcent) ${interakcje.hoverObramowanie}%, var(--ui-component-border))`)
+  style.setProperty('--ui-active-brightness', String(interakcje.activeJasnosc))
+  style.setProperty('--ui-active-opacity', String(interakcje.activeKrycie))
+  style.setProperty('--ui-active-scale', String(interakcje.activeSkala))
+  style.setProperty('--ui-active-y', `${interakcje.activePrzesuniecieY}px`)
+  style.setProperty('--ui-active-shadow', interakcje.activeCien === 0 ? 'none' : `inset 0 ${Math.max(1, interakcje.activeCien / 3)}px ${interakcje.activeCien}px rgb(0 0 0 / 22%)`)
+  style.setProperty('--ui-selected-surface', `color-mix(in srgb, var(--akcent) ${interakcje.selectedIntensywnosc}%, var(--panel))`)
+  style.setProperty('--ui-selected-border', `color-mix(in srgb, var(--akcent) ${interakcje.selectedObramowanie}%, var(--obramowanie))`)
+  style.setProperty('--ui-selected-glow', `${interakcje.selectedGlow}px`)
+  style.setProperty('--ui-focus-width', `${interakcje.focusGrubosc}px`)
+  style.setProperty('--ui-focus-opacity', `${interakcje.focusKrycie}%`)
+  style.setProperty('--ui-disabled-opacity', String(interakcje.disabledKrycie / 100))
+  style.setProperty('--ui-sidebar-hover-effective', p.interakcje.hoverPoziom === 'wylaczony' ? 'var(--ui-sidebar-bg)' : 'var(--ui-sidebar-hover)')
+  style.setProperty('--ui-sidebar-selected-effective', p.interakcje.autoStany
+    ? `color-mix(in srgb, var(--akcent) ${interakcje.selectedIntensywnosc}%, var(--ui-sidebar-bg))`
+    : 'var(--ui-sidebar-active)')
+  style.setProperty('--ui-accent-hover-effective', p.interakcje.hoverPoziom === 'wylaczony' ? 'var(--akcent)' : 'var(--akcent-hover)')
 
   const ruch0 = ograniczRuch || p.animacje.profil === 'wylaczone'
-  const duration = (ms: number) => `${ruch0 ? 0 : ms}ms`
-  style.setProperty('--ui-hover-ms', duration(p.animacje.hoverMs))
-  style.setProperty('--ui-active-ms', duration(p.animacje.activeMs))
-  style.setProperty('--ui-modal-ms', duration(p.animacje.modalMs))
-  style.setProperty('--ui-dropdown-ms', duration(p.animacje.dropdownMs))
-  style.setProperty('--ui-tooltip-ms', duration(p.animacje.tooltipMs))
-  style.setProperty('--ui-page-ms', duration(p.animacje.pageMs))
-  style.setProperty('--ui-card-ms', duration(p.animacje.kartaMs))
+  root.dataset.uiRuch = ruch0 ? 'wylaczony' : p.animacje.profil
+  const duration = (ms: number, wlaczone = true) => `${ruch0 || !wlaczone ? 0 : ms}ms`
+  style.setProperty('--ui-hover-ms', duration(p.animacje.hoverMs, p.animacje.animujHover))
+  style.setProperty('--ui-button-ms', duration(p.animacje.hoverMs, p.animacje.animujHover && p.animacje.animujPrzyciski))
+  style.setProperty('--ui-active-ms', duration(p.animacje.activeMs, p.animacje.animujPrzyciski))
+  style.setProperty('--ui-modal-ms', duration(p.animacje.modalMs, p.animacje.animujModale))
+  style.setProperty('--ui-dropdown-ms', duration(p.animacje.dropdownMs, p.animacje.animujDropdowny))
+  style.setProperty('--ui-tooltip-ms', duration(p.animacje.tooltipMs, p.animacje.animujHover))
+  style.setProperty('--ui-page-ms', duration(p.animacje.pageMs, p.animacje.animujPanele))
+  style.setProperty('--ui-card-ms', duration(p.animacje.kartaMs, p.animacje.animujKarty))
+  style.setProperty('--ui-tab-ms', duration(p.animacje.hoverMs, p.animacje.animujZakladki))
+  style.setProperty('--ui-appear-ms', duration(p.animacje.pageMs, p.animacje.animujPojawianie))
   style.setProperty('--ui-drag-ms', duration(p.animacje.dragMs))
   style.setProperty('--ui-easing', p.animacje.easing)
-  style.setProperty('--czas-animacji', duration(p.animacje.hoverMs))
+  style.setProperty('--czas-animacji', duration(p.animacje.pageMs, p.animacje.animujPanele))
 
+  style.setProperty('--ui-component-border', OBRAMOWANIA[p.komponenty.obramowanie])
+  style.setProperty('--ui-depth-shadow', CIENIE_GLEBI[p.komponenty.glebia])
   style.setProperty('--ui-card-shadow', CIENIE[p.komponenty.kartaCien])
   style.setProperty('--ui-card-border', `${p.komponenty.kartaObramowanie}px`)
-  style.setProperty('--ui-card-hover-y', `${p.komponenty.kartaHoverUniesienie}px`)
+  style.setProperty('--ui-card-hover-y', `${p.interakcje.hoverPoziom === 'wylaczony' ? 0 : p.komponenty.kartaHoverUniesienie}px`)
   style.setProperty('--ui-button-border', `${p.komponenty.przyciskObramowanie}px`)
   style.setProperty('--ui-field-border', `${p.komponenty.poleObramowanie}px`)
   style.setProperty('--ui-sidebar-radius', `${p.komponenty.sidebarPromien}px`)

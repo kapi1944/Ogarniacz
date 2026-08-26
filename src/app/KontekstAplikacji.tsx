@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useRepozytorium } from '../hooks/useRepozytorium'
 import type { NazwaModulu, Ustawienia } from '../domain/typy'
@@ -27,22 +27,58 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
   const { dane: uprawnienia } = useRepozytorium('uprawnienia')
   const [szybkieDodawanie, ustawSzybkieDodawanie] = useState(false)
   const [wyszukiwanie, ustawWyszukiwanie] = useState(false)
-  const [podgladUstawien, ustawPodglad] = useState<Ustawienia | null>(null)
-  const ustawienia = podgladUstawien ?? zapisaneUstawienia
-  const ustawPodgladUstawien = useCallback((noweUstawienia: Ustawienia) => ustawPodglad(normalizujUstawienia(noweUstawienia)), [])
-  const wyczyscPodgladUstawien = useCallback(() => ustawPodglad(null), [])
+  const zapisaneUstawieniaRef = useRef(zapisaneUstawienia)
+  const podgladUstawienRef = useRef<Ustawienia | null>(null)
+  const ciemnyMotywSystemowyRef = useRef(false)
+  const ograniczRuchSystemowoRef = useRef(false)
+  const ustawienia = zapisaneUstawienia
+  zapisaneUstawieniaRef.current = zapisaneUstawienia
+
+  const zastosujBiezaceUstawienia = useCallback((noweUstawienia: Ustawienia) => {
+    zastosujUstawieniaInterfejsu(
+      noweUstawienia,
+      ciemnyMotywSystemowyRef.current,
+      ograniczRuchSystemowoRef.current,
+    )
+  }, [])
+
+  const ustawPodgladUstawien = useCallback((noweUstawienia: Ustawienia) => {
+    const znormalizowane = normalizujUstawienia(noweUstawienia)
+    podgladUstawienRef.current = znormalizowane
+    zastosujBiezaceUstawienia(znormalizowane)
+  }, [zastosujBiezaceUstawienia])
+
+  const wyczyscPodgladUstawien = useCallback(() => {
+    podgladUstawienRef.current = null
+    zastosujBiezaceUstawienia(zapisaneUstawieniaRef.current)
+  }, [zastosujBiezaceUstawienia])
 
   useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const zastosuj = () => zastosujUstawieniaInterfejsu(ustawienia, media.matches)
+    const mediaMotywu = window.matchMedia('(prefers-color-scheme: dark)')
+    const mediaRuchu = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const zastosuj = () => {
+      ciemnyMotywSystemowyRef.current = mediaMotywu.matches
+      ograniczRuchSystemowoRef.current = mediaRuchu.matches
+      zastosujBiezaceUstawienia(podgladUstawienRef.current ?? zapisaneUstawieniaRef.current)
+    }
     zastosuj()
-    media.addEventListener('change', zastosuj)
-    return () => media.removeEventListener('change', zastosuj)
-  }, [ustawienia])
+    mediaMotywu.addEventListener('change', zastosuj)
+    mediaRuchu.addEventListener('change', zastosuj)
+    return () => {
+      mediaMotywu.removeEventListener('change', zastosuj)
+      mediaRuchu.removeEventListener('change', zastosuj)
+    }
+  }, [zastosujBiezaceUstawienia])
+
+  useEffect(() => {
+    if (!podgladUstawienRef.current) zastosujBiezaceUstawienia(zapisaneUstawienia)
+  }, [zapisaneUstawienia, zastosujBiezaceUstawienia])
 
   const zapiszUstawienia = async (zmiany: Partial<Ustawienia>) => {
-    await repozytoriumUstawien.zapisz({ ...zapisaneUstawienia, ...zmiany })
-    wyczyscPodgladUstawien()
+    const zapisane = await repozytoriumUstawien.zapisz({ ...zapisaneUstawienia, ...zmiany })
+    zapisaneUstawieniaRef.current = zapisane
+    podgladUstawienRef.current = null
+    zastosujBiezaceUstawienia(zapisane)
   }
 
   const moze = (modul: NazwaModulu, operacja: 'odczyt' | 'edycja' = 'odczyt', sekcja?: string) =>

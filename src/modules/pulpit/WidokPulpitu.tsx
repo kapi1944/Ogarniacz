@@ -107,6 +107,11 @@ export function WidokPulpitu() {
       {ustawienia.pulpit.pokazOsCzasu && <OsCzasu
         data={data}
         harmonogram={harmonogram}
+        zakresSnu={{
+          od: ustawienia.harmonogram.poczatekSnu,
+          do: ustawienia.harmonogram.koniecSnu,
+          skala: ustawienia.harmonogram.skalaSnuNaOsi,
+        }}
         elementy={elementyOsi}
         zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu}
         edytujHarmonogram={() => ustawEdycjeHarmonogramu(true)}

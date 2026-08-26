@@ -45,11 +45,32 @@ describe.sequential('ustawienia aplikacji', () => {
 
   it('przywraca bezpieczny harmonogram dla błędnych godzin', () => {
     const wynik = normalizujUstawienia({
-      harmonogram: { godzinaRozpoczecia: '18:00', godzinaZakonczenia: '08:00' },
+      harmonogram: {
+        godzinaRozpoczecia: '18:00',
+        godzinaZakonczenia: '08:00',
+        poczatekSnu: '25:00',
+        koniecSnu: '06:30',
+      },
     })
 
     expect(wynik.harmonogram.godzinaRozpoczecia).toBe('07:45')
     expect(wynik.harmonogram.godzinaZakonczenia).toBe('16:00')
+    expect(wynik.harmonogram.poczatekSnu).toBe('22:30')
+    expect(wynik.harmonogram.koniecSnu).toBe('06:30')
+  })
+
+  it('zachowuje sen przechodzący przez północ i ogranicza jego skalę', () => {
+    const wynik = normalizujUstawienia({
+      harmonogram: {
+        poczatekSnu: '23:30',
+        koniecSnu: '07:30',
+        skalaSnuNaOsi: 0.05,
+      },
+    })
+
+    expect(wynik.harmonogram.poczatekSnu).toBe('23:30')
+    expect(wynik.harmonogram.koniecSnu).toBe('07:30')
+    expect(wynik.harmonogram.skalaSnuNaOsi).toBe(0.1)
   })
 
   it('zapisuje i ponownie wczytuje ustawienia przez repozytorium', async () => {
@@ -62,5 +83,34 @@ describe.sequential('ustawienia aplikacji', () => {
     const wczytane = await repozytoriumUstawien.wczytaj()
     expect(wczytane.wyglad.gestosc).toBe('zwarta')
     expect(wczytane.harmonogram.dojazdDoPracyMinuty).toBe(55)
+  })
+
+  it('zapisuje własne interakcje, animacje i motyw w bibliotece', async () => {
+    const bazowa = DOMYSLNE_USTAWIENIA.wyglad.personalizacja
+    const wlasna = {
+      ...bazowa,
+      interakcje: { ...bazowa.interakcje, hoverPoziom: 'wlasny' as const, hoverSkala: 1.025 },
+      animacje: { ...bazowa.animacje, profil: 'wlasne' as const, modalMs: 330, animujKarty: false },
+      motywyWlasne: [{
+        id: 'testowy-motyw',
+        nazwa: 'Testowy motyw',
+        motyw: 'ciemny' as const,
+        paleta: bazowa.paleta,
+        interakcje: { ...bazowa.interakcje, hoverPoziom: 'wlasny' as const, hoverSkala: 1.025 },
+        animacje: { ...bazowa.animacje, profil: 'wlasne' as const, modalMs: 330, animujKarty: false },
+        komponenty: bazowa.komponenty,
+      }],
+    }
+
+    await repozytoriumUstawien.zapisz({
+      ...DOMYSLNE_USTAWIENIA,
+      wyglad: { ...DOMYSLNE_USTAWIENIA.wyglad, personalizacja: wlasna },
+    })
+
+    const wczytane = await repozytoriumUstawien.wczytaj()
+    expect(wczytane.wyglad.personalizacja.interakcje.hoverSkala).toBe(1.025)
+    expect(wczytane.wyglad.personalizacja.animacje.modalMs).toBe(330)
+    expect(wczytane.wyglad.personalizacja.animacje.animujKarty).toBe(false)
+    expect(wczytane.wyglad.personalizacja.motywyWlasne[0].id).toBe('testowy-motyw')
   })
 })

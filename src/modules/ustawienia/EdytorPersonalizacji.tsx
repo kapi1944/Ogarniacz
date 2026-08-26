@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import {
+  AlertTriangle,
   Download,
   Eye,
   Palette,
@@ -16,17 +17,29 @@ import { Komunikat, NaglowekWidoku } from '../../components/Interfejs'
 import {
   DOMYSLNA_PERSONALIZACJA,
   PRESETY_MOTYWOW,
+  WERSJA_SCHEMATU_MOTYWU,
+  normalizujImportMotywu,
   normalizujPersonalizacje,
+  ocenKontrastPalety,
+  przywrocBazowaPersonalizacje,
+  zastosujPoziomActive,
+  zastosujPoziomFocus,
+  zastosujPoziomHover,
+  zastosujPoziomSelected,
   zastosujPresetMotywu,
   zastosujProfilRuchu,
   type AnimacjePersonalizacji,
+  type InterakcjePersonalizacji,
   type KomponentyPersonalizacji,
   type MotywWlasny,
   type PaletaPersonalizacji,
   type PersonalizacjaUI,
+  type PoziomFocus,
+  type PoziomHover,
+  type PoziomReakcji,
   type ProfilRuchu,
 } from '../../domain/personalizacja'
-import { normalizujUstawienia } from '../../domain/ustawienia'
+import { DOMYSLNE_USTAWIENIA, normalizujUstawienia } from '../../domain/ustawienia'
 import type { Ustawienia } from '../../domain/typy'
 
 type Zakladka = 'motyw' | 'kolory' | 'komponenty' | 'interakcje' | 'animacje' | 'podglad'
@@ -99,6 +112,7 @@ export function EdytorPersonalizacji() {
   const [blad, ustawBlad] = useState('')
   const [nazwaMotywu, ustawNazweMotywu] = useState('Mój motyw')
   const [wybranyWlasny, ustawWybranyWlasny] = useState('')
+  const [pokazBazowy, ustawPokazBazowy] = useState(false)
 
   useEffect(() => {
     ustawSzkic(normalizujUstawienia(zapisaneUstawienia))
@@ -108,6 +122,12 @@ export function EdytorPersonalizacji() {
 
   const p = szkic.wyglad.personalizacja
   const grupyKolorow = useMemo(() => [...new Set(KOLORY.map((item) => item.grupa))], [])
+  const niezapisaneZmiany = useMemo(
+    () => JSON.stringify(szkic.wyglad) !== JSON.stringify(normalizujUstawienia(zapisaneUstawienia).wyglad),
+    [szkic.wyglad, zapisaneUstawienia],
+  )
+  const ocenyKontrastu = useMemo(() => ocenKontrastPalety(p.paleta), [p.paleta])
+  const niskieKontrasty = ocenyKontrastu.filter((ocena) => ocena.niski)
 
   const aktualizuj = (nowe: Ustawienia) => {
     const normalized = normalizujUstawienia(nowe)
@@ -183,6 +203,17 @@ export function EdytorPersonalizacji() {
     })
   }
 
+  const ustawWlasneInterakcje = (
+    zmiany: Partial<InterakcjePersonalizacji>,
+    grupa: 'hover' | 'active' | 'selected' | 'focus',
+  ) => {
+    const polePoziomu = `${grupa}Poziom` as const
+    aktualizujPersonalizacje({
+      ...p,
+      interakcje: { ...p.interakcje, ...zmiany, [polePoziomu]: 'wlasny' },
+    })
+  }
+
   const zapisz = async () => {
     await zapiszUstawienia({ wyglad: szkic.wyglad })
     ustawKomunikat('Motyw i personalizacja zostały zapisane.')
@@ -194,9 +225,10 @@ export function EdytorPersonalizacji() {
       wyglad: {
         ...szkic.wyglad,
         motyw: 'systemowy',
+        promienKart: DOMYSLNE_USTAWIENIA.wyglad.promienKart,
+        promienPol: DOMYSLNE_USTAWIENIA.wyglad.promienPol,
         personalizacja: {
-          ...kopiujPersonalizacje(DOMYSLNA_PERSONALIZACJA),
-          motywyWlasne: p.motywyWlasne,
+          ...przywrocBazowaPersonalizacje(p),
         },
       },
     })
@@ -264,7 +296,7 @@ export function EdytorPersonalizacji() {
   const eksportuj = () => {
     const blob = new Blob([JSON.stringify({
       format: 'ogarniacz-theme',
-      wersja: 1,
+      wersja: WERSJA_SCHEMATU_MOTYWU,
       motyw: szkic.wyglad.motyw,
       personalizacja: p,
     }, null, 2)], { type: 'application/json' })
@@ -281,22 +313,14 @@ export function EdytorPersonalizacji() {
     event.target.value = ''
     if (!file) return
     try {
-      const source = JSON.parse(await file.text()) as {
-        format?: string
-        motyw?: unknown
-        personalizacja?: unknown
-      }
-      if (source.format !== 'ogarniacz-theme') throw new Error('format')
-      const motyw = source.motyw === 'jasny' || source.motyw === 'ciemny' || source.motyw === 'systemowy'
-        ? source.motyw
-        : szkic.wyglad.motyw
+      const importowany = normalizujImportMotywu(JSON.parse(await file.text()), szkic.wyglad.motyw)
       aktualizuj({
         ...szkic,
         wyglad: {
           ...szkic.wyglad,
-          motyw,
+          motyw: importowany.motyw,
           personalizacja: {
-            ...normalizujPersonalizacje(source.personalizacja),
+            ...importowany.personalizacja,
             preset: 'wlasny',
             uzyjWlasnejPalety: true,
           },
@@ -315,7 +339,7 @@ export function EdytorPersonalizacji() {
       akcje={<>
         <Link className="przycisk przycisk--drugorzedny" to="/ustawienia">← Ustawienia</Link>
         <button className="przycisk przycisk--drugorzedny" type="button" onClick={resetuj}><RotateCcw aria-hidden="true" />Resetuj</button>
-        <button className="przycisk przycisk--glowny" type="button" onClick={zapisz}><Save aria-hidden="true" />Zapisz motyw</button>
+        <button className="przycisk przycisk--glowny" type="button" disabled={!niezapisaneZmiany} onClick={zapisz}><Save aria-hidden="true" />Zapisz ustawienia</button>
       </>}
     />
 
@@ -327,7 +351,10 @@ export function EdytorPersonalizacji() {
         <Palette aria-hidden="true" />
         <div>
           <strong>{p.preset === 'wlasny' ? 'Motyw własny' : PRESETY_MOTYWOW.find((item) => item.id === p.preset)?.nazwa ?? 'Motyw bazowy'}</strong>
-          <span>Podgląd na żywo · {p.uzyjWlasnejPalety ? 'własna paleta' : 'kolory bazowe aplikacji'}</span>
+          <span>
+            Podgląd na żywo · {p.uzyjWlasnejPalety ? 'własna paleta' : 'kolory bazowe aplikacji'}
+            {niezapisaneZmiany && <em className="personalizacja__dirty"> · Niezapisane zmiany</em>}
+          </span>
         </div>
       </div>
       <div className="personalizacja__io">
@@ -425,6 +452,17 @@ export function EdytorPersonalizacji() {
             <div><h2>Paleta kolorów</h2><p>Zmiana dowolnego koloru automatycznie przełącza paletę w tryb własny.</p></div>
             <Palette aria-hidden="true" />
           </div>
+          <div className={`kontrast-panel ${niskieKontrasty.length > 0 ? 'kontrast-panel--ostrzezenie' : ''}`}>
+            {niskieKontrasty.length > 0 && <AlertTriangle aria-hidden="true" />}
+            <div>
+              <strong>{niskieKontrasty.length > 0 ? 'Niski kontrast' : 'Podstawowy kontrast jest czytelny'}</strong>
+              <span>
+                {niskieKontrasty.length > 0
+                  ? niskieKontrasty.map((ocena) => `${ocena.etykieta} (${ocena.wspolczynnik.toFixed(2)}:1)`).join(' · ')
+                  : 'Sprawdzono tekst aplikacji, karty, przycisk primary i sidebar.'}
+              </span>
+            </div>
+          </div>
           {grupyKolorow.map((grupa) => <div key={grupa} className="personalizacja-blok">
             <h3>{grupa}</h3>
             <div className="kolory-grid">
@@ -452,6 +490,10 @@ export function EdytorPersonalizacji() {
             <SlidersHorizontal aria-hidden="true" />
           </div>
           <div className="personalizacja-form-grid">
+            <label className="pole"><span>Globalne obramowanie</span><select value={p.komponenty.obramowanie} onChange={(e) => ustawKomponent('obramowanie', e.target.value as KomponentyPersonalizacji['obramowanie'])}><option value="brak">Brak</option><option value="subtelne">Subtelne</option><option value="standardowe">Standardowe</option><option value="wyrazne">Wyraźne</option></select></label>
+            <label className="pole"><span>Globalna głębia</span><select value={p.komponenty.glebia} onChange={(e) => ustawKomponent('glebia', e.target.value as KomponentyPersonalizacji['glebia'])}><option value="plaska">Płaska</option><option value="lekko-podniesiona">Lekko podniesiona</option><option value="przestrzenna">Przestrzenna</option></select></label>
+            <Suwak label="Globalny promień kart i paneli" value={szkic.wyglad.promienKart} min={0} max={24} step={1} suffix=" px" onChange={(v) => aktualizuj({ ...szkic, wyglad: { ...szkic.wyglad, promienKart: v } })} />
+            <Suwak label="Globalny promień kontrolek" value={szkic.wyglad.promienPol} min={0} max={16} step={1} suffix=" px" onChange={(v) => aktualizuj({ ...szkic, wyglad: { ...szkic.wyglad, promienPol: v } })} />
             <label className="pole"><span>Cień kart</span><select value={p.komponenty.kartaCien} onChange={(e) => ustawKomponent('kartaCien', e.target.value as KomponentyPersonalizacji['kartaCien'])}><option value="brak">Brak</option><option value="lekki">Lekki</option><option value="sredni">Średni</option><option value="mocny">Mocny</option></select></label>
             <Suwak label="Obramowanie kart" value={p.komponenty.kartaObramowanie} min={0} max={4} step={1} suffix=" px" onChange={(v) => ustawKomponent('kartaObramowanie', v)} />
             <Suwak label="Uniesienie karty na hover" value={p.komponenty.kartaHoverUniesienie} min={0} max={10} step={1} suffix=" px" onChange={(v) => ustawKomponent('kartaHoverUniesienie', v)} />
@@ -467,21 +509,53 @@ export function EdytorPersonalizacji() {
 
         {zakladka === 'interakcje' && <section className="personalizacja-sekcja">
           <div className="personalizacja-sekcja__naglowek">
-            <div><h2>Hover, active, selected i focus</h2><p>Reakcje są współdzielone przez przyciski, karty i pozycje nawigacji.</p></div>
+            <div><h2>Hover, active, selected i focus</h2><p>Poziom ustawia bezpieczny zestaw reakcji. „Własny” odsłania precyzyjne parametry.</p></div>
             <Sparkles aria-hidden="true" />
           </div>
           <label className="ustawienie-wiersz personalizacja-toggle">
             <span><strong>Automatyczne stany kolorystyczne</strong><small>Kolory hover i active pozostają spójne z akcentem.</small></span>
             <input type="checkbox" checked={p.interakcje.autoStany} onChange={(e) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, autoStany: e.target.checked } })} />
           </label>
-          <div className="personalizacja-form-grid">
-            <Suwak label="Jasność hover" value={p.interakcje.hoverJasnosc} min={0.8} max={1.3} step={0.01} suffix="×" onChange={(v) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, hoverJasnosc: v } })} />
-            <Suwak label="Skala hover" value={p.interakcje.hoverSkala} min={0.94} max={1.08} step={0.005} suffix="×" onChange={(v) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, hoverSkala: v } })} />
-            <Suwak label="Przesunięcie hover Y" value={p.interakcje.hoverPrzesuniecieY} min={-8} max={8} step={1} suffix=" px" onChange={(v) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, hoverPrzesuniecieY: v } })} />
-            <Suwak label="Skala active" value={p.interakcje.activeSkala} min={0.9} max={1.04} step={0.005} suffix="×" onChange={(v) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, activeSkala: v } })} />
-            <Suwak label="Przesunięcie active Y" value={p.interakcje.activePrzesuniecieY} min={-4} max={6} step={1} suffix=" px" onChange={(v) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, activePrzesuniecieY: v } })} />
-            <Suwak label="Glow zaznaczenia" value={p.interakcje.selectedGlow} min={0} max={32} step={1} suffix=" px" onChange={(v) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, selectedGlow: v } })} />
-            <Suwak label="Grubość focus" value={p.interakcje.focusGrubosc} min={1} max={6} step={1} suffix=" px" onChange={(v) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, focusGrubosc: v } })} />
+          <div className="personalizacja-blok">
+            <h3>Hover</h3>
+            <label className="pole"><span>Intensywność</span><select value={p.interakcje.hoverPoziom} onChange={(e) => aktualizujPersonalizacje({ ...p, interakcje: zastosujPoziomHover(p.interakcje, e.target.value as PoziomHover) })}><option value="wylaczony">Wyłączony</option><option value="subtelny">Subtelny</option><option value="normalny">Normalny</option><option value="wyrazny">Wyraźny</option><option value="wlasny">Własny</option></select></label>
+            {p.interakcje.hoverPoziom === 'wlasny' && <div className="personalizacja-form-grid">
+              <Suwak label="Jasność" value={p.interakcje.hoverJasnosc} min={0.8} max={1.3} step={0.01} suffix="×" onChange={(v) => ustawWlasneInterakcje({ hoverJasnosc: v }, 'hover')} />
+              <Suwak label="Krycie" value={p.interakcje.hoverKrycie} min={0.65} max={1} step={0.01} suffix="×" onChange={(v) => ustawWlasneInterakcje({ hoverKrycie: v }, 'hover')} />
+              <Suwak label="Skala" value={p.interakcje.hoverSkala} min={0.96} max={1.04} step={0.005} suffix="×" onChange={(v) => ustawWlasneInterakcje({ hoverSkala: v }, 'hover')} />
+              <Suwak label="Przesunięcie Y" value={p.interakcje.hoverPrzesuniecieY} min={-4} max={4} step={1} suffix=" px" onChange={(v) => ustawWlasneInterakcje({ hoverPrzesuniecieY: v }, 'hover')} />
+              <Suwak label="Cień" value={p.interakcje.hoverCien} min={0} max={24} step={1} suffix=" px" onChange={(v) => ustawWlasneInterakcje({ hoverCien: v }, 'hover')} />
+              <Suwak label="Akcent obramowania" value={p.interakcje.hoverObramowanie} min={0} max={100} step={5} suffix="%" onChange={(v) => ustawWlasneInterakcje({ hoverObramowanie: v }, 'hover')} />
+            </div>}
+          </div>
+          <div className="personalizacja-blok">
+            <h3>Active / pressed</h3>
+            <label className="pole"><span>Intensywność</span><select value={p.interakcje.activePoziom} onChange={(e) => aktualizujPersonalizacje({ ...p, interakcje: zastosujPoziomActive(p.interakcje, e.target.value as PoziomReakcji) })}><option value="subtelny">Subtelny</option><option value="normalny">Normalny</option><option value="wyrazny">Wyraźny</option><option value="wlasny">Własny</option></select></label>
+            {p.interakcje.activePoziom === 'wlasny' && <div className="personalizacja-form-grid">
+              <Suwak label="Jasność" value={p.interakcje.activeJasnosc} min={0.75} max={1.1} step={0.01} suffix="×" onChange={(v) => ustawWlasneInterakcje({ activeJasnosc: v }, 'active')} />
+              <Suwak label="Krycie" value={p.interakcje.activeKrycie} min={0.65} max={1} step={0.01} suffix="×" onChange={(v) => ustawWlasneInterakcje({ activeKrycie: v }, 'active')} />
+              <Suwak label="Skala" value={p.interakcje.activeSkala} min={0.92} max={1.02} step={0.005} suffix="×" onChange={(v) => ustawWlasneInterakcje({ activeSkala: v }, 'active')} />
+              <Suwak label="Przesunięcie Y" value={p.interakcje.activePrzesuniecieY} min={0} max={3} step={1} suffix=" px" onChange={(v) => ustawWlasneInterakcje({ activePrzesuniecieY: v }, 'active')} />
+              <Suwak label="Cień wciśnięcia" value={p.interakcje.activeCien} min={0} max={18} step={1} suffix=" px" onChange={(v) => ustawWlasneInterakcje({ activeCien: v }, 'active')} />
+            </div>}
+          </div>
+          <div className="personalizacja-blok">
+            <h3>Selected</h3>
+            <label className="pole"><span>Intensywność</span><select value={p.interakcje.selectedPoziom} onChange={(e) => aktualizujPersonalizacje({ ...p, interakcje: zastosujPoziomSelected(p.interakcje, e.target.value as PoziomReakcji) })}><option value="subtelny">Subtelny</option><option value="normalny">Normalny</option><option value="wyrazny">Wyraźny</option><option value="wlasny">Własny</option></select></label>
+            {p.interakcje.selectedPoziom === 'wlasny' && <div className="personalizacja-form-grid">
+              <Suwak label="Tło akcentu" value={p.interakcje.selectedIntensywnosc} min={6} max={40} step={1} suffix="%" onChange={(v) => ustawWlasneInterakcje({ selectedIntensywnosc: v }, 'selected')} />
+              <Suwak label="Obramowanie akcentu" value={p.interakcje.selectedObramowanie} min={20} max={100} step={5} suffix="%" onChange={(v) => ustawWlasneInterakcje({ selectedObramowanie: v }, 'selected')} />
+              <Suwak label="Glow zaznaczenia" value={p.interakcje.selectedGlow} min={0} max={24} step={1} suffix=" px" onChange={(v) => ustawWlasneInterakcje({ selectedGlow: v }, 'selected')} />
+            </div>}
+          </div>
+          <div className="personalizacja-blok">
+            <h3>Focus i disabled</h3>
+            <label className="pole"><span>Czytelność focus</span><select value={p.interakcje.focusPoziom} onChange={(e) => aktualizujPersonalizacje({ ...p, interakcje: zastosujPoziomFocus(p.interakcje, e.target.value as PoziomFocus) })}><option value="subtelny">Subtelny</option><option value="standardowy">Standardowy</option><option value="wyrazny">Wyraźny</option><option value="wlasny">Własny</option></select></label>
+            <div className="personalizacja-form-grid">
+              {p.interakcje.focusPoziom === 'wlasny' && <><Suwak label="Grubość focus" value={p.interakcje.focusGrubosc} min={1} max={6} step={1} suffix=" px" onChange={(v) => ustawWlasneInterakcje({ focusGrubosc: v }, 'focus')} /><Suwak label="Krycie focus" value={p.interakcje.focusKrycie} min={35} max={100} step={5} suffix="%" onChange={(v) => ustawWlasneInterakcje({ focusKrycie: v }, 'focus')} /></>}
+              <Suwak label="Krycie disabled" value={p.interakcje.disabledKrycie} min={30} max={75} step={5} suffix="%" onChange={(v) => aktualizujPersonalizacje({ ...p, interakcje: { ...p.interakcje, disabledKrycie: v } })} />
+            </div>
+            <small className="tekst-pomocniczy">Focus zawsze pozostaje widoczny; nie można ustawić grubości ani krycia na zero.</small>
           </div>
         </section>}
 
@@ -499,7 +573,23 @@ export function EdytorPersonalizacji() {
               <option value="dynamiczne">Dynamiczne</option>
               <option value="wlasne">Własne</option>
             </select>
+            <small>Ustawienie „Ogranicz ruch” oraz systemowe prefers-reduced-motion mają wyższy priorytet.</small>
           </label>
+          <div className="personalizacja-blok">
+            <h3>Rodzaje efektów</h3>
+            <div className="animacje-grid">
+              {([
+                ['animujHover', 'Hover'],
+                ['animujPrzyciski', 'Przyciski'],
+                ['animujKarty', 'Karty'],
+                ['animujDropdowny', 'Dropdowny'],
+                ['animujModale', 'Modale'],
+                ['animujZakladki', 'Zakładki'],
+                ['animujPanele', 'Panele i sidebar'],
+                ['animujPojawianie', 'Pojawianie elementów'],
+              ] as const).map(([key, label]) => <label className="ustawienie-wiersz personalizacja-toggle" key={key}><span><strong>{label}</strong></span><input type="checkbox" checked={p.animacje[key]} onChange={(e) => ustawAnimacje(key, e.target.checked)} /></label>)}
+            </div>
+          </div>
           <div className="personalizacja-form-grid">
             <Suwak label="Hover" value={p.animacje.hoverMs} min={0} max={1000} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('hoverMs', v)} />
             <Suwak label="Active" value={p.animacje.activeMs} min={0} max={1000} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('activeMs', v)} />
@@ -528,7 +618,11 @@ export function EdytorPersonalizacji() {
             <div><h2>Playground motywu</h2><p>Najedź, kliknij i przejdź klawiaturą po elementach. Cała aplikacja również korzysta z bieżącego podglądu.</p></div>
             <Eye aria-hidden="true" />
           </div>
-          <Playground />
+          <div className="porownanie-motywu" role="group" aria-label="Porównanie motywu">
+            <button type="button" className={!pokazBazowy ? 'active' : ''} aria-pressed={!pokazBazowy} onClick={() => ustawPokazBazowy(false)}>Edytowany</button>
+            <button type="button" className={pokazBazowy ? 'active' : ''} aria-pressed={pokazBazowy} onClick={() => ustawPokazBazowy(true)}>Bazowy</button>
+          </div>
+          <Playground bazowy={pokazBazowy} />
         </section>}
       </main>
 
@@ -563,36 +657,68 @@ function Suwak({
   </label>
 }
 
-function Playground({ kompaktowy = false }: { kompaktowy?: boolean }) {
-  return <div className={`motyw-playground ${kompaktowy ? 'motyw-playground--kompaktowy' : ''}`}>
+function Playground({ kompaktowy = false, bazowy = false }: { kompaktowy?: boolean; bazowy?: boolean }) {
+  const [sekcja, ustawSekcje] = useState('pulpit')
+  const [zakladka, ustawZakladke] = useState('dzisiaj')
+  const [wybranyWiersz, ustawWybranyWiersz] = useState('pierwszy')
+  const [wybranyBlok, ustawWybranyBlok] = useState('zadanie')
+  const [zaznaczone, ustawZaznaczone] = useState(true)
+  const [przelacznik, ustawPrzelacznik] = useState(true)
+  const [dropdown, ustawDropdown] = useState(false)
+  const [modal, ustawModal] = useState(false)
+
+  return <div className={`motyw-playground ${kompaktowy ? 'motyw-playground--kompaktowy' : ''} ${bazowy ? 'motyw-playground--bazowy' : ''}`}>
     <div className="motyw-playground__sidebar">
       <strong>Ogarniacz</strong>
-      <button type="button" className="active">Pulpit</button>
-      <button type="button">Zadania</button>
-      <button type="button">Projekty</button>
+      {['Pulpit', 'Zadania', 'Projekty'].map((etykieta) => {
+        const id = etykieta.toLocaleLowerCase('pl-PL')
+        return <button type="button" key={id} className={sekcja === id ? 'active' : ''} aria-pressed={sekcja === id} onClick={() => ustawSekcje(id)}>{etykieta}</button>
+      })}
     </div>
     <div className="motyw-playground__main">
       <div className="motyw-playground__toolbar">
         <button type="button" className="przycisk przycisk--glowny">Główny</button>
         <button type="button" className="przycisk przycisk--drugorzedny">Drugorzędny</button>
+        <button type="button" className="przycisk przycisk--niebezpieczny">Niebezpieczny</button>
+        <button type="button" className="przycisk" disabled>Disabled</button>
       </div>
       <div className="karta motyw-playground__karta">
         <span className="tytul-karty">Przykładowa karta</span>
         <strong>Zadanie do wykonania</strong>
         <p>Hover i cień reagują na ustawienia komponentów.</p>
-        <input type="text" defaultValue="Pole formularza" aria-label="Przykładowe pole formularza" />
+        <div className="motyw-playground__formularz">
+          <input type="text" defaultValue="Pole formularza" aria-label="Przykładowe pole formularza" />
+          <select defaultValue="normalny" aria-label="Przykładowy select"><option value="niski">Niski</option><option value="normalny">Normalny</option><option value="wysoki">Wysoki</option></select>
+          <label className="motyw-playground__checkbox"><input type="checkbox" checked={zaznaczone} onChange={(e) => ustawZaznaczone(e.target.checked)} /> Checkbox</label>
+          <label className="przelacznik motyw-playground__switch"><input type="checkbox" checked={przelacznik} onChange={(e) => ustawPrzelacznik(e.target.checked)} /><span /><b>Switch</b></label>
+        </div>
+      </div>
+      <div className="motyw-playground__zakladki" role="tablist" aria-label="Przykładowe zakładki">
+        {['dzisiaj', 'tydzien', 'miesiac'].map((id) => <button type="button" role="tab" aria-selected={zakladka === id} className={zakladka === id ? 'active' : ''} key={id} onClick={() => ustawZakladke(id)}>{id === 'dzisiaj' ? 'Dzisiaj' : id === 'tydzien' ? 'Tydzień' : 'Miesiąc'}</button>)}
       </div>
       <div className="motyw-playground__statusy">
         <span style={{ background: 'var(--sukces-tlo)', color: 'var(--sukces)' }}>Sukces</span>
         <span style={{ background: 'var(--ostrzezenie-tlo)', color: 'var(--ostrzezenie)' }}>Uwaga</span>
         <span style={{ background: 'var(--blad-tlo)', color: 'var(--blad)' }}>Błąd</span>
       </div>
+      <div className="motyw-playground__akcje-podgladu">
+        <div className="motyw-playground__dropdown-wrap">
+          <button type="button" className="przycisk przycisk--maly" aria-expanded={dropdown} onClick={() => ustawDropdown((otwarty) => !otwarty)}>Dropdown ▾</button>
+          {dropdown && <div className="motyw-playground__dropdown" role="menu"><button type="button" role="menuitem">Pierwsza akcja</button><button type="button" role="menuitem">Druga akcja</button></div>}
+        </div>
+        <button type="button" className="przycisk przycisk--maly motyw-playground__tooltip" data-tooltip="Przykładowy tooltip">Najedź po tooltip</button>
+        <button type="button" className="przycisk przycisk--maly" onClick={() => ustawModal(true)}>Pokaż modal</button>
+      </div>
+      <div className="motyw-playground__lista" aria-label="Przykładowa lista">
+        {[['pierwszy', 'Zadanie wybrane'], ['drugi', 'Zwykły element listy']].map(([id, etykieta]) => <button type="button" aria-pressed={wybranyWiersz === id} className={wybranyWiersz === id ? 'active' : ''} key={id} onClick={() => ustawWybranyWiersz(id)}><span>{etykieta}</span><small>{id === 'pierwszy' ? 'Dzisiaj, 09:00' : 'Bez terminu'}</small></button>)}
+      </div>
       <div className="motyw-playground__timeline">
         <i />
-        <div className="motyw-playground__blok motyw-playground__blok--zadanie">09:00 · Zadanie</div>
-        <div className="motyw-playground__blok motyw-playground__blok--wizyta">11:30 · Wizyta</div>
+        <button type="button" aria-pressed={wybranyBlok === 'zadanie'} onClick={() => ustawWybranyBlok('zadanie')} className="motyw-playground__blok motyw-playground__blok--zadanie">09:00 · Zadanie</button>
+        <button type="button" aria-pressed={wybranyBlok === 'wizyta'} onClick={() => ustawWybranyBlok('wizyta')} className="motyw-playground__blok motyw-playground__blok--wizyta">11:30 · Wizyta</button>
         <b>teraz</b>
       </div>
+      {modal && <div className="motyw-playground__modal" role="dialog" aria-modal="true" aria-label="Przykładowy modal"><strong>Przykładowy modal</strong><p>Geometria, obramowanie, cień i animacja korzystają z centralnych tokenów.</p><button type="button" className="przycisk przycisk--glowny przycisk--maly" onClick={() => ustawModal(false)}>Zamknij</button></div>}
     </div>
   </div>
 }
