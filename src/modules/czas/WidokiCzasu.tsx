@@ -203,7 +203,7 @@ function SekcjaKalendarzaGrafiku() {
                 data === dzisiaj ? 'kalendarz-grafiku__dzien--dzisiaj' : '',
                 swieto ? 'kalendarz-grafiku__dzien--swieto' : '',
                 urlopyTegoDnia.length ? 'kalendarz-grafiku__dzien--urlop' : '',
-              ].filter(Boolean).join(' ') ?? ''} ${Boolean(pracuje) && !Boolean(urlopyTegoDnia) && !Boolean(swieto) ? 'kalendarz-dzien--pracujacy' : ''}`}
+              ].filter(Boolean).join(' ') ?? ''} ${pracuje && urlopyTegoDnia.length === 0 && !swieto ? 'kalendarz-dzien--pracujacy' : ''}`}
               aria-label={`${data}: ${godziny}${swieto ? `, ${swieto.nazwa}` : ''}`}
             >
               <div className="kalendarz-grafiku__data">
