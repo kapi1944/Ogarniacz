@@ -1,3 +1,5 @@
+import type { PersonalizacjaUI } from './personalizacja'
+
 export type Id = string
 
 export interface EncjaBazowa {
@@ -310,6 +312,7 @@ export interface UstawieniaWygladu {
   promienKart: number
   promienPol: number
   czasAnimacjiMs: number
+  personalizacja: PersonalizacjaUI
 }
 
 export interface UstawieniaNawigacji {

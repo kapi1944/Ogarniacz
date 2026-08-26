@@ -10,6 +10,7 @@ import { WidokCelow, WidokDokumentow, WidokKontaktow, WidokNaPozniej, WidokNotat
 import { WidokFinansow } from './modules/finanse/WidokFinansow'
 import { WidokEcho } from './modules/echo/WidokEcho'
 import { WidokUstawien } from './modules/ustawienia/WidokUstawien'
+import { EdytorPersonalizacji } from './modules/ustawienia/EdytorPersonalizacji'
 import type { NazwaModulu } from './domain/typy'
 
 const chron = (modul: NazwaModulu, element: React.ReactNode) => <StraznikModulu modul={modul}>{element}</StraznikModulu>
@@ -43,6 +44,7 @@ export default function App() {
     <Route path="/finanse" element={chron('finanse', <WidokFinansow />)} />
     <Route path="/echo" element={chron('echo', <WidokEcho />)} />
     <Route path="/ustawienia" element={chron('ustawienia', <WidokUstawien />)} />
+    <Route path="/ustawienia/personalizacja" element={chron('ustawienia', <EdytorPersonalizacji />)} />
     <Route path="*" element={<NieZnaleziono />} />
   </Routes></UkladAplikacji></DostawcaAplikacji></BrowserRouter>
 }

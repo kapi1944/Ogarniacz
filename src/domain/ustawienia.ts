@@ -1,4 +1,5 @@
 import { utworzMetadane } from './fabryki'
+import { DOMYSLNA_PERSONALIZACJA, normalizujPersonalizacje, zastosujPersonalizacje } from './personalizacja'
 import type {
   DostepnoscPlanistyczna,
   GestoscInterfejsu,
@@ -24,6 +25,7 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
     promienKart: 12,
     promienPol: 7,
     czasAnimacjiMs: 180,
+    personalizacja: DOMYSLNA_PERSONALIZACJA,
   },
   nawigacja: {
     szerokoscMenu: 256,
@@ -160,6 +162,7 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
       promienKart: liczba(wyglad.promienKart, 0, 24, domyslne.wyglad.promienKart),
       promienPol: liczba(wyglad.promienPol, 0, 16, domyslne.wyglad.promienPol),
       czasAnimacjiMs: liczba(wyglad.czasAnimacjiMs, 0, 600, domyslne.wyglad.czasAnimacjiMs),
+      personalizacja: normalizujPersonalizacje(wyglad.personalizacja),
     },
     nawigacja: {
       szerokoscMenu: liczba(nawigacja.szerokoscMenu, 220, 360, domyslne.nawigacja.szerokoscMenu),
@@ -225,4 +228,5 @@ export function zastosujUstawieniaInterfejsu(ustawienia: Ustawienia, ciemnyMotyw
   korzen.style.setProperty('--czas-animacji', `${ustawienia.dostepnosc.ograniczRuch ? 0 : ustawienia.wyglad.czasAnimacjiMs}ms`)
   korzen.style.setProperty('--szerokosc-menu', `${ustawienia.nawigacja.szerokoscMenu}px`)
   korzen.style.setProperty('--wysokosc-pozycji-menu', `${ustawienia.nawigacja.wysokoscPozycji}px`)
+  zastosujPersonalizacje(ustawienia.wyglad.personalizacja, korzen, ustawienia.dostepnosc.ograniczRuch)
 }
