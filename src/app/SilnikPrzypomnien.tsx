@@ -23,3 +23,16 @@ export function SilnikPrzypomnien() {
 
   return null
 }
+
+// OGARNIACZ_FINAL_AUDIT_VOICE_2026_08_27_V1 — czysta logika współdzielona przez Zadania/Leki/Wizyty/Finanse.
+export {
+  odlozPrzypomnienieV1,
+  przypomnieniaWOknieV1,
+  wyznaczPrzypomnieniaV1,
+} from './wspolnySilnikPrzypomnien'
+export type {
+  KandydatPrzypomnieniaV1,
+  RegulaPrzypomnieniaV1,
+  SourceRefPrzypomnienia,
+  ZaplanowanePrzypomnienieV1,
+} from './wspolnySilnikPrzypomnien'

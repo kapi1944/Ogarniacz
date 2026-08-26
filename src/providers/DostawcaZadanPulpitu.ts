@@ -10,3 +10,12 @@ export class DostawcaZadanPulpitu implements DostawcaElementowPulpitu {
     return (await this.repozytorium.lista(zakres)).filter((element) => element.pokazNaPulpicie !== false)
   }
 }
+
+// OGARNIACZ_FINAL_AUDIT_VOICE_2026_08_27_V1 — wspólna polityka ekspozycji Pulpitu: ważne/pilne wyżej, luźne niżej.
+export {
+  czyZalegle,
+  dniOpoznienia,
+  sekcjaDlaElementuPulpitu,
+  sortujElementyPulpitu,
+  wynikRankinguPulpitu,
+} from '../domain/ustaleniaGlosowe'
