@@ -6,11 +6,16 @@ import type {
   MotywAplikacji,
   Priorytet,
   TypSzybkiegoDodawania,
+  KonfiguracjaKafelkaPulpitu,
   Ustawienia,
   ZakresZmianyHarmonogramu,
 } from './typy'
 
 export const WERSJA_USTAWIEN = 1 as const
+export const DOMYSLNE_KAFELKI_PULPITU: KonfiguracjaKafelkaPulpitu[] = [
+  ['pilne', 'large', '7d'], ['zadania', 'large', '7d'], ['wizyty', 'medium', '30d'], ['leki', 'medium', 'today'], ['finanse', 'medium', '30d'], ['samochod', 'medium', '30d'], ['zakupy', 'small', '7d'], ['poczekalnia', 'small', '7d'], ['notatki', 'small', '7d'],
+].map(([typ, rozmiar, zakresCzasu], kolejnosc) => ({ id: `pulpit-${typ}`, typ: typ as KonfiguracjaKafelkaPulpitu['typ'], widoczny: true, kolejnosc, rozmiar: rozmiar as KonfiguracjaKafelkaPulpitu['rozmiar'], zakresCzasu: zakresCzasu as KonfiguracjaKafelkaPulpitu['zakresCzasu'], limit: 4 }))
+
 
 const domyslneTypySzybkiegoDodawania: TypSzybkiegoDodawania[] = [
   'zadanie', 'notatka', 'wizyta', 'lek', 'wydatek', 'samochod',
@@ -42,6 +47,7 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
     pokazWykonane: false,
     efektyAsap: true,
     limitAlertow: 4,
+    kafelki: DOMYSLNE_KAFELKI_PULPITU,
   },
   harmonogram: {
     dniPracy: [1, 2, 3, 4, 5],
@@ -139,6 +145,21 @@ function licznikiSzybkiegoDodawania(wartosc: unknown): Record<TypSzybkiegoDodawa
   const zrodlo = jakoRekord(wartosc)
   return Object.fromEntries(domyslneTypySzybkiegoDodawania.map((typ) => [typ, liczba(zrodlo[typ], 0, 1_000_000, 0)])) as Record<TypSzybkiegoDodawania, number>
 }
+function kafelkiPulpitu(wartosc: unknown): KonfiguracjaKafelkaPulpitu[] {
+  const zrodlo = Array.isArray(wartosc) ? wartosc : []
+  const wedlugTypu = new Map(zrodlo.map((element) => [jakoRekord(element).typ, jakoRekord(element)] as const))
+  return DOMYSLNE_KAFELKI_PULPITU.map((domyslny, indeks) => {
+    const rekord = wedlugTypu.get(domyslny.typ) ?? {}
+    return {
+      id: tekst(rekord.id, domyslny.id), typ: domyslny.typ,
+      widoczny: logiczna(rekord.widoczny, domyslny.widoczny), kolejnosc: liczba(rekord.kolejnosc, 0, 99, indeks),
+      rozmiar: enumWartosci(rekord.rozmiar, ['small', 'medium', 'large'], domyslny.rozmiar),
+      zakresCzasu: enumWartosci(rekord.zakresCzasu, ['today', '3d', '7d', '30d', 'custom'], domyslny.zakresCzasu),
+      limit: liczba(rekord.limit, 1, 10, domyslny.limit),
+    }
+  }).sort((a, b) => a.kolejnosc - b.kolejnosc || a.typ.localeCompare(b.typ, 'pl')).map((kafelek, kolejnosc) => ({ ...kafelek, kolejnosc }))
+}
+
 export function normalizujUstawienia(wartosc: unknown): Ustawienia {
   const zrodlo = jakoRekord(wartosc)
   const wyglad = jakoRekord(zrodlo.wyglad)
@@ -202,7 +223,8 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
       pokazMiniatury: logiczna(pulpit.pokazMiniatury, domyslne.pulpit.pokazMiniatury),
       pokazWykonane: logiczna(pulpit.pokazWykonane, domyslne.pulpit.pokazWykonane),
       efektyAsap: logiczna(pulpit.efektyAsap, domyslne.pulpit.efektyAsap),
-      limitAlertow: liczba(pulpit.limitAlertow, 1, 10, domyslne.pulpit.limitAlertow),
+      limitAlertow: liczba(pulpit.limitAlertow, 3, 5, domyslne.pulpit.limitAlertow),
+      kafelki: kafelkiPulpitu(pulpit.kafelki),
     },
     harmonogram: {
       dniPracy: dniPracy(harmonogram.dniPracy),

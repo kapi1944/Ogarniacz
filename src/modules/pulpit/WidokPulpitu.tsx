@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertCircle, CheckCircle2, LayoutGrid, Plus } from 'lucide-react'
 import { Karta, Komunikat, NaglowekWidoku, PustyStan } from '../../components/Interfejs'
@@ -8,6 +9,7 @@ import type { ZakresZmianyHarmonogramu } from '../../domain/typy'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { DostawcaZadanPulpitu } from '../../providers/DostawcaZadanPulpitu'
+import { alertyZadan, deduplikujAlerty, elementyDlaKafelka, rangujAlerty, sortujKafelki } from './logikaKafelkow'
 import { FormularzHarmonogramuDnia } from './FormularzHarmonogramuDnia'
 import { NawigatorDnia } from './NawigatorDnia'
 import { OsCzasu } from './OsCzasu'
@@ -48,6 +50,12 @@ export function WidokPulpitu() {
     [data],
     [],
   )
+  const elementyKafelkow = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: '1900-01-01', do: '9999-12-31' }), [], [])
+  const [pokazWiecejAlertow, ustawPokazWiecejAlertow] = useState(false)
+  const [filtrKafelkow, ustawFiltrKafelkow] = useState<'wszystkie' | 'zadania' | 'pilne'>('wszystkie')
+  const alerty = useMemo(() => rangujAlerty(deduplikujAlerty(alertyZadan(elementyKafelkow, new Date()))), [elementyKafelkow])
+  const widoczneAlerty = pokazWiecejAlertow ? alerty : alerty.slice(0, ustawienia.pulpit.limitAlertow)
+  const kafelki = useMemo(() => sortujKafelki(ustawienia.pulpit.kafelki).filter((k) => filtrKafelkow === 'wszystkie' || k.typ === filtrKafelkow), [ustawienia.pulpit.kafelki, filtrKafelkow])
   const wyjatekDnia = useMemo(() => [...wyjatki]
     .filter((wyjatek) => wyjatek.data === data)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
@@ -118,11 +126,7 @@ export function WidokPulpitu() {
       <NawigatorDnia data={data} zmienDate={(nowaData) => { ustawDate(nowaData); ustawKomunikat('') }} />
       {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}
 
-      {(ustawienia.pulpit.pokazAlerty || ustawienia.pulpit.pokazKafelki) && <section className="strefy-pulpitu">
-        {ustawienia.pulpit.pokazAlerty && <Karta klasa="strefa-pulpitu strefa-pulpitu--alerty"><div className="tytul-karty"><AlertCircle aria-hidden="true" /><span>Alerty</span></div><h2>Obszar najważniejszych sygnałów</h2><p>Ta strefa nie zależy wyłącznie od wybranego dnia. Ranking zaległości i alertów modułowych pojawi się w Etapie 7.</p></Karta>}
-        {ustawienia.pulpit.pokazKafelki && <Karta klasa="strefa-pulpitu"><div className="tytul-karty"><LayoutGrid aria-hidden="true" /><span>Kafelki</span></div><h2>Przekrojowe podsumowania</h2><p>Kafelki będą mogły prezentować zakresy 3, 7 i 30 dni niezależnie od daty osi czasu.</p></Karta>}
-      </section>}
-
+      {ustawienia.pulpit.pokazAlerty && <Karta klasa="strefa-pulpitu strefa-pulpitu--alerty"><div className="tytul-karty"><AlertCircle aria-hidden="true" /><span>Smart Alerts</span></div><h2>Najważniejsze sygnały</h2>{widoczneAlerty.length === 0 ? <p>Brak alertów wymagających uwagi.</p> : <div className="lista-kompaktowa">{widoczneAlerty.map((alert) => <div key={alert.id}><div><Link to={`/zadania?element=${alert.sourceRef.encjaId}`}><strong>{alert.tytul}</strong></Link><small>{alert.severity === "critical" ? "Krytyczne" : "Ostrzeżenie"} · {alert.opis}</small></div></div>)}</div>}{alerty.length > ustawienia.pulpit.limitAlertow && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPokazWiecejAlertow((w) => !w)}>{pokazWiecejAlertow ? "Pokaż mniej" : "Pokaż więcej"}</button>}</Karta>}`n      {ustawienia.pulpit.pokazKafelki && <section><div className="akcje-formularza"><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow("wszystkie")}>Wszystkie</button><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow("zadania")}>Zadania</button><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow("pilne")}>Pilne</button></div><div className="strefy-pulpitu">{kafelki.map((k) => { const elementy = elementyDlaKafelka(k, elementyKafelkow, new Date()); return <Karta key={k.id} klasa="strefa-pulpitu"><div className="tytul-karty"><LayoutGrid aria-hidden="true" /><span>{k.typ === "pilne" ? "Pilne / zaległe" : k.typ}</span></div>{["zadania", "pilne"].includes(k.typ) ? (elementy.length ? <div className="lista-kompaktowa">{elementy.map((e) => <div key={e.id}><div><Link to={`/zadania?element=${e.referencjaZrodla?.encjaId ?? e.id}`}><strong>{e.tytul}</strong></Link><small>{e.data ?? "Bez terminu"}</small></div></div>)}</div> : <PustyStan tytul="Brak danych" opis="Brak elementów w wybranym zakresie." />) : <PustyStan tytul="Brak danych" opis="Integracja modułu będzie dostępna po podłączeniu źródła." />}</Karta> })}</div></section>}`n
       {ustawienia.pulpit.pokazOsCzasu && <OsCzasu
         data={data}
         harmonogram={harmonogram}

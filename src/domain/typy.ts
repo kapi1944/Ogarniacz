@@ -329,6 +329,19 @@ export type DostepnoscPlanistyczna = 'czesciowa' | 'pelna'
 export type ZakresZmianyHarmonogramu = 'tylko_ten_dzien' | 'nowa_regula'
 export type TypSzybkiegoDodawania = 'zadanie' | 'notatka' | 'wizyta' | 'lek' | 'wydatek' | 'samochod'
 
+export type TypKafelkaPulpitu = 'zadania' | 'pilne' | 'wizyty' | 'leki' | 'finanse' | 'samochod' | 'zakupy' | 'poczekalnia' | 'notatki'
+export type RozmiarKafelkaPulpitu = 'small' | 'medium' | 'large'
+export type ZakresCzasuKafelkaPulpitu = 'today' | '3d' | '7d' | '30d' | 'custom'
+
+export interface KonfiguracjaKafelkaPulpitu {
+  id: string
+  typ: TypKafelkaPulpitu
+  widoczny: boolean
+  kolejnosc: number
+  rozmiar: RozmiarKafelkaPulpitu
+  zakresCzasu: ZakresCzasuKafelkaPulpitu
+  limit: number
+}
 export interface UstawieniaWygladu {
   motyw: MotywAplikacji
   gestosc: GestoscInterfejsu
@@ -354,6 +367,7 @@ export interface UstawieniaPulpitu {
   pokazWykonane: boolean
   efektyAsap: boolean
   limitAlertow: number
+  kafelki: KonfiguracjaKafelkaPulpitu[]
 }
 
 export interface UstawieniaHarmonogramu {
