@@ -13,6 +13,8 @@ export interface DefinicjaPola {
   min?: number
   krok?: number
   opcje?: { wartosc: string; etykieta: string }[]
+  widoczne?: (formularz: Record<string, string>) => boolean
+  domyslnaWartosc?: string
 }
 
 interface Wlasciwosci<T extends EncjaBazowa> {
@@ -27,6 +29,7 @@ interface Wlasciwosci<T extends EncjaBazowa> {
   szczegoly: (element: T) => ReactNode
   akcje?: (element: T) => ReactNode
   filtr?: ReactNode
+  uzupelnijFormularz?: (element: T) => Record<string, string>
 }
 
 function wartoscTekstowa(wartosc: unknown): string {
@@ -43,7 +46,8 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
 
   const otworz = (element?: T) => {
     ustawEdytowany(element)
-    ustawFormularz(Object.fromEntries(wlasciwosci.pola.map((pole) => [pole.klucz, wartoscTekstowa(element ? (element as unknown as Record<string, unknown>)[pole.klucz] : '')])))
+    const wartosciPoczatkowe = Object.fromEntries(wlasciwosci.pola.map((pole) => [pole.klucz, wartoscTekstowa(element ? (element as unknown as Record<string, unknown>)[pole.klucz] : pole.domyslnaWartosc ?? '')]))
+    ustawFormularz(element ? { ...wartosciPoczatkowe, ...wlasciwosci.uzupelnijFormularz?.(element) } : wartosciPoczatkowe)
     ustawBlad('')
     ustawFormularzOtwarty(true)
   }
@@ -90,7 +94,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
         <Modal tytul={edytowany ? 'Edytuj element' : wlasciwosci.etykietaDodawania} zamknij={() => ustawFormularzOtwarty(false)}>
           <form className="formularz" onSubmit={zapisz}>
             {blad && <Komunikat typ="blad">{blad}</Komunikat>}
-            {wlasciwosci.pola.map((pole) => (
+            {wlasciwosci.pola.filter((pole) => pole.widoczne?.(formularz) ?? true).map((pole) => (
               <label className={pole.typ === 'textarea' ? 'pole pole--pelne' : 'pole'} key={pole.klucz}>
                 <span>{pole.etykieta}{pole.wymagane && ' *'}</span>
                 {pole.typ === 'textarea' ? (

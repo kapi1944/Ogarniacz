@@ -1,6 +1,7 @@
 import { godzinaZadaniaNaOsi } from './logikaTerminuZadania'
 import { noweId, terazIso, utworzMetadane } from './fabryki'
-import type { ElementZadania, PriorytetElementu, StatusElementu, TrybTerminuElementu } from './elementyOgarniacza'
+import type { ElementZadania, PriorytetElementu, StatusElementu } from './elementyOgarniacza'
+import { odczytajTerminZadania } from './logikaTerminuZadania'
 import type { Priorytet, RegulaPowtarzania, Zadanie } from './typy'
 
 type NieznanyRekord = Record<string, unknown>
@@ -78,17 +79,6 @@ function statusZadania(status: StatusElementu | undefined, istniejacy?: Zadanie)
   return status === 'wykonany' ? 'wykonane' : 'otwarte'
 }
 
-function daneTerminu(termin: unknown): { data?: string; godzina?: string; tryb: TrybTerminuElementu } {
-  if (typeof termin !== 'string') return { tryb: 'bez_godziny' }
-  const dopasowanie = /^(\d{4}-\d{2}-\d{2})(?:T(\d{2}:\d{2}))?/.exec(termin)
-  if (!dopasowanie) return { tryb: 'bez_godziny' }
-  return {
-    data: dopasowanie[1],
-    ...(dopasowanie[2] ? { godzina: dopasowanie[2] } : {}),
-    tryb: dopasowanie[2] ? 'o_godzinie' : 'koniec_dnia',
-  }
-}
-
 function powtarzanie(wartosc: unknown): RegulaPowtarzania | undefined {
   const rekord = jakoRekord(wartosc)
   const typy = ['brak', 'codziennie', 'co_x_dni', 'tygodniowo', 'dni_tygodnia', 'miesiecznie', 'rocznie']
@@ -105,17 +95,13 @@ export function zadanieLegacyNaElement(wartosc: unknown): ElementZadania {
   const rekord = jakoRekord(wartosc)
   const id = opcjonalnyTekst(rekord.id) ?? noweId()
   const teraz = terazIso()
-  const termin = daneTerminu(rekord.termin)
-  const data = maPole(rekord, 'dataElementu') ? opcjonalnyTekst(rekord.dataElementu) : termin.data
-  const godzina = maPole(rekord, 'godzinaElementu') ? opcjonalnyTekst(rekord.godzinaElementu) : termin.godzina
+  const termin = odczytajTerminZadania(rekord)
+  const data = termin.data
+  const godzina = termin.godzina
   const terminGraniczny = maPole(rekord, 'terminGranicznyElementu')
     ? opcjonalnyTekst(rekord.terminGranicznyElementu)
     : opcjonalnyTekst(rekord.termin)
-  const trybTerminu = rekord.trybTerminuElementu === 'o_godzinie'
-    || rekord.trybTerminuElementu === 'koniec_dnia'
-    || rekord.trybTerminuElementu === 'bez_godziny'
-    ? rekord.trybTerminuElementu
-    : termin.tryb
+  const trybTerminu = termin.tryb
   const opis = opcjonalnyTekst(rekord.opis)
   const projektId = opcjonalnyTekst(rekord.projektId)
   const regula = powtarzanie(rekord.powtarzanie)
@@ -150,9 +136,8 @@ export function zadanieLegacyNaElement(wartosc: unknown): ElementZadania {
 }
 
 export function elementNaZadanieLegacy(element: ElementZadania, istniejacy?: Zadanie): Zadanie {
-  const metadane = istniejacy ?? utworzMetadane(element.id)
-  const termin = element.terminGraniczny
-    ?? (element.data ? `${element.data}${element.godzina ? `T${element.godzina}` : ''}` : undefined)
+  const { deadlineMode: _deadlineMode, time: _time, ...metadane } = (istniejacy ?? utworzMetadane(element.id)) as Zadanie & { deadlineMode?: unknown; time?: unknown }
+  const termin = element.data
   return {
     ...metadane,
     id: element.id,

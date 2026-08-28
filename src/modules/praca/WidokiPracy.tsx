@@ -4,6 +4,7 @@ import { Check, CornerDownRight, RotateCcw } from 'lucide-react'
 import { WidokRejestru, type DefinicjaPola } from '../../components/WidokRejestru'
 import { Karta, Komunikat, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
+import { normalizujTerminZadania, odczytajTerminZadania } from '../../domain/logikaTerminuZadania'
 import type { ElementSkrzynki, ListaZakupow, NaPozniej, NazwaModulu, Notatka, PozycjaZakupow, Pomysl, Projekt, Wizyta, Zadanie } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
@@ -47,12 +48,21 @@ export function WidokZadan() {
     ] },
     { klucz: 'priorytet', etykieta: 'Priorytet', typ: 'select', wymagane: true, opcje: opcjePriorytetu },
     { klucz: 'termin', etykieta: 'Termin', typ: 'date' },
+<<<<<<< ours
       { klucz: 'deadlineMode', etykieta: 'Tryb terminu', typ: 'select', wymagane: true, opcje: [
         { wartosc: 'AT_TIME', etykieta: 'O konkretnej godzinie' },
         { wartosc: 'END_OF_DAY', etykieta: 'Do końca dnia' },
         { wartosc: 'NO_TIME', etykieta: 'Bez godziny' }
       ] },
       { klucz: 'time', etykieta: 'Godzina deadline', typ: 'time' },
+=======
+    { klucz: 'trybTerminuElementu', etykieta: 'Tryb terminu', typ: 'select', wymagane: true, domyslnaWartosc: 'bez_godziny', opcje: [
+      { wartosc: 'o_godzinie', etykieta: 'O konkretnej godzinie' },
+      { wartosc: 'koniec_dnia', etykieta: 'Do końca dnia' },
+      { wartosc: 'bez_godziny', etykieta: 'Bez godziny' },
+    ] },
+    { klucz: 'godzinaElementu', etykieta: 'Godzina', typ: 'time', widoczne: (formularz) => formularz.trybTerminuElementu === 'o_godzinie' },
+>>>>>>> theirs
     { klucz: 'dataStartu', etykieta: 'Najwcześniej od', typ: 'date' },
     { klucz: 'szacowanyCzasMin', etykieta: 'Szacowany czas (min)', typ: 'number', min: 1 },
     { klucz: 'projektId', etykieta: 'Projekt', typ: 'select', opcje: projekty.map((projekt) => ({ wartosc: projekt.id, etykieta: projekt.nazwa })) },
@@ -77,13 +87,17 @@ export function WidokZadan() {
     </div>}
     zbuduj={(formularz, istniejace) => {
       const baza = istniejace ?? utworzZadanie({ tytul: formularz.tytul, opis: formularz.opis, priorytet: formularz.priorytet as Zadanie['priorytet'], termin: formularz.termin || undefined })
+      const { deadlineMode: _deadlineMode, time: _time, ...kanonicznaBaza } = baza as Zadanie & { deadlineMode?: unknown; time?: unknown }
+      const termin = normalizujTerminZadania(formularz.trybTerminuElementu, formularz.godzinaElementu)
       return {
-        ...baza,
+        ...kanonicznaBaza,
         tytul: formularz.tytul.trim(),
         opis: formularz.opis ?? '',
         status: (formularz.status || 'otwarte') as Zadanie['status'],
         priorytet: (formularz.priorytet || 'normalny') as Zadanie['priorytet'],
         termin: formularz.termin || undefined,
+        trybTerminuElementu: termin.tryb,
+        godzinaElementu: termin.godzina,
         dataStartu: formularz.dataStartu || undefined,
         szacowanyCzasMin: formularz.szacowanyCzasMin ? Number(formularz.szacowanyCzasMin) : undefined,
         projektId: formularz.projektId || undefined,
@@ -91,6 +105,14 @@ export function WidokZadan() {
         tagi: (formularz.tagi ?? '').split(',').map((tag) => tag.trim()).filter(Boolean),
         powtarzanie: formularz.powtarzanieTyp && formularz.powtarzanieTyp !== 'brak' ? { typ: formularz.powtarzanieTyp as NonNullable<Zadanie['powtarzanie']>['typ'], coIle: Number(formularz.powtarzanieCoIle) || 1, dataStartu: formularz.termin || dzisiaj } : undefined,
         updatedAt: terazIso(),
+      }
+    }}
+    uzupelnijFormularz={(zadanie) => {
+      const termin = odczytajTerminZadania(zadanie as unknown as Record<string, unknown>)
+      return {
+        termin: termin.data ?? '',
+        trybTerminuElementu: termin.tryb,
+        godzinaElementu: termin.godzina ?? '',
       }
     }}
     etykieta={(zadanie) => zadanie.tytul}

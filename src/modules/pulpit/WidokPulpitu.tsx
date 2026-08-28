@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { AlertCircle, CheckCircle2, LayoutGrid, Plus } from 'lucide-react'
 import { Karta, Komunikat, NaglowekWidoku, PustyStan } from '../../components/Interfejs'
 import { utworzMetadane, dzisiajIso } from '../../domain/fabryki'
+import { poprawnaGodzinaTerminu } from '../../domain/logikaTerminuZadania'
 import type { ZakresZmianyHarmonogramu } from '../../domain/typy'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
@@ -17,6 +18,20 @@ import {
 } from './logikaOsiCzasu'
 
 const dostawcaZadan = new DostawcaZadanPulpitu()
+
+function etykietaTerminuBezGodziny(tryb: string | undefined): string {
+  if (tryb === 'koniec_dnia') return 'Do końca dnia'
+  if (tryb === 'bez_godziny') return 'Bez godziny'
+  return 'Wymaga poprawy godziny'
+}
+
+function wagaElementuBezGodziny(tryb: string | undefined): number {
+  return tryb === 'koniec_dnia' ? 2 : tryb === 'bez_godziny' ? 0 : 1
+}
+
+function wagaPriorytetuElementu(priorytet: string | undefined): number {
+  return priorytet === 'asap' ? 2 : priorytet === 'pilny' ? 1 : 0
+}
 
 function ograniczMinuty(wartosc: number): number {
   return Number.isFinite(wartosc) ? Math.min(180, Math.max(0, Math.round(wartosc))) : 0
@@ -40,8 +55,12 @@ export function WidokPulpitu() {
     () => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia),
     [data, ustawienia.harmonogram, wyjatekDnia],
   )
-  const elementyOsi = elementyDnia.filter((element) => element.godzina && element.status !== 'wykonany')
-  const elementyBezGodziny = elementyDnia.filter((element) => !element.godzina && element.status !== 'wykonany')
+  const elementyOsi = elementyDnia.filter((element) => element.status !== 'wykonany' && element.trybTerminu === 'o_godzinie' && poprawnaGodzinaTerminu(element.godzina))
+  const elementyBezGodziny = elementyDnia
+    .filter((element) => element.status !== 'wykonany' && !elementyOsi.some((elementOsi) => elementOsi.id === element.id))
+    .sort((a, b) => wagaElementuBezGodziny(b.trybTerminu) - wagaElementuBezGodziny(a.trybTerminu)
+      || wagaPriorytetuElementu(b.priorytet) - wagaPriorytetuElementu(a.priorytet)
+      || a.tytul.localeCompare(b.tytul, 'pl'))
   const elementyWykonane = elementyDnia.filter((element) => element.status === 'wykonany')
 
   const zapiszWyjatekDnia = async (edycja: EdycjaHarmonogramuDnia) => {
@@ -122,7 +141,7 @@ export function WidokPulpitu() {
       <section className="sekcje-elementow-pulpitu">
         <Karta>
           <div className="naglowek-karty"><div><h2>Bez godziny</h2><p>Elementy przypisane do wybranego dnia bez konkretnej godziny.</p></div></div>
-          {elementyBezGodziny.length === 0 ? <PustyStan tytul="Brak elementów bez godziny" opis="Zadania z trybem końca dnia i bez konkretnej godziny pojawią się tutaj." /> : <div className="lista-kompaktowa">{elementyBezGodziny.map((element) => <div key={element.id}><div><strong>{element.tytul}</strong><small>{element.trybTerminu === 'koniec_dnia' ? 'Do końca dnia' : 'Bez godziny'}</small></div></div>)}</div>}
+          {elementyBezGodziny.length === 0 ? <PustyStan tytul="Brak elementów bez godziny" opis="Zadania z trybem końca dnia i bez konkretnej godziny pojawią się tutaj." /> : <div className="lista-kompaktowa">{elementyBezGodziny.map((element) => <div key={element.id}><div><strong>{element.tytul}</strong><small>{etykietaTerminuBezGodziny(element.trybTerminu)}</small></div></div>)}</div>}
         </Karta>
         {ustawienia.pulpit.pokazWykonane && <Karta>
           <div className="naglowek-karty"><div><h2><CheckCircle2 aria-hidden="true" /> Wykonane</h2><p>Elementy zakończone dla wybranej daty.</p></div></div>
