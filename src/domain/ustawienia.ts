@@ -66,6 +66,7 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
     kolejnoscTypow: [...domyslneTypySzybkiegoDodawania],
     uczKolejnosci: true,
     parserWlaczony: true,
+    licznikiUzyc: { zadanie: 0, notatka: 0, wizyta: 0, lek: 0, wydatek: 0, samochod: 0 },
   },
   dostepnosc: {
     ograniczRuch: false,
@@ -134,6 +135,10 @@ function typySzybkiegoDodawania(wartosc: unknown, domyslne: TypSzybkiegoDodawani
   return typy.length > 0 ? typy : [...domyslne]
 }
 
+function licznikiSzybkiegoDodawania(wartosc: unknown): Record<TypSzybkiegoDodawania, number> {
+  const zrodlo = jakoRekord(wartosc)
+  return Object.fromEntries(domyslneTypySzybkiegoDodawania.map((typ) => [typ, liczba(zrodlo[typ], 0, 1_000_000, 0)])) as Record<TypSzybkiegoDodawania, number>
+}
 export function normalizujUstawienia(wartosc: unknown): Ustawienia {
   const zrodlo = jakoRekord(wartosc)
   const wyglad = jakoRekord(zrodlo.wyglad)
@@ -222,6 +227,7 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
       kolejnoscTypow: typySzybkiegoDodawania(szybkieDodawanie.kolejnoscTypow, domyslne.szybkieDodawanie.kolejnoscTypow),
       uczKolejnosci: logiczna(szybkieDodawanie.uczKolejnosci, domyslne.szybkieDodawanie.uczKolejnosci),
       parserWlaczony: logiczna(szybkieDodawanie.parserWlaczony, domyslne.szybkieDodawanie.parserWlaczony),
+      licznikiUzyc: licznikiSzybkiegoDodawania(szybkieDodawanie.licznikiUzyc),
     },
     dostepnosc: {
       ograniczRuch: logiczna(dostepnosc.ograniczRuch, domyslne.dostepnosc.ograniczRuch),

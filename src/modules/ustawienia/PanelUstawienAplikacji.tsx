@@ -76,6 +76,14 @@ export function PanelUstawienAplikacji() {
     aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, widoczneTypy } })
   }
 
+  const przesunTyp = (typ: TypSzybkiegoDodawania, kierunek: -1 | 1) => {
+    const kolejnosc = [...szkic.szybkieDodawanie.kolejnoscTypow]
+    const indeks = kolejnosc.indexOf(typ)
+    const nowyIndeks = indeks + kierunek
+    if (indeks < 0 || nowyIndeks < 0 || nowyIndeks >= kolejnosc.length) return
+    ;[kolejnosc[indeks], kolejnosc[nowyIndeks]] = [kolejnosc[nowyIndeks], kolejnosc[indeks]]
+    aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, kolejnoscTypow: kolejnosc } })
+  }
   return <section className="panel-ustawien-aplikacji" aria-labelledby="ustawienia-aplikacji-tytul">
     <div className="naglowek-karty panel-ustawien-aplikacji__naglowek">
       <div>
@@ -135,7 +143,7 @@ export function PanelUstawienAplikacji() {
 
       <SekcjaUstawien tytul="Szybkie dodawanie" resetuj={() => resetujSekcje('szybkieDodawanie')}>
         <div className="pole pole--pelne"><span>Widoczne typy</span><div className="lista-typow-szybkich">{typySzybkiegoDodawania.map((typ) => <label key={typ.wartosc}><input type="checkbox" checked={szkic.szybkieDodawanie.widoczneTypy.includes(typ.wartosc)} onChange={(e) => zmienWidocznoscTypu(typ.wartosc, e.target.checked)} />{typ.etykieta}</label>)}</div></div>
-        <Przelacznik etykieta="Ucz kolejności" opis="Najczęściej używane typy mogą przesuwać się wyżej." zaznaczony={szkic.szybkieDodawanie.uczKolejnosci} zmien={(uczKolejnosci) => aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, uczKolejnosci } })} />
+        <div className="pole pole--pelne"><span>Ręczna kolejność</span><div className="lista-typow-szybkich">{szkic.szybkieDodawanie.kolejnoscTypow.map((typ, indeks) => <div key={typ}><span>{typySzybkiegoDodawania.find((element) => element.wartosc === typ)?.etykieta}</span><button type="button" className="przycisk przycisk--maly" disabled={indeks === 0} onClick={() => przesunTyp(typ, -1)}>↑</button><button type="button" className="przycisk przycisk--maly" disabled={indeks === szkic.szybkieDodawanie.kolejnoscTypow.length - 1} onClick={() => przesunTyp(typ, 1)}>↓</button></div>)}</div><small>Obowiązuje po wyłączeniu uczenia kolejności.</small></div><Przelacznik etykieta="Ucz kolejności" opis="Najczęściej używane typy mogą przesuwać się wyżej." zaznaczony={szkic.szybkieDodawanie.uczKolejnosci} zmien={(uczKolejnosci) => aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, uczKolejnosci } })} />
         <Przelacznik etykieta="Parser lokalny" opis="Włącza deterministyczne rozpoznawanie typu, daty i godziny." zaznaczony={szkic.szybkieDodawanie.parserWlaczony} zmien={(parserWlaczony) => aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, parserWlaczony } })} />
       </SekcjaUstawien>
 

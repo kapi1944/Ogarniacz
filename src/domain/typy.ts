@@ -381,6 +381,7 @@ export interface UstawieniaSzybkiegoDodawania {
   kolejnoscTypow: TypSzybkiegoDodawania[]
   uczKolejnosci: boolean
   parserWlaczony: boolean
+  licznikiUzyc: Record<TypSzybkiegoDodawania, number>
 }
 
 export interface UstawieniaDostepnosci {
