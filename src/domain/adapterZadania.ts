@@ -1,7 +1,6 @@
-import { godzinaZadaniaNaOsi } from './logikaTerminuZadania'
 import { noweId, terazIso, utworzMetadane } from './fabryki'
 import type { ElementZadania, PriorytetElementu, StatusElementu } from './elementyOgarniacza'
-import { odczytajTerminZadania } from './logikaTerminuZadania'
+import { normalizujTerminZadania, odczytajTerminZadania } from './logikaTerminuZadania'
 import type { Priorytet, RegulaPowtarzania, Zadanie } from './typy'
 
 type NieznanyRekord = Record<string, unknown>
@@ -110,7 +109,6 @@ export function zadanieLegacyNaElement(wartosc: unknown): ElementZadania {
     id,
     typ: 'zadanie',
     tytul: tekst(rekord.tytul).trim() || 'Bez tytułu',
-    godzina: godzinaZadaniaNaOsi({ deadlineMode: rekord.deadlineMode, date: rekord.termin, time: rekord.time }),
     ...(opis ? { opis } : {}),
     referencjaZrodla: { modul: 'zadania', encjaId: id },
     ...(data ? { data } : {}),
@@ -136,8 +134,17 @@ export function zadanieLegacyNaElement(wartosc: unknown): ElementZadania {
 }
 
 export function elementNaZadanieLegacy(element: ElementZadania, istniejacy?: Zadanie): Zadanie {
-  const { deadlineMode: _deadlineMode, time: _time, ...metadane } = (istniejacy ?? utworzMetadane(element.id)) as Zadanie & { deadlineMode?: unknown; time?: unknown }
+  const {
+    deadlineMode: _deadlineMode,
+    time: _time,
+    godzinaElementu: _godzinaElementu,
+    ...metadane
+  } = (istniejacy ?? utworzMetadane(element.id)) as Zadanie & { deadlineMode?: unknown; time?: unknown }
   const termin = element.data
+  const terminElementu = normalizujTerminZadania(
+    element.trybTerminu ?? (element.godzina ? 'o_godzinie' : element.data ? 'koniec_dnia' : 'bez_godziny'),
+    element.godzina,
+  )
   return {
     ...metadane,
     id: element.id,
@@ -155,9 +162,9 @@ export function elementNaZadanieLegacy(element: ElementZadania, istniejacy?: Zad
     powiazania: [...(istniejacy?.powiazania ?? [])],
     wykonanoAt: element.status === 'wykonany' ? (istniejacy?.wykonanoAt ?? terazIso()) : undefined,
     dataElementu: element.data,
-    godzinaElementu: element.godzina,
+    ...(terminElementu.godzina ? { godzinaElementu: terminElementu.godzina } : {}),
     terminGranicznyElementu: element.terminGraniczny,
-    trybTerminuElementu: element.trybTerminu,
+    trybTerminuElementu: terminElementu.tryb,
     statusElementu: element.status,
     przypomnieniaElementu: element.przypomnienia?.map((przypomnienie) => ({ ...przypomnienie })),
     dostepnoscPlanistyczna: element.dostepnoscPlanistyczna,

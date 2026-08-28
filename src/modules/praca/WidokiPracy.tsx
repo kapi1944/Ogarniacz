@@ -48,21 +48,12 @@ export function WidokZadan() {
     ] },
     { klucz: 'priorytet', etykieta: 'Priorytet', typ: 'select', wymagane: true, opcje: opcjePriorytetu },
     { klucz: 'termin', etykieta: 'Termin', typ: 'date' },
-<<<<<<< ours
-      { klucz: 'deadlineMode', etykieta: 'Tryb terminu', typ: 'select', wymagane: true, opcje: [
-        { wartosc: 'AT_TIME', etykieta: 'O konkretnej godzinie' },
-        { wartosc: 'END_OF_DAY', etykieta: 'Do końca dnia' },
-        { wartosc: 'NO_TIME', etykieta: 'Bez godziny' }
-      ] },
-      { klucz: 'time', etykieta: 'Godzina deadline', typ: 'time' },
-=======
     { klucz: 'trybTerminuElementu', etykieta: 'Tryb terminu', typ: 'select', wymagane: true, domyslnaWartosc: 'bez_godziny', opcje: [
       { wartosc: 'o_godzinie', etykieta: 'O konkretnej godzinie' },
       { wartosc: 'koniec_dnia', etykieta: 'Do końca dnia' },
       { wartosc: 'bez_godziny', etykieta: 'Bez godziny' },
     ] },
     { klucz: 'godzinaElementu', etykieta: 'Godzina', typ: 'time', widoczne: (formularz) => formularz.trybTerminuElementu === 'o_godzinie' },
->>>>>>> theirs
     { klucz: 'dataStartu', etykieta: 'Najwcześniej od', typ: 'date' },
     { klucz: 'szacowanyCzasMin', etykieta: 'Szacowany czas (min)', typ: 'number', min: 1 },
     { klucz: 'projektId', etykieta: 'Projekt', typ: 'select', opcje: projekty.map((projekt) => ({ wartosc: projekt.id, etykieta: projekt.nazwa })) },
@@ -87,7 +78,12 @@ export function WidokZadan() {
     </div>}
     zbuduj={(formularz, istniejace) => {
       const baza = istniejace ?? utworzZadanie({ tytul: formularz.tytul, opis: formularz.opis, priorytet: formularz.priorytet as Zadanie['priorytet'], termin: formularz.termin || undefined })
-      const { deadlineMode: _deadlineMode, time: _time, ...kanonicznaBaza } = baza as Zadanie & { deadlineMode?: unknown; time?: unknown }
+      const {
+        deadlineMode: _deadlineMode,
+        time: _time,
+        godzinaElementu: _godzinaElementu,
+        ...kanonicznaBaza
+      } = baza as Zadanie & { deadlineMode?: unknown; time?: unknown }
       const termin = normalizujTerminZadania(formularz.trybTerminuElementu, formularz.godzinaElementu)
       return {
         ...kanonicznaBaza,
@@ -97,7 +93,7 @@ export function WidokZadan() {
         priorytet: (formularz.priorytet || 'normalny') as Zadanie['priorytet'],
         termin: formularz.termin || undefined,
         trybTerminuElementu: termin.tryb,
-        godzinaElementu: termin.godzina,
+        ...(termin.godzina ? { godzinaElementu: termin.godzina } : {}),
         dataStartu: formularz.dataStartu || undefined,
         szacowanyCzasMin: formularz.szacowanyCzasMin ? Number(formularz.szacowanyCzasMin) : undefined,
         projektId: formularz.projektId || undefined,
