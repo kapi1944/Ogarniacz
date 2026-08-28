@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
-import { DOMYSLNE_USTAWIENIA, normalizujUstawienia } from './ustawienia'
+import { DOMYSLNE_KAFELKI_PULPITU, DOMYSLNE_USTAWIENIA, normalizujUstawienia } from './ustawienia'
 
 describe.sequential('ustawienia aplikacji', () => {
   beforeEach(async () => {
@@ -71,6 +71,58 @@ describe.sequential('ustawienia aplikacji', () => {
     expect(wynik.harmonogram.poczatekSnu).toBe('23:30')
     expect(wynik.harmonogram.koniecSnu).toBe('07:30')
     expect(wynik.harmonogram.skalaSnuNaOsi).toBe(0.1)
+  })
+
+  it('uzupełnia kompletne domyślne kafelki w starszych ustawieniach', () => {
+    const wynik = normalizujUstawienia({ pulpit: { pokazKafelki: true } })
+
+    expect(wynik.pulpit.kafelki).toEqual(DOMYSLNE_KAFELKI_PULPITU)
+  })
+
+  it('ignoruje nieznany typ kafelka i zachowuje poprawną widoczność oraz kolejność', () => {
+    const wynik = normalizujUstawienia({
+      pulpit: {
+        kafelki: [
+          { typ: 'nieznany', widoczny: true, kolejnosc: 1 },
+          { typ: 'zadania', widoczny: false, kolejnosc: 0, rozmiar: 'medium', zakresCzasu: '7d', limit: 4 },
+          { typ: 'pilne', widoczny: true, kolejnosc: 99, rozmiar: 'large', zakresCzasu: '7d', limit: 4 },
+        ],
+      },
+    })
+
+    expect(wynik.pulpit.kafelki).toHaveLength(DOMYSLNE_KAFELKI_PULPITU.length)
+    expect(wynik.pulpit.kafelki.map((kafelek) => kafelek.typ)).not.toContain('nieznany')
+    expect(wynik.pulpit.kafelki[0]).toMatchObject({ typ: 'zadania', widoczny: false })
+    expect(wynik.pulpit.kafelki.at(-1)?.typ).toBe('pilne')
+  })
+
+  it('normalizuje zakres, limity i rozmiar kafelków', () => {
+    const wynik = normalizujUstawienia({
+      pulpit: {
+        kafelki: [
+          { typ: 'zadania', zakresCzasu: 'rok', limit: -5, rozmiar: 'ogromny' },
+          { typ: 'pilne', zakresCzasu: '30d', limit: 999, rozmiar: 'small' },
+        ],
+      },
+    })
+    const zadania = wynik.pulpit.kafelki.find((kafelek) => kafelek.typ === 'zadania')
+    const pilne = wynik.pulpit.kafelki.find((kafelek) => kafelek.typ === 'pilne')
+
+    expect(zadania).toMatchObject({ zakresCzasu: '7d', limit: 1, rozmiar: 'large' })
+    expect(pilne).toMatchObject({ zakresCzasu: '30d', limit: 10, rozmiar: 'small' })
+  })
+
+  it('nie mutuje wejścia ani nie nadpisuje ustawień Quick Add podczas normalizacji kafelków', () => {
+    const wejscie = {
+      pulpit: { kafelki: [{ typ: 'zadania', widoczny: false, kolejnosc: 3, rozmiar: 'small', zakresCzasu: 'today', limit: 2 }] },
+      szybkieDodawanie: { parserWlaczony: false },
+    }
+    const kopia = structuredClone(wejscie)
+
+    const wynik = normalizujUstawienia(wejscie)
+
+    expect(wejscie).toEqual(kopia)
+    expect(wynik.szybkieDodawanie.parserWlaczony).toBe(false)
   })
 
   it('zapisuje i ponownie wczytuje ustawienia przez repozytorium', async () => {

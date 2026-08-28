@@ -235,8 +235,11 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .wybor-daty-pulpitu { display: flex; align-items: center; min-height: 36px; padding: 4px 8px; gap: 6px; background: var(--panel-2); border: 1px solid var(--obramowanie-mocne); border-radius: var(--promien-pola); }
 .wybor-daty-pulpitu svg { width: 17px; color: var(--akcent); }
 .wybor-daty-pulpitu input { width: 128px; color: var(--tekst); background: transparent; border: 0; }
-.strefy-pulpitu { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.strefy-pulpitu { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .strefa-pulpitu { min-height: 132px; }
+.strefa-pulpitu--small { grid-column: span 1; }
+.strefa-pulpitu--medium { grid-column: span 2; }
+.strefa-pulpitu--large { grid-column: 1 / -1; }
 .strefa-pulpitu h2 { margin-bottom: 4px; }
 .strefa-pulpitu p { margin: 0; color: var(--tekst-2); font-size: .82rem; }
 .strefa-pulpitu--alerty { background: linear-gradient(140deg, var(--ostrzezenie-tlo), var(--panel) 74%); }
@@ -437,6 +440,7 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
   .sidebar__zamknij-mobilne, .pasek-gorny__menu { display: inline-flex !important; }
   .zaslona-menu { position: fixed; inset: 0; z-index: 25; display: block; background: rgb(0 0 0 / 42%); border: 0; }
   .siatka-dashboardu, .siatka-echo { grid-template-columns: 1fr; }
+  .strefy-pulpitu { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .karta--os-dnia { min-height: auto; }
   .siatka-dwie-kolumny, .siatka-dwie-kolumny--rowne { grid-template-columns: 1fr; }
   .siatka-sekcji-ustawien { grid-template-columns: 1fr; }
@@ -451,6 +455,8 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
   .przycisk-plus { width: 38px; padding: 6px; }
   .naglowek-widoku { flex-direction: column; gap: 12px; }
   .siatka-teraz, .siatka-reakcji, .siatka-ustawien, .podsumowanie-finansowe { grid-template-columns: 1fr; }
+  .strefy-pulpitu { grid-template-columns: minmax(0, 1fr); }
+  .strefa-pulpitu--small, .strefa-pulpitu--medium, .strefa-pulpitu--large { grid-column: 1 / -1; }
   .formularz { grid-template-columns: 1fr; }
   .pole--pelne { grid-column: auto; }
   .wybor-typu { grid-template-columns: repeat(2, 1fr); }
