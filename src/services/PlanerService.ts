@@ -1,9 +1,8 @@
-import { format, getDay, parseISO } from 'date-fns'
-import { utworzMetadane } from '../domain/fabryki'
-import type { BlokCzasu, GrafikPracy, Nawyk, Urlop, Wizyta, WyjatekGrafiku, Zadanie } from '../domain/typy'
-import { czyNawykNaDzien } from './NawykiService'
-import { czyPolskieSwieto } from './PolskieSwietaService'
-import { czyDataWUrlopie } from './UrlopyService'
+import type { RepozytoriumElementow, ElementOgarniacza } from '../domain/elementyOgarniacza'
+import { zadanieLegacyNaElement } from '../domain/adapterZadania'
+import type { Zadanie } from '../domain/typy'
+import type { HarmonogramDnia } from '../modules/pulpit/logikaOsiCzasu'
+import { minutyDnia } from '../modules/pulpit/logikaOsiCzasu'
 
 interface Przedzial {
   od: number
@@ -12,30 +11,40 @@ interface Przedzial {
 
 export interface DanePlanera {
   data: string
-  tryb: 'dzien' | 'wieczor'
   zadania: Zadanie[]
-  nawyki: Nawyk[]
-  wizyty: Wizyta[]
-  bloki: BlokCzasu[]
-  grafik: GrafikPracy[]
-  wyjatkiGrafiku: WyjatekGrafiku[]
-  urlopy: Urlop[]
+  wydarzenia: ElementOgarniacza[]
+  harmonogram: HarmonogramDnia
   odGodziny?: string
 }
 
+export type StatusPozycjiDraftu = 'zaplanowana' | 'wymaga_czasu' | 'konflikt'
+
+export interface PozycjaDraftu {
+  id: string
+  zadanieId: string
+  tytul: string
+  czasTrwaniaMinuty?: number
+  poczatek?: string
+  koniec?: string
+  status: StatusPozycjiDraftu
+  powod?: string
+}
+
 export interface WynikPlanera {
-  propozycje: BlokCzasu[]
+  data: string
+  pozycje: PozycjaDraftu[]
   minutyDostepne: number
-  minutyObowiazkow: number
-  wykorzystanieProcent: number
+  minutyZaplanowane: number
 }
 
-const priorytetWaga = { niski: 0, normalny: 1, wysoki: 2, krytyczny: 3 }
-
-function naMinuty(godzina: string): number {
-  const [h = 0, m = 0] = godzina.split(':').map(Number)
-  return h * 60 + m
+export interface WynikWalidacjiPozycji {
+  poprawna: boolean
+  powod?: string
+  poczatek?: string
+  koniec?: string
 }
+
+const wagiPriorytetu = { normalny: 0, pilny: 1, asap: 2 }
 
 function naGodzine(minuty: number): string {
   return `${String(Math.floor(minuty / 60)).padStart(2, '0')}:${String(minuty % 60).padStart(2, '0')}`
@@ -45,96 +54,171 @@ function isoDnia(data: string, minuty: number): string {
   return `${data}T${naGodzine(minuty)}:00`
 }
 
-function odejmijZajete(zakres: Przedzial, zajete: Przedzial[]): Przedzial[] {
-  let wolne = [zakres]
-  for (const blok of zajete.sort((a, b) => a.od - b.od)) {
-    wolne = wolne.flatMap((fragment) => {
-      if (blok.do <= fragment.od || blok.od >= fragment.do) return [fragment]
-      const wynik: Przedzial[] = []
-      if (blok.od > fragment.od) wynik.push({ od: fragment.od, do: blok.od })
-      if (blok.do < fragment.do) wynik.push({ od: blok.do, do: fragment.do })
-      return wynik
-    })
-  }
-  return wolne.filter((fragment) => fragment.do - fragment.od >= 15)
+function odejmijPrzedzial(zrodlo: readonly Przedzial[], zajety: Przedzial): Przedzial[] {
+  return zrodlo.flatMap((fragment) => {
+    if (zajety.do <= fragment.od || zajety.od >= fragment.do) return [fragment]
+    const wynik: Przedzial[] = []
+    if (zajety.od > fragment.od) wynik.push({ od: fragment.od, do: zajety.od })
+    if (zajety.do < fragment.do) wynik.push({ od: zajety.do, do: fragment.do })
+    return wynik
+  })
 }
 
-function pracaDnia(dane: DanePlanera): Przedzial | undefined {
-  const wyjatek = dane.wyjatkiGrafiku.find((element) => element.data === dane.data)
-  if (wyjatek) return wyjatek.pracuje && wyjatek.od && wyjatek.do ? { od: naMinuty(wyjatek.od), do: naMinuty(wyjatek.do) } : undefined
-  if (czyPolskieSwieto(dane.data) || dane.urlopy.some((urlop) => czyDataWUrlopie(urlop, dane.data))) return undefined
-  const dzien = getDay(parseISO(dane.data))
-  const wpis = dane.grafik.find((element) => element.dzienTygodnia === dzien && element.aktywny)
-  return wpis ? { od: naMinuty(wpis.od), do: naMinuty(wpis.do) } : undefined
-}
+function przedzialyDostepne(dane: DanePlanera): Przedzial[] {
+  const poczatek = Math.max(
+    minutyDnia(dane.harmonogram.zakresAktywny.od),
+    dane.odGodziny ? minutyDnia(dane.odGodziny) : 0,
+  )
+  let przedzialy: Przedzial[] = [{ od: poczatek, do: minutyDnia(dane.harmonogram.zakresAktywny.do) }]
 
-function utworzBlok(data: string, tytul: string, typ: BlokCzasu['typ'], od: number, doMinuty: number, powiazanie?: BlokCzasu['powiazanie']): BlokCzasu {
-  return {
-    ...utworzMetadane(),
-    tytul,
-    poczatek: isoDnia(data, od),
-    koniec: isoDnia(data, doMinuty),
-    typ,
-    powiazanie,
-    elastycznosc: typ === 'zadanie' || typ === 'nawyk' || typ === 'wolne' ? 'elastyczny' : 'twardy',
-    status: 'propozycja',
-  }
-}
-
-export function zaproponujPlan(dane: DanePlanera): WynikPlanera {
-  const start = naMinuty(dane.odGodziny ?? (dane.tryb === 'wieczor' ? '16:00' : '07:00'))
-  const koniec = naMinuty('22:00')
-  const zajete: Przedzial[] = []
-  const praca = pracaDnia(dane)
-  if (praca) zajete.push(praca)
-
-  dane.wizyty
-    .filter((wizyta) => wizyta.status === 'umowiona' && wizyta.data === dane.data && wizyta.godzina)
-    .forEach((wizyta) => {
-      const od = naMinuty(wizyta.godzina!)
-      zajete.push({ od, do: od + 60 })
-    })
-
-  dane.bloki
-    .filter((blok) => blok.poczatek.startsWith(dane.data) && blok.status !== 'odrzucony')
-    .forEach((blok) => zajete.push({ od: naMinuty(format(parseISO(blok.poczatek), 'HH:mm')), do: naMinuty(format(parseISO(blok.koniec), 'HH:mm')) }))
-
-  const wolne = odejmijZajete({ od: start, do: koniec }, zajete)
-  const minutyDostepne = wolne.reduce((suma, fragment) => suma + fragment.do - fragment.od, 0)
-  const limitObowiazkow = Math.floor(minutyDostepne * 0.75)
-  let wykorzystane = 0
-  const propozycje: BlokCzasu[] = []
-  const elementy = [
-    ...dane.zadania
-      .filter((zadanie) => zadanie.status !== 'wykonane' && (!zadanie.dataStartu || zadanie.dataStartu <= dane.data))
-      .sort((a, b) => priorytetWaga[b.priorytet] - priorytetWaga[a.priorytet] || (a.termin ?? '9999').localeCompare(b.termin ?? '9999'))
-      .map((zadanie) => ({ tytul: zadanie.tytul, typ: 'zadanie' as const, minuty: zadanie.szacowanyCzasMin ?? 30, id: zadanie.id })),
-    ...dane.nawyki
-      .filter((nawyk) => czyNawykNaDzien(nawyk, dane.data))
-      .map((nawyk) => ({ tytul: nawyk.nazwa, typ: 'nawyk' as const, minuty: 20, id: nawyk.id })),
-  ]
-
-  const kursory = wolne.map((fragment) => ({ ...fragment, kursor: fragment.od }))
-  for (const element of elementy) {
-    const czas = Math.max(15, Math.min(element.minuty, 180))
-    if (wykorzystane + czas > limitObowiazkow) continue
-    const fragment = kursory.find((kandydat) => kandydat.kursor + czas <= kandydat.do)
-    if (!fragment) continue
-    propozycje.push(utworzBlok(dane.data, element.tytul, element.typ, fragment.kursor, fragment.kursor + czas, { typ: element.typ === 'zadanie' ? 'zadania' : 'nawyki', id: element.id }))
-    fragment.kursor += czas + 10
-    wykorzystane += czas
-  }
-
-  for (const fragment of kursory) {
-    if (fragment.do - fragment.kursor >= 30) {
-      propozycje.push(utworzBlok(dane.data, 'Czas wolny / bufor', 'wolne', fragment.kursor, fragment.do))
+  for (const przedzial of dane.harmonogram.przedzialy) {
+    const niedozwolony = przedzial.id === 'praca' || przedzial.dostepnosc === 'czesciowa'
+    if (niedozwolony) {
+      przedzialy = odejmijPrzedzial(przedzialy, { od: minutyDnia(przedzial.od), do: minutyDnia(przedzial.do) })
     }
   }
 
-  return {
-    propozycje: propozycje.sort((a, b) => a.poczatek.localeCompare(b.poczatek)),
-    minutyDostepne,
-    minutyObowiazkow: wykorzystane,
-    wykorzystanieProcent: minutyDostepne ? Math.round((wykorzystane / minutyDostepne) * 100) : 0,
+  const twarde = dane.wydarzenia
+    .filter((element) => element.data === dane.data && element.godzina && element.status !== 'anulowany')
+    .map((element) => {
+      const od = minutyDnia(element.godzina!)
+      return { od, do: od + Math.max(1, element.czasTrwaniaMinuty ?? 1) }
+    })
+    .sort((a, b) => a.od - b.od || a.do - b.do)
+
+  for (const zajety of twarde) przedzialy = odejmijPrzedzial(przedzialy, zajety)
+  return przedzialy.filter((przedzial) => przedzial.do > przedzial.od)
+}
+
+function terminMinuty(element: ElementOgarniacza<'zadanie'>, data: string): number | undefined {
+  const termin = element.terminGraniczny
+  if (!termin) return undefined
+  const dataTerminu = termin.slice(0, 10)
+  if (dataTerminu < data) return -1
+  if (dataTerminu > data) return undefined
+  const godzina = /T\d{2}:\d{2}/.test(termin) ? termin.slice(11, 16) : '24:00'
+  return minutyDnia(godzina)
+}
+
+function kandydaci(dane: DanePlanera): ElementOgarniacza<'zadanie'>[] {
+  return dane.zadania
+    .map(zadanieLegacyNaElement)
+    .filter((zadanie) => zadanie.status === 'otwarty')
+    .filter((zadanie) => !(zadanie.data && zadanie.godzina && zadanie.trybTerminu === 'o_godzinie'))
+    .filter((zadanie) => !dane.zadania.find((zrodlo) => zrodlo.id === zadanie.id)?.dataStartu
+      || dane.zadania.find((zrodlo) => zrodlo.id === zadanie.id)!.dataStartu! <= dane.data)
+    .sort((a, b) => {
+      const terminA = a.terminGraniczny ?? '9999'
+      const terminB = b.terminGraniczny ?? '9999'
+      const zalegleA = terminA.slice(0, 10) < dane.data
+      const zalegleB = terminB.slice(0, 10) < dane.data
+      return Number(zalegleB) - Number(zalegleA)
+        || wagiPriorytetu[b.priorytet ?? 'normalny'] - wagiPriorytetu[a.priorytet ?? 'normalny']
+        || terminA.localeCompare(terminB)
+        || a.tytul.localeCompare(b.tytul, 'pl')
+        || a.id.localeCompare(b.id)
+    })
+}
+
+function znajdzSlot(przedzialy: readonly Przedzial[], czas: number, deadline?: number): Przedzial | undefined {
+  return przedzialy.find((przedzial) => {
+    const koniec = przedzial.od + czas
+    return koniec <= przedzial.do && (deadline === undefined || koniec <= deadline)
+  })
+}
+
+export function generujPlan(dane: DanePlanera): WynikPlanera {
+  let wolne = przedzialyDostepne(dane)
+  const minutyDostepne = wolne.reduce((suma, przedzial) => suma + przedzial.do - przedzial.od, 0)
+  const pozycje: PozycjaDraftu[] = []
+
+  for (const zadanie of kandydaci(dane)) {
+    const czas = zadanie.czasTrwaniaMinuty
+    if (!czas || czas <= 0) {
+      pozycje.push({
+        id: `draft:${zadanie.id}`,
+        zadanieId: zadanie.id,
+        tytul: zadanie.tytul,
+        status: 'wymaga_czasu',
+        powod: 'Uzupełnij czas trwania przed wyznaczeniem slotu.',
+      })
+      continue
+    }
+    const deadline = terminMinuty(zadanie, dane.data)
+    const slot = deadline === -1 ? undefined : znajdzSlot(wolne, czas, deadline)
+    if (!slot) {
+      pozycje.push({
+        id: `draft:${zadanie.id}`,
+        zadanieId: zadanie.id,
+        tytul: zadanie.tytul,
+        czasTrwaniaMinuty: czas,
+        status: 'konflikt',
+        powod: deadline === -1 ? 'Termin zadania już minął.' : 'Brak dostępnego slotu przed terminem.',
+      })
+      continue
+    }
+    const koniec = slot.od + czas
+    pozycje.push({
+      id: `draft:${zadanie.id}`,
+      zadanieId: zadanie.id,
+      tytul: zadanie.tytul,
+      czasTrwaniaMinuty: czas,
+      poczatek: isoDnia(dane.data, slot.od),
+      koniec: isoDnia(dane.data, koniec),
+      status: 'zaplanowana',
+    })
+    wolne = odejmijPrzedzial(wolne, { od: slot.od, do: koniec })
   }
+
+  return {
+    data: dane.data,
+    pozycje,
+    minutyDostepne,
+    minutyZaplanowane: pozycje.reduce((suma, pozycja) => suma + (pozycja.status === 'zaplanowana' ? pozycja.czasTrwaniaMinuty ?? 0 : 0), 0),
+  }
+}
+
+export const zaproponujPlan = generujPlan
+
+export function walidujPozycjeDraftu(
+  dane: DanePlanera,
+  pozycja: PozycjaDraftu,
+  godzina: string,
+  czasTrwaniaMinuty: number,
+  pozostale: readonly PozycjaDraftu[] = [],
+): WynikWalidacjiPozycji {
+  if (!Number.isFinite(czasTrwaniaMinuty) || czasTrwaniaMinuty <= 0) return { poprawna: false, powod: 'Czas trwania musi być większy od zera.' }
+  const od = minutyDnia(godzina)
+  const doMinuty = od + czasTrwaniaMinuty
+  const zadanie = dane.zadania.find((element) => element.id === pozycja.zadanieId)
+  if (!zadanie) return { poprawna: false, powod: 'Brak źródłowego Zadania.' }
+  const element = zadanieLegacyNaElement(zadanie)
+  const deadline = terminMinuty(element, dane.data)
+  if (deadline === -1 || deadline !== undefined && doMinuty > deadline) return { poprawna: false, powod: 'Slot kończy się po terminie Zadania.' }
+
+  let wolne = przedzialyDostepne(dane)
+  for (const inna of pozostale) {
+    if (inna.id === pozycja.id || inna.status !== 'zaplanowana' || !inna.poczatek || !inna.koniec) continue
+    wolne = odejmijPrzedzial(wolne, { od: minutyDnia(inna.poczatek.slice(11, 16)), do: minutyDnia(inna.koniec.slice(11, 16)) })
+  }
+  const miesciSie = wolne.some((przedzial) => od >= przedzial.od && doMinuty <= przedzial.do)
+  if (!miesciSie) return { poprawna: false, powod: 'Slot koliduje albo wypada poza pełną dostępnością.' }
+  return { poprawna: true, poczatek: isoDnia(dane.data, od), koniec: isoDnia(dane.data, doMinuty) }
+}
+
+export function anulujPlan(_wynik: WynikPlanera): undefined {
+  return undefined
+}
+
+export async function zatwierdzPlan(wynik: WynikPlanera, repozytorium: RepozytoriumElementow<'zadanie'>): Promise<number> {
+  const zaplanowane = wynik.pozycje.filter((pozycja) => pozycja.status === 'zaplanowana' && pozycja.poczatek && pozycja.czasTrwaniaMinuty)
+  for (const pozycja of zaplanowane) {
+    await repozytorium.aktualizuj(pozycja.zadanieId, {
+      data: wynik.data,
+      godzina: pozycja.poczatek!.slice(11, 16),
+      trybTerminu: 'o_godzinie',
+      czasTrwaniaMinuty: pozycja.czasTrwaniaMinuty,
+    })
+  }
+  return zaplanowane.length
 }

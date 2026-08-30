@@ -202,6 +202,8 @@ describe('logika kafelków Pulpitu', () => {
     expect(adresReferencjiZrodla({ modul: 'rachunki', encjaId: 'rachunek-1' })).toBe('/rachunki?element=rachunek-1')
     expect(adresReferencjiZrodla({ modul: 'samochod', encjaId: 'auto-1' })).toBe('/samochod?element=auto-1')
     expect(adresReferencjiZrodla({ modul: 'zakupy', encjaId: 'lista-1' })).toBe('/zakupy?element=lista-1')
+    expect(adresReferencjiZrodla({ modul: 'notatki', encjaId: 'notatka-1' })).toBe('/notatki?element=notatka-1')
+    expect(adresReferencjiZrodla({ modul: 'skrzynka', encjaId: 'wpis-1' })).toBe('/skrzynka?element=wpis-1')
   })
 
   it('rozwiązuje klasy wszystkich rozmiarów kafelka', () => {

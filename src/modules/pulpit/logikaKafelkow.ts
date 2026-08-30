@@ -3,6 +3,7 @@ import { czyZalegle } from '../../domain/ustaleniaGlosowe'
 import type { ElementOgarniacza, ReferencjaZrodla } from '../../domain/elementyOgarniacza'
 import type { KonfiguracjaKafelkaPulpitu, RozmiarKafelkaPulpitu } from '../../domain/typy'
 import { czasDawkiDoUwagi } from '../../services/LekiService'
+import { PROG_STARZENIA_POCZEKALNI_DNI } from '../../providers/DostawcaPoczekalniPulpitu'
 
 export interface AlertPulpitu {
   id: string
@@ -64,17 +65,22 @@ export function elementyDlaKafelka(kafelek: KonfiguracjaKafelkaPulpitu, elementy
                 })()
               : kafelek.typ === 'zakupy'
                 ? otwarte.filter((element) => element.typ === 'zakupy' && (!element.data || wZakresie(element)))
+                : kafelek.typ === 'notatki'
+                  ? otwarte.filter((element) => element.typ === 'notatka' && (element.dane?.przypieta || !element.data || wZakresie(element)))
+                  : kafelek.typ === 'poczekalnia'
+                    ? otwarte.filter((element) => element.typ === 'poczekalnia')
           : []
 
   return wynik
     .sort((a, b) => (kafelek.typ === 'leki' ? wagaDawki(a, dataReferencyjna) - wagaDawki(b, dataReferencyjna) : 0)
+      || (kafelek.typ === 'notatki' ? Number(Boolean(b.dane && 'przypieta' in b.dane && b.dane.przypieta)) - Number(Boolean(a.dane && 'przypieta' in a.dane && a.dane.przypieta)) : 0)
       || dataCzasElementu(a).localeCompare(dataCzasElementu(b))
       || a.tytul.localeCompare(b.tytul, 'pl') || a.id.localeCompare(b.id))
     .slice(0, kafelek.limit)
 }
 
 export function rozwiazDaneKafelka(kafelek: KonfiguracjaKafelkaPulpitu, elementy: readonly ElementOgarniacza[], dataReferencyjna: Date) {
-  if (!['zadania', 'pilne', 'leki', 'wizyty', 'finanse', 'samochod', 'zakupy'].includes(kafelek.typ)) {
+  if (!['zadania', 'pilne', 'leki', 'wizyty', 'finanse', 'samochod', 'zakupy', 'notatki', 'poczekalnia'].includes(kafelek.typ)) {
     return { stan: 'niedostepny' as const, elementy: [] as ElementOgarniacza[] }
   }
   return { stan: 'dostepny' as const, elementy: elementyDlaKafelka(kafelek, elementy, dataReferencyjna) }
@@ -85,7 +91,7 @@ export function klasaRozmiaruKafelka(rozmiar: RozmiarKafelkaPulpitu) {
 }
 
 export function adresReferencjiZrodla(sourceRef: ReferencjaZrodla): string {
-  const adresy = { zadania: '/zadania', leki: '/leki', wizyty: '/wizyty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy' } as const
+  const adresy = { zadania: '/zadania', leki: '/leki', wizyty: '/wizyty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy', notatki: '/notatki', skrzynka: '/skrzynka' } as const
   const adres = adresy[sourceRef.modul as keyof typeof adresy] ?? '/'
   const parametry = new URLSearchParams({ element: sourceRef.encjaId })
   if (sourceRef.wystapienieId) parametry.set('wystapienie', sourceRef.wystapienieId)
@@ -245,6 +251,45 @@ export function alertyZakupow(elementy: readonly ElementOgarniacza[], dataRefere
         createdAt: element.createdAt,
       }]
     })
+}
+
+export function alertyNotatek(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date, horyzontMinuty = 24 * 60): AlertPulpitu[] {
+  const teraz = dataReferencyjna.getTime()
+  const koniecHoryzontu = teraz + horyzontMinuty * 60_000
+  return elementy
+    .flatMap((element) => {
+      if (element.typ !== 'notatka' || !element.referencjaZrodla || !element.dane?.przypomnienieAt) return []
+      const przypomnienieAt = element.dane.przypomnienieAt
+      const czas = new Date(przypomnienieAt).getTime()
+      if (!Number.isFinite(czas) || czas > koniecHoryzontu) return []
+      const zalegle = czas <= teraz
+      return [{
+        id: `${element.id}-${zalegle ? 'overdue' : 'near'}`,
+        tytul: element.tytul,
+        opis: zalegle ? 'Minął termin przypomnienia notatki' : 'Zbliża się przypomnienie notatki',
+        severity: zalegle ? 'warning' as const : 'info' as const,
+        termin: przypomnienieAt,
+        typ: zalegle ? 'overdue' as const : 'near' as const,
+        sourceRef: element.referencjaZrodla,
+        createdAt: element.createdAt,
+      }]
+    })
+}
+
+export function alertyPoczekalni(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date): AlertPulpitu[] {
+  const prog = dataReferencyjna.getTime() - PROG_STARZENIA_POCZEKALNI_DNI * 24 * 60 * 60 * 1000
+  return elementy
+    .filter((element) => element.typ === 'poczekalnia' && element.referencjaZrodla)
+    .filter((element) => new Date(element.createdAt).getTime() <= prog)
+    .map((element) => ({
+      id: `${element.id}-stare`,
+      tytul: element.tytul,
+      opis: `Nieprzetworzone od co najmniej ${PROG_STARZENIA_POCZEKALNI_DNI} dni`,
+      severity: 'warning' as const,
+      typ: 'near' as const,
+      sourceRef: element.referencjaZrodla!,
+      createdAt: element.createdAt,
+    }))
 }
 
 export function deduplikujAlerty(alerty: readonly AlertPulpitu[]) {

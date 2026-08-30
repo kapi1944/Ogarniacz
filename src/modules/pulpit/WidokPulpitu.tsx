@@ -16,6 +16,8 @@ import { DostawcaZadanPulpitu } from '../../providers/DostawcaZadanPulpitu'
 import { DostawcaFinansowPulpitu } from '../../providers/DostawcaFinansowPulpitu'
 import { DostawcaSamochoduPulpitu } from '../../providers/DostawcaSamochoduPulpitu'
 import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
+import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
+import { DostawcaPoczekalniPulpitu } from '../../providers/DostawcaPoczekalniPulpitu'
 import {
   adresReferencjiZrodla,
   alertyFinansow,
@@ -23,6 +25,8 @@ import {
   alertySamochodu,
   alertyWizyt,
   alertyZakupow,
+  alertyNotatek,
+  alertyPoczekalni,
   alertyZadan,
   deduplikujAlerty,
   klasaRozmiaruKafelka,
@@ -47,6 +51,8 @@ const dostawcaWizyt = new DostawcaWizytPulpitu()
 const dostawcaFinansow = new DostawcaFinansowPulpitu()
 const dostawcaSamochodu = new DostawcaSamochoduPulpitu()
 const dostawcaZakupow = new DostawcaZakupowPulpitu()
+const dostawcaNotatek = new DostawcaNotatekPulpitu()
+const dostawcaPoczekalni = new DostawcaPoczekalniPulpitu()
 
 type StanZrodla = 'gotowy' | 'blad'
 
@@ -61,6 +67,8 @@ interface WynikiModulow {
   finanse: WynikZrodla
   samochod: WynikZrodla
   zakupy: WynikZrodla
+  notatki: WynikZrodla
+  poczekalnia: WynikZrodla
 }
 
 async function pobierzBezpiecznie(dostawca: DostawcaElementowPulpitu, zakres: ZakresDat): Promise<WynikZrodla> {
@@ -96,6 +104,8 @@ function etykietaKafelka(kafelek: KonfiguracjaKafelkaPulpitu): string {
   if (kafelek.typ === 'finanse') return 'Finanse'
   if (kafelek.typ === 'samochod') return 'Samochód'
   if (kafelek.typ === 'zakupy') return 'Zakupy'
+  if (kafelek.typ === 'notatki') return 'Notatki'
+  if (kafelek.typ === 'poczekalnia') return 'Poczekalnia'
   return kafelek.typ
 }
 
@@ -109,11 +119,13 @@ function opisElementuKafelka(element: ElementOgarniacza): string {
   if (element.typ === 'wydatek' && element.dane?.rodzaj === 'budzet') return element.opis ?? 'Przekroczony budżet'
   if (element.typ === 'samochod') return [termin, element.dane?.pozostaloKm === undefined ? '' : `${element.dane.pozostaloKm} km do wymiany`].filter(Boolean).join(' · ')
   if (element.typ === 'zakupy') return `${element.dane?.kupione ?? 0}/${element.dane?.liczbaPozycji ?? 0} kupionych${termin ? ` · ${termin}` : ''}`
+  if (element.typ === 'notatka') return [element.dane?.przypieta ? 'Przypięta' : '', termin].filter(Boolean).join(' · ') || 'Bez terminu'
+  if (element.typ === 'poczekalnia') return `Nieprzetworzone: ${element.dane?.liczbaNieprzetworzonych ?? 0}`
   return termin || 'Bez terminu'
 }
 
 function stanKafelka(kafelek: KonfiguracjaKafelkaPulpitu, wyniki: WynikiModulow | undefined) {
-  if (!['leki', 'wizyty', 'finanse', 'samochod', 'zakupy'].includes(kafelek.typ)) return 'gotowy' as const
+  if (!['leki', 'wizyty', 'finanse', 'samochod', 'zakupy', 'notatki', 'poczekalnia'].includes(kafelek.typ)) return 'gotowy' as const
   if (!wyniki) return 'ladowanie' as const
   return wyniki[kafelek.typ as keyof WynikiModulow].stan
 }
@@ -151,46 +163,52 @@ export function WidokPulpitu() {
   const zakresModulow = useMemo(() => {
     const dataReferencyjna = new Date(`${dzisiaj}T12:00:00`)
     const konceZakresow = ustawienia.pulpit.kafelki
-      .filter((kafelek) => kafelek.widoczny && ['leki', 'wizyty', 'finanse', 'samochod', 'zakupy'].includes(kafelek.typ))
+      .filter((kafelek) => kafelek.widoczny && ['leki', 'wizyty', 'finanse', 'samochod', 'zakupy', 'notatki', 'poczekalnia'].includes(kafelek.typ))
       .map((kafelek) => rozwiazZakresKafelka(kafelek, dataReferencyjna).do)
     if (ustawienia.pulpit.pokazAlerty) konceZakresow.push(format(addDays(dataReferencyjna, 1), 'yyyy-MM-dd'))
     return { od: dzisiaj, do: konceZakresow.sort().at(-1) ?? dzisiaj }
   }, [dzisiaj, ustawienia.pulpit.kafelki, ustawienia.pulpit.pokazAlerty])
   const zadaniaDnia = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: data, do: data }), [data], [])
   const modulyDnia = useLiveQuery(async () => {
-    const [leki, wizyty, finanse, samochod, zakupy] = await Promise.all([
+    const [leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia] = await Promise.all([
       pobierzBezpiecznie(dostawcaLekow, { od: data, do: data }),
       pobierzBezpiecznie(dostawcaWizyt, { od: data, do: data }),
       pobierzBezpiecznie(dostawcaFinansow, { od: data, do: data }),
       pobierzBezpiecznie(dostawcaSamochodu, { od: data, do: data }),
       pobierzBezpiecznie(dostawcaZakupow, { od: data, do: data }),
+      pobierzBezpiecznie(dostawcaNotatek, { od: data, do: data }),
+      pobierzBezpiecznie(dostawcaPoczekalni, { od: data, do: data }),
     ])
-    return { leki, wizyty, finanse, samochod, zakupy }
+    return { leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia }
   }, [data])
   const zadaniaKafelkow = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: '1900-01-01', do: '9999-12-31' }), [], [])
   const modulyKafelkow = useLiveQuery(async () => {
-    const [leki, wizyty, finanse, samochod, zakupy] = await Promise.all([
+    const [leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia] = await Promise.all([
       pobierzBezpiecznie(dostawcaLekow, zakresModulow),
       pobierzBezpiecznie(dostawcaWizyt, zakresModulow),
       pobierzBezpiecznie(dostawcaFinansow, zakresModulow),
       pobierzBezpiecznie(dostawcaSamochodu, { od: zakresModulow.od, do: format(addDays(new Date(`${zakresModulow.od}T12:00:00`), 3650), 'yyyy-MM-dd') }),
       pobierzBezpiecznie(dostawcaZakupow, zakresModulow),
+      pobierzBezpiecznie(dostawcaNotatek, zakresModulow),
+      pobierzBezpiecznie(dostawcaPoczekalni, zakresModulow),
     ])
-    return { leki, wizyty, finanse, samochod, zakupy }
+    return { leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia }
   }, [zakresModulow.od, zakresModulow.do])
   const modulyAlertow = useLiveQuery(async () => {
     const dataReferencyjna = new Date()
     const dzisiajAlertow = format(dataReferencyjna, 'yyyy-MM-dd')
     const jutroAlertow = format(addDays(dataReferencyjna, 1), 'yyyy-MM-dd')
     const zaMiesiac = format(addDays(dataReferencyjna, 30), 'yyyy-MM-dd')
-    const [leki, wizyty, finanse, samochod, zakupy] = await Promise.all([
+    const [leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia] = await Promise.all([
       pobierzBezpiecznie(dostawcaLekow, { od: dzisiajAlertow, do: jutroAlertow }),
       pobierzBezpiecznie(dostawcaWizyt, { od: dzisiajAlertow, do: jutroAlertow }),
       pobierzBezpiecznie(dostawcaFinansow, { od: '1900-01-01', do: zaMiesiac }),
       pobierzBezpiecznie(dostawcaSamochodu, { od: '1900-01-01', do: zaMiesiac }),
       pobierzBezpiecznie(dostawcaZakupow, { od: '1900-01-01', do: jutroAlertow }),
+      pobierzBezpiecznie(dostawcaNotatek, { od: '1900-01-01', do: '9999-12-31' }),
+      pobierzBezpiecznie(dostawcaPoczekalni, { od: dzisiajAlertow, do: dzisiajAlertow }),
     ])
-    return { leki, wizyty, finanse, samochod, zakupy }
+    return { leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia }
   }, [dzisiaj])
   const elementyDnia = [
     ...zadaniaDnia,
@@ -199,6 +217,7 @@ export function WidokPulpitu() {
     ...(modulyDnia?.finanse.elementy.filter((element) => element.typ === 'platnosc') ?? []),
     ...(modulyDnia?.samochod.elementy ?? []),
     ...(modulyDnia?.zakupy.elementy.filter((element) => element.data === data) ?? []),
+    ...(modulyDnia?.notatki.elementy.filter((element) => element.data === data) ?? []),
   ]
   const elementyModulowKafelkow = useMemo(() => [
     ...(modulyKafelkow?.leki.elementy ?? []),
@@ -206,6 +225,8 @@ export function WidokPulpitu() {
     ...(modulyKafelkow?.finanse.elementy ?? []),
     ...(modulyKafelkow?.samochod.elementy ?? []),
     ...(modulyKafelkow?.zakupy.elementy ?? []),
+    ...(modulyKafelkow?.notatki.elementy ?? []),
+    ...(modulyKafelkow?.poczekalnia.elementy ?? []),
   ], [modulyKafelkow])
   const elementyKafelkow = useMemo(() => [...zadaniaKafelkow, ...elementyModulowKafelkow], [elementyModulowKafelkow, zadaniaKafelkow])
   const alerty = useMemo(() => {
@@ -217,6 +238,8 @@ export function WidokPulpitu() {
       ...alertyFinansow(modulyAlertow?.finanse.elementy ?? [], teraz),
       ...alertySamochodu(modulyAlertow?.samochod.elementy ?? [], teraz),
       ...alertyZakupow(modulyAlertow?.zakupy.elementy ?? [], teraz),
+      ...alertyNotatek(modulyAlertow?.notatki.elementy ?? [], teraz),
+      ...alertyPoczekalni(modulyAlertow?.poczekalnia.elementy ?? [], teraz),
     ]))
   }, [modulyAlertow, zadaniaKafelkow])
   const widoczneAlerty = ograniczAlerty(alerty, ustawienia.pulpit.limitAlertow, pokazWiecejAlertow).widoczne

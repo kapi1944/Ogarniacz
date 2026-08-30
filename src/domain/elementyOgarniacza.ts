@@ -3,6 +3,7 @@ import type { DostepnoscPlanistyczna, DziennikLeku, Id, NazwaModulu, RegulaPowta
 export type TypElementuOgarniacza =
   | 'zadanie'
   | 'notatka'
+  | 'poczekalnia'
   | 'wizyta'
   | 'lek'
   | 'wydatek'
@@ -54,7 +55,8 @@ export interface RdzenElementuOgarniacza {
 
 export interface MapaDanychElementu {
   zadanie: { projektId?: Id }
-  notatka: { tresc?: string }
+  notatka: { tresc?: string; przypieta?: boolean; przypomnienieAt?: string }
+  poczekalnia: { liczbaNieprzetworzonych?: number; zrodlo?: 'tekst' | 'glos' }
   wizyta: { miejsce?: string; lekarzPlacowka?: string; statusWizyty?: string; liczbaElementowChecklisty?: number }
   lek: { lekId?: Id; idWystapienia?: Id; statusDawki?: DziennikLeku['status']; odroczoneDo?: string }
   wydatek: { kwota?: number; waluta?: string; rodzaj?: 'budzet'; okres?: string; limit?: number; wydano?: number }

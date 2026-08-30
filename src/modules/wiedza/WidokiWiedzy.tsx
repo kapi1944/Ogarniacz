@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { BellPlus, Download, FileUp, ListTodo, NotebookPen, PackageCheck, Trash2 } from 'lucide-react'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { Karta, Komunikat, Modal, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
@@ -29,9 +30,44 @@ export function WidokCelow() {
 }
 
 export function WidokNotatek() {
+  const [parametry] = useSearchParams()
   const { dane, repozytorium } = useRepozytorium('notatki')
   usePodswietlenie(dane.length)
-  return <WidokRejestru tytul="Notatki" opis="Samodzielne treści oraz materiały, które można powiązać z innymi encjami." etykietaDodawania="Nowa notatka" dane={dane} repozytorium={repozytorium} pola={[{ klucz: 'tytul', etykieta: 'Tytuł', wymagane: true }, { klucz: 'tresc', etykieta: 'Treść', typ: 'textarea', wymagane: true }, { klucz: 'tagi', etykieta: 'Tagi', podpowiedz: 'oddzielone przecinkami' }, { klucz: 'powiazanieTyp', etykieta: 'Typ powiązania', typ: 'select', opcje: [{ wartosc: 'zadania', etykieta: 'Zadanie' }, { wartosc: 'projekty', etykieta: 'Projekt' }, { wartosc: 'wizyty', etykieta: 'Wizyta' }, { wartosc: 'kontakty', etykieta: 'Kontakt' }, { wartosc: 'cele', etykieta: 'Cel' }] }, { klucz: 'powiazanieId', etykieta: 'ID powiązanej encji' }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), tytul: f.tytul.trim(), tresc: f.tresc, tagi: f.tagi.split(',').map((x) => x.trim()).filter(Boolean), powiazania: f.powiazanieTyp && f.powiazanieId ? [{ typ: f.powiazanieTyp as Notatka['powiazania'][number]['typ'], id: f.powiazanieId }] : e?.powiazania ?? [], updatedAt: terazIso() })} etykieta={(x) => x.tytul} szczegoly={(x) => <>{x.tagi.map((tag) => <Znacznik key={tag}>{tag}</Znacznik>)}{x.powiazania.length > 0 && <span>Powiązania: {x.powiazania.length}</span>}<p>{x.tresc}</p></>} />
+  return <WidokRejestru
+    tytul="Notatki"
+    opis="Samodzielne treści, opcjonalnie przypięte lub jawnie zaplanowane."
+    etykietaDodawania="Nowa notatka"
+    dane={dane}
+    repozytorium={repozytorium}
+    wybranyElementId={parametry.get('element') ?? undefined}
+    pola={[
+      { klucz: 'tytul', etykieta: 'Tytuł', wymagane: true },
+      { klucz: 'tresc', etykieta: 'Treść', typ: 'textarea', wymagane: true },
+      { klucz: 'tagi', etykieta: 'Tagi', podpowiedz: 'oddzielone przecinkami' },
+      { klucz: 'data', etykieta: 'Jawna data', typ: 'date' },
+      { klucz: 'godzina', etykieta: 'Jawna godzina', typ: 'time' },
+      { klucz: 'przypieta', etykieta: 'Przypięta', typ: 'select', opcje: [{ wartosc: 'true', etykieta: 'Tak' }, { wartosc: 'false', etykieta: 'Nie' }] },
+      { klucz: 'przypomnienieAt', etykieta: 'Przypomnienie', podpowiedz: 'YYYY-MM-DDTHH:mm' },
+      { klucz: 'powiazanieTyp', etykieta: 'Typ powiązania', typ: 'select', opcje: [{ wartosc: 'zadania', etykieta: 'Zadanie' }, { wartosc: 'projekty', etykieta: 'Projekt' }, { wartosc: 'wizyty', etykieta: 'Wizyta' }, { wartosc: 'kontakty', etykieta: 'Kontakt' }, { wartosc: 'cele', etykieta: 'Cel' }] },
+      { klucz: 'powiazanieId', etykieta: 'ID powiązanej encji' },
+    ]}
+    zbuduj={(formularz, istniejaca) => ({
+      ...(istniejaca ?? utworzMetadane()),
+      tytul: formularz.tytul.trim(),
+      tresc: formularz.tresc,
+      tagi: formularz.tagi.split(',').map((tag) => tag.trim()).filter(Boolean),
+      powiazania: formularz.powiazanieTyp && formularz.powiazanieId
+        ? [{ typ: formularz.powiazanieTyp as Notatka['powiazania'][number]['typ'], id: formularz.powiazanieId }]
+        : istniejaca?.powiazania ?? [],
+      data: formularz.data || undefined,
+      godzina: formularz.data && formularz.godzina ? formularz.godzina : undefined,
+      przypieta: formularz.przypieta === 'true',
+      przypomnienieAt: formularz.przypomnienieAt || undefined,
+      updatedAt: terazIso(),
+    })}
+    etykieta={(notatka) => notatka.tytul}
+    szczegoly={(notatka) => <>{notatka.przypieta && <Znacznik wariant="informacja">przypięta</Znacznik>}{notatka.tagi.map((tag) => <Znacznik key={tag}>{tag}</Znacznik>)}{notatka.data && <span>{notatka.data}{notatka.godzina ? ` ${notatka.godzina}` : ''}</span>}{notatka.przypomnienieAt && <span>Przypomnienie: {notatka.przypomnienieAt}</span>}{notatka.powiazania.length > 0 && <span>Powiązania: {notatka.powiazania.length}</span>}<p>{notatka.tresc}</p></>}
+  />
 }
 
 export function WidokPomyslow() {

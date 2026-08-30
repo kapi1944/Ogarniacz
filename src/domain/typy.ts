@@ -221,6 +221,10 @@ export interface Notatka extends EncjaBazowa {
   tresc: string
   tagi: string[]
   powiazania: PowiazanieEncji[]
+  data?: string
+  godzina?: string
+  przypieta?: boolean
+  przypomnienieAt?: string
 }
 
 export interface Pomysl extends EncjaBazowa {

@@ -1,16 +1,49 @@
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, getDay, isSameMonth, parseISO, startOfMonth, startOfWeek, subMonths } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { Karta, Komunikat, Modal, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
 import type { BlokCzasu, GrafikPracy, Urlop, WyjatekGrafiku } from '../../domain/typy'
+import type { DostawcaElementowPulpitu, ElementOgarniacza } from '../../domain/elementyOgarniacza'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { zaproponujPlan, type WynikPlanera } from '../../services/PlanerService'
+import { useAplikacja } from '../../app/KontekstAplikacji'
+import { repozytoriumElementowZadan } from '../../data/RepozytoriumElementowZadan'
+import { DostawcaZadanPulpitu } from '../../providers/DostawcaZadanPulpitu'
+import { DostawcaLekowPulpitu } from '../../providers/DostawcaLekowPulpitu'
+import { DostawcaWizytPulpitu } from '../../providers/DostawcaWizytPulpitu'
+import { DostawcaFinansowPulpitu } from '../../providers/DostawcaFinansowPulpitu'
+import { DostawcaSamochoduPulpitu } from '../../providers/DostawcaSamochoduPulpitu'
+import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
+import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
+import { anulujPlan, generujPlan, walidujPozycjeDraftu, zatwierdzPlan, type WynikPlanera } from '../../services/PlanerService'
+import { utworzHarmonogramDnia } from '../pulpit/logikaOsiCzasu'
 import { pobierzPolskieSwieto } from '../../services/PolskieSwietaService'
 import { czyZakresySieNakladaja, ETYKIETY_STATUSOW_URLOPU, ETYKIETY_TYPOW_URLOPU, urlopyDnia } from '../../services/UrlopyService'
 
 const dni = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota']
+
+const dostawcyTwardychWydarzen: DostawcaElementowPulpitu[] = [
+  new DostawcaZadanPulpitu(),
+  new DostawcaLekowPulpitu(),
+  new DostawcaWizytPulpitu(),
+  new DostawcaFinansowPulpitu(),
+  new DostawcaSamochoduPulpitu(),
+  new DostawcaZakupowPulpitu(),
+  new DostawcaNotatekPulpitu(),
+]
+
+async function pobierzTwardeWydarzenia(data: string): Promise<ElementOgarniacza[]> {
+  const wyniki = await Promise.all(dostawcyTwardychWydarzen.map(async (dostawca) => {
+    try {
+      return await dostawca.pobierzElementy({ od: data, do: data })
+    } catch {
+      return []
+    }
+  }))
+  return wyniki.flat()
+}
 
 function zmienCzas(iso: string, godzina: string): string {
   return `${iso.slice(0, 10)}T${godzina}:00`
@@ -18,52 +51,78 @@ function zmienCzas(iso: string, godzina: string): string {
 
 export function WidokPlanera() {
   const [data, ustawDate] = useState(dzisiajIso())
-  const [tryb, ustawTryb] = useState<'dzien' | 'wieczor'>('dzien')
   const [wynik, ustawWynik] = useState<WynikPlanera>()
   const [komunikat, ustawKomunikat] = useState('')
   const [reczneDodawanie, ustawReczneDodawanie] = useState(false)
+  const { ustawienia } = useAplikacja()
   const { dane: zadania } = useRepozytorium('zadania')
-  const { dane: nawyki } = useRepozytorium('nawyki')
-  const { dane: wizyty } = useRepozytorium('wizyty')
   const { dane: bloki, repozytorium } = useRepozytorium('blokiCzasu')
-  const { dane: grafik } = useRepozytorium('grafikPracy')
   const { dane: wyjatki } = useRepozytorium('wyjatkiGrafiku')
-  const { dane: urlopy } = useRepozytorium('urlopy')
   const blokiDnia = bloki.filter((blok) => blok.poczatek.startsWith(data)).sort((a, b) => a.poczatek.localeCompare(b.poczatek))
+  const wydarzeniaZrodlowe = useLiveQuery(() => pobierzTwardeWydarzenia(data), [data], [])
+  const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
+  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia), [data, ustawienia.harmonogram, wyjatekDnia])
+  const wydarzenia = useMemo<ElementOgarniacza[]>(() => [
+    ...wydarzeniaZrodlowe,
+    ...blokiDnia.filter((blok) => blok.status !== 'odrzucony').map((blok) => ({
+      id: `blok:${blok.id}`,
+      typ: 'planer' as const,
+      tytul: blok.tytul,
+      data,
+      godzina: blok.poczatek.slice(11, 16),
+      czasTrwaniaMinuty: Math.max(1, (new Date(blok.koniec).getTime() - new Date(blok.poczatek).getTime()) / 60_000),
+      trybTerminu: 'o_godzinie' as const,
+      status: blok.status === 'wykonany' ? 'wykonany' as const : 'otwarty' as const,
+      createdAt: blok.createdAt,
+      updatedAt: blok.updatedAt,
+    })),
+  ], [blokiDnia, data, wydarzeniaZrodlowe])
+  const danePlanera = useMemo(() => ({ data, zadania, wydarzenia, harmonogram }), [data, harmonogram, wydarzenia, zadania])
 
-  const generuj = (odTeraz = false) => {
-    const odGodziny = odTeraz && data === dzisiajIso() ? format(new Date(), 'HH:mm') : undefined
-    ustawWynik(zaproponujPlan({ data, tryb, zadania, nawyki, wizyty, bloki: blokiDnia, grafik, wyjatkiGrafiku: wyjatki, urlopy, odGodziny }))
-    ustawKomunikat('Przygotowano lokalną, deterministyczną propozycję. Zmień wybrane bloki albo zaakceptuj całość.')
+  const generuj = () => {
+    ustawWynik(generujPlan(danePlanera))
+    ustawKomunikat('Przygotowano deterministyczny draft. Repozytoria nie zostały zmienione.')
   }
 
   const zaakceptujWszystko = async () => {
     if (!wynik) return
-    await repozytorium.zapiszWiele(wynik.propozycje.map((blok) => ({ ...blok, status: 'zaakceptowany' as const })))
+    const liczba = await zatwierdzPlan(wynik, repozytoriumElementowZadan)
     ustawWynik(undefined)
-    ustawKomunikat('Plan został zaakceptowany i zapisany lokalnie.')
+    ustawKomunikat(`Zatwierdzono ${liczba} pozycji przez aktualizację źródłowych Zadań.`)
   }
 
-  const aktualizujPropozycje = (id: string, pole: 'poczatek' | 'koniec', godzina: string) => {
+  const aktualizujPozycje = (id: string, godzina: string, czasTrwaniaMinuty: number) => {
     if (!wynik) return
-    ustawWynik({ ...wynik, propozycje: wynik.propozycje.map((blok) => blok.id === id ? { ...blok, [pole]: zmienCzas(blok[pole], godzina) } : blok) })
+    const pozycja = wynik.pozycje.find((element) => element.id === id)
+    if (!pozycja) return
+    const walidacja = walidujPozycjeDraftu(danePlanera, pozycja, godzina, czasTrwaniaMinuty, wynik.pozycje)
+    const pozycje = wynik.pozycje.map((element) => element.id !== id ? element : {
+      ...element,
+      czasTrwaniaMinuty: czasTrwaniaMinuty > 0 ? czasTrwaniaMinuty : undefined,
+      poczatek: walidacja.poprawna ? walidacja.poczatek : `${data}T${godzina}:00`,
+      koniec: walidacja.koniec,
+      status: walidacja.poprawna ? 'zaplanowana' as const : 'konflikt' as const,
+      powod: walidacja.powod,
+    })
+    ustawWynik({ ...wynik, pozycje, minutyZaplanowane: pozycje.reduce((suma, element) => suma + (element.status === 'zaplanowana' ? element.czasTrwaniaMinuty ?? 0 : 0), 0) })
   }
 
   return <div className="widok">
-    <NaglowekWidoku tytul="Planer dnia" opis="Realistyczna propozycja z ochroną pracy, wizyt i twardych bloków. Obowiązki zajmują najwyżej 75% dostępnego czasu." akcje={<button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawReczneDodawanie(true)}><Plus aria-hidden="true" />Blok ręczny</button>} />
+    <NaglowekWidoku tytul="Planer dnia" opis="Draft korzysta ze wspólnej dostępności dnia i twardych wydarzeń. Zapis następuje dopiero po zatwierdzeniu." akcje={<button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawReczneDodawanie(true)}><Plus aria-hidden="true" />Blok ręczny</button>} />
     <Karta>
       <div className="pasek-planera">
         <label><span>Dzień</span><input type="date" value={data} onChange={(e) => { ustawDate(e.target.value); ustawWynik(undefined) }} /></label>
-        <label><span>Zakres</span><select value={tryb} onChange={(e) => ustawTryb(e.target.value as typeof tryb)}><option value="dzien">Cały dzień</option><option value="wieczor">Wieczór od 16:00</option></select></label>
-        <button type="button" className="przycisk przycisk--glowny" onClick={() => generuj(false)}>Zaproponuj plan</button>
-        {data === dzisiajIso() && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => generuj(true)}><RefreshCw aria-hidden="true" />Przebuduj od teraz</button>}
+        <button type="button" className="przycisk przycisk--glowny" onClick={generuj}><RefreshCw aria-hidden="true" />Generuj propozycję</button>
       </div>
     </Karta>
     {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}
 
     {wynik && <Karta klasa="propozycja-planu">
-      <div className="naglowek-karty"><div><h2>Propozycja</h2><p>{wynik.minutyObowiazkow} min obowiązków z {wynik.minutyDostepne} min dostępnych ({wynik.wykorzystanieProcent}%). Reszta pozostaje buforem lub czasem wolnym.</p></div><div className="naglowek-widoku__akcje"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawWynik(undefined)}><X aria-hidden="true" />Odrzuć</button><button type="button" className="przycisk przycisk--glowny" onClick={zaakceptujWszystko}><Check aria-hidden="true" />Akceptuj plan</button></div></div>
-      <div className="lista-blokow">{wynik.propozycje.map((blok) => <article className={`blok-planu blok-planu--${blok.typ}`} key={blok.id}><div className="blok-planu__czas"><input aria-label="Początek bloku" type="time" value={blok.poczatek.slice(11, 16)} onChange={(e) => aktualizujPropozycje(blok.id, 'poczatek', e.target.value)} /><span>–</span><input aria-label="Koniec bloku" type="time" value={blok.koniec.slice(11, 16)} onChange={(e) => aktualizujPropozycje(blok.id, 'koniec', e.target.value)} /></div><div><strong>{blok.tytul}</strong><small>{blok.typ} · {blok.elastycznosc}</small></div><button type="button" className="przycisk-ikona" title="Usuń z propozycji" onClick={() => ustawWynik({ ...wynik, propozycje: wynik.propozycje.filter((x) => x.id !== blok.id) })}><Trash2 aria-hidden="true" /></button></article>)}</div>
+      <div className="naglowek-karty"><div><h2>Draft propozycji</h2><p>{wynik.minutyZaplanowane} min zaplanowanych z {wynik.minutyDostepne} min dostępnych. Konflikty pozostają niezaplanowane.</p></div><div className="naglowek-widoku__akcje"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawWynik(anulujPlan(wynik)); ustawKomunikat('Draft anulowano bez zapisu.') }}><X aria-hidden="true" />Anuluj</button><button type="button" className="przycisk przycisk--glowny" onClick={zaakceptujWszystko}><Check aria-hidden="true" />Zatwierdź plan</button></div></div>
+      <div className="lista-blokow">{wynik.pozycje.map((pozycja) => {
+        const godzina = pozycja.poczatek?.slice(11, 16) ?? harmonogram.zakresAktywny.od
+        return <article className="blok-planu blok-planu--zadanie" key={pozycja.id}><div className="blok-planu__czas"><input aria-label={`Początek: ${pozycja.tytul}`} type="time" value={godzina} onChange={(e) => aktualizujPozycje(pozycja.id, e.target.value, pozycja.czasTrwaniaMinuty ?? 0)} /><input aria-label={`Czas trwania: ${pozycja.tytul}`} type="number" min="1" step="5" placeholder="min" value={pozycja.czasTrwaniaMinuty ?? ''} onChange={(e) => aktualizujPozycje(pozycja.id, godzina, Number(e.target.value))} /></div><div><strong>{pozycja.tytul}</strong><small>{pozycja.status === 'zaplanowana' ? `${godzina}–${pozycja.koniec?.slice(11, 16)}` : pozycja.powod}</small></div><Znacznik wariant={pozycja.status === 'zaplanowana' ? 'sukces' : 'ostrzezenie'}>{pozycja.status.replace('_', ' ')}</Znacznik><button type="button" className="przycisk-ikona" title="Usuń z draftu" onClick={() => ustawWynik({ ...wynik, pozycje: wynik.pozycje.filter((element) => element.id !== pozycja.id) })}><Trash2 aria-hidden="true" /></button></article>
+      })}</div>
     </Karta>}
 
     <Karta>
