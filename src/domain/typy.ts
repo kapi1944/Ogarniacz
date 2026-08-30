@@ -189,6 +189,9 @@ export interface ListaZakupow extends EncjaBazowa {
   lokalizacja?: string
   budzet?: number
   aktywna: boolean
+  planowanaData?: string
+  planowanaGodzina?: string
+  priorytet?: 'normalny' | 'pilny' | 'asap'
 }
 
 export interface PozycjaZakupow extends EncjaBazowa {
@@ -278,6 +281,18 @@ export interface Budzet extends EncjaBazowa {
   kategoria?: string
   okres: string
   limit: number
+}
+
+export interface Pojazd extends EncjaBazowa {
+  nazwa: string
+  przebieg?: number
+  ocDo?: string
+  przegladDo?: string
+  wymianaOlejuDo?: string
+  wymianaOlejuPrzebieg?: number
+  planowanySerwisData?: string
+  planowanySerwisGodzina?: string
+  notatka?: string
 }
 
 export interface TerminWaznosci extends EncjaBazowa {
@@ -440,6 +455,7 @@ export type NazwaModulu =
   | 'kontakty'
   | 'dokumenty'
   | 'finanse'
+  | 'samochod'
   | 'terminy'
   | 'echo'
   | 'ustawienia'
@@ -470,6 +486,7 @@ export interface MapaTabel {
   dokumenty: Dokument
   wydatki: Wydatek
   budzety: Budzet
+  pojazdy: Pojazd
   terminyWaznosci: TerminWaznosci
   pamiecEcho: PamiecEcho
   uprawnienia: Uprawnienie

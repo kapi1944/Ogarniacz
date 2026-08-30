@@ -72,14 +72,14 @@ function wizyta(): ElementOgarniacza {
     updatedAt: '2026-08-01T10:00:00.000Z',
   }
 }
-function alert(id: string, typ: AlertPulpitu['typ'], termin?: string, severity: AlertPulpitu['severity'] = 'warning'): AlertPulpitu {
+function alert(id: string, typ: AlertPulpitu['typ'], termin?: string, severity: AlertPulpitu['severity'] = 'warning', modul: AlertPulpitu['sourceRef']['modul'] = 'zadania'): AlertPulpitu {
   return {
     id,
     typ,
     severity,
     tytul: id,
     termin,
-    sourceRef: { modul: 'zadania', encjaId: id },
+    sourceRef: { modul, encjaId: id },
     createdAt: '2026-08-28T08:00:00.000Z',
   }
 }
@@ -122,6 +122,23 @@ describe('logika kafelków Pulpitu', () => {
 
     expect(pierwszyWynik).toEqual(['zalegle', 'asap', 'za-godzine', 'pozniejsze-ostrzezenie', 'informacja'])
     expect(drugiWynik).toEqual(pierwszyWynik)
+  })
+
+  it('utrzymuje jeden deterministyczny ranking dla Zadania, Leku, Wizyty, Finansów, Samochodu i Zakupów', () => {
+    const alerty = [
+      alert('zadanie', 'near', '2026-08-29', 'warning', 'zadania'),
+      alert('lek', 'near', '2026-08-29', 'warning', 'leki'),
+      alert('wizyta', 'near', '2026-08-29', 'warning', 'wizyty'),
+      alert('finanse', 'near', '2026-08-29', 'warning', 'rachunki'),
+      alert('samochod', 'near', '2026-08-29', 'warning', 'samochod'),
+      alert('zakupy', 'near', '2026-08-29', 'warning', 'zakupy'),
+    ]
+
+    const pierwszy = rangujAlerty(alerty)
+    const drugi = rangujAlerty(alerty)
+    expect(pierwszy.map((pozycja) => pozycja.id)).toEqual(['finanse', 'lek', 'samochod', 'wizyta', 'zadanie', 'zakupy'])
+    expect(drugi).toEqual(pierwszy)
+    expect(new Set(pierwszy.map((pozycja) => pozycja.sourceRef.modul))).toEqual(new Set(['zadania', 'leki', 'wizyty', 'rachunki', 'samochod', 'zakupy']))
   })
 
   it('deduplikuje ten sam problem źródła, ale zachowuje różne typy problemów', () => {
@@ -182,6 +199,9 @@ describe('logika kafelków Pulpitu', () => {
     expect(adresReferencjiZrodla(dawka().referencjaZrodla!))
       .toBe('/leki?element=lek-1&wystapienie=lek-1%3A2026-08-28%3A08%3A00')
     expect(adresReferencjiZrodla(wizyta().referencjaZrodla!)).toBe('/wizyty?element=wizyta-1')
+    expect(adresReferencjiZrodla({ modul: 'rachunki', encjaId: 'rachunek-1' })).toBe('/rachunki?element=rachunek-1')
+    expect(adresReferencjiZrodla({ modul: 'samochod', encjaId: 'auto-1' })).toBe('/samochod?element=auto-1')
+    expect(adresReferencjiZrodla({ modul: 'zakupy', encjaId: 'lista-1' })).toBe('/zakupy?element=lista-1')
   })
 
   it('rozwiązuje klasy wszystkich rozmiarów kafelka', () => {

@@ -13,10 +13,16 @@ import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { DostawcaLekowPulpitu } from '../../providers/DostawcaLekowPulpitu'
 import { DostawcaWizytPulpitu } from '../../providers/DostawcaWizytPulpitu'
 import { DostawcaZadanPulpitu } from '../../providers/DostawcaZadanPulpitu'
+import { DostawcaFinansowPulpitu } from '../../providers/DostawcaFinansowPulpitu'
+import { DostawcaSamochoduPulpitu } from '../../providers/DostawcaSamochoduPulpitu'
+import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
 import {
   adresReferencjiZrodla,
+  alertyFinansow,
   alertyLekow,
+  alertySamochodu,
   alertyWizyt,
+  alertyZakupow,
   alertyZadan,
   deduplikujAlerty,
   klasaRozmiaruKafelka,
@@ -38,12 +44,23 @@ import {
 const dostawcaZadan = new DostawcaZadanPulpitu()
 const dostawcaLekow = new DostawcaLekowPulpitu()
 const dostawcaWizyt = new DostawcaWizytPulpitu()
+const dostawcaFinansow = new DostawcaFinansowPulpitu()
+const dostawcaSamochodu = new DostawcaSamochoduPulpitu()
+const dostawcaZakupow = new DostawcaZakupowPulpitu()
 
 type StanZrodla = 'gotowy' | 'blad'
 
 interface WynikZrodla {
   stan: StanZrodla
   elementy: ElementOgarniacza[]
+}
+
+interface WynikiModulow {
+  leki: WynikZrodla
+  wizyty: WynikZrodla
+  finanse: WynikZrodla
+  samochod: WynikZrodla
+  zakupy: WynikZrodla
 }
 
 async function pobierzBezpiecznie(dostawca: DostawcaElementowPulpitu, zakres: ZakresDat): Promise<WynikZrodla> {
@@ -76,6 +93,9 @@ function etykietaKafelka(kafelek: KonfiguracjaKafelkaPulpitu): string {
   if (kafelek.typ === 'pilne') return 'Pilne / zaległe'
   if (kafelek.typ === 'leki') return 'Leki'
   if (kafelek.typ === 'wizyty') return 'Wizyty'
+  if (kafelek.typ === 'finanse') return 'Finanse'
+  if (kafelek.typ === 'samochod') return 'Samochód'
+  if (kafelek.typ === 'zakupy') return 'Zakupy'
   return kafelek.typ
 }
 
@@ -85,13 +105,17 @@ function opisElementuKafelka(element: ElementOgarniacza): string {
     const status = element.dane?.statusDawki === 'zazyte' ? 'zażyta' : element.dane?.statusDawki ?? 'oczekuje'
     return `${termin} · ${status}`
   }
+  if (element.typ === 'platnosc') return `${termin} · ${element.dane?.kwota?.toFixed(2) ?? '—'} ${element.dane?.waluta ?? 'PLN'}`
+  if (element.typ === 'wydatek' && element.dane?.rodzaj === 'budzet') return element.opis ?? 'Przekroczony budżet'
+  if (element.typ === 'samochod') return [termin, element.dane?.pozostaloKm === undefined ? '' : `${element.dane.pozostaloKm} km do wymiany`].filter(Boolean).join(' · ')
+  if (element.typ === 'zakupy') return `${element.dane?.kupione ?? 0}/${element.dane?.liczbaPozycji ?? 0} kupionych${termin ? ` · ${termin}` : ''}`
   return termin || 'Bez terminu'
 }
 
-function stanKafelka(kafelek: KonfiguracjaKafelkaPulpitu, wyniki: { leki: WynikZrodla; wizyty: WynikZrodla } | undefined) {
-  if (kafelek.typ !== 'leki' && kafelek.typ !== 'wizyty') return 'gotowy' as const
+function stanKafelka(kafelek: KonfiguracjaKafelkaPulpitu, wyniki: WynikiModulow | undefined) {
+  if (!['leki', 'wizyty', 'finanse', 'samochod', 'zakupy'].includes(kafelek.typ)) return 'gotowy' as const
   if (!wyniki) return 'ladowanie' as const
-  return wyniki[kafelek.typ].stan
+  return wyniki[kafelek.typ as keyof WynikiModulow].stan
 }
 
 function ZawartoscKafelka({
@@ -102,7 +126,7 @@ function ZawartoscKafelka({
 }: {
   kafelek: KonfiguracjaKafelkaPulpitu
   elementy: ElementOgarniacza[]
-  wynikiModulow: { leki: WynikZrodla; wizyty: WynikZrodla } | undefined
+  wynikiModulow: WynikiModulow | undefined
   dataReferencyjna: Date
 }) {
   const stanZrodla = stanKafelka(kafelek, wynikiModulow)
@@ -127,38 +151,74 @@ export function WidokPulpitu() {
   const zakresModulow = useMemo(() => {
     const dataReferencyjna = new Date(`${dzisiaj}T12:00:00`)
     const konceZakresow = ustawienia.pulpit.kafelki
-      .filter((kafelek) => kafelek.widoczny && (kafelek.typ === 'leki' || kafelek.typ === 'wizyty'))
+      .filter((kafelek) => kafelek.widoczny && ['leki', 'wizyty', 'finanse', 'samochod', 'zakupy'].includes(kafelek.typ))
       .map((kafelek) => rozwiazZakresKafelka(kafelek, dataReferencyjna).do)
     if (ustawienia.pulpit.pokazAlerty) konceZakresow.push(format(addDays(dataReferencyjna, 1), 'yyyy-MM-dd'))
     return { od: dzisiaj, do: konceZakresow.sort().at(-1) ?? dzisiaj }
   }, [dzisiaj, ustawienia.pulpit.kafelki, ustawienia.pulpit.pokazAlerty])
   const zadaniaDnia = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: data, do: data }), [data], [])
   const modulyDnia = useLiveQuery(async () => {
-    const [leki, wizyty] = await Promise.all([
+    const [leki, wizyty, finanse, samochod, zakupy] = await Promise.all([
       pobierzBezpiecznie(dostawcaLekow, { od: data, do: data }),
       pobierzBezpiecznie(dostawcaWizyt, { od: data, do: data }),
+      pobierzBezpiecznie(dostawcaFinansow, { od: data, do: data }),
+      pobierzBezpiecznie(dostawcaSamochodu, { od: data, do: data }),
+      pobierzBezpiecznie(dostawcaZakupow, { od: data, do: data }),
     ])
-    return { leki, wizyty }
+    return { leki, wizyty, finanse, samochod, zakupy }
   }, [data])
   const zadaniaKafelkow = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: '1900-01-01', do: '9999-12-31' }), [], [])
   const modulyKafelkow = useLiveQuery(async () => {
-    const [leki, wizyty] = await Promise.all([
+    const [leki, wizyty, finanse, samochod, zakupy] = await Promise.all([
       pobierzBezpiecznie(dostawcaLekow, zakresModulow),
       pobierzBezpiecznie(dostawcaWizyt, zakresModulow),
+      pobierzBezpiecznie(dostawcaFinansow, zakresModulow),
+      pobierzBezpiecznie(dostawcaSamochodu, { od: zakresModulow.od, do: format(addDays(new Date(`${zakresModulow.od}T12:00:00`), 3650), 'yyyy-MM-dd') }),
+      pobierzBezpiecznie(dostawcaZakupow, zakresModulow),
     ])
-    return { leki, wizyty }
+    return { leki, wizyty, finanse, samochod, zakupy }
   }, [zakresModulow.od, zakresModulow.do])
-  const elementyDnia = [...zadaniaDnia, ...(modulyDnia?.leki.elementy ?? []), ...(modulyDnia?.wizyty.elementy ?? [])]
-  const elementyModulowKafelkow = useMemo(() => [...(modulyKafelkow?.leki.elementy ?? []), ...(modulyKafelkow?.wizyty.elementy ?? [])], [modulyKafelkow])
+  const modulyAlertow = useLiveQuery(async () => {
+    const dataReferencyjna = new Date()
+    const dzisiajAlertow = format(dataReferencyjna, 'yyyy-MM-dd')
+    const jutroAlertow = format(addDays(dataReferencyjna, 1), 'yyyy-MM-dd')
+    const zaMiesiac = format(addDays(dataReferencyjna, 30), 'yyyy-MM-dd')
+    const [leki, wizyty, finanse, samochod, zakupy] = await Promise.all([
+      pobierzBezpiecznie(dostawcaLekow, { od: dzisiajAlertow, do: jutroAlertow }),
+      pobierzBezpiecznie(dostawcaWizyt, { od: dzisiajAlertow, do: jutroAlertow }),
+      pobierzBezpiecznie(dostawcaFinansow, { od: '1900-01-01', do: zaMiesiac }),
+      pobierzBezpiecznie(dostawcaSamochodu, { od: '1900-01-01', do: zaMiesiac }),
+      pobierzBezpiecznie(dostawcaZakupow, { od: '1900-01-01', do: jutroAlertow }),
+    ])
+    return { leki, wizyty, finanse, samochod, zakupy }
+  }, [dzisiaj])
+  const elementyDnia = [
+    ...zadaniaDnia,
+    ...(modulyDnia?.leki.elementy ?? []),
+    ...(modulyDnia?.wizyty.elementy ?? []),
+    ...(modulyDnia?.finanse.elementy.filter((element) => element.typ === 'platnosc') ?? []),
+    ...(modulyDnia?.samochod.elementy ?? []),
+    ...(modulyDnia?.zakupy.elementy.filter((element) => element.data === data) ?? []),
+  ]
+  const elementyModulowKafelkow = useMemo(() => [
+    ...(modulyKafelkow?.leki.elementy ?? []),
+    ...(modulyKafelkow?.wizyty.elementy ?? []),
+    ...(modulyKafelkow?.finanse.elementy ?? []),
+    ...(modulyKafelkow?.samochod.elementy ?? []),
+    ...(modulyKafelkow?.zakupy.elementy ?? []),
+  ], [modulyKafelkow])
   const elementyKafelkow = useMemo(() => [...zadaniaKafelkow, ...elementyModulowKafelkow], [elementyModulowKafelkow, zadaniaKafelkow])
   const alerty = useMemo(() => {
     const teraz = new Date()
     return rangujAlerty(deduplikujAlerty([
       ...alertyZadan(zadaniaKafelkow, teraz),
-      ...alertyLekow(elementyModulowKafelkow, teraz),
-      ...alertyWizyt(elementyModulowKafelkow, teraz),
+      ...alertyLekow(modulyAlertow?.leki.elementy ?? [], teraz),
+      ...alertyWizyt(modulyAlertow?.wizyty.elementy ?? [], teraz),
+      ...alertyFinansow(modulyAlertow?.finanse.elementy ?? [], teraz),
+      ...alertySamochodu(modulyAlertow?.samochod.elementy ?? [], teraz),
+      ...alertyZakupow(modulyAlertow?.zakupy.elementy ?? [], teraz),
     ]))
-  }, [elementyModulowKafelkow, zadaniaKafelkow])
+  }, [modulyAlertow, zadaniaKafelkow])
   const widoczneAlerty = ograniczAlerty(alerty, ustawienia.pulpit.limitAlertow, pokazWiecejAlertow).widoczne
   const kafelki = useMemo(() => sortujKafelki(ustawienia.pulpit.kafelki).filter((kafelek) => filtrKafelkow === 'wszystkie' || kafelek.typ === filtrKafelkow), [ustawienia.pulpit.kafelki, filtrKafelkow])
   const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
@@ -210,14 +270,14 @@ export function WidokPulpitu() {
     ustawKomunikat('Przywrócono domyślną regułę harmonogramu dla tego dnia.')
   }
 
-  const bladModuluDnia = modulyDnia && [modulyDnia.leki, modulyDnia.wizyty].some((wynik) => wynik.stan === 'blad')
+  const bladModuluDnia = modulyDnia && Object.values(modulyDnia).some((wynik) => wynik.stan === 'blad')
   const dataReferencyjnaKafelkow = new Date(`${dzisiaj}T12:00:00`)
 
   return <div className="widok widok-pulpitu">
     <NaglowekWidoku tytul="Pulpit" opis="Najważniejsze informacje teraz i w nadchodzących zakresach. Wybrana data steruje osią czasu, nie całym Pulpitem." akcje={<button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Szybko dodaj</button>} />
     <NawigatorDnia data={data} zmienDate={(nowaData) => { ustawDate(nowaData); ustawKomunikat('') }} />
     {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}
-    {bladModuluDnia && <Komunikat typ="blad">Nie udało się pobrać części danych zdrowotnych. Pozostałe elementy Pulpitu nadal działają.</Komunikat>}
+    {bladModuluDnia && <Komunikat typ="blad">Nie udało się pobrać części danych modułowych. Pozostałe elementy Pulpitu nadal działają.</Komunikat>}
 
     {ustawienia.pulpit.pokazAlerty && <Karta klasa="strefa-pulpitu strefa-pulpitu--alerty"><div className="tytul-karty"><AlertCircle aria-hidden="true" /><span>Smart Alerts</span></div><h2>Najważniejsze sygnały</h2>{widoczneAlerty.length === 0 ? <p>Brak alertów wymagających uwagi.</p> : <div className="lista-kompaktowa">{widoczneAlerty.map((alert) => <div key={alert.id}><div><Link to={adresReferencjiZrodla(alert.sourceRef)}><strong>{alert.tytul}</strong></Link><small>{alert.severity === 'critical' ? 'Krytyczne' : alert.severity === 'warning' ? 'Ostrzeżenie' : 'Informacja'} · {alert.opis}</small></div></div>)}</div>}{alerty.length > ustawienia.pulpit.limitAlertow && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPokazWiecejAlertow((wartosc) => !wartosc)}>{pokazWiecejAlertow ? 'Pokaż mniej' : 'Pokaż więcej'}</button>}</Karta>}
     {ustawienia.pulpit.pokazKafelki && <section><div className="akcje-formularza"><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('wszystkie')}>Wszystkie</button><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('zadania')}>Zadania</button><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('pilne')}>Pilne</button></div><div className="strefy-pulpitu">{kafelki.map((kafelek) => <Karta key={kafelek.id} klasa={`strefa-pulpitu ${klasaRozmiaruKafelka(kafelek.rozmiar)}`}><div className="tytul-karty"><LayoutGrid aria-hidden="true" /><span>{etykietaKafelka(kafelek)}</span></div><ZawartoscKafelka kafelek={kafelek} elementy={elementyKafelkow} wynikiModulow={modulyKafelkow} dataReferencyjna={dataReferencyjnaKafelkow} /></Karta>)}</div></section>}

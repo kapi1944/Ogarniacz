@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Clock3, CreditCard, Plus, RotateCcw, Trash2 } from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { Karta, Modal, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
@@ -90,11 +90,15 @@ export function WidokNawykow() {
 }
 
 export function WidokZakupow() {
+  const [parametry] = useSearchParams()
   const { dane: listy, repozytorium: repoList } = useRepozytorium('listyZakupow')
   const { dane: pozycje, repozytorium: repoPozycji } = useRepozytorium('pozycjeZakupow')
   const [aktywnaId, ustawAktywnaId] = useState<string>()
   const [listaModal, ustawListaModal] = useState<ListaZakupow | null>()
-  const aktywna = listy.find((lista) => lista.id === aktywnaId) ?? listy.find((lista) => lista.aktywna) ?? listy[0]
+  const aktywna = listy.find((lista) => lista.id === aktywnaId)
+    ?? listy.find((lista) => lista.id === parametry.get('element'))
+    ?? listy.find((lista) => lista.aktywna)
+    ?? listy[0]
   const elementy = pozycje.filter((pozycja) => pozycja.listaId === aktywna?.id).sort((a, b) => Number(a.kupione) - Number(b.kupione))
 
   return <div className="widok">
@@ -113,10 +117,31 @@ export function WidokZakupow() {
 
 function FormularzListy({ lista, zamknij, zapisz }: { lista: ListaZakupow; zamknij: () => void; zapisz: (lista: ListaZakupow) => Promise<void> }) {
   const [dane, ustawDane] = useState(lista)
-  return <Modal tytul={lista.nazwa ? 'Edytuj listę' : 'Nowa lista zakupów'} zamknij={zamknij}><form className="formularz" onSubmit={(e) => { e.preventDefault(); if (dane.nazwa.trim()) zapisz({ ...dane, nazwa: dane.nazwa.trim(), updatedAt: terazIso() }) }}><label className="pole pole--pelne"><span>Nazwa *</span><input required value={dane.nazwa} onChange={(e) => ustawDane({ ...dane, nazwa: e.target.value })} /></label><label className="pole"><span>Sklep</span><input value={dane.sklep ?? ''} onChange={(e) => ustawDane({ ...dane, sklep: e.target.value || undefined })} /></label><label className="pole"><span>Lokalizacja</span><input value={dane.lokalizacja ?? ''} onChange={(e) => ustawDane({ ...dane, lokalizacja: e.target.value || undefined })} /></label><label className="pole"><span>Budżet</span><input type="number" min="0" step="0.01" value={dane.budzet ?? ''} onChange={(e) => ustawDane({ ...dane, budzet: e.target.value ? Number(e.target.value) : undefined })} /></label><label className="pole pole-checkbox"><input type="checkbox" checked={dane.aktywna} onChange={(e) => ustawDane({ ...dane, aktywna: e.target.checked })} /><span>Lista aktywna</span></label><div className="akcje-formularza pole--pelne"><button type="button" className="przycisk przycisk--drugorzedny" onClick={zamknij}>Anuluj</button><button className="przycisk przycisk--glowny" type="submit">Zapisz</button></div></form></Modal>
+  return <Modal tytul={lista.nazwa ? 'Edytuj listę' : 'Nowa lista zakupów'} zamknij={zamknij}>
+    <form className="formularz" onSubmit={(e) => {
+      e.preventDefault()
+      if (dane.nazwa.trim()) zapisz({
+        ...dane,
+        nazwa: dane.nazwa.trim(),
+        planowanaGodzina: dane.planowanaData ? dane.planowanaGodzina : undefined,
+        updatedAt: terazIso(),
+      })
+    }}>
+      <label className="pole pole--pelne"><span>Nazwa *</span><input required value={dane.nazwa} onChange={(e) => ustawDane({ ...dane, nazwa: e.target.value })} /></label>
+      <label className="pole"><span>Sklep</span><input value={dane.sklep ?? ''} onChange={(e) => ustawDane({ ...dane, sklep: e.target.value || undefined })} /></label>
+      <label className="pole"><span>Lokalizacja</span><input value={dane.lokalizacja ?? ''} onChange={(e) => ustawDane({ ...dane, lokalizacja: e.target.value || undefined })} /></label>
+      <label className="pole"><span>Budżet</span><input type="number" min="0" step="0.01" value={dane.budzet ?? ''} onChange={(e) => ustawDane({ ...dane, budzet: e.target.value ? Number(e.target.value) : undefined })} /></label>
+      <label className="pole"><span>Planowana data</span><input type="date" value={dane.planowanaData ?? ''} onChange={(e) => ustawDane({ ...dane, planowanaData: e.target.value || undefined })} /></label>
+      <label className="pole"><span>Planowana godzina</span><input type="time" value={dane.planowanaGodzina ?? ''} disabled={!dane.planowanaData} onChange={(e) => ustawDane({ ...dane, planowanaGodzina: e.target.value || undefined })} /></label>
+      <label className="pole"><span>Priorytet</span><select value={dane.priorytet ?? 'normalny'} onChange={(e) => ustawDane({ ...dane, priorytet: e.target.value as ListaZakupow['priorytet'] })}><option value="normalny">Normalny</option><option value="pilny">Pilny</option><option value="asap">ASAP</option></select></label>
+      <label className="pole pole-checkbox"><input type="checkbox" checked={dane.aktywna} onChange={(e) => ustawDane({ ...dane, aktywna: e.target.checked })} /><span>Lista aktywna</span></label>
+      <div className="akcje-formularza pole--pelne"><button type="button" className="przycisk przycisk--drugorzedny" onClick={zamknij}>Anuluj</button><button className="przycisk przycisk--glowny" type="submit">Zapisz</button></div>
+    </form>
+  </Modal>
 }
 
 export function WidokRachunkow() {
+  const [parametry] = useSearchParams()
   const { dane: rachunki, repozytorium } = useRepozytorium('rachunki')
   const { dane: platnosci, repozytorium: repoPlatnosci } = useRepozytorium('platnosciRachunkow')
   const [pokazHistorie, ustawPokazHistorie] = useState(false)
@@ -137,6 +162,7 @@ export function WidokRachunkow() {
       etykietaDodawania="Nowy rachunek"
       dane={rachunki}
       repozytorium={repozytorium}
+      wybranyElementId={parametry.get('element') ?? undefined}
       pola={[
         { klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true }, { klucz: 'kwota', etykieta: 'Kwota', typ: 'number', wymagane: true, min: 0.01, krok: 0.01 }, { klucz: 'termin', etykieta: 'Termin', typ: 'date', wymagane: true }, { klucz: 'status', etykieta: 'Status', typ: 'select', wymagane: true, opcje: [{ wartosc: 'niezaplacony', etykieta: 'Niezapłacony' }, { wartosc: 'zaplacony', etykieta: 'Zapłacony' }] }, { klucz: 'powtarzanieTyp', etykieta: 'Cykliczność', typ: 'select', opcje: [{ wartosc: 'brak', etykieta: 'Brak' }, { wartosc: 'miesiecznie', etykieta: 'Miesięcznie' }, { wartosc: 'rocznie', etykieta: 'Rocznie' }, { wartosc: 'tygodniowo', etykieta: 'Tygodniowo' }] },
       ]}

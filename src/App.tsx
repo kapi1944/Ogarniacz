@@ -8,6 +8,7 @@ import { WidokLekow, WidokWizyt } from './modules/zdrowie/WidokiZdrowia'
 import { WidokMiasta, WidokNawykow, WidokPrzypomnien, WidokRachunkow, WidokZakupow } from './modules/organizacja/WidokiOrganizacji'
 import { WidokCelow, WidokDokumentow, WidokKontaktow, WidokNaPozniej, WidokNotatek, WidokPomyslow, WidokTerminow } from './modules/wiedza/WidokiWiedzy'
 import { WidokFinansow } from './modules/finanse/WidokFinansow'
+import { WidokSamochodu } from './modules/samochod/WidokSamochodu'
 import { WidokEcho } from './modules/echo/WidokEcho'
 import { WidokUstawien } from './modules/ustawienia/WidokUstawien'
 import { EdytorPersonalizacji } from './modules/ustawienia/EdytorPersonalizacji'
@@ -42,6 +43,7 @@ export default function App() {
     <Route path="/dokumenty" element={chron('dokumenty', <WidokDokumentow />)} />
     <Route path="/terminy" element={chron('terminy', <WidokTerminow />)} />
     <Route path="/finanse" element={chron('finanse', <WidokFinansow />)} />
+    <Route path="/samochod" element={chron('samochod', <WidokSamochodu />)} />
     <Route path="/echo" element={chron('echo', <WidokEcho />)} />
     <Route path="/ustawienia" element={chron('ustawienia', <WidokUstawien />)} />
     <Route path="/ustawienia/personalizacja" element={chron('ustawienia', <EdytorPersonalizacji />)} />

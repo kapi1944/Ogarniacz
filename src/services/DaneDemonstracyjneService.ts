@@ -5,7 +5,7 @@ import { dzisiajIso, utworzMetadane } from '../domain/fabryki'
 import type { BlokCzasu, Budzet, Cel, Dokument, ElementSkrzynki, Kontakt, Lek, ListaZakupow, NaPozniej, Nawyk, Notatka, Pomysl, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, TerminWaznosci, Wizyta, Wydatek } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 
-const tabeleUzytkownika = ['zadania', 'projekty', 'skrzynka', 'blokiCzasu', 'nawyki', 'leki', 'wizyty', 'przypomnienia', 'listyZakupow', 'rachunki', 'notatki', 'pomysly', 'naPozniej', 'cele', 'kontakty', 'dokumenty', 'wydatki', 'budzety', 'terminyWaznosci'] as const
+const tabeleUzytkownika = ['zadania', 'projekty', 'skrzynka', 'blokiCzasu', 'nawyki', 'leki', 'wizyty', 'przypomnienia', 'listyZakupow', 'rachunki', 'notatki', 'pomysly', 'naPozniej', 'cele', 'kontakty', 'dokumenty', 'wydatki', 'budzety', 'pojazdy', 'terminyWaznosci'] as const
 
 export async function czyMoznaWczytacDemo(): Promise<boolean> {
   const liczby = await Promise.all(tabeleUzytkownika.map((nazwa) => baza.table(nazwa).count()))

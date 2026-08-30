@@ -29,6 +29,7 @@ export const nazwyTabel: NazwaTabeli[] = [
   'dokumenty',
   'wydatki',
   'budzety',
+  'pojazdy',
   'terminyWaznosci',
   'pamiecEcho',
   'uprawnienia',
@@ -62,6 +63,7 @@ const schematPelny = {
   dokumenty: 'id, terminWaznosci, updatedAt, usunietoAt',
   wydatki: 'id, data, kategoria, updatedAt, usunietoAt',
   budzety: 'id, okres, kategoria, updatedAt, usunietoAt',
+  pojazdy: 'id, ocDo, przegladDo, wymianaOlejuDo, planowanySerwisData, updatedAt, usunietoAt',
   terminyWaznosci: 'id, dataWaznosci, status, updatedAt, usunietoAt',
   pamiecEcho: 'id, typ, wrazliwosc, updatedAt, usunietoAt',
   uprawnienia: 'id, editorId, modul, status, updatedAt, usunietoAt',
@@ -93,6 +95,11 @@ class BazaOgarniacza extends Dexie {
       })
 
     this.version(3).stores({
+      ...schematPelny,
+      urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
+    })
+
+    this.version(4).stores({
       ...schematPelny,
       urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
     })

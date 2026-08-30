@@ -52,8 +52,18 @@ export function elementyDlaKafelka(kafelek: KonfiguracjaKafelkaPulpitu, elementy
       ? otwarte.filter((element) => element.typ === 'zadanie' && wZakresie(element))
       : kafelek.typ === 'leki'
         ? elementy.filter((element) => element.typ === 'lek' && wZakresie(element))
-        : kafelek.typ === 'wizyty'
+      : kafelek.typ === 'wizyty'
           ? otwarte.filter((element) => element.typ === 'wizyta' && wZakresie(element))
+          : kafelek.typ === 'finanse'
+            ? otwarte.filter((element) => (element.typ === 'platnosc' || element.typ === 'wydatek') && wZakresie(element))
+            : kafelek.typ === 'samochod'
+              ? (() => {
+                  const terminy = otwarte.filter((element) => element.typ === 'samochod')
+                  const wZakresieKafelka = terminy.filter(wZakresie)
+                  return wZakresieKafelka.length > 0 ? wZakresieKafelka : terminy.filter((element) => element.data && element.data >= zakres.od).slice(0, 1)
+                })()
+              : kafelek.typ === 'zakupy'
+                ? otwarte.filter((element) => element.typ === 'zakupy' && (!element.data || wZakresie(element)))
           : []
 
   return wynik
@@ -64,7 +74,7 @@ export function elementyDlaKafelka(kafelek: KonfiguracjaKafelkaPulpitu, elementy
 }
 
 export function rozwiazDaneKafelka(kafelek: KonfiguracjaKafelkaPulpitu, elementy: readonly ElementOgarniacza[], dataReferencyjna: Date) {
-  if (!['zadania', 'pilne', 'leki', 'wizyty'].includes(kafelek.typ)) {
+  if (!['zadania', 'pilne', 'leki', 'wizyty', 'finanse', 'samochod', 'zakupy'].includes(kafelek.typ)) {
     return { stan: 'niedostepny' as const, elementy: [] as ElementOgarniacza[] }
   }
   return { stan: 'dostepny' as const, elementy: elementyDlaKafelka(kafelek, elementy, dataReferencyjna) }
@@ -75,7 +85,7 @@ export function klasaRozmiaruKafelka(rozmiar: RozmiarKafelkaPulpitu) {
 }
 
 export function adresReferencjiZrodla(sourceRef: ReferencjaZrodla): string {
-  const adresy = { zadania: '/zadania', leki: '/leki', wizyty: '/wizyty' } as const
+  const adresy = { zadania: '/zadania', leki: '/leki', wizyty: '/wizyty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy' } as const
   const adres = adresy[sourceRef.modul as keyof typeof adresy] ?? '/'
   const parametry = new URLSearchParams({ element: sourceRef.encjaId })
   if (sourceRef.wystapienieId) parametry.set('wystapienie', sourceRef.wystapienieId)
@@ -145,6 +155,92 @@ export function alertyWizyt(elementy: readonly ElementOgarniacza[], dataReferenc
         severity: aktywnePrzypomnienie ? 'warning' as const : 'info' as const,
         termin: `${element.data}T${element.godzina}`,
         typ: 'near' as const,
+        sourceRef: element.referencjaZrodla,
+        createdAt: element.createdAt,
+      }]
+    })
+}
+
+function dataHoryzontu(dataReferencyjna: Date, dni: number): string {
+  return format(addDays(dataReferencyjna, dni), 'yyyy-MM-dd')
+}
+
+export function alertyFinansow(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date, horyzontDni = 7): AlertPulpitu[] {
+  const dzisiaj = format(dataReferencyjna, 'yyyy-MM-dd')
+  const koniecHoryzontu = dataHoryzontu(dataReferencyjna, horyzontDni)
+  return elementy.flatMap((element): AlertPulpitu[] => {
+    if (!element.referencjaZrodla || element.status !== 'otwarty') return []
+    if (element.typ === 'wydatek' && element.dane?.rodzaj === 'budzet') {
+      if (element.dane.okres !== dzisiaj.slice(0, 7)) return []
+      return [{
+        id: `${element.id}-budget`,
+        tytul: element.tytul,
+        opis: element.opis ?? 'Przekroczony budżet',
+        severity: 'warning' as const,
+        termin: element.data,
+        typ: 'asap' as const,
+        sourceRef: element.referencjaZrodla,
+        createdAt: element.createdAt,
+      }]
+    }
+    if (element.typ !== 'platnosc' || !element.data || element.dane?.oplacona) return []
+    const zalegla = element.godzina
+      ? new Date(`${element.data}T${element.godzina}:00`).getTime() < dataReferencyjna.getTime()
+      : element.data < dzisiaj
+    const bliska = !zalegla && element.data >= dzisiaj && element.data <= koniecHoryzontu
+    if (!zalegla && !bliska) return []
+    return [{
+      id: `${element.id}-${zalegla ? 'overdue' : 'near'}`,
+      tytul: element.tytul,
+      opis: zalegla ? 'Zaległa płatność' : 'Nadchodząca płatność',
+      severity: zalegla ? 'critical' as const : 'warning' as const,
+      termin: element.terminGraniczny ?? element.data,
+      typ: zalegla ? 'overdue' as const : 'near' as const,
+      sourceRef: element.referencjaZrodla,
+      createdAt: element.createdAt,
+    }]
+  })
+}
+
+export function alertySamochodu(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date, horyzontDni = 30): AlertPulpitu[] {
+  const dzisiaj = format(dataReferencyjna, 'yyyy-MM-dd')
+  const koniecHoryzontu = dataHoryzontu(dataReferencyjna, horyzontDni)
+  return elementy
+    .filter((element) => element.typ === 'samochod' && element.status === 'otwarty' && element.referencjaZrodla && element.data)
+    .flatMap((element) => {
+      const zalegly = element.data! < dzisiaj
+      const bliski = !zalegly && element.data! <= koniecHoryzontu
+      if (!zalegly && !bliski || !element.referencjaZrodla) return []
+      return [{
+        id: `${element.id}-${zalegly ? 'overdue' : 'near'}`,
+        tytul: element.tytul,
+        opis: zalegly ? 'Termin samochodu minął' : 'Zbliża się termin samochodu',
+        severity: zalegly ? 'critical' as const : 'warning' as const,
+        termin: element.data,
+        typ: zalegly ? 'overdue' as const : 'near' as const,
+        sourceRef: element.referencjaZrodla,
+        createdAt: element.createdAt,
+      }]
+    })
+}
+
+export function alertyZakupow(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date, horyzontDni = 1): AlertPulpitu[] {
+  const dzisiaj = format(dataReferencyjna, 'yyyy-MM-dd')
+  const koniecHoryzontu = dataHoryzontu(dataReferencyjna, horyzontDni)
+  return elementy
+    .filter((element) => element.typ === 'zakupy' && element.status === 'otwarty' && element.referencjaZrodla)
+    .flatMap((element) => {
+      const zalegle = Boolean(element.data && element.data < dzisiaj)
+      const bliskie = Boolean(element.data && element.data >= dzisiaj && element.data <= koniecHoryzontu)
+      const wazne = element.priorytet === 'pilny' || element.priorytet === 'asap'
+      if (!zalegle && !bliskie && !wazne || !element.referencjaZrodla) return []
+      return [{
+        id: `${element.id}-${zalegle ? 'overdue' : wazne ? 'asap' : 'near'}`,
+        tytul: element.tytul,
+        opis: zalegle ? 'Minął termin listy zakupów' : wazne ? 'Priorytetowa lista zakupów' : 'Zbliża się termin listy zakupów',
+        severity: zalegle ? 'critical' as const : 'warning' as const,
+        termin: element.data,
+        typ: zalegle ? 'overdue' as const : wazne ? 'asap' as const : 'near' as const,
         sourceRef: element.referencjaZrodla,
         createdAt: element.createdAt,
       }]

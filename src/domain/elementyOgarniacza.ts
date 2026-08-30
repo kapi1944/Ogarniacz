@@ -57,10 +57,10 @@ export interface MapaDanychElementu {
   notatka: { tresc?: string }
   wizyta: { miejsce?: string; lekarzPlacowka?: string; statusWizyty?: string; liczbaElementowChecklisty?: number }
   lek: { lekId?: Id; idWystapienia?: Id; statusDawki?: DziennikLeku['status']; odroczoneDo?: string }
-  wydatek: { kwota?: number; waluta?: string }
-  platnosc: { kwota?: number; waluta?: string }
-  samochod: { pojazdId?: Id }
-  zakupy: { listaId?: Id }
+  wydatek: { kwota?: number; waluta?: string; rodzaj?: 'budzet'; okres?: string; limit?: number; wydano?: number }
+  platnosc: { kwota?: number; waluta?: string; rodzaj?: 'rachunek' | 'subskrypcja'; oplacona?: boolean }
+  samochod: { pojazdId?: Id; rodzajTerminu?: 'oc' | 'przeglad' | 'olej' | 'serwis'; pozostaloKm?: number }
+  zakupy: { listaId?: Id; liczbaPozycji?: number; kupione?: number; pozostalo?: number }
   planer: { elastyczny?: boolean }
   wydarzenie: { lokalizacja?: string }
 }

@@ -191,7 +191,7 @@ export function OsCzasu({
             >
               <span />
               <strong>{element.tytul}</strong>
-              <small>{element.typ === 'lek' ? 'Lek' : element.typ === 'wizyta' ? 'Wizyta' : 'Zadanie'} · {element.status ?? 'bez statusu'}</small>
+              <small>{element.typ === 'lek' ? 'Lek' : element.typ === 'wizyta' ? 'Wizyta' : element.typ === 'platnosc' ? 'Płatność' : element.typ === 'samochod' ? 'Samochód' : element.typ === 'zakupy' ? 'Zakupy' : 'Zadanie'} · {element.status ?? 'bez statusu'}</small>
             </button>
           ))}
 

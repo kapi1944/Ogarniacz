@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   AlarmClock, Archive, Bell, BookOpen, CalendarClock, CalendarDays, CheckSquare, ChevronLeft,
   ChevronRight, CircleDollarSign, Clock3, ContactRound, FileClock, Files, HeartPulse, Inbox,
-  LayoutDashboard, Lightbulb, ListChecks, Menu, MessageCircle, Moon, NotebookPen, PackageCheck,
+  Car, LayoutDashboard, Lightbulb, ListChecks, Menu, MessageCircle, Moon, NotebookPen, PackageCheck,
   Pill, Plus, Search, Settings, ShoppingCart, Sparkles, Sun, Target, WalletCards, X,
 } from 'lucide-react'
 import type { NazwaModulu } from '../domain/typy'
@@ -49,6 +49,7 @@ const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
   ] },
   { etykieta: 'Pozostałe', pozycje: [
     { etykieta: 'Wydatki i budżet', adres: '/finanse', modul: 'finanse', ikona: CircleDollarSign },
+    { etykieta: 'Samochód', adres: '/samochod', modul: 'samochod', ikona: Car },
     { etykieta: 'Echo', adres: '/echo', modul: 'echo', ikona: MessageCircle },
     { etykieta: 'Ustawienia', adres: '/ustawienia', modul: 'ustawienia', ikona: Settings },
   ] },
