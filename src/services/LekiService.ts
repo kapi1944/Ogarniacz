@@ -40,3 +40,20 @@ export function zapiszStatusDawki(dawka: DawkaDnia, status: DziennikLeku['status
     updatedAt: terazIso(),
   }
 }
+
+export function czasDawkiDoUwagi(data: string, godzina: string, status: DziennikLeku['status'], odroczoneDo?: string): number {
+  return status === 'odroczone' && odroczoneDo
+    ? new Date(odroczoneDo).getTime()
+    : new Date(`${data}T${godzina}:00`).getTime()
+}
+export function wyznaczNastepnaDawke(dawki: readonly DawkaDnia[], teraz = new Date()): DawkaDnia | undefined {
+  const czasTeraz = teraz.getTime()
+  const czasDawki = (dawka: DawkaDnia) => dawka.status === 'odroczone' && dawka.wpis?.odroczoneDo
+    ? new Date(dawka.wpis.odroczoneDo).getTime()
+    : new Date(`${dawka.data}T${dawka.planowanaGodzina}:00`).getTime()
+
+  return [...dawki]
+    .filter((dawka) => dawka.status === 'oczekuje' || dawka.status === 'odroczone')
+    .filter((dawka) => Number.isFinite(czasDawki(dawka)) && czasDawki(dawka) >= czasTeraz)
+    .sort((a, b) => czasDawki(a) - czasDawki(b) || a.idWystapienia.localeCompare(b.idWystapienia))[0]
+}

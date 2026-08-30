@@ -46,6 +46,7 @@ export function OsCzasu({
   edytujHarmonogram,
   przelaczDostepnosc,
   usunWyjatek,
+  otworzElement,
 }: {
   data: string
   harmonogram: HarmonogramDnia
@@ -55,6 +56,7 @@ export function OsCzasu({
   edytujHarmonogram: () => void
   przelaczDostepnosc: () => void
   usunWyjatek: () => void
+  otworzElement: (element: ElementOgarniacza) => void
 }) {
   const [teraz, ustawTeraz] = useState(new Date())
   const [wybranyElementOsi, ustawWybranyElementOsi] = useState<string | null>(null)
@@ -175,17 +177,21 @@ export function OsCzasu({
             <button
               type="button"
               key={element.id}
-              className="os-czasu__marker"
+              className={`os-czasu__marker os-czasu__marker--${element.typ} os-czasu__marker--${element.status ?? 'bez-statusu'}`}
               style={{
                 left: `${pozycjaGodzinyNaOsi(element.godzina, zakresSnu)}%`,
                 top: `${122 + indeks % 3 * 24}px`,
               }}
-              title={`${element.godzina} ${element.tytul}`}
+              title={`${element.godzina} ${element.tytul} · ${element.status ?? 'bez statusu'}`}
               aria-pressed={wybranyElementOsi === `element:${element.id}`}
-              onClick={() => ustawWybranyElementOsi(`element:${element.id}`)}
+              onClick={() => {
+                ustawWybranyElementOsi(`element:${element.id}`)
+                otworzElement(element)
+              }}
             >
               <span />
               <strong>{element.tytul}</strong>
+              <small>{element.typ === 'lek' ? 'Lek' : element.typ === 'wizyta' ? 'Wizyta' : 'Zadanie'} · {element.status ?? 'bez statusu'}</small>
             </button>
           ))}
 

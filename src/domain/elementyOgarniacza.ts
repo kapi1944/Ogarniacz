@@ -1,4 +1,4 @@
-import type { DostepnoscPlanistyczna, Id, NazwaModulu, RegulaPowtarzania } from './typy'
+import type { DostepnoscPlanistyczna, DziennikLeku, Id, NazwaModulu, RegulaPowtarzania } from './typy'
 
 export type TypElementuOgarniacza =
   | 'zadanie'
@@ -19,12 +19,14 @@ export type StatusElementu = 'otwarty' | 'wykonany' | 'anulowany' | 'pominiety'
 export interface ReferencjaZrodla {
   modul: NazwaModulu
   encjaId: Id
+  wystapienieId?: Id
 }
 
 export interface PrzypomnienieElementu {
   id: Id
   czas?: string
   przesuniecieMinuty?: number
+  aktywne?: boolean
 }
 
 export interface RdzenElementuOgarniacza {
@@ -53,8 +55,8 @@ export interface RdzenElementuOgarniacza {
 export interface MapaDanychElementu {
   zadanie: { projektId?: Id }
   notatka: { tresc?: string }
-  wizyta: { miejsce?: string }
-  lek: { lekId?: Id }
+  wizyta: { miejsce?: string; lekarzPlacowka?: string; statusWizyty?: string; liczbaElementowChecklisty?: number }
+  lek: { lekId?: Id; idWystapienia?: Id; statusDawki?: DziennikLeku['status']; odroczoneDo?: string }
   wydatek: { kwota?: number; waluta?: string }
   platnosc: { kwota?: number; waluta?: string }
   samochod: { pojazdId?: Id }

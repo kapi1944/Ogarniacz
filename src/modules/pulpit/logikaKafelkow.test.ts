@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { ElementOgarniacza } from '../../domain/elementyOgarniacza'
 import type { KonfiguracjaKafelkaPulpitu } from '../../domain/typy'
 import {
+  adresReferencjiZrodla,
+  alertyLekow,
+  alertyWizyt,
   deduplikujAlerty,
   elementyDlaKafelka,
   klasaRozmiaruKafelka,
@@ -41,6 +44,34 @@ function element(id: string, data: string): ElementOgarniacza {
   }
 }
 
+function dawka(status: ElementOgarniacza['status'] = 'otwarty'): ElementOgarniacza {
+  return {
+    id: 'lek:lek-1:2026-08-28:08:00',
+    typ: 'lek',
+    tytul: 'Lek',
+    data: '2026-08-28',
+    godzina: '08:00',
+    status,
+    referencjaZrodla: { modul: 'leki', encjaId: 'lek-1', wystapienieId: 'lek-1:2026-08-28:08:00' },
+    dane: { lekId: 'lek-1', statusDawki: status === 'wykonany' ? 'zazyte' : 'oczekuje' },
+    createdAt: '2026-08-01T10:00:00.000Z',
+    updatedAt: '2026-08-01T10:00:00.000Z',
+  }
+}
+
+function wizyta(): ElementOgarniacza {
+  return {
+    id: 'wizyta:wizyta-1',
+    typ: 'wizyta',
+    tytul: 'Dentysta',
+    data: '2026-08-29',
+    godzina: '10:00',
+    status: 'otwarty',
+    referencjaZrodla: { modul: 'wizyty', encjaId: 'wizyta-1' },
+    createdAt: '2026-08-01T10:00:00.000Z',
+    updatedAt: '2026-08-01T10:00:00.000Z',
+  }
+}
 function alert(id: string, typ: AlertPulpitu['typ'], termin?: string, severity: AlertPulpitu['severity'] = 'warning'): AlertPulpitu {
   return {
     id,
@@ -126,12 +157,31 @@ describe('logika kafelków Pulpitu', () => {
     expect(sortujKafelki(konfiguracja).map((pozycja) => pozycja.id)).toEqual(sortujKafelki(konfiguracja).map((pozycja) => pozycja.id))
   })
 
-  it('zwraca neutralny stan bez danych dla kafelka bez providera', () => {
-    expect(() => rozwiazDaneKafelka(kafelek({ typ: 'leki' }), [element('zadanie', '2026-08-28')], dataReferencyjna)).not.toThrow()
-    expect(rozwiazDaneKafelka(kafelek({ typ: 'leki' }), [element('zadanie', '2026-08-28')], dataReferencyjna)).toEqual({
-      stan: 'niedostepny',
-      elementy: [],
+  it('udostępnia realne dane kafelków Leków i Wizyt z zachowaniem limitu', () => {
+    expect(rozwiazDaneKafelka(kafelek({ typ: 'leki', zakresCzasu: 'today', limit: 1 }), [dawka(), wizyta()], dataReferencyjna)).toMatchObject({
+      stan: 'dostepny',
+      elementy: [{ typ: 'lek' }],
     })
+    expect(rozwiazDaneKafelka(kafelek({ typ: 'wizyty', zakresCzasu: '3d', limit: 1 }), [dawka(), wizyta()], dataReferencyjna)).toMatchObject({
+      stan: 'dostepny',
+      elementy: [{ typ: 'wizyta' }],
+    })
+  })
+
+  it('usuwa alert dawki po zmianie statusu na zażyta', () => {
+    expect(alertyLekow([dawka()], dataReferencyjna)).toHaveLength(1)
+    expect(alertyLekow([dawka('wykonany')], dataReferencyjna)).toHaveLength(0)
+  })
+
+  it('tworzy alert tylko dla bliskiej wizyty albo aktywnego przypomnienia', () => {
+    expect(alertyWizyt([wizyta()], dataReferencyjna)).toHaveLength(1)
+    expect(alertyWizyt([{ ...wizyta(), data: '2026-09-10' }], dataReferencyjna)).toHaveLength(0)
+  })
+
+  it('buduje adres źródłowy rekordu i konkretnego wystąpienia dawki', () => {
+    expect(adresReferencjiZrodla(dawka().referencjaZrodla!))
+      .toBe('/leki?element=lek-1&wystapienie=lek-1%3A2026-08-28%3A08%3A00')
+    expect(adresReferencjiZrodla(wizyta().referencjaZrodla!)).toBe('/wizyty?element=wizyta-1')
   })
 
   it('rozwiązuje klasy wszystkich rozmiarów kafelka', () => {

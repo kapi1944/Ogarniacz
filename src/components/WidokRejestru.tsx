@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Edit3, Plus, Trash2 } from 'lucide-react'
 import type { Repozytorium } from '../data/Repozytorium'
 import type { EncjaBazowa } from '../domain/typy'
@@ -30,6 +30,7 @@ interface Wlasciwosci<T extends EncjaBazowa> {
   akcje?: (element: T) => ReactNode
   filtr?: ReactNode
   uzupelnijFormularz?: (element: T) => Record<string, string>
+  wybranyElementId?: string
 }
 
 function wartoscTekstowa(wartosc: unknown): string {
@@ -43,14 +44,24 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
   const [formularz, ustawFormularz] = useState<Record<string, string>>({})
   const [doUsuniecia, ustawDoUsuniecia] = useState<T>()
   const [blad, ustawBlad] = useState('')
+  const ostatnioOtwartyElement = useRef<string | undefined>(undefined)
 
-  const otworz = (element?: T) => {
+  const otworz = useCallback((element?: T) => {
     ustawEdytowany(element)
     const wartosciPoczatkowe = Object.fromEntries(wlasciwosci.pola.map((pole) => [pole.klucz, wartoscTekstowa(element ? (element as unknown as Record<string, unknown>)[pole.klucz] : pole.domyslnaWartosc ?? '')]))
     ustawFormularz(element ? { ...wartosciPoczatkowe, ...wlasciwosci.uzupelnijFormularz?.(element) } : wartosciPoczatkowe)
     ustawBlad('')
     ustawFormularzOtwarty(true)
-  }
+  }, [wlasciwosci])
+
+  useEffect(() => {
+    const wybranyElementId = wlasciwosci.wybranyElementId
+    if (!wybranyElementId || ostatnioOtwartyElement.current === wybranyElementId) return
+    const element = wlasciwosci.dane.find((pozycja) => pozycja.id === wybranyElementId)
+    if (!element) return
+    ostatnioOtwartyElement.current = wybranyElementId
+    otworz(element)
+  }, [otworz, wlasciwosci.dane, wlasciwosci.wybranyElementId])
 
   const zapisz = async (zdarzenie: FormEvent) => {
     zdarzenie.preventDefault()

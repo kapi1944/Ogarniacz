@@ -2,6 +2,7 @@ import { addDays, format } from 'date-fns'
 import { czyZalegle } from '../../domain/ustaleniaGlosowe'
 import type { ElementOgarniacza, ReferencjaZrodla } from '../../domain/elementyOgarniacza'
 import type { KonfiguracjaKafelkaPulpitu, RozmiarKafelkaPulpitu } from '../../domain/typy'
+import { czasDawkiDoUwagi } from '../../services/LekiService'
 
 export interface AlertPulpitu {
   id: string
@@ -29,25 +30,41 @@ function termin(element: ElementOgarniacza) {
   return element.terminGraniczny ?? element.data
 }
 
+function dataCzasElementu(element: ElementOgarniacza): string {
+  return `${element.data ?? '9999-12-31'}T${element.godzina ?? '99:99'}`
+}
+
+function wagaDawki(element: ElementOgarniacza, dataReferencyjna: Date): number {
+  if (element.typ !== 'lek' || !element.data || !element.godzina || !element.dane?.statusDawki) return 2
+  const czas = czasDawkiDoUwagi(element.data, element.godzina, element.dane.statusDawki, element.dane.odroczoneDo)
+  if (element.status === 'otwarty' && czas >= dataReferencyjna.getTime()) return 0
+  if (element.status === 'otwarty') return 1
+  return 2
+}
+
 export function elementyDlaKafelka(kafelek: KonfiguracjaKafelkaPulpitu, elementy: readonly ElementOgarniacza[], dataReferencyjna: Date) {
   const zakres = rozwiazZakresKafelka(kafelek, dataReferencyjna)
+  const wZakresie = (element: ElementOgarniacza) => Boolean(element.data && element.data >= zakres.od && element.data <= zakres.do)
   const otwarte = elementy.filter((element) => element.status === 'otwarty')
   const wynik = kafelek.typ === 'pilne'
     ? otwarte.filter((element) => czyZalegle({ id: element.id, date: termin(element), time: element.godzina, priority: element.priorytet, status: element.status }, dataReferencyjna) || element.priorytet === 'asap' || element.priorytet === 'pilny')
     : kafelek.typ === 'zadania'
-      ? otwarte.filter((element) => {
-        const dataTerminu = termin(element)
-        return Boolean(dataTerminu && dataTerminu >= zakres.od && dataTerminu <= zakres.do)
-      })
-      : []
+      ? otwarte.filter((element) => element.typ === 'zadanie' && wZakresie(element))
+      : kafelek.typ === 'leki'
+        ? elementy.filter((element) => element.typ === 'lek' && wZakresie(element))
+        : kafelek.typ === 'wizyty'
+          ? otwarte.filter((element) => element.typ === 'wizyta' && wZakresie(element))
+          : []
 
   return wynik
-    .sort((a, b) => (termin(a) ?? '9999').localeCompare(termin(b) ?? '9999') || a.tytul.localeCompare(b.tytul, 'pl') || a.id.localeCompare(b.id))
+    .sort((a, b) => (kafelek.typ === 'leki' ? wagaDawki(a, dataReferencyjna) - wagaDawki(b, dataReferencyjna) : 0)
+      || dataCzasElementu(a).localeCompare(dataCzasElementu(b))
+      || a.tytul.localeCompare(b.tytul, 'pl') || a.id.localeCompare(b.id))
     .slice(0, kafelek.limit)
 }
 
 export function rozwiazDaneKafelka(kafelek: KonfiguracjaKafelkaPulpitu, elementy: readonly ElementOgarniacza[], dataReferencyjna: Date) {
-  if (kafelek.typ !== 'zadania' && kafelek.typ !== 'pilne') {
+  if (!['zadania', 'pilne', 'leki', 'wizyty'].includes(kafelek.typ)) {
     return { stan: 'niedostepny' as const, elementy: [] as ElementOgarniacza[] }
   }
   return { stan: 'dostepny' as const, elementy: elementyDlaKafelka(kafelek, elementy, dataReferencyjna) }
@@ -55,6 +72,14 @@ export function rozwiazDaneKafelka(kafelek: KonfiguracjaKafelkaPulpitu, elementy
 
 export function klasaRozmiaruKafelka(rozmiar: RozmiarKafelkaPulpitu) {
   return `strefa-pulpitu--${rozmiar}`
+}
+
+export function adresReferencjiZrodla(sourceRef: ReferencjaZrodla): string {
+  const adresy = { zadania: '/zadania', leki: '/leki', wizyty: '/wizyty' } as const
+  const adres = adresy[sourceRef.modul as keyof typeof adresy] ?? '/'
+  const parametry = new URLSearchParams({ element: sourceRef.encjaId })
+  if (sourceRef.wystapienieId) parametry.set('wystapienie', sourceRef.wystapienieId)
+  return `${adres}?${parametry.toString()}`
 }
 
 export function alertyZadan(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date): AlertPulpitu[] {
@@ -67,7 +92,7 @@ export function alertyZadan(elementy: readonly ElementOgarniacza[], dataReferenc
         id: `${element.id}-${typ}`,
         tytul: element.tytul,
         opis: zalegle ? 'Zaległe zadanie' : 'Wymaga działania ASAP',
-        severity: zalegle ? 'critical' : 'warning',
+        severity: zalegle ? 'critical' as const : 'warning' as const,
         termin: termin(element),
         typ,
         sourceRef: element.referencjaZrodla,
@@ -76,13 +101,65 @@ export function alertyZadan(elementy: readonly ElementOgarniacza[], dataReferenc
     })
 }
 
+function przypomnienieWymagaUwagi(element: ElementOgarniacza, dataReferencyjna: Date): boolean {
+  return Boolean(element.przypomnienia?.some((przypomnienie) => przypomnienie.aktywne
+    && przypomnienie.czas && new Date(przypomnienie.czas).getTime() <= dataReferencyjna.getTime()))
+}
+
+export function alertyLekow(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date): AlertPulpitu[] {
+  return elementy
+    .filter((element) => element.typ === 'lek' && element.status === 'otwarty' && element.referencjaZrodla && element.data && element.godzina)
+    .flatMap((element) => {
+      const odroczoneDo = element.typ === 'lek' ? element.dane?.odroczoneDo : undefined
+      const czasDawki = new Date(odroczoneDo ?? `${element.data}T${element.godzina}:00`).getTime()
+      const minelaGodzina = Number.isFinite(czasDawki) && czasDawki <= dataReferencyjna.getTime()
+      const aktywnePrzypomnienie = przypomnienieWymagaUwagi(element, dataReferencyjna)
+      if ((!minelaGodzina && !aktywnePrzypomnienie) || !element.referencjaZrodla) return []
+      return [{
+        id: `${element.id}-${minelaGodzina ? 'overdue' : 'near'}`,
+        tytul: element.tytul,
+        opis: minelaGodzina ? 'Planowana godzina dawki minęła' : 'Aktywne przypomnienie dawki',
+        severity: 'warning' as const,
+        termin: `${element.data}T${element.godzina}`,
+        typ: minelaGodzina ? 'overdue' as const : 'near' as const,
+        sourceRef: element.referencjaZrodla,
+        createdAt: element.createdAt,
+      }]
+    })
+}
+
+export function alertyWizyt(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date, horyzontMinuty = 24 * 60): AlertPulpitu[] {
+  const teraz = dataReferencyjna.getTime()
+  const koniecHoryzontu = teraz + horyzontMinuty * 60_000
+  return elementy
+    .filter((element) => element.typ === 'wizyta' && element.status === 'otwarty' && element.referencjaZrodla && element.data && element.godzina)
+    .flatMap((element) => {
+      const czasWizyty = new Date(`${element.data}T${element.godzina}:00`).getTime()
+      const aktywnePrzypomnienie = przypomnienieWymagaUwagi(element, dataReferencyjna)
+      const bliskaWizyta = Number.isFinite(czasWizyty) && czasWizyty >= teraz && czasWizyty <= koniecHoryzontu
+      if ((!aktywnePrzypomnienie && !bliskaWizyta) || !element.referencjaZrodla) return []
+      return [{
+        id: `${element.id}-near`,
+        tytul: element.tytul,
+        opis: aktywnePrzypomnienie ? 'Aktywne przypomnienie wizyty' : 'Wizyta w ciągu 24 godzin',
+        severity: aktywnePrzypomnienie ? 'warning' as const : 'info' as const,
+        termin: `${element.data}T${element.godzina}`,
+        typ: 'near' as const,
+        sourceRef: element.referencjaZrodla,
+        createdAt: element.createdAt,
+      }]
+    })
+}
+
 export function deduplikujAlerty(alerty: readonly AlertPulpitu[]) {
-  return [...new Map(alerty.map((alert) => [`${alert.sourceRef.modul}:${alert.sourceRef.encjaId}:${alert.typ}`, alert])).values()]
+  return [...new Map(alerty.map((alert) => [`${alert.sourceRef.modul}:${alert.sourceRef.encjaId}:${alert.sourceRef.wystapienieId ?? ''}:${alert.typ}`, alert])).values()]
 }
 
 export function rangujAlerty(alerty: readonly AlertPulpitu[]) {
-  const wagi = { overdue: 3, asap: 2, near: 1 }
-  return [...alerty].sort((a, b) => wagi[b.typ] - wagi[a.typ]
+  const wagiTypow = { overdue: 3, asap: 2, near: 1 }
+  const wagiWaznosci = { info: 0, warning: 1, critical: 2 }
+  return [...alerty].sort((a, b) => wagiTypow[b.typ] - wagiTypow[a.typ]
+    || wagiWaznosci[b.severity] - wagiWaznosci[a.severity]
     || (a.termin ?? '9999').localeCompare(b.termin ?? '9999')
     || a.tytul.localeCompare(b.tytul, 'pl')
     || a.id.localeCompare(b.id))

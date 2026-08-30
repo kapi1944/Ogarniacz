@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { BellPlus, History, ShieldAlert } from 'lucide-react'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { Karta, Komunikat, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
@@ -9,6 +10,7 @@ import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { generujDawkiDnia, zapiszStatusDawki } from '../../services/LekiService'
 
 export function WidokLekow() {
+  const [parametryAdresu] = useSearchParams()
   const { dane: leki, repozytorium } = useRepozytorium('leki')
   const { dane: wpisy, repozytorium: repoWpisow } = useRepozytorium('dziennikLekow')
   const [historia, ustawHistorie] = useState(false)
@@ -38,12 +40,14 @@ export function WidokLekow() {
       ]}
       zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), dawkaInstrukcja: formularz.dawkaInstrukcja.trim(), godziny: formularz.godziny.split(',').map((x) => x.trim()).filter((x) => /^\d{2}:\d{2}$/.test(x)).sort(), dodatkoweInstrukcje: formularz.dodatkoweInstrukcje || undefined, aktywny: formularz.aktywny !== 'false', updatedAt: terazIso() } as Lek)}
       etykieta={(lek) => lek.nazwa}
+      wybranyElementId={parametryAdresu.get('element') ?? undefined}
       szczegoly={(lek) => <><Znacznik wariant={lek.aktywny ? 'sukces' : 'neutralny'}>{lek.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{lek.dawkaInstrukcja}</span><span>Godziny: {lek.godziny.join(', ') || 'brak — uzupełnij'}</span>{lek.dodatkoweInstrukcje && <p>{lek.dodatkoweInstrukcje}</p>}</>}
     />
   </div>
 }
 
 export function WidokWizyt() {
+  const [parametryAdresu] = useSearchParams()
   const { dane: wizyty, repozytorium } = useRepozytorium('wizyty')
   const { dane: kontakty } = useRepozytorium('kontakty')
   const { repozytorium: repoPrzypomnien } = useRepozytorium('przypomnienia')
@@ -81,6 +85,7 @@ export function WidokWizyt() {
       ]}
       zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), status: (formularz.status || 'do_umowienia') as Wizyta['status'], terminGraniczny: formularz.terminGraniczny || undefined, data: formularz.data || undefined, godzina: formularz.godzina || undefined, miejsce: formularz.miejsce || undefined, lekarzPlacowka: formularz.lekarzPlacowka || undefined, kontaktId: formularz.kontaktId || undefined, notatka: formularz.notatka ?? '', pytania: formularz.pytania.split(',').map((x) => x.trim()).filter(Boolean), checklista: formularz.checklista.split(',').map((x) => x.trim()).filter(Boolean), dokumentyIds: istniejacy?.dokumentyIds ?? [], updatedAt: terazIso() })}
       etykieta={(wizyta) => wizyta.nazwa}
+      wybranyElementId={parametryAdresu.get('element') ?? undefined}
       szczegoly={(wizyta) => <><Znacznik wariant={wizyta.status === 'odbyta' ? 'sukces' : wizyta.status === 'do_umowienia' ? 'ostrzezenie' : 'informacja'}>{wizyta.status.replaceAll('_', ' ')}</Znacznik>{wizyta.data && <span>{wizyta.data} {wizyta.godzina}</span>}{wizyta.terminGraniczny && <span>Umów do: {wizyta.terminGraniczny}</span>}{wizyta.miejsce && <span>{wizyta.miejsce}</span>}{wizyta.pytania.length > 0 && <span>Pytania: {wizyta.pytania.join(', ')}</span>}{wizyta.checklista.length > 0 && <span>Zabrać: {wizyta.checklista.join(', ')}</span>}{wizyta.notatka && <p>{wizyta.notatka}</p>}</>}
       akcje={(wizyta) => <button type="button" className="przycisk-ikona" title="Dodaj przypomnienie dzień wcześniej" onClick={() => dodajPrzypomnienie(wizyta)}><BellPlus aria-hidden="true" /></button>}
     />
