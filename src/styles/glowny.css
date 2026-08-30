@@ -401,6 +401,10 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .lista-sekcji-backupu { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-bottom: 14px; }
 .lista-sekcji-backupu label { display: flex; align-items: center; gap: 8px; padding: 9px 10px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); cursor: pointer; }
 .lista-sekcji-backupu input { accent-color: var(--akcent); }
+.podglad-manifestu, .transfer-ustawien { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--obramowanie); }
+.podglad-manifestu > code { display: block; overflow-wrap: anywhere; margin: 8px 0 14px; color: var(--tekst-2); }
+.kopia-before-restore { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); }
+.kopia-before-restore span { flex: 1 1 220px; color: var(--tekst-2); }
 .lista-uprawnien { display: grid; margin-top: 10px; }
 .lista-uprawnien > div { display: grid; grid-template-columns: 1fr auto auto; align-items: center; padding: 7px 0; gap: 8px; border-bottom: 1px solid var(--obramowanie); font-size: .72rem; }
 .brak-dostepu { display: grid; min-height: 55vh; place-items: center; align-content: center; text-align: center; color: var(--tekst-2); }
