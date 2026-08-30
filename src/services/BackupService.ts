@@ -1,78 +1,158 @@
-import { z } from 'zod'
 import { baza, nazwyTabel } from '../data/BazaOgarniacza'
-import { terazIso } from '../domain/fabryki'
+import { pobierzRepozytorium } from '../data/Repozytorium'
+import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
+import type { NazwaTabeli } from '../domain/typy'
 
-const schematKopii = z.object({
-  format: z.literal('ogarniacz-backup'),
-  wersja: z.literal(1),
-  wersjaBazy: z.number().int().positive(),
-  wyeksportowanoAt: z.string(),
-  dane: z.record(z.string(), z.array(z.record(z.string(), z.unknown()))),
-})
+export const WERSJA_FORMATU_BACKUPU = 1
+const WERSJA_APLIKACJI = '1.0.0'
 
-export type KopiaOgarniacza = z.infer<typeof schematKopii>
+export const SEKCJE_BACKUPU = [
+  { nazwa: 'ustawienia', etykieta: 'Ustawienia' },
+  { nazwa: 'zadania', etykieta: 'Zadania i planer' },
+  { nazwa: 'notatki', etykieta: 'Notatki' },
+  { nazwa: 'poczekalnia', etykieta: 'Poczekalnia' },
+  { nazwa: 'leki', etykieta: 'Leki' },
+  { nazwa: 'wizyty', etykieta: 'Wizyty' },
+  { nazwa: 'finanse', etykieta: 'Finanse i rachunki' },
+  { nazwa: 'samochod', etykieta: 'Samochód' },
+  { nazwa: 'zakupy', etykieta: 'Zakupy' },
+] as const
 
-async function zakodujWartosc(wartosc: unknown): Promise<unknown> {
-  if (wartosc instanceof Blob) {
-    const bufor = await wartosc.arrayBuffer()
-    const bajty = new Uint8Array(bufor)
-    let binarne = ''
-    for (const bajt of bajty) binarne += String.fromCharCode(bajt)
-    return { __typ: 'Blob', mimeType: wartosc.type, base64: btoa(binarne) }
-  }
-  if (Array.isArray(wartosc)) return Promise.all(wartosc.map(zakodujWartosc))
+export type NazwaSekcjiBackupu = (typeof SEKCJE_BACKUPU)[number]['nazwa']
+type RekordBackupu = Record<string, unknown>
+type DaneSekcji = Record<string, RekordBackupu[]>
+
+export interface ManifestBackupu {
+  formatVersion: number
+  createdAt: string
+  appVersion: string
+  sections: NazwaSekcjiBackupu[]
+  recordCounts: Partial<Record<NazwaSekcjiBackupu, number>>
+  schemaVersions: Partial<Record<NazwaSekcjiBackupu, number>>
+  checksum: string
+}
+
+export interface OgarniaczBackup {
+  manifest: ManifestBackupu
+  payload: Partial<Record<NazwaSekcjiBackupu, DaneSekcji>>
+}
+
+interface ZrodloSekcji {
+  nazwa: NazwaSekcjiBackupu
+  wersjaSchematu: number
+  pobierz: () => Promise<DaneSekcji>
+}
+
+const niedozwoloneKlucze = /^(access_?token|refresh_?token|token|secret|sekret|password|haslo|session|sesja|credentials|daneLogowania)$/i
+
+function oczyscWartosc(wartosc: unknown): unknown {
+  if (Array.isArray(wartosc)) return wartosc.map(oczyscWartosc)
   if (wartosc && typeof wartosc === 'object') {
-    const wynik: Record<string, unknown> = {}
-    for (const [klucz, element] of Object.entries(wartosc)) wynik[klucz] = await zakodujWartosc(element)
-    return wynik
+    return Object.fromEntries(
+      Object.entries(wartosc)
+        .filter(([klucz]) => !niedozwoloneKlucze.test(klucz))
+        .map(([klucz, element]) => [klucz, oczyscWartosc(element)]),
+    )
   }
   return wartosc
 }
 
-function odkodujWartosc(wartosc: unknown): unknown {
-  if (Array.isArray(wartosc)) return wartosc.map(odkodujWartosc)
-  if (wartosc && typeof wartosc === 'object') {
-    const rekord = wartosc as Record<string, unknown>
-    if (rekord.__typ === 'Blob' && typeof rekord.base64 === 'string') {
-      const binarne = atob(rekord.base64)
-      const bajty = Uint8Array.from(binarne, (znak) => znak.charCodeAt(0))
-      return new Blob([bajty], { type: String(rekord.mimeType ?? '') })
-    }
-    return Object.fromEntries(Object.entries(rekord).map(([klucz, element]) => [klucz, odkodujWartosc(element)]))
-  }
-  return wartosc
+function kanonizuj(wartosc: unknown): string {
+  if (wartosc === null || typeof wartosc !== 'object') return JSON.stringify(wartosc) ?? 'null'
+  if (Array.isArray(wartosc)) return `[${wartosc.map(kanonizuj).join(',')}]`
+  return `{${Object.entries(wartosc)
+    .filter(([, element]) => element !== undefined)
+    .sort(([kluczA], [kluczB]) => kluczA.localeCompare(kluczB))
+    .map(([klucz, element]) => `${JSON.stringify(klucz)}:${kanonizuj(element)}`)
+    .join(',')}}`
 }
 
-export async function eksportujKopie(): Promise<KopiaOgarniacza> {
-  const dane: Record<string, Record<string, unknown>[]> = {}
-  for (const nazwa of nazwyTabel) {
-    const rekordy = await baza.table(nazwa).toArray()
-    dane[nazwa] = (await zakodujWartosc(rekordy)) as Record<string, unknown>[]
-  }
+async function sha256(tresc: string): Promise<string> {
+  const skrot = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tresc))
+  return `sha256:${Array.from(new Uint8Array(skrot), (bajt) => bajt.toString(16).padStart(2, '0')).join('')}`
+}
+
+function zrodloRepozytoriow(nazwa: NazwaSekcjiBackupu, tabele: NazwaTabeli[]): ZrodloSekcji {
   return {
-    format: 'ogarniacz-backup',
-    wersja: 1,
-    wersjaBazy: 2,
-    wyeksportowanoAt: terazIso(),
-    dane,
+    nazwa,
+    wersjaSchematu: 1,
+    pobierz: async () => Object.fromEntries(
+      await Promise.all(tabele.map(async (tabela) => [tabela, await pobierzRepozytorium(tabela).lista()])),
+    ) as DaneSekcji,
   }
 }
 
-export function walidujKopie(wartosc: unknown): KopiaOgarniacza {
-  return schematKopii.parse(wartosc)
+const zrodlaDomyslne: ZrodloSekcji[] = [
+  {
+    nazwa: 'ustawienia',
+    wersjaSchematu: 1,
+    pobierz: async () => ({ ustawienia: [await repozytoriumUstawien.wczytaj() as unknown as RekordBackupu] }),
+  },
+  zrodloRepozytoriow('zadania', ['zadania']),
+  zrodloRepozytoriow('notatki', ['notatki']),
+  zrodloRepozytoriow('poczekalnia', ['skrzynka']),
+  zrodloRepozytoriow('leki', ['leki', 'dziennikLekow']),
+  zrodloRepozytoriow('wizyty', ['wizyty']),
+  zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'budzety']),
+  zrodloRepozytoriow('samochod', ['pojazdy']),
+  zrodloRepozytoriow('zakupy', ['listyZakupow', 'pozycjeZakupow']),
+]
+
+export class BladSekcjiBackupu extends Error {
+  constructor(public readonly sekcja: NazwaSekcjiBackupu, przyczyna: unknown) {
+    super(`Nie udało się odczytać sekcji „${sekcja}”. Backup nie został utworzony.`, { cause: przyczyna })
+    this.name = 'BladSekcjiBackupu'
+  }
 }
 
-export async function importujKopie(kopiaNieznana: unknown, tryb: 'scal' | 'nadpisz'): Promise<void> {
-  const kopia = walidujKopie(kopiaNieznana)
-  await baza.transaction('rw', nazwyTabel.map((nazwa) => baza.table(nazwa)), async () => {
-    if (tryb === 'nadpisz') {
-      for (const nazwa of nazwyTabel) await baza.table(nazwa).clear()
+function daneChronione(backup: Omit<OgarniaczBackup, 'manifest'> & { manifest: Omit<ManifestBackupu, 'checksum'> }): unknown {
+  return { manifest: backup.manifest, payload: backup.payload }
+}
+
+export async function obliczChecksum(
+  backup: Omit<OgarniaczBackup, 'manifest'> & { manifest: Omit<ManifestBackupu, 'checksum'> },
+): Promise<string> {
+  return sha256(kanonizuj(daneChronione(backup)))
+}
+
+export async function checksumJestPoprawny(backup: OgarniaczBackup): Promise<boolean> {
+  const { checksum, ...manifest } = backup.manifest
+  return checksum === await obliczChecksum({ manifest, payload: backup.payload })
+}
+
+export async function utworzBackup(
+  wybraneSekcje: readonly NazwaSekcjiBackupu[] = SEKCJE_BACKUPU.map(({ nazwa }) => nazwa),
+  teraz: () => string = () => new Date().toISOString(),
+): Promise<OgarniaczBackup> {
+  const unikalneSekcje = SEKCJE_BACKUPU.map(({ nazwa }) => nazwa).filter((nazwa) => wybraneSekcje.includes(nazwa))
+  if (unikalneSekcje.length === 0) throw new Error('Wybierz co najmniej jedną sekcję backupu.')
+
+  const payload: OgarniaczBackup['payload'] = {}
+  const recordCounts: ManifestBackupu['recordCounts'] = {}
+  const schemaVersions: ManifestBackupu['schemaVersions'] = {}
+
+  for (const nazwa of unikalneSekcje) {
+    const zrodlo = zrodlaDomyslne.find((element) => element.nazwa === nazwa)!
+    try {
+      const dane = oczyscWartosc(await zrodlo.pobierz()) as DaneSekcji
+      payload[nazwa] = dane
+      recordCounts[nazwa] = Object.values(dane).reduce((suma, rekordy) => suma + rekordy.length, 0)
+      schemaVersions[nazwa] = zrodlo.wersjaSchematu
+    } catch (blad) {
+      throw new BladSekcjiBackupu(nazwa, blad)
     }
-    for (const nazwa of nazwyTabel) {
-      const rekordy = kopia.dane[nazwa] ?? []
-      if (rekordy.length > 0) await baza.table(nazwa).bulkPut(odkodujWartosc(rekordy) as object[])
-    }
-  })
+  }
+
+  const manifestBezChecksum: Omit<ManifestBackupu, 'checksum'> = {
+    formatVersion: WERSJA_FORMATU_BACKUPU,
+    createdAt: teraz(),
+    appVersion: WERSJA_APLIKACJI,
+    sections: unikalneSekcje,
+    recordCounts,
+    schemaVersions,
+  }
+  const checksum = await obliczChecksum({ manifest: manifestBezChecksum, payload })
+  return { manifest: { ...manifestBezChecksum, checksum }, payload }
 }
 
 export async function wyczyscDane(): Promise<void> {

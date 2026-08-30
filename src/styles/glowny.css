@@ -398,6 +398,9 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .ustawienie-wiersz input { width: 18px; height: 18px; }
 .akcje-backupu { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .akcje-backupu select { width: auto; min-height: 36px; }
+.lista-sekcji-backupu { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; margin-bottom: 14px; }
+.lista-sekcji-backupu label { display: flex; align-items: center; gap: 8px; padding: 9px 10px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); cursor: pointer; }
+.lista-sekcji-backupu input { accent-color: var(--akcent); }
 .lista-uprawnien { display: grid; margin-top: 10px; }
 .lista-uprawnien > div { display: grid; grid-template-columns: 1fr auto auto; align-items: center; padding: 7px 0; gap: 8px; border-bottom: 1px solid var(--obramowanie); font-size: .72rem; }
 .brak-dostepu { display: grid; min-height: 55vh; place-items: center; align-content: center; text-align: center; color: var(--tekst-2); }

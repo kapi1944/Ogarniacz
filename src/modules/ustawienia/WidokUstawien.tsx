@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Bell, Database, Download, Shield, Sparkles, Upload, UserCog } from 'lucide-react'
+import { Bell, Database, Download, Shield, Sparkles, UserCog } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { WidokRejestru } from '../../components/WidokRejestru'
-import { Karta, Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
+import { Karta, Komunikat, Modal, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { inicjalizujBaze } from '../../data/BazaOgarniacza'
 import { terazIso, utworzMetadane } from '../../domain/fabryki'
 import type { NazwaModulu, PamiecEcho, ProfilEdytora, Uprawnienie } from '../../domain/typy'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { eksportujKopie, importujKopie, walidujKopie, wyczyscDane, type KopiaOgarniacza } from '../../services/BackupService'
+import { SEKCJE_BACKUPU, utworzBackup, wyczyscDane, type NazwaSekcjiBackupu, type OgarniaczBackup } from '../../services/BackupService'
 import { czyMoznaWczytacDemo, wczytajDaneDemonstracyjne } from '../../services/DaneDemonstracyjneService'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { PanelUstawienAplikacji } from './PanelUstawienAplikacji'
@@ -23,8 +23,9 @@ export function WidokUstawien() {
   const { dane: uprawnienia, repozytorium: repoUprawnien } = useRepozytorium('uprawnienia')
   const [komunikat, ustawKomunikat] = useState('')
   const [blad, ustawBlad] = useState('')
-  const [kopiaDoImportu, ustawKopieDoImportu] = useState<KopiaOgarniacza>()
-  const [trybImportu, ustawTrybImportu] = useState<'scal' | 'nadpisz'>('scal')
+  const [wybraneSekcje, ustawWybraneSekcje] = useState<NazwaSekcjiBackupu[]>(SEKCJE_BACKUPU.map(({ nazwa }) => nazwa))
+  const [backup, ustawBackup] = useState<OgarniaczBackup>()
+  const [tworzenieBackupu, ustawTworzenieBackupu] = useState(false)
   const [czyszczenie, ustawCzyszczenie] = useState(false)
   const [moznaDemo, ustawMoznaDemo] = useState(false)
   const [zajete, ustawZajete] = useState('—')
@@ -33,17 +34,31 @@ export function WidokUstawien() {
 
   useEffect(() => { czyMoznaWczytacDemo().then(ustawMoznaDemo); navigator.storage?.estimate().then((wynik) => ustawZajete(wynik.usage ? `${(wynik.usage / 1024 / 1024).toFixed(2)} MB` : '0 MB')) }, [])
 
-  const pobierzBackup = async () => {
-    const kopia = await eksportujKopie()
-    const plik = new Blob([JSON.stringify(kopia, null, 2)], { type: 'application/json' })
-    const adres = URL.createObjectURL(plik)
-    const link = document.createElement('a'); link.href = adres; link.download = `ogarniacz-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(adres)
-    ustawKomunikat('Pełna kopia danych została przygotowana do pobrania.')
+  const przygotujBackup = async () => {
+    ustawTworzenieBackupu(true)
+    ustawBlad('')
+    ustawBackup(undefined)
+    try {
+      const nowyBackup = await utworzBackup(wybraneSekcje)
+      ustawBackup(nowyBackup)
+      ustawKomunikat('Backup został bezpiecznie utworzony. Możesz pobrać plik JSON.')
+    } catch (bladBackupu) {
+      ustawBlad(bladBackupu instanceof Error ? bladBackupu.message : 'Nie udało się utworzyć backupu.')
+    } finally {
+      ustawTworzenieBackupu(false)
+    }
   }
 
-  const wybierzBackup = async (plik?: File) => {
-    if (!plik) return
-    try { ustawKopieDoImportu(walidujKopie(JSON.parse(await plik.text()))); ustawBlad('') } catch { ustawBlad('Plik nie jest prawidłową kopią Ogarniacza v1.') }
+  const pobierzBackup = () => {
+    if (!backup) return
+    const plik = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+    const adres = URL.createObjectURL(plik)
+    const link = document.createElement('a'); link.href = adres; link.download = `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(adres)
+  }
+
+  const zmienSekcjeBackupu = (nazwa: NazwaSekcjiBackupu, zaznaczona: boolean) => {
+    ustawBackup(undefined)
+    ustawWybraneSekcje((obecne) => zaznaczona ? [...obecne, nazwa] : obecne.filter((sekcja) => sekcja !== nazwa))
   }
 
   const wlaczPowiadomienia = async () => {
@@ -75,7 +90,11 @@ export function WidokUstawien() {
       <Karta><div className="tytul-karty"><Database aria-hidden="true" /><span>Dane lokalne</span></div><h2>IndexedDB</h2><p>Szacowane użycie pamięci tej witryny: <strong>{zajete}</strong>. Dane pozostają w profilu tej przeglądarki.</p><Link to="/grafik" className="przycisk przycisk--drugorzedny">Ustaw grafik pracy</Link></Karta>
     </section>
 
-    <Karta><div className="naglowek-karty"><div><h2>Backup i import</h2><p>Wersjonowany JSON obejmuje wszystkie lokalne encje, ustawienia, powiązania i pliki Blob.</p></div></div><div className="akcje-backupu"><button type="button" className="przycisk przycisk--glowny" onClick={pobierzBackup}><Download aria-hidden="true" />Eksportuj pełną kopię</button><label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Wybierz kopię do importu<input className="sr-only" type="file" accept="application/json,.json" onChange={(e) => wybierzBackup(e.target.files?.[0])} /></label><select aria-label="Tryb importu" value={trybImportu} onChange={(e) => ustawTrybImportu(e.target.value as typeof trybImportu)}><option value="scal">Scal po ID</option><option value="nadpisz">Nadpisz całą bazę</option></select></div></Karta>
+    <Karta><div className="naglowek-karty"><div><h2>Dane / Backup</h2><p>Wersjonowany eksport JSON jest tworzony na żądanie z wybranych repozytoriów. Restore będzie dostępny w kolejnym etapie.</p></div></div>
+      <div className="lista-sekcji-backupu">{SEKCJE_BACKUPU.map((sekcja) => <label key={sekcja.nazwa}><input type="checkbox" checked={wybraneSekcje.includes(sekcja.nazwa)} onChange={(e) => zmienSekcjeBackupu(sekcja.nazwa, e.target.checked)} /><span>{sekcja.etykieta}</span></label>)}</div>
+      <div className="akcje-backupu"><button type="button" className="przycisk przycisk--glowny" disabled={wybraneSekcje.length === 0 || tworzenieBackupu} onClick={przygotujBackup}>{tworzenieBackupu ? 'Tworzenie…' : 'Utwórz backup'}</button>{backup && <button type="button" className="przycisk przycisk--drugorzedny" onClick={pobierzBackup}><Download aria-hidden="true" />Pobierz plik JSON</button>}</div>
+      {backup && <p className="tekst-pomocniczy">Utworzono: <strong>{new Date(backup.manifest.createdAt).toLocaleString('pl-PL')}</strong> · rekordów: <strong>{Object.values(backup.manifest.recordCounts).reduce((suma, liczba) => suma + (liczba ?? 0), 0)}</strong> · checksum: <code>{backup.manifest.checksum}</code></p>}
+    </Karta>
 
     <section className="siatka-dwie-kolumny siatka-dwie-kolumny--rowne">
       <Karta><div className="tytul-karty"><UserCog aria-hidden="true" /><span>Edytor</span></div><h2>Profile i lokalny podgląd</h2><p>To wyłącznie mechanizm developerski do testowania permission engine. Bez backendu nie jest zdalnym współdzieleniem ani zabezpieczeniem kont.</p><form className="szybki-wpis" onSubmit={dodajEdytora}><input value={nowyEdytor} onChange={(e) => ustawNowegoEdytora(e.target.value)} placeholder="Nazwa Edytora" /><button type="submit" className="przycisk przycisk--glowny">Dodaj</button></form>{edytorzy.length === 0 ? <PustyStan tytul="Brak Edytorów" opis="Dodaj profil testowy." /> : <div className="lista-kompaktowa">{edytorzy.map((edytor) => <div key={edytor.id}><div><strong>{edytor.nazwa}</strong><small>{edytor.aktywny ? 'aktywny' : 'nieaktywny'}</small></div><button type="button" className="przycisk przycisk--maly" onClick={() => zapiszUstawienia({ trybUzytkownika: 'edytor', aktywnyEdytorId: edytor.id })}>Podgląd jako Edytor</button><button type="button" className="przycisk-ikona" onClick={() => repoEdytorow.zapisz({ ...edytor, aktywny: !edytor.aktywny })}>{edytor.aktywny ? '×' : '✓'}</button></div>)}</div>}</Karta>
@@ -87,7 +106,6 @@ export function WidokUstawien() {
     <section className="siatka-dwie-kolumny siatka-dwie-kolumny--rowne"><Karta><h2>Dane demonstracyjne</h2><p>Przykładowe rekordy można wczytać tylko do całkowicie pustej bazy, aby nie mieszać ich z prawdziwymi danymi.</p><button type="button" className="przycisk przycisk--drugorzedny" disabled={!moznaDemo} onClick={async () => { try { await wczytajDaneDemonstracyjne(); ustawMoznaDemo(false); ustawKomunikat('Dane demonstracyjne zostały wczytane.') } catch (e) { ustawBlad(e instanceof Error ? e.message : 'Błąd danych demonstracyjnych.') } }}>Wczytaj dane demonstracyjne</button>{!moznaDemo && <p className="tekst-pomocniczy">Baza zawiera już dane — opcja jest wyłączona.</p>}</Karta><Karta klasa="karta--niebezpieczna"><h2>Wyczyść dane lokalne</h2><p>Operacja trwale usuwa całą bazę na tym urządzeniu. Najpierw wykonaj backup.</p><button type="button" className="przycisk przycisk--niebezpieczny" onClick={() => ustawCzyszczenie(true)}>Wyczyść wszystkie dane</button></Karta></section>
     <Karta><h2>Informacje o aplikacji</h2><p><strong>Ogarniacz v1.0.0</strong> · local-first PWA · schemat IndexedDB v2 · bez backendu i zewnętrznego API.</p><p className="tekst-pomocniczy">Systemowe alarmy po całkowitym zamknięciu aplikacji, zdalne współdzielenie i synchronizacja wymagają przyszłej warstwy platformowej/backendowej.</p></Karta>
 
-    {kopiaDoImportu && <ModalPotwierdzenia tytul={trybImportu === 'nadpisz' ? 'Nadpisać całą bazę?' : 'Scalić kopię z bazą?'} opis={trybImportu === 'nadpisz' ? 'Wszystkie obecne rekordy zostaną trwale zastąpione zawartością kopii.' : 'Rekordy o tych samych ID zostaną zaktualizowane, a pozostałe dodane. Przed importem warto wykonać własny backup.'} etykietaAkcji={trybImportu === 'nadpisz' ? 'Nadpisz bazę' : 'Scal dane'} niebezpieczne={trybImportu === 'nadpisz'} anuluj={() => ustawKopieDoImportu(undefined)} potwierdz={async () => { await importujKopie(kopiaDoImportu, trybImportu); ustawKopieDoImportu(undefined); ustawKomunikat('Import zakończony pomyślnie.') }} />}
     {czyszczenie && <PotwierdzenieCzyszczenia anuluj={() => ustawCzyszczenie(false)} wykonaj={async () => { await wyczyscDane(); await inicjalizujBaze(); window.location.assign('/') }} />}
   </div>
 }
