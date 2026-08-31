@@ -1,7 +1,7 @@
 import { LocalNotifications, type LocalNotificationSchema, type PendingLocalNotificationSchema } from '@capacitor/local-notifications'
 import type { Przypomnienie } from '../domain/typy'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
-import { sciezkaDlaSourceRef } from './trasy'
+import { normalizujSciezkePowiadomienia, sciezkaDlaSourceRef } from './trasy'
 import type {
   DanePowiadomienia,
   KanalPowiadomienia,
@@ -103,13 +103,20 @@ function wersjaOczekujacego(powiadomienie: PendingLocalNotificationSchema) {
 
 export function utworzUslugePowiadomien(czyAndroid: boolean) {
   const obslugiAkcji = new Set<(sciezka: string) => void>()
+  const ostatnieAkcje = new Map<string, number>()
   let oczekujacaSciezka: string | undefined
   let inicjalizacja: Promise<void> | undefined
   let kolejkaSynchronizacji = Promise.resolve<WynikSynchronizacjiPowiadomien>({ zaplanowanePrzypomnieniaIds: [] })
 
   const przekazSciezke = (sciezka: string) => {
-    if (obslugiAkcji.size === 0) oczekujacaSciezka = sciezka
-    else obslugiAkcji.forEach((obsluga) => obsluga(sciezka))
+    const bezpiecznaSciezka = normalizujSciezkePowiadomienia(sciezka)
+    if (!bezpiecznaSciezka) return
+    const teraz = Date.now()
+    const poprzedniaAkcja = ostatnieAkcje.get(bezpiecznaSciezka)
+    if (poprzedniaAkcja !== undefined && teraz - poprzedniaAkcja < 2_000) return
+    ostatnieAkcje.set(bezpiecznaSciezka, teraz)
+    if (obslugiAkcji.size === 0) oczekujacaSciezka = bezpiecznaSciezka
+    else obslugiAkcji.forEach((obsluga) => obsluga(bezpiecznaSciezka))
   }
 
   const przygotujKanaly = async () => {

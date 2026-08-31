@@ -104,6 +104,21 @@ describe('routing sourceRef', () => {
   it('bez sourceRef prowadzi do rekordu przypomnienia', () => {
     expect(sciezkaDlaSourceRef(undefined, 'przypomnienie 1')).toBe('/przypomnienia?element=przypomnienie%201')
   })
+
+  it('przetwarza powtórzoną akcję powiadomienia tylko raz', async () => {
+    const usluga = utworzUslugePowiadomien(true)
+    await usluga.inicjalizuj()
+    const obsluga = vi.fn()
+    usluga.nasluchujAkcji(obsluga)
+    const akcja = lokalnePowiadomienia.addListener.mock.calls[0][1]
+
+    akcja({ notification: { extra: { sciezka: '/zadania?element=zadanie-1' } } })
+    akcja({ notification: { extra: { sciezka: '/zadania?element=zadanie-1' } } })
+    akcja({ notification: { extra: { sciezka: '/admin?element=zadanie-1' } } })
+
+    expect(obsluga).toHaveBeenCalledTimes(1)
+    expect(obsluga).toHaveBeenCalledWith('/zadania?element=zadanie-1')
+  })
 })
 
 describe('reconciliation natywnych powiadomień', () => {

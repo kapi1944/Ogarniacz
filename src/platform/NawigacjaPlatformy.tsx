@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { App } from '@capacitor/app'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { useObslugaWstecz } from './obslugaWstecz'
+import { obsluzWstecz, useObslugaWstecz } from './obslugaWstecz'
 import { platforma } from './platforma'
 import { parsujDeepLink } from './trasy'
 
@@ -15,6 +15,18 @@ export function NawigacjaPlatformy() {
   }, [polozenie.key])
 
   useEffect(() => platforma.powiadomienia.nasluchujAkcji((sciezka) => nawiguj(sciezka)), [nawiguj])
+
+  useEffect(() => {
+    if (!platforma.natywna) return
+    let aktywna = true
+    const nasluchiwanie = App.addListener('backButton', () => {
+      if (aktywna && !obsluzWstecz()) void App.minimizeApp()
+    })
+    return () => {
+      aktywna = false
+      void nasluchiwanie.then((uchwyt) => uchwyt.remove())
+    }
+  }, [])
 
   useEffect(() => {
     if (!platforma.natywna) return

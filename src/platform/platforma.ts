@@ -1,10 +1,8 @@
-import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { utworzUslugePlikow } from './FileService'
 import { utworzUslugeHaptyki } from './HapticsService'
 import { utworzUslugeCykluZycia } from './LifecycleService'
 import { utworzUslugePowiadomien } from './NotificationService'
-import { obsluzWstecz } from './obslugaWstecz'
 import { utworzUslugeUdostepniania } from './ShareService'
 import { utworzMostMigawekWidgetow } from './WidgetBridgeService'
 import type { PlatformaOgarniacza } from './typy'
@@ -31,9 +29,6 @@ export function inicjalizujPlatforme() {
 
   inicjalizacjaPlatformy ??= Promise.all([
     uslugaPowiadomien.inicjalizuj(),
-    App.addListener('backButton', () => {
-      if (!obsluzWstecz()) void App.minimizeApp()
-    }),
   ]).then(() => undefined)
 
   return inicjalizacjaPlatformy

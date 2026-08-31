@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parsujDeepLink } from './trasy'
+import { normalizujSciezkePowiadomienia, parsujDeepLink, sciezkaDlaSourceRef } from './trasy'
 
 describe('parser deep linków Ogarniacza', () => {
   it('mapuje poprawny URL na trasę aplikacji', () => {
@@ -22,5 +22,11 @@ describe('parser deep linków Ogarniacza', () => {
     expect(parsujDeepLink('ogarniacz://admin')).toBeNull()
     expect(parsujDeepLink('ogarniacz://pulpit/zadania')).toBeNull()
     expect(parsujDeepLink('ogarniacz://zadania?przekieruj=https://example.com')).toBeNull()
+  })
+
+  it('odrzuca nieznaną trasę powiadomienia i niepoprawny sourceRef', () => {
+    expect(normalizujSciezkePowiadomienia('/admin?element=1')).toBeNull()
+    expect(normalizujSciezkePowiadomienia('/zadania?element=')).toBeNull()
+    expect(sciezkaDlaSourceRef({ typ: 'nieistniejacy' as never, id: 'x' }, 'przypomnienie-1')).toBe('/przypomnienia?element=przypomnienie-1')
   })
 })
