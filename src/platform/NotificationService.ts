@@ -235,8 +235,8 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
       if (!istniejace) nowe.push(powiadomienie)
       else if (wersjaOczekujacego(istniejace) !== powiadomienie.wersja) zmienione.push(powiadomienie)
     }
-    await przeplanuj(zmienione)
-    await zaplanuj(nowe)
+    await anuluj(zmienione.map((powiadomienie) => powiadomienie.id))
+    await zaplanuj([...nowe, ...zmienione])
     return { zaplanowanePrzypomnieniaIds: docelowe.map(({ przypomnienie }) => przypomnienie.id) }
   }
 

@@ -106,6 +106,51 @@ describe('routing sourceRef', () => {
   })
 })
 
+describe('reconciliation natywnych powiadomień', () => {
+  it('nie tworzy kolejnej kopii, gdy oczekujące powiadomienie ma tę samą wersję', async () => {
+    const docelowe = mapujPrzypomnienieNaPowiadomienie(przypomnienie())!
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{
+      id: docelowe.id,
+      extra: { ogarniacz: true, wersja: docelowe.wersja },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([przypomnienie()], true)
+
+    expect(lokalnePowiadomienia.cancel).not.toHaveBeenCalled()
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+    expect(lokalnePowiadomienia.update).not.toHaveBeenCalled()
+  })
+
+  it('przy zmianie terminu anuluje poprzedni harmonogram i tworzy aktualny', async () => {
+    const poprzednie = mapujPrzypomnienieNaPowiadomienie(przypomnienie())!
+    const zmienione = przypomnienie({ czas: '2026-09-01T11:00:00.000Z' })
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{
+      id: poprzednie.id,
+      extra: { ogarniacz: true, wersja: poprzednie.wersja },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([zmienione], true)
+
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: poprzednie.id }] })
+    expect(lokalnePowiadomienia.schedule).toHaveBeenCalledWith(expect.objectContaining({
+      notifications: [expect.objectContaining({ id: poprzednie.id, schedule: expect.objectContaining({ at: expect.any(Date) }) })],
+    }))
+  })
+
+  it('anuluje oczekujące powiadomienie po usunięciu przypomnienia', async () => {
+    const oczekujace = mapujPrzypomnienieNaPowiadomienie(przypomnienie())!
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{
+      id: oczekujace.id,
+      extra: { ogarniacz: true, wersja: oczekujace.wersja },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([], true)
+
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: oczekujace.id }] })
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+})
+
 describe('fallback dokładnych alarmów', () => {
   const powiadomienieDokladne = () => mapujPrzypomnienieNaPowiadomienie(przypomnienie({ priorytet: 'krytyczny' }))!
 

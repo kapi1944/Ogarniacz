@@ -1,9 +1,14 @@
-import type { EncjaBazowa, MapaTabel, NazwaTabeli } from '../domain/typy'
+import type { EncjaBazowa, MapaTabel, NazwaModulu, NazwaTabeli, Przypomnienie } from '../domain/typy'
 import { terazIso } from '../domain/fabryki'
 import { baza } from './BazaOgarniacza'
 import type { Table } from 'dexie'
 import { czyHistoriaWlaczona, zbudujWpisHistorii } from '../services/HistoriaZmianService'
 import { powiadomOZmianieDanych } from './ZdarzeniaDanych'
+
+const modulyZrodelPrzypomnien: Partial<Record<NazwaTabeli, NazwaModulu>> = {
+  wizyty: 'wizyty',
+  terminyWaznosci: 'terminy',
+}
 
 export interface Repozytorium<T extends EncjaBazowa> {
   lista(): Promise<T[]>
@@ -19,6 +24,22 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
 
   private tabela(): Table<T, string> {
     return baza.table(this.nazwa) as Table<T, string>
+  }
+
+  private async oznaczPowiazanePrzypomnieniaJakoUsuniete(id: string): Promise<void> {
+    const modul = modulyZrodelPrzypomnien[this.nazwa]
+    if (!modul) return
+    const tabelaPrzypomnien = baza.tabela('przypomnienia')
+    const powiazane = (await tabelaPrzypomnien.toArray())
+      .filter((przypomnienie) => !przypomnienie.usunietoAt && przypomnienie.zrodlo?.typ === modul && przypomnienie.zrodlo.id === id)
+    if (powiazane.length === 0) return
+    const teraz = terazIso()
+    await tabelaPrzypomnien.bulkPut(powiazane.map((przypomnienie) => ({
+      ...przypomnienie,
+      usunietoAt: teraz,
+      updatedAt: teraz,
+    }) satisfies Przypomnienie))
+    powiadomOZmianieDanych('przypomnienia')
   }
 
   async lista(): Promise<T[]> {
@@ -82,6 +103,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       if (!encja) return
       const teraz = terazIso()
       await tabela.put({ ...encja, usunietoAt: teraz, updatedAt: teraz })
+      await this.oznaczPowiazanePrzypomnieniaJakoUsuniete(id)
       powiadomOZmianieDanych(this.nazwa)
       return
     }
@@ -95,6 +117,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       const wpis = zbudujWpisHistorii(this.nazwa, encja, usunieta, 'usuniecie', teraz)
       if (wpis) await historia.put(wpis)
     })
+    await this.oznaczPowiazanePrzypomnieniaJakoUsuniete(id)
     powiadomOZmianieDanych(this.nazwa)
   }
 
