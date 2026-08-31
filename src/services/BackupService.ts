@@ -19,9 +19,13 @@ export const SEKCJE_BACKUPU = [
   { nazwa: 'finanse', etykieta: 'Finanse i rachunki' },
   { nazwa: 'samochod', etykieta: 'Samochód' },
   { nazwa: 'zakupy', etykieta: 'Zakupy' },
+  { nazwa: 'historia', etykieta: 'Historia ważnych zmian' },
 ] as const
 
 export type NazwaSekcjiBackupu = (typeof SEKCJE_BACKUPU)[number]['nazwa']
+export const PODSTAWOWE_SEKCJE_BACKUPU: NazwaSekcjiBackupu[] = SEKCJE_BACKUPU
+  .map(({ nazwa }) => nazwa)
+  .filter((nazwa) => nazwa !== 'historia')
 export type TypBackupu = 'export' | 'before-restore'
 type RekordBackupu = Record<string, unknown>
 type DaneSekcji = Record<string, RekordBackupu[]>
@@ -167,6 +171,16 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     ilosc: z.string(),
     kupione: z.boolean(),
   }),
+  historiaZmian: schematEncji.extend({
+    modul: z.enum(['finanse', 'leki', 'wizyty', 'samochod', 'zadania']),
+    typEncji: z.string(),
+    encjaId: z.string(),
+    operacja: z.enum(['utworzenie', 'aktualizacja', 'usuniecie']),
+    znacznikCzasu: z.string(),
+    zmienionePola: z.array(z.string()),
+    przed: z.record(z.string(), z.unknown()).optional(),
+    po: z.record(z.string(), z.unknown()).optional(),
+  }),
 }
 
 const schematSurowegoBackupu = z.object({
@@ -237,6 +251,7 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'budzety']),
   zrodloRepozytoriow('samochod', ['pojazdy']),
   zrodloRepozytoriow('zakupy', ['listyZakupow', 'pozycjeZakupow']),
+  zrodloRepozytoriow('historia', ['historiaZmian']),
 ]
 
 export class BladBackupu extends Error {
@@ -266,7 +281,7 @@ export async function checksumJestPoprawny(backup: OgarniaczBackup): Promise<boo
 }
 
 export async function utworzBackup(
-  wybraneSekcje: readonly NazwaSekcjiBackupu[] = SEKCJE_BACKUPU.map(({ nazwa }) => nazwa),
+  wybraneSekcje: readonly NazwaSekcjiBackupu[] = PODSTAWOWE_SEKCJE_BACKUPU,
   teraz: () => string = () => new Date().toISOString(),
   typBackupu: TypBackupu = 'export',
 ): Promise<OgarniaczBackup> {
@@ -321,7 +336,7 @@ function sprawdzKompatybilnosc(surowy: SurowyBackup): void {
     throw new BladBackupu(`Backup pochodzi z niekompatybilnej wersji aplikacji: ${surowy.manifest.appVersion}.`, 'WERSJA_APLIKACJI')
   }
   if (wersja === WERSJA_FORMATU_BACKUPU) {
-    if (surowy.manifest.dexieSchemaVersion !== WERSJA_SCHEMATU_BAZY) {
+    if (![4, WERSJA_SCHEMATU_BAZY].includes(surowy.manifest.dexieSchemaVersion ?? -1)) {
       throw new BladBackupu('Backup ma nieobsługiwaną wersję schematu danych.', 'WERSJA_SCHEMATU_BAZY')
     }
   }
@@ -394,7 +409,7 @@ function walidujCaloscBackupu(backup: SurowyBackup): OgarniaczBackup {
   const sekcje = backup.manifest.sections as NazwaSekcjiBackupu[]
   if (
     backup.manifest.formatVersion !== WERSJA_FORMATU_BACKUPU
-    || backup.manifest.dexieSchemaVersion !== WERSJA_SCHEMATU_BAZY
+    || ![4, WERSJA_SCHEMATU_BAZY].includes(backup.manifest.dexieSchemaVersion ?? -1)
     || !backup.manifest.backupType
   ) {
     throw new BladBackupu('Backup nie został poprawnie doprowadzony do aktualnego formatu.', 'STRUKTURA_MANIFESTU')
@@ -459,7 +474,7 @@ export async function przywrocBackup(
   if (!await checksumJestPoprawny(backupPrzedPrzywracaniem)) {
     throw new BladBackupu('Automatyczna kopia before-restore ma niepoprawny checksum.', 'BEFORE_RESTORE')
   }
-  const wszystkieSekcje = SEKCJE_BACKUPU.map(({ nazwa }) => nazwa)
+  const wszystkieSekcje = PODSTAWOWE_SEKCJE_BACKUPU
   if (
     backupPrzedPrzywracaniem.manifest.backupType !== 'before-restore'
     || backupPrzedPrzywracaniem.manifest.sections.join('|') !== wszystkieSekcje.join('|')

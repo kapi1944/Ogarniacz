@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 4
+export const WERSJA_SCHEMATU_BAZY = 5
 
 export const nazwyTabel: NazwaTabeli[] = [
   'zadania',
@@ -38,6 +38,7 @@ export const nazwyTabel: NazwaTabeli[] = [
   'edytorzy',
   'dziennikEcho',
   'ustawienia',
+  'historiaZmian',
 ]
 
 const schematPelny = {
@@ -104,6 +105,7 @@ class BazaOgarniacza extends Dexie {
     this.version(WERSJA_SCHEMATU_BAZY).stores({
       ...schematPelny,
       urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
+      historiaZmian: 'id, znacznikCzasu, modul, typEncji, encjaId, operacja',
     })
   }
 

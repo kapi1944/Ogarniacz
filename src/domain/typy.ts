@@ -342,6 +342,20 @@ export interface DziennikEcho extends EncjaBazowa {
   wynik: 'wykonane' | 'odrzucone' | 'blad'
 }
 
+export type ModulHistorii = 'finanse' | 'leki' | 'wizyty' | 'samochod' | 'zadania'
+export type OperacjaHistorii = 'utworzenie' | 'aktualizacja' | 'usuniecie'
+
+export interface WpisHistoriiZmian extends EncjaBazowa {
+  modul: ModulHistorii
+  typEncji: string
+  encjaId: Id
+  operacja: OperacjaHistorii
+  znacznikCzasu: string
+  zmienionePola: string[]
+  przed?: Record<string, unknown>
+  po?: Record<string, unknown>
+}
+
 export type MotywAplikacji = 'jasny' | 'ciemny' | 'systemowy'
 export type GestoscInterfejsu = 'komfortowa' | 'zwarta'
 export type DostepnoscPlanistyczna = 'czesciowa' | 'pelna'
@@ -497,6 +511,7 @@ export interface MapaTabel {
   edytorzy: ProfilEdytora
   dziennikEcho: DziennikEcho
   ustawienia: Ustawienia
+  historiaZmian: WpisHistoriiZmian
 }
 
 export type NazwaTabeli = keyof MapaTabel

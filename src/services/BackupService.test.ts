@@ -2,15 +2,16 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
+import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { utworzMetadane } from '../domain/fabryki'
-import type { Notatka, Zadanie } from '../domain/typy'
+import type { ElementSkrzynki, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Rachunek, Wizyta, Zadanie } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 import {
   checksumJestPoprawny,
   obliczChecksum,
+  PODSTAWOWE_SEKCJE_BACKUPU,
   przygotujBackupDoPrzywracania,
   przywrocBackup,
-  SEKCJE_BACKUPU,
   utworzBackup,
   WERSJA_FORMATU_BACKUPU,
   type OgarniaczBackup,
@@ -134,7 +135,7 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     const wynik = await przywrocBackup(backup)
 
     expect(wynik.backupPrzedPrzywracaniem.manifest.backupType).toBe('before-restore')
-    expect(wynik.backupPrzedPrzywracaniem.manifest.sections).toEqual(SEKCJE_BACKUPU.map(({ nazwa }) => nazwa))
+    expect(wynik.backupPrzedPrzywracaniem.manifest.sections).toEqual(PODSTAWOWE_SEKCJE_BACKUPU)
     expect(wynik.backupPrzedPrzywracaniem.payload.zadania?.zadania[0]).toMatchObject({ tytul: 'Przed restore' })
     expect((await repozytorium.lista())[0]).toMatchObject({ tytul: 'Z backupu' })
   })
@@ -188,6 +189,52 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     expect(await notatki.lista()).toEqual(backup.payload.notatki?.notatki)
   })
 
+  it('finalnie odzyskuje krytyczne dane wielu kategorii i tworzy pre-restore backup', async () => {
+    const zadanie = utworzZadanie({ tytul: 'Recovery zadanie', opis: '', priorytet: 'wysoki' })
+    const notatka = utworzNotatke('Recovery notatka')
+    const poczekalnia: ElementSkrzynki = { ...utworzMetadane('recovery-poczekalnia'), tresc: 'Do rozpatrzenia', zrodlo: 'tekst', status: 'nowe' }
+    const lek: Lek = { ...utworzMetadane('recovery-lek'), nazwa: 'Recovery lek', dawkaInstrukcja: '1 tabletka', godziny: ['08:00'], aktywny: true }
+    const wizyta: Wizyta = { ...utworzMetadane('recovery-wizyta'), nazwa: 'Recovery wizyta', status: 'umowiona', data: '2026-09-15', godzina: '12:00', notatka: '', pytania: [], dokumentyIds: [], checklista: [] }
+    const rachunek: Rachunek = { ...utworzMetadane('recovery-rachunek'), nazwa: 'Recovery rachunek', kwota: 150, termin: '2026-09-20', status: 'niezaplacony' }
+    const pojazd: Pojazd = { ...utworzMetadane('recovery-pojazd'), nazwa: 'Recovery auto', przebieg: 12345 }
+    const lista: ListaZakupow = { ...utworzMetadane('recovery-lista'), nazwa: 'Recovery zakupy', aktywna: true }
+    const pozycja: PozycjaZakupow = { ...utworzMetadane('recovery-pozycja'), listaId: lista.id, nazwa: 'Mleko', ilosc: '1', kupione: false }
+
+    await pobierzRepozytorium('zadania').zapisz(zadanie)
+    await pobierzRepozytorium('notatki').zapisz(notatka)
+    await pobierzRepozytorium('skrzynka').zapisz(poczekalnia)
+    await pobierzRepozytorium('leki').zapisz(lek)
+    await pobierzRepozytorium('wizyty').zapisz(wizyta)
+    await pobierzRepozytorium('rachunki').zapisz(rachunek)
+    await pobierzRepozytorium('pojazdy').zapisz(pojazd)
+    await pobierzRepozytorium('listyZakupow').zapisz(lista)
+    await pobierzRepozytorium('pozycjeZakupow').zapisz(pozycja)
+    await repozytoriumUstawien.zapisz({ ...(await repozytoriumUstawien.wczytaj()), powiadomienia: true })
+
+    const backup = await przygotuj(await utworzBackup(undefined, () => STALA_DATA))
+    expect(await checksumJestPoprawny(backup)).toBe(true)
+    await pobierzRepozytorium('zadania').zapisz({ ...(await pobierzRepozytorium('zadania').pobierz(zadanie.id))!, tytul: 'Mutacja zadania' })
+    for (const tabela of ['notatki', 'skrzynka', 'leki', 'wizyty', 'rachunki', 'pojazdy', 'listyZakupow', 'pozycjeZakupow'] as const) {
+      await baza.tabela(tabela).clear()
+    }
+    await repozytoriumUstawien.zapisz({ ...(await repozytoriumUstawien.wczytaj()), powiadomienia: false })
+
+    const wynik = await przywrocBackup(backup)
+
+    expect(await checksumJestPoprawny(wynik.backupPrzedPrzywracaniem)).toBe(true)
+    expect(wynik.backupPrzedPrzywracaniem.manifest.backupType).toBe('before-restore')
+    expect((await pobierzRepozytorium('zadania').lista())[0]).toMatchObject({ tytul: 'Recovery zadanie' })
+    expect((await pobierzRepozytorium('notatki').lista())[0]).toMatchObject({ tytul: 'Recovery notatka' })
+    expect((await pobierzRepozytorium('skrzynka').lista())[0]).toMatchObject({ tresc: 'Do rozpatrzenia' })
+    expect((await pobierzRepozytorium('leki').lista())[0]).toMatchObject({ nazwa: 'Recovery lek' })
+    expect((await pobierzRepozytorium('wizyty').lista())[0]).toMatchObject({ nazwa: 'Recovery wizyta' })
+    expect((await pobierzRepozytorium('rachunki').lista())[0]).toMatchObject({ kwota: 150 })
+    expect((await pobierzRepozytorium('pojazdy').lista())[0]).toMatchObject({ przebieg: 12345 })
+    expect((await pobierzRepozytorium('listyZakupow').lista())[0]).toMatchObject({ nazwa: 'Recovery zakupy' })
+    expect((await pobierzRepozytorium('pozycjeZakupow').lista())[0]).toMatchObject({ nazwa: 'Mleko' })
+    expect((await repozytoriumUstawien.wczytaj()).powiadomienia).toBe(true)
+  })
+
   it('migruje wspierany backup v1 do aktualnego formatu bez mutacji wejścia', async () => {
     const aktualny = await utworzBackup(['zadania'], () => STALA_DATA)
     const stary = await zmienManifest(aktualny, (manifest) => {
@@ -206,6 +253,18 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
       backupType: 'export',
     })
     expect(await checksumJestPoprawny(zmigrowany)).toBe(true)
+  })
+
+  it('zachowuje zgodność backupu v2 utworzonego na schemacie Dexie v4', async () => {
+    const aktualny = await utworzBackup(['zadania'], () => STALA_DATA)
+    const zEtapu9B = await zmienManifest(aktualny, (manifest) => {
+      manifest.dexieSchemaVersion = 4
+    })
+
+    const przygotowany = await przygotujBackupDoPrzywracania(JSON.stringify(zEtapu9B))
+
+    expect(przygotowany.manifest.dexieSchemaVersion).toBe(4)
+    expect(await checksumJestPoprawny(przygotowany)).toBe(true)
   })
 
   it('selektywny eksport nie zawiera niewybranych sekcji', async () => {
