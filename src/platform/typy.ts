@@ -1,9 +1,38 @@
+import type { Przypomnienie, PowiazanieEncji } from '../domain/typy'
+
 export type RodzajPlatformy = 'web' | 'android'
 export type StanCykluZycia = 'aktywny' | 'nieaktywny'
+export type StanZgody = 'przyznana' | 'odrzucona' | 'pytaj' | 'niedostepna'
+export type KanalPowiadomienia = 'ogarniacz-wazne' | 'ogarniacz-zwykle' | 'ogarniacz-zdrowie' | 'ogarniacz-finanse'
 
 export interface DanePowiadomienia {
   tytul: string
   tresc: string
+  sciezka?: string
+}
+
+export interface PowiadomieniePlatformowe {
+  id: number
+  przypomnienieId: string
+  tytul: string
+  tresc: string
+  termin: string
+  kanal: KanalPowiadomienia
+  sourceRef?: PowiazanieEncji
+  sciezka: string
+  wymagaDokladnosci: boolean
+  wersja: string
+}
+
+export interface StanPowiadomienPlatformy {
+  zgoda: StanZgody
+  systemoweWlaczone: boolean
+  kanalyGotowe: boolean | null
+  exactAlarms: StanZgody | null
+}
+
+export interface WynikSynchronizacjiPowiadomien {
+  zaplanowanePrzypomnieniaIds: string[]
 }
 
 export interface DaneUdostepniania {
@@ -22,7 +51,13 @@ export interface PlatformaOgarniacza {
   powiadomienia: {
     dostepne: () => boolean
     poprosOUprawnienie: () => Promise<boolean>
+    sprawdzStan: () => Promise<StanPowiadomienPlatformy>
     pokaz: (dane: DanePowiadomienia) => Promise<boolean>
+    zaplanuj: (powiadomienia: PowiadomieniePlatformowe[]) => Promise<void>
+    anuluj: (identyfikatory: number[]) => Promise<void>
+    przeplanuj: (powiadomienia: PowiadomieniePlatformowe[]) => Promise<void>
+    synchronizuj: (przypomnienia: Przypomnienie[], wlaczone: boolean) => Promise<WynikSynchronizacjiPowiadomien>
+    nasluchujAkcji: (obsluga: (sciezka: string) => void) => () => void
   }
   pliki: {
     zapisz: (nazwa: string, dane: Blob) => Promise<boolean>
@@ -34,6 +69,8 @@ export interface PlatformaOgarniacza {
   haptyka: {
     dostepna: () => boolean
     dotkniecie: () => Promise<boolean>
+    sukces: () => Promise<boolean>
+    ostrzezenie: () => Promise<boolean>
   }
   migawkiWidgetow: {
     dostepne: () => boolean

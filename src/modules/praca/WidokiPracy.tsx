@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { addDays, format, parseISO } from 'date-fns'
-import { Check, CornerDownRight, RotateCcw } from 'lucide-react'
+import { Check, CornerDownRight, RotateCcw, Share2 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { WidokRejestru, type DefinicjaPola } from '../../components/WidokRejestru'
 import { Karta, Komunikat, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
@@ -9,6 +10,7 @@ import type { ElementSkrzynki, ListaZakupow, NaPozniej, NazwaModulu, Notatka, Po
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { czyZadanieZalegle, odroczZadanie, przywrocZadanie, ukonczZadanie, utworzZadanie } from '../../services/ZadaniaService'
+import { platforma } from '../../platform/platforma'
 
 const opcjePriorytetu = [
   { wartosc: 'niski', etykieta: 'Niski' },
@@ -18,6 +20,7 @@ const opcjePriorytetu = [
 ]
 
 export function WidokZadan() {
+  const [parametryAdresu] = useSearchParams()
   const { dane: zadania, repozytorium } = useRepozytorium('zadania')
   const { dane: projekty } = useRepozytorium('projekty')
   const [filtr, ustawFiltr] = useState<'otwarte' | 'dzisiaj' | 'zalegle' | 'nadchodzace' | 'wykonane' | 'wszystkie'>('otwarte')
@@ -71,6 +74,7 @@ export function WidokZadan() {
     etykietaDodawania="Nowe zadanie"
     dane={widoczne}
     repozytorium={repozytorium}
+    wybranyElementId={parametryAdresu.get('element') ?? undefined}
     pola={pola}
     filtr={<div className="pasek-filtrow">
       <div className="segmenty">{(['otwarte', 'dzisiaj', 'zalegle', 'nadchodzace', 'wykonane', 'wszystkie'] as const).map((wartosc) => <button type="button" className={filtr === wartosc ? 'aktywny' : ''} onClick={() => ustawFiltr(wartosc)} key={wartosc}>{wartosc === 'wszystkie' ? 'Wszystkie' : wartosc[0].toUpperCase() + wartosc.slice(1)}</button>)}</div>
@@ -122,8 +126,9 @@ export function WidokZadan() {
       {zadanie.opis && <p>{zadanie.opis}</p>}
     </>}
     akcje={(zadanie) => <>
-      {zadanie.status === 'wykonane' ? <button type="button" className="przycisk-ikona" title="Przywróć" onClick={() => repozytorium.zapisz(przywrocZadanie(zadanie))}><RotateCcw aria-hidden="true" /></button> : <button type="button" className="przycisk-ikona przycisk-ikona--sukces" title="Oznacz jako wykonane" onClick={async () => { const wynik = ukonczZadanie(zadanie); await repozytorium.zapisz(wynik.wykonane); if (wynik.nastepne) await repozytorium.zapisz(wynik.nastepne) }}><Check aria-hidden="true" /></button>}
+      {zadanie.status === 'wykonane' ? <button type="button" className="przycisk-ikona" title="Przywróć" onClick={() => repozytorium.zapisz(przywrocZadanie(zadanie))}><RotateCcw aria-hidden="true" /></button> : <button type="button" className="przycisk-ikona przycisk-ikona--sukces" title="Oznacz jako wykonane" onClick={async () => { const wynik = ukonczZadanie(zadanie); await repozytorium.zapisz(wynik.wykonane); if (wynik.nastepne) await repozytorium.zapisz(wynik.nastepne); await platforma.haptyka.sukces() }}><Check aria-hidden="true" /></button>}
       {zadanie.status !== 'wykonane' && <button type="button" className="przycisk-ikona" title="Odrocz o dzień" onClick={() => repozytorium.zapisz(odroczZadanie(zadanie, format(addDays(parseISO(zadanie.termin ?? dzisiaj), 1), 'yyyy-MM-dd')))}><CornerDownRight aria-hidden="true" /></button>}
+      {platforma.udostepnianie.dostepne() && <button type="button" className="przycisk-ikona" title="Udostępnij zadanie" onClick={() => platforma.udostepnianie.udostepnij({ tytul: zadanie.tytul, tekst: [zadanie.opis, zadanie.termin ? `Termin: ${zadanie.termin}` : ''].filter(Boolean).join('\n') })}><Share2 aria-hidden="true" /></button>}
     </>}
   />
 }

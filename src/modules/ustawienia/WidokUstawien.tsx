@@ -13,11 +13,20 @@ import { czyMoznaWczytacDemo, wczytajDaneDemonstracyjne } from '../../services/D
 import { importujUstawienia, utworzEksportUstawien } from '../../services/TransferUstawienService'
 import { pobierzNajnowszaHistorie } from '../../services/HistoriaZmianService'
 import { useAplikacja } from '../../app/KontekstAplikacji'
+import { platforma } from '../../platform/platforma'
+import type { StanPowiadomienPlatformy, StanZgody } from '../../platform/typy'
 import { PanelUstawienAplikacji } from './PanelUstawienAplikacji'
 
 const modulyUprawnien: { wartosc: NazwaModulu; etykieta: string }[] = [
   ['zadania', 'Zadania'], ['projekty', 'Projekty'], ['skrzynka', 'Skrzynka'], ['planer', 'Planer'], ['grafik', 'Grafik'], ['nawyki', 'Nawyki'], ['leki', 'Leki'], ['wizyty', 'Wizyty'], ['przypomnienia', 'Przypomnienia'], ['zakupy', 'Zakupy'], ['rachunki', 'Rachunki'], ['miasto', 'Sprawy na mieście'], ['cele', 'Cele'], ['notatki', 'Notatki'], ['pomysly', 'Pomysły'], ['na_pozniej', 'Na później'], ['kontakty', 'Kontakty'], ['dokumenty', 'Dokumenty'], ['finanse', 'Finanse'], ['samochod', 'Samochód'], ['terminy', 'Terminy'],
 ].map(([wartosc, etykieta]) => ({ wartosc: wartosc as NazwaModulu, etykieta }))
+
+const etykietaZgody = (stan: StanZgody | null | undefined) => {
+  if (stan === 'przyznana') return 'przyznana'
+  if (stan === 'odrzucona') return 'odrzucona'
+  if (stan === 'pytaj') return 'nieustalona'
+  return 'niedostępne'
+}
 
 export function WidokUstawien() {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
@@ -39,8 +48,13 @@ export function WidokUstawien() {
   const [zajete, ustawZajete] = useState('—')
   const [nowyEdytor, ustawNowegoEdytora] = useState('')
   const [grant, ustawGrant] = useState({ editorId: '', modul: 'zadania' as NazwaModulu, odczyt: true, edycja: false })
+  const [stanPowiadomien, ustawStanPowiadomien] = useState<StanPowiadomienPlatformy>()
 
-  useEffect(() => { czyMoznaWczytacDemo().then(ustawMoznaDemo); navigator.storage?.estimate().then((wynik) => ustawZajete(wynik.usage ? `${(wynik.usage / 1024 / 1024).toFixed(2)} MB` : '0 MB')) }, [])
+  useEffect(() => {
+    czyMoznaWczytacDemo().then(ustawMoznaDemo)
+    navigator.storage?.estimate().then((wynik) => ustawZajete(wynik.usage ? `${(wynik.usage / 1024 / 1024).toFixed(2)} MB` : '0 MB'))
+    platforma.powiadomienia.sprawdzStan().then(ustawStanPowiadomien)
+  }, [])
 
   const przygotujBackup = async () => {
     ustawTworzenieBackupu(true)
@@ -57,10 +71,11 @@ export function WidokUstawien() {
     }
   }
 
-  const pobierzJson = (dane: unknown, nazwa: string) => {
+  const pobierzJson = async (dane: unknown, nazwa: string) => {
     const plik = new Blob([JSON.stringify(dane, null, 2)], { type: 'application/json' })
-    const adres = URL.createObjectURL(plik)
-    const link = document.createElement('a'); link.href = adres; link.download = nazwa; link.click(); URL.revokeObjectURL(adres)
+    const zapisano = await platforma.pliki.zapisz(nazwa, plik)
+    if (!zapisano) ustawBlad('Nie udało się zapisać pliku.')
+    else ustawKomunikat(platforma.natywna ? 'Plik zapisano w katalogu Dokumenty/Ogarniacz.' : 'Rozpoczęto pobieranie pliku.')
   }
 
   const zmienSekcjeBackupu = (nazwa: NazwaSekcjiBackupu, zaznaczona: boolean) => {
@@ -119,10 +134,13 @@ export function WidokUstawien() {
   }
 
   const wlaczPowiadomienia = async () => {
-    if (!('Notification' in window)) return ustawBlad('Ta przeglądarka nie obsługuje Notification API.')
-    const zgoda = await Notification.requestPermission()
-    await zapiszUstawienia({ powiadomienia: zgoda === 'granted' })
-    ustawKomunikat(zgoda === 'granted' ? 'Powiadomienia przeglądarki są włączone. Przy zamkniętej PWA ich działanie nie jest gwarantowane.' : 'Nie przyznano dostępu do powiadomień.')
+    if (!platforma.powiadomienia.dostepne()) return ustawBlad('Ta platforma nie obsługuje powiadomień systemowych.')
+    const przyznana = await platforma.powiadomienia.poprosOUprawnienie()
+    await zapiszUstawienia({ powiadomienia: przyznana })
+    ustawStanPowiadomien(await platforma.powiadomienia.sprawdzStan())
+    ustawKomunikat(przyznana
+      ? platforma.natywna ? 'Natywne powiadomienia Androida są włączone.' : 'Powiadomienia przeglądarki są włączone. Przy zamkniętej PWA ich działanie nie jest gwarantowane.'
+      : 'Nie przyznano dostępu do powiadomień.')
   }
 
   const dodajEdytora = async (zdarzenie: FormEvent) => {
@@ -142,7 +160,7 @@ export function WidokUstawien() {
     {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}{blad && <Komunikat typ="blad">{blad}</Komunikat>}
     <PanelUstawienAplikacji />
     <section className="siatka-ustawien">
-      <Karta><div className="tytul-karty"><Bell aria-hidden="true" /><span>Powiadomienia</span></div><h2>Notification API</h2><p>Reminder engine i centrum przypomnień działają w aplikacji. Przeglądarka może dodatkowo pokazać systemowy komunikat, ale nie gwarantuje alarmu po całkowitym zamknięciu.</p><button type="button" className="przycisk przycisk--drugorzedny" onClick={wlaczPowiadomienia}>{ustawienia.powiadomienia ? 'Sprawdź uprawnienie' : 'Włącz powiadomienia'}</button></Karta>
+      <Karta><div className="tytul-karty"><Bell aria-hidden="true" /><span>Powiadomienia</span></div><h2>{platforma.natywna ? 'Android Local Notifications' : 'Notification API'}</h2><p>Wspólny silnik Ogarniacza ustala treść i czas. Platforma jest wyłącznie kanałem dostarczenia.</p><div className="lista-kompaktowa"><div><span>Zgoda na powiadomienia</span><Znacznik wariant={stanPowiadomien?.zgoda === 'przyznana' ? 'sukces' : 'neutralny'}>{etykietaZgody(stanPowiadomien?.zgoda)}</Znacznik></div><div><span>Powiadomienia systemowe</span><Znacznik wariant={stanPowiadomien?.systemoweWlaczone ? 'sukces' : 'ostrzezenie'}>{stanPowiadomien?.systemoweWlaczone ? 'włączone' : 'wyłączone'}</Znacznik></div>{platforma.natywna && <><div><span>Kanały Androida</span><Znacznik wariant={stanPowiadomien?.kanalyGotowe ? 'sukces' : 'ostrzezenie'}>{stanPowiadomien?.kanalyGotowe ? 'gotowe' : 'niegotowe'}</Znacznik></div><div><span>Dokładne alarmy</span><Znacznik wariant={stanPowiadomien?.exactAlarms === 'przyznana' ? 'sukces' : 'neutralny'}>{etykietaZgody(stanPowiadomien?.exactAlarms)}</Znacznik><small>Używane tylko dla przypomnień krytycznych lub eskalowanych; Ogarniacz nie otwiera sam ustawień specjalnego dostępu.</small></div></>}</div><button type="button" className="przycisk przycisk--drugorzedny" onClick={wlaczPowiadomienia}>{ustawienia.powiadomienia ? 'Sprawdź uprawnienie' : 'Włącz powiadomienia'}</button></Karta>
       <Karta><div className="tytul-karty"><Sparkles aria-hidden="true" /><span>Echo</span></div><h2>Proaktywność</h2><label className="ustawienie-wiersz"><span><strong>Proaktywność</strong><small>Pozwala Echo prezentować lokalne sugestie.</small></span><input type="checkbox" checked={ustawienia.proaktywnoscEcho} onChange={(e) => zapiszUstawienia({ proaktywnoscEcho: e.target.checked })} /></label><label className="ustawienie-wiersz"><span><strong>Wyciszenie</strong><small>Ukrywa inicjowane sugestie bez wyłączania panelu.</small></span><input type="checkbox" checked={ustawienia.echoWyciszone} onChange={(e) => zapiszUstawienia({ echoWyciszone: e.target.checked })} /></label></Karta>
       <Karta><div className="tytul-karty"><Database aria-hidden="true" /><span>Dane lokalne</span></div><h2>IndexedDB</h2><p>Szacowane użycie pamięci tej witryny: <strong>{zajete}</strong>. Dane pozostają w profilu tej przeglądarki.</p><Link to="/grafik" className="przycisk przycisk--drugorzedny">Ustaw grafik pracy</Link></Karta>
     </section>
@@ -168,7 +186,7 @@ export function WidokUstawien() {
     <WidokRejestru tytul="Pamięć Echo" opis="Właściciel może zobaczyć, edytować i usunąć każdy lokalny fakt, preferencję lub regułę." etykietaDodawania="Dodaj wpis pamięci" dane={pamiec} repozytorium={repoPamieci} pola={[{ klucz: 'tresc', etykieta: 'Treść', typ: 'textarea', wymagane: true }, { klucz: 'typ', etykieta: 'Typ', typ: 'select', wymagane: true, opcje: [{ wartosc: 'fakt', etykieta: 'Fakt' }, { wartosc: 'preferencja', etykieta: 'Preferencja' }, { wartosc: 'regula', etykieta: 'Reguła' }] }, { klucz: 'zrodlo', etykieta: 'Źródło', wymagane: true }, { klucz: 'wrazliwosc', etykieta: 'Wrażliwość', typ: 'select', wymagane: true, opcje: [{ wartosc: 'zwykla', etykieta: 'Zwykła' }, { wartosc: 'wrazliwa', etykieta: 'Wrażliwa' }] }, { klucz: 'sposob', etykieta: 'Sposób zapisu', typ: 'select', wymagane: true, opcje: [{ wartosc: 'reczne', etykieta: 'Ręczne' }, { wartosc: 'zaproponowane', etykieta: 'Zaproponowane przez Echo' }] }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), tresc: f.tresc.trim(), typ: (f.typ || 'fakt') as PamiecEcho['typ'], zrodlo: f.zrodlo, wrazliwosc: (f.wrazliwosc || 'zwykla') as PamiecEcho['wrazliwosc'], sposob: (f.sposob || 'reczne') as PamiecEcho['sposob'], updatedAt: terazIso() })} etykieta={(x) => x.tresc.slice(0, 80)} szczegoly={(x) => <><Znacznik wariant={x.wrazliwosc === 'wrazliwa' ? 'ostrzezenie' : 'neutralny'}>{x.wrazliwosc}</Znacznik><span>{x.typ} · {x.zrodlo} · {x.sposob}</span></>} />
 
     <section className="siatka-dwie-kolumny siatka-dwie-kolumny--rowne"><Karta><h2>Dane demonstracyjne</h2><p>Przykładowe rekordy można wczytać tylko do całkowicie pustej bazy, aby nie mieszać ich z prawdziwymi danymi.</p><button type="button" className="przycisk przycisk--drugorzedny" disabled={!moznaDemo} onClick={async () => { try { await wczytajDaneDemonstracyjne(); ustawMoznaDemo(false); ustawKomunikat('Dane demonstracyjne zostały wczytane.') } catch (e) { ustawBlad(e instanceof Error ? e.message : 'Błąd danych demonstracyjnych.') } }}>Wczytaj dane demonstracyjne</button>{!moznaDemo && <p className="tekst-pomocniczy">Baza zawiera już dane — opcja jest wyłączona.</p>}</Karta><Karta klasa="karta--niebezpieczna"><h2>Wyczyść dane lokalne</h2><p>Operacja trwale usuwa całą bazę na tym urządzeniu. Najpierw wykonaj backup.</p><button type="button" className="przycisk przycisk--niebezpieczny" onClick={() => ustawCzyszczenie(true)}>Wyczyść wszystkie dane</button></Karta></section>
-    <Karta><h2>Informacje o aplikacji</h2><p><strong>Ogarniacz v1.0.0</strong> · local-first PWA · schemat IndexedDB v5 · bez backendu i zewnętrznego API.</p><p className="tekst-pomocniczy">Systemowe alarmy po całkowitym zamknięciu aplikacji, zdalne współdzielenie i synchronizacja wymagają przyszłej warstwy platformowej/backendowej.</p></Karta>
+    <Karta><h2>Informacje o aplikacji</h2><p><strong>Ogarniacz v1.0.0</strong> · local-first PWA i Android · schemat IndexedDB v5 · bez zewnętrznego API.</p><p className="tekst-pomocniczy">Android dostarcza lokalne alarmy także poza aktywnym WebView. Planowany serwer Raspberry Pi pozostaje przyszłym kanałem synchronizacji i nie przejmuje logiki przypomnień klienta.</p></Karta>
 
     {potwierdzeniePrzywracania && <ModalPotwierdzenia tytul="Przywrócić wybrane dane?" opis={`Wybrane sekcje (${sekcjePrzywracania.length}) zastąpią bieżące dane tych kategorii. Pozostałe kategorie nie zostaną zmienione. Przed zapisem system utworzy pełną kopię before-restore.`} etykietaAkcji="Utwórz kopię i przywróć" niebezpieczne anuluj={() => ustawPotwierdzeniePrzywracania(false)} potwierdz={wykonajPrzywracanie} />}
     {czyszczenie && <PotwierdzenieCzyszczenia anuluj={() => ustawCzyszczenie(false)} wykonaj={async () => { await wyczyscDane(); await inicjalizujBaze(); window.location.assign('/') }} />}

@@ -12,6 +12,7 @@ import { aktywnePrzypomnienia, odroczPrzypomnienie, zakonczPrzypomnienie } from 
 import { ukonczZadanie, utworzZadanie } from '../../services/ZadaniaService'
 
 export function WidokPrzypomnien() {
+  const [parametryAdresu] = useSearchParams()
   const { dane, repozytorium } = useRepozytorium('przypomnienia')
   const aktywne = aktywnePrzypomnienia(dane)
   const zakoncz = async (element: Przypomnienie) => {
@@ -31,6 +32,7 @@ export function WidokPrzypomnien() {
       etykietaDodawania="Nowe przypomnienie"
       dane={dane}
       repozytorium={repozytorium}
+      wybranyElementId={parametryAdresu.get('element') ?? undefined}
       pola={[
         { klucz: 'tytul', etykieta: 'Treść', wymagane: true },
         { klucz: 'typ', etykieta: 'Typ', typ: 'select', wymagane: true, opcje: [{ wartosc: 'absolutne', etykieta: 'Absolutne' }, { wartosc: 'wzgledne', etykieta: 'Względne do czasu źródła' }, { wartosc: 'cykliczne', etykieta: 'Cykliczne' }] },

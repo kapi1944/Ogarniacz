@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, Inbox, X } from 'lucide-react'
 import { useObslugaWstecz } from '../platform/obslugaWstecz'
+import { platforma } from '../platform/platforma'
 
 export function NaglowekWidoku({ tytul, opis, akcje }: { tytul: string; opis?: string; akcje?: ReactNode }) {
   return (
@@ -64,7 +65,7 @@ export function ModalPotwierdzenia({ tytul, opis, etykietaAkcji = 'Potwierdz', n
       </div>
       <div className="akcje-formularza">
         <button type="button" className="przycisk przycisk--drugorzedny" onClick={anuluj}>Anuluj</button>
-        <button type="button" className={`przycisk ${niebezpieczne ? 'przycisk--niebezpieczny' : 'przycisk--glowny'}`} onClick={potwierdz}>{etykietaAkcji}</button>
+        <button type="button" className={`przycisk ${niebezpieczne ? 'przycisk--niebezpieczny' : 'przycisk--glowny'}`} onClick={async () => { if (niebezpieczne) await platforma.haptyka.ostrzezenie(); await potwierdz() }}>{etykietaAkcji}</button>
       </div>
     </Modal>
   )

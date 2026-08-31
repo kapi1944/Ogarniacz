@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { BellPlus, Download, FileUp, ListTodo, NotebookPen, PackageCheck, Trash2 } from 'lucide-react'
+import { BellPlus, Download, FileUp, ListTodo, NotebookPen, PackageCheck, Share2, Trash2 } from 'lucide-react'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { Karta, Komunikat, Modal, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { terazIso, utworzMetadane } from '../../domain/fabryki'
@@ -8,6 +8,7 @@ import type { Cel, Dokument, Kontakt, NaPozniej, Notatka, Pomysl, Projekt, Przyp
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { utworzZadanie } from '../../services/ZadaniaService'
+import { platforma } from '../../platform/platforma'
 
 export function WidokCelow() {
   const { dane: cele, repozytorium } = useRepozytorium('cele')
@@ -67,6 +68,7 @@ export function WidokNotatek() {
     })}
     etykieta={(notatka) => notatka.tytul}
     szczegoly={(notatka) => <>{notatka.przypieta && <Znacznik wariant="informacja">przypięta</Znacznik>}{notatka.tagi.map((tag) => <Znacznik key={tag}>{tag}</Znacznik>)}{notatka.data && <span>{notatka.data}{notatka.godzina ? ` ${notatka.godzina}` : ''}</span>}{notatka.przypomnienieAt && <span>Przypomnienie: {notatka.przypomnienieAt}</span>}{notatka.powiazania.length > 0 && <span>Powiązania: {notatka.powiazania.length}</span>}<p>{notatka.tresc}</p></>}
+    akcje={(notatka) => platforma.udostepnianie.dostepne() ? <button type="button" className="przycisk-ikona" title="Udostępnij notatkę" onClick={() => platforma.udostepnianie.udostepnij({ tytul: notatka.tytul, tekst: notatka.tresc })}><Share2 aria-hidden="true" /></button> : null}
   />
 }
 
@@ -90,7 +92,7 @@ export function WidokPomyslow() {
 export function WidokNaPozniej() {
   const { dane, repozytorium } = useRepozytorium('naPozniej')
   const { repozytorium: repoZadan } = useRepozytorium('zadania')
-  return <WidokRejestru tytul="Na później" opis="Rzeczy do przeczytania, obejrzenia, sprawdzenia, kupienia lub rozważenia." etykietaDodawania="Dodaj na później" dane={dane} repozytorium={repozytorium} pola={[{ klucz: 'tytul', etykieta: 'Tytuł', wymagane: true }, { klucz: 'typ', etykieta: 'Typ', typ: 'select', wymagane: true, opcje: [{ wartosc: 'przeczytac', etykieta: 'Do przeczytania' }, { wartosc: 'obejrzec', etykieta: 'Do obejrzenia' }, { wartosc: 'sprawdzic', etykieta: 'Do sprawdzenia' }, { wartosc: 'kupic', etykieta: 'Do kupienia' }, { wartosc: 'rozwazyc', etykieta: 'Do rozważenia' }] }, { klucz: 'adres', etykieta: 'Adres URL', typ: 'url' }, { klucz: 'opis', etykieta: 'Opis', typ: 'textarea' }, { klucz: 'status', etykieta: 'Status', typ: 'select', wymagane: true, opcje: [{ wartosc: 'oczekuje', etykieta: 'Oczekuje' }, { wartosc: 'wykonane', etykieta: 'Wykonane' }] }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), tytul: f.tytul.trim(), typ: (f.typ || 'sprawdzic') as NaPozniej['typ'], adres: f.adres || undefined, opis: f.opis || undefined, status: (f.status || 'oczekuje') as NaPozniej['status'], updatedAt: terazIso() })} etykieta={(x) => x.tytul} szczegoly={(x) => <><Znacznik wariant={x.status === 'wykonane' ? 'sukces' : 'neutralny'}>{x.typ.replaceAll('_', ' ')}</Znacznik>{x.adres && <a href={x.adres} target="_blank" rel="noreferrer">Otwórz adres</a>}{x.opis && <p>{x.opis}</p>}</>} akcje={(x) => x.status === 'oczekuje' ? <button type="button" className="przycisk przycisk--maly" onClick={async () => { await repoZadan.zapisz(utworzZadanie({ tytul: x.tytul, opis: x.opis ?? '', priorytet: 'normalny' })); await repozytorium.zapisz({ ...x, status: 'wykonane' }) }}>Do zadań</button> : null} />
+  return <WidokRejestru tytul="Na później" opis="Rzeczy do przeczytania, obejrzenia, sprawdzenia, kupienia lub rozważenia." etykietaDodawania="Dodaj na później" dane={dane} repozytorium={repozytorium} pola={[{ klucz: 'tytul', etykieta: 'Tytuł', wymagane: true }, { klucz: 'typ', etykieta: 'Typ', typ: 'select', wymagane: true, opcje: [{ wartosc: 'przeczytac', etykieta: 'Do przeczytania' }, { wartosc: 'obejrzec', etykieta: 'Do obejrzenia' }, { wartosc: 'sprawdzic', etykieta: 'Do sprawdzenia' }, { wartosc: 'kupic', etykieta: 'Do kupienia' }, { wartosc: 'rozwazyc', etykieta: 'Do rozważenia' }] }, { klucz: 'adres', etykieta: 'Adres URL', typ: 'url' }, { klucz: 'opis', etykieta: 'Opis', typ: 'textarea' }, { klucz: 'status', etykieta: 'Status', typ: 'select', wymagane: true, opcje: [{ wartosc: 'oczekuje', etykieta: 'Oczekuje' }, { wartosc: 'wykonane', etykieta: 'Wykonane' }] }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), tytul: f.tytul.trim(), typ: (f.typ || 'sprawdzic') as NaPozniej['typ'], adres: f.adres || undefined, opis: f.opis || undefined, status: (f.status || 'oczekuje') as NaPozniej['status'], updatedAt: terazIso() })} etykieta={(x) => x.tytul} szczegoly={(x) => <><Znacznik wariant={x.status === 'wykonane' ? 'sukces' : 'neutralny'}>{x.typ.replaceAll('_', ' ')}</Znacznik>{x.adres && <a href={x.adres} target="_blank" rel="noreferrer">Otwórz adres</a>}{x.opis && <p>{x.opis}</p>}</>} akcje={(x) => <div className="menu-konwersji">{x.status === 'oczekuje' && <button type="button" className="przycisk przycisk--maly" onClick={async () => { await repoZadan.zapisz(utworzZadanie({ tytul: x.tytul, opis: x.opis ?? '', priorytet: 'normalny' })); await repozytorium.zapisz({ ...x, status: 'wykonane' }) }}>Do zadań</button>}{platforma.udostepnianie.dostepne() && <button type="button" title="Udostępnij element" onClick={() => platforma.udostepnianie.udostepnij({ tytul: x.tytul, tekst: x.opis, adres: x.adres })}><Share2 aria-hidden="true" /></button>}</div>} />
 }
 
 export function WidokKontaktow() {

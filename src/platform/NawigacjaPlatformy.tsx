@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useObslugaWstecz } from './obslugaWstecz'
+import { platforma } from './platforma'
 
 export function NawigacjaPlatformy() {
   const polozenie = useLocation()
@@ -10,6 +11,8 @@ export function NawigacjaPlatformy() {
   useEffect(() => {
     if (historia.current.at(-1) !== polozenie.key) historia.current.push(polozenie.key)
   }, [polozenie.key])
+
+  useEffect(() => platforma.powiadomienia.nasluchujAkcji((sciezka) => nawiguj(sciezka)), [nawiguj])
 
   useObslugaWstecz(polozenie.pathname !== '/', () => {
     if (historia.current.length > 1) {
