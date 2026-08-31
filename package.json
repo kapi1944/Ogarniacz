@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "npm run typecheck && vite build",
+    "server:build": "tsc -p tsconfig.server.json",
+    "server:start": "npm run server:build && node dist-server/main.js",
+    "server:test": "node --experimental-strip-types --test server/*.test.ts",
     "android:sync": "npm run build && cap sync android",
     "android:open": "cap open android",
     "android:run": "npm run android:sync && cap run android",
