@@ -1802,3 +1802,178 @@ input[type="radio"] {
     transparent
   );
 }
+
+/* Wspólny shell mobile: ten sam React działa w Web/PWA, Androidzie i na przyszłym hoście sieciowym. */
+.dolna-nawigacja,
+.pulpit-sekcja--teraz { display: none; }
+
+@media (max-width: 980px) {
+  :root { --wysokosc-nawigacji-mobilnej: 68px; }
+  html, body, #root { max-width: 100%; overflow-x: hidden; }
+  body.mobilny-drawer-otwarty { overflow: hidden; }
+  .aplikacja { min-height: 100dvh; padding-left: 0; }
+  .sidebar { display: none; }
+  :root .aplikacja .zawartosc { padding-bottom: calc(var(--wysokosc-nawigacji-mobilnej) + env(safe-area-inset-bottom) + 24px); }
+
+  .dolna-nawigacja {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 90;
+    display: grid;
+    min-height: calc(var(--wysokosc-nawigacji-mobilnej) + env(safe-area-inset-bottom));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    align-items: start;
+    padding: 5px max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left));
+    background: color-mix(in srgb, var(--panel) 96%, transparent);
+    border-top: 1px solid var(--obramowanie);
+    box-shadow: 0 -8px 28px rgb(10 35 31 / 12%);
+    backdrop-filter: blur(16px);
+  }
+
+  .dolna-nawigacja__element,
+  .dolna-nawigacja__dodaj {
+    display: flex;
+    min-width: 0;
+    min-height: 56px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 3px;
+    color: var(--tekst-2);
+    background: transparent;
+    border: 0;
+    border-radius: var(--promien-pola);
+    text-decoration: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .dolna-nawigacja__element svg { width: 22px; height: 22px; }
+  .dolna-nawigacja__element span,
+  .dolna-nawigacja__dodaj small { overflow: hidden; font-size: .66rem; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+  .dolna-nawigacja__element.active { color: var(--akcent); background: var(--ui-selected-surface); }
+  .dolna-nawigacja__dodaj { position: relative; color: var(--akcent); }
+  .dolna-nawigacja__dodaj > span {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    margin-top: -22px;
+    place-items: center;
+    color: var(--ui-text-on-accent);
+    background: var(--akcent);
+    border: 4px solid var(--panel);
+    border-radius: 50%;
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--akcent) 38%, transparent);
+  }
+  .dolna-nawigacja__dodaj svg { width: 25px; height: 25px; }
+
+  .mobilny-drawer-tlo {
+    position: fixed;
+    inset: 0 0 calc(var(--wysokosc-nawigacji-mobilnej) + env(safe-area-inset-bottom));
+    z-index: 70;
+    padding: 0;
+    background: rgb(4 15 13 / 58%);
+    border: 0;
+    backdrop-filter: blur(3px);
+  }
+
+  .mobilny-drawer {
+    position: fixed;
+    right: 0;
+    bottom: calc(var(--wysokosc-nawigacji-mobilnej) + env(safe-area-inset-bottom));
+    left: 0;
+    z-index: 80;
+    display: flex;
+    max-height: min(72dvh, 650px);
+    flex-direction: column;
+    color: var(--tekst);
+    background: var(--panel);
+    border: 1px solid var(--obramowanie);
+    border-bottom: 0;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -22px 60px rgb(0 0 0 / 24%);
+  }
+
+  .mobilny-drawer__uchwyt { width: 42px; height: 4px; margin: 8px auto 2px; background: var(--obramowanie-mocne); border-radius: 999px; }
+  .mobilny-drawer__naglowek { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px 10px; gap: 12px; border-bottom: 1px solid var(--obramowanie); }
+  .mobilny-drawer__naglowek > div { display: grid; gap: 2px; }
+  .mobilny-drawer__naglowek small { color: var(--tekst-2); font-size: .72rem; }
+  .mobilny-drawer__nawigacja { padding: 10px 12px 18px; overflow-y: auto; overscroll-behavior: contain; }
+  .mobilny-drawer__grupa { display: grid; gap: 5px; margin-bottom: 13px; }
+  .mobilny-drawer__grupa > span { color: var(--tekst-2); font-size: .65rem; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
+  .mobilny-drawer__grupa > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .mobilny-drawer__grupa a { display: flex; min-width: 0; min-height: 48px; align-items: center; padding: 8px 10px; gap: 8px; color: var(--tekst); background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); text-decoration: none; }
+  .mobilny-drawer__grupa a svg { color: var(--akcent); }
+  .mobilny-drawer__grupa a strong { min-width: 0; overflow: hidden; font-size: .76rem; text-overflow: ellipsis; white-space: nowrap; }
+  .mobilny-drawer__grupa a.active { color: var(--akcent); background: var(--ui-selected-surface); border-color: var(--ui-selected-border); }
+
+  .pasek-gorny { min-height: 56px; }
+  .pasek-gorny .przycisk-plus { display: none; }
+  .przycisk, .przycisk-ikona, .przycisk-szukaj { min-height: 44px; }
+  .przycisk-ikona, .przycisk-szukaj { width: 44px; }
+  .pole input, .pole select, .pole textarea,
+  .pasek-planera input, .pasek-planera select,
+  .pole-inline input, .pole-inline select,
+  .rekord__akcje select, .akcje-backupu select { min-height: 48px; }
+
+  :root .modal-tlo { align-items: end; padding: max(8px, env(safe-area-inset-top)) 0 0; }
+  :root[data-platforma="android"] .modal-tlo { padding: max(8px, env(safe-area-inset-top)) 0 0; }
+  .modal { width: 100%; max-height: calc(100dvh - max(8px, env(safe-area-inset-top))); border-radius: 20px 20px 0 0; }
+  .modal__tresc { padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .modal .akcje-formularza { position: sticky; bottom: 0; z-index: 2; padding: 10px 0 max(6px, env(safe-area-inset-bottom)); background: var(--panel); }
+
+  .widok-pulpitu { display: flex; flex-direction: column; }
+  .pulpit-sekcja--naglowek { order: 0; }
+  .pulpit-sekcja--nawigator { order: 1; }
+  .pulpit-sekcja--komunikaty { display: grid; order: 2; gap: 8px; }
+  .pulpit-sekcja--alerty { order: 3; }
+  .pulpit-sekcja--teraz { display: block; order: 4; }
+  .pulpit-sekcja--os-czasu { order: 5; }
+  .pulpit-sekcja--kafelki { order: 6; }
+  .pulpit-sekcja--reszta { order: 7; }
+  .pulpit-sekcja--naglowek .naglowek-widoku__akcje { display: none; }
+  .pulpit-sekcja--kafelki > .akcje-formularza { justify-content: flex-start; margin: 0 0 8px; overflow-x: auto; }
+  .strefa-pulpitu--pilne { order: -1; }
+
+  .os-czasu-przewijana { margin-inline: -8px; padding: 0 8px 8px; overscroll-behavior-x: contain; scrollbar-width: thin; }
+  .os-czasu { min-width: 700px; height: 218px; }
+  .os-czasu__pas { min-height: 40px; touch-action: manipulation; }
+  .os-czasu__pas--praca { min-height: 44px; }
+  .os-czasu__marker { width: 48px; height: 48px; transform: translateX(-24px); touch-action: manipulation; }
+  .os-czasu__marker > span { left: 19px; width: 14px; height: 14px; }
+  .os-czasu__marker strong { left: 24px; max-width: 150px; min-height: 24px; padding: 4px 7px; }
+  .os-czasu__teraz { width: 3px; }
+
+  @media (hover: none) {
+    .przycisk:hover, .przycisk-ikona:hover, .przycisk-szukaj:hover,
+    .dolna-nawigacja__element:hover, .mobilny-drawer__grupa a:hover,
+    .os-czasu__pas:hover { filter: none; transform: none; box-shadow: none; }
+    .os-czasu__marker:hover strong { filter: none; box-shadow: none; transform: translateX(-50%); }
+  }
+}
+
+@media (max-width: 359px) {
+  :root { --wysokosc-nawigacji-mobilnej: 64px; }
+  :root .aplikacja .zawartosc { padding-right: 8px; padding-left: 8px; }
+  .pasek-gorny { padding-right: 8px; padding-left: 8px; }
+  .pasek-gorny__akcje { gap: 3px; }
+  .dolna-nawigacja { padding-right: 1px; padding-left: 1px; }
+  .dolna-nawigacja__element span, .dolna-nawigacja__dodaj small { font-size: .59rem; }
+  .dolna-nawigacja__dodaj > span { width: 48px; height: 48px; }
+  .mobilny-drawer__nawigacja { padding-right: 8px; padding-left: 8px; }
+  .mobilny-drawer__grupa a { padding-inline: 7px; }
+  .mobilny-drawer__grupa a strong { font-size: .7rem; }
+  .naglowek-widoku p { font-size: .8rem; }
+  .karta { padding: calc(14px * var(--gestosc)); }
+  .os-czasu { min-width: 640px; }
+}
+
+@media (min-width: 400px) and (max-width: 980px) {
+  :root .aplikacja .zawartosc { padding-right: 18px; padding-left: 18px; }
+  .mobilny-drawer { right: max(0px, calc((100vw - 520px) / 2)); left: max(0px, calc((100vw - 520px) / 2)); }
+  .strefy-pulpitu { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .strefa-pulpitu--small { grid-column: span 1; }
+  .strefa-pulpitu--medium, .strefa-pulpitu--large { grid-column: 1 / -1; }
+}

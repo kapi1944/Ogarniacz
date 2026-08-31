@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom'
 import {
   AlarmClock, Archive, Bell, BookOpen, CalendarClock, CalendarDays, CheckSquare, ChevronLeft,
   ChevronRight, CircleDollarSign, Clock3, ContactRound, FileClock, Files, HeartPulse, Inbox,
-  Car, LayoutDashboard, Lightbulb, ListChecks, Menu, MessageCircle, Moon, NotebookPen, PackageCheck,
+  Car, Ellipsis, LayoutDashboard, Lightbulb, ListChecks, MessageCircle, Moon, NotebookPen, PackageCheck,
   Pill, Plus, Search, Settings, ShoppingCart, Sparkles, Sun, Target, WalletCards, X,
 } from 'lucide-react'
 import type { NazwaModulu } from '../domain/typy'
@@ -57,16 +57,68 @@ const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
 ]
 
 const wszystkiePozycje = grupy.flatMap((grupa) => grupa.pozycje)
+const glowneAdresyMobilne = new Set(['/', '/zadania', '/planer'])
+
+export function DolnaNawigacjaMobilna({
+  otworzSzybkieDodawanie,
+  moze,
+}: {
+  otworzSzybkieDodawanie: () => void
+  moze: (modul: NazwaModulu, operacja?: 'odczyt' | 'edycja', sekcja?: string) => boolean
+}) {
+  const [wiecejOtwarte, ustawWiecejOtwarte] = useState(false)
+  const { pathname } = useLocation()
+  const wiecejAktywne = !glowneAdresyMobilne.has(pathname)
+
+  useEffect(() => ustawWiecejOtwarte(false), [pathname])
+  useEffect(() => {
+    document.body.classList.toggle('mobilny-drawer-otwarty', wiecejOtwarte)
+    return () => document.body.classList.remove('mobilny-drawer-otwarty')
+  }, [wiecejOtwarte])
+  useObslugaWstecz(wiecejOtwarte, () => ustawWiecejOtwarte(false), 80)
+
+  return <>
+    {wiecejOtwarte && <>
+      <button type="button" className="mobilny-drawer-tlo" aria-label="Zamknij więcej modułów" onClick={() => ustawWiecejOtwarte(false)} />
+      <section className="mobilny-drawer" role="dialog" aria-modal="true" aria-labelledby="mobilny-drawer-tytul">
+        <div className="mobilny-drawer__uchwyt" aria-hidden="true" />
+        <header className="mobilny-drawer__naglowek">
+          <div><strong id="mobilny-drawer-tytul">Więcej modułów</strong><small>Wszystkie dostępne obszary Ogarniacza</small></div>
+          <button type="button" className="przycisk-ikona" onClick={() => ustawWiecejOtwarte(false)} aria-label="Zamknij"><X aria-hidden="true" /></button>
+        </header>
+        <nav className="mobilny-drawer__nawigacja" aria-label="Pozostałe moduły">
+          {grupy.map((grupa) => {
+            const widoczne = grupa.pozycje.filter((pozycja) =>
+              !glowneAdresyMobilne.has(pozycja.adres) && (!pozycja.modul || moze(pozycja.modul)),
+            )
+            if (widoczne.length === 0) return null
+            return <div className="mobilny-drawer__grupa" key={grupa.etykieta}>
+              <span>{grupa.etykieta}</span>
+              <div>{widoczne.map((pozycja) => {
+                const Ikona = pozycja.ikona
+                return <NavLink to={pozycja.adres} key={pozycja.adres}><Ikona aria-hidden="true" /><strong>{pozycja.etykieta}</strong></NavLink>
+              })}</div>
+            </div>
+          })}
+        </nav>
+      </section>
+    </>}
+    <nav className="dolna-nawigacja" aria-label="Dolna nawigacja">
+      <NavLink end to="/" className="dolna-nawigacja__element"><LayoutDashboard aria-hidden="true" /><span>Pulpit</span></NavLink>
+      <NavLink to="/zadania" className="dolna-nawigacja__element"><CheckSquare aria-hidden="true" /><span>Zadania</span></NavLink>
+      <button type="button" className="dolna-nawigacja__dodaj" onClick={otworzSzybkieDodawanie} aria-label="Szybko dodaj"><span><Plus aria-hidden="true" /></span><small>Dodaj</small></button>
+      <NavLink to="/planer" className="dolna-nawigacja__element"><CalendarClock aria-hidden="true" /><span>Planer</span></NavLink>
+      <button type="button" className={`dolna-nawigacja__element ${wiecejAktywne || wiecejOtwarte ? 'active' : ''}`} onClick={() => ustawWiecejOtwarte(true)} aria-haspopup="dialog" aria-expanded={wiecejOtwarte}><Ellipsis aria-hidden="true" /><span>Więcej</span></button>
+    </nav>
+  </>
+}
 
 export function UkladAplikacji({ children }: { children: ReactNode }) {
   const { otworzSzybkieDodawanie, otworzWyszukiwanie, ustawienia, zapiszUstawienia, moze } = useAplikacja()
   const [zwiniete, ustawZwiniete] = useState(ustawienia.nawigacja.menuDomyslnieZwiniete)
-  const [menuMobilne, ustawMenuMobilne] = useState(false)
   const { pathname } = useLocation()
   const nazwaWidoku = wszystkiePozycje.find((pozycja) => pozycja.adres === pathname)?.etykieta ?? 'Ogarniacz'
 
-  useEffect(() => ustawMenuMobilne(false), [pathname])
-  useObslugaWstecz(menuMobilne, () => ustawMenuMobilne(false), 80)
   useEffect(() => ustawZwiniete(ustawienia.nawigacja.menuDomyslnieZwiniete), [ustawienia.nawigacja.menuDomyslnieZwiniete])
   useEffect(() => {
     const klawisze = (zdarzenie: KeyboardEvent) => {
@@ -88,11 +140,10 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
   }
 
   const sidebar = (
-    <aside className={`sidebar ${zwiniete ? 'sidebar--zwiniety' : ''} ${menuMobilne ? 'sidebar--mobilny-otwarty' : ''}`}>
+    <aside className={`sidebar ${zwiniete ? 'sidebar--zwiniety' : ''}`}>
       <div className="sidebar__marka">
         <span className="sidebar__logo"><CheckSquare aria-hidden="true" /></span>
         {!zwiniete && <div><strong>Ogarniacz</strong><small>centrum dowodzenia</small></div>}
-        <button type="button" className="przycisk-ikona sidebar__zamknij-mobilne" onClick={() => ustawMenuMobilne(false)} title="Zamknij menu"><X aria-hidden="true" /></button>
       </div>
       <nav className="sidebar__nawigacja" aria-label="Główna nawigacja">
         {grupy.map((grupa) => {
@@ -118,11 +169,9 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
   return (
     <div className={`aplikacja ${zwiniete ? 'aplikacja--menu-zwiniete' : ''}`}>
       {sidebar}
-      {menuMobilne && <button className="zaslona-menu" type="button" aria-label="Zamknij menu" onClick={() => ustawMenuMobilne(false)} />}
       <div className="obszar-glowny">
         {ustawienia.trybUzytkownika === 'edytor' && <div className="pasek-edytora"><span><Sparkles aria-hidden="true" />Lokalny podgląd jako Edytor — to nie jest zdalne, bezpieczne współdzielenie.</span><button type="button" onClick={() => zapiszUstawienia({ trybUzytkownika: 'wlasciciel', aktywnyEdytorId: undefined })}>Wróć do Właściciela</button></div>}
         <header className="pasek-gorny">
-          <button type="button" className="przycisk-ikona pasek-gorny__menu" onClick={() => ustawMenuMobilne(true)} title="Otwórz menu"><Menu aria-hidden="true" /></button>
           <strong>{nazwaWidoku}</strong>
           <div className="pasek-gorny__akcje">
             <button type="button" className="przycisk-szukaj" onClick={otworzWyszukiwanie}><Search aria-hidden="true" /><span>Szukaj</span><kbd>Ctrl K</kbd></button>
@@ -133,6 +182,7 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
         </header>
         <main className="zawartosc">{children}</main>
       </div>
+      <DolnaNawigacjaMobilna otworzSzybkieDodawanie={otworzSzybkieDodawanie} moze={moze} />
     </div>
   )
 }

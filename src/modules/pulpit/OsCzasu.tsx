@@ -79,7 +79,7 @@ export function OsCzasu({
   )
 
   return (
-    <section className="karta karta--os-czasu">
+    <section className="karta karta--os-czasu pulpit-sekcja--os-czasu">
       <div className="naglowek-karty naglowek-osi-czasu">
         <div>
           <h2><Clock3 aria-hidden="true" /> Oś czasu</h2>
@@ -147,6 +147,7 @@ export function OsCzasu({
               className={`os-czasu__pas os-czasu__pas--${przedzial.id}`}
               style={styl}
               title={`${przedzial.etykieta}: ${przedzial.od}–${przedzial.do}`}
+              aria-label={`${przedzial.etykieta}: ${przedzial.od}–${przedzial.do}`}
               aria-pressed={wybranyElementOsi === `przedzial:${przedzial.id}`}
               onClick={() => ustawWybranyElementOsi(`przedzial:${przedzial.id}`)}
             >
@@ -183,6 +184,7 @@ export function OsCzasu({
                 top: `${122 + indeks % 3 * 24}px`,
               }}
               title={`${element.godzina} ${element.tytul} · ${element.status ?? 'bez statusu'}`}
+              aria-label={`${element.godzina} ${element.tytul} · ${element.status ?? 'bez statusu'}`}
               aria-pressed={wybranyElementOsi === `element:${element.id}`}
               onClick={() => {
                 ustawWybranyElementOsi(`element:${element.id}`)
