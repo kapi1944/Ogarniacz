@@ -7,8 +7,9 @@ import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarnia
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { utworzMetadane } from '../domain/fabryki'
-import type { Dokument, ElementSkrzynki, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Rachunek, Wizyta, Zadanie } from '../domain/typy'
+import type { Dokument, ElementSkrzynki, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, Wizyta, Zadanie } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
+import { pobierzInstallationId } from './InstallationService'
 import {
   checksumJestPoprawny,
   obliczChecksum,
@@ -189,6 +190,60 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
 
     expect((await zadania.lista())[0]).toMatchObject({ tytul: 'Zadanie z backupu' })
     expect((await notatki.lista())[0]).toMatchObject({ tytul: 'Notatka bieżąca' })
+  })
+
+  it('zachowuje lokalny installationId podczas importu backupu z innej instalacji', async () => {
+    const lokalneInstallationId = pobierzInstallationId()
+    const backup = await utworzBackup(['zadania'], () => STALA_DATA)
+    const obcyBackup = await zmienManifest(backup, (manifest) => {
+      manifest.installationId = 'instalacja-zrodlowa'
+    })
+
+    await przywrocBackup(await przygotuj(obcyBackup as unknown as OgarniaczBackup), ['zadania'])
+
+    expect(pobierzInstallationId()).toBe(lokalneInstallationId)
+  })
+
+  it('kolejny import tego samego backupu zastępuje sekcję zamiast dublować rekordy', async () => {
+    const zadania = pobierzRepozytorium('zadania')
+    await zadania.zapisz(utworzZadanie({ tytul: 'Jedno zadanie', opis: '', priorytet: 'normalny' }))
+    const backup = await przygotuj(await utworzBackup(['zadania'], () => STALA_DATA))
+    await baza.tabela('zadania').clear()
+
+    await przywrocBackup(backup, ['zadania'])
+    await przywrocBackup(backup, ['zadania'])
+
+    expect(await zadania.lista()).toHaveLength(1)
+  })
+
+  it('przenosi rekordy powiązane z projektami i przypomnieniami bez zmiany ich ID', async () => {
+    const projekt: Projekt = { ...utworzMetadane('projekt-transfer'), nazwa: 'Projekt transfer', opis: '', status: 'aktywne', blokady: '' }
+    const zadanie = { ...utworzZadanie({ tytul: 'Zadanie transfer', opis: '', priorytet: 'normalny' }), projektId: projekt.id }
+    const przypomnienie: Przypomnienie = {
+      ...utworzMetadane('przypomnienie-transfer'),
+      tytul: 'Przypomnienie transfer',
+      zrodlo: { typ: 'zadania', id: zadanie.id },
+      typ: 'absolutne',
+      priorytet: 'normalny',
+      stan: 'nowe',
+      eskalacja: false,
+    }
+    await baza.tabela('projekty').put(projekt)
+    await baza.tabela('zadania').put(zadanie)
+    await baza.tabela('przypomnienia').put(przypomnienie)
+
+    const backup = await przygotuj(await utworzBackup(['zadania', 'pozostaleDane'], () => STALA_DATA))
+    await baza.tabela('projekty').clear()
+    await baza.tabela('zadania').clear()
+    await baza.tabela('przypomnienia').clear()
+
+    await przywrocBackup(backup, ['zadania', 'pozostaleDane'])
+
+    expect(await baza.tabela('zadania').get(zadanie.id)).toMatchObject({ projektId: projekt.id })
+    expect(await baza.tabela('projekty').get(projekt.id)).toMatchObject({ id: projekt.id })
+    expect(await baza.tabela('przypomnienia').get(przypomnienie.id)).toMatchObject({
+      zrodlo: { typ: 'zadania', id: zadanie.id },
+    })
   })
 
   it('wykonuje scenariusz seed → backup → mutation → restore → requery', async () => {
