@@ -30,7 +30,7 @@ export default defineConfig({
     }),
   ],
   test: {
-    exclude: [...configDefaults.exclude, '**/.patch-backups/**'],
+    exclude: [...configDefaults.exclude, '**/.patch-backups/**', 'server/**'],
     environment: 'jsdom',
     setupFiles: ['./src/testy/konfiguracja.ts'],
     coverage: {

@@ -3,6 +3,7 @@ import { Bot, Mic, Send, ShieldCheck, Volume2 } from 'lucide-react'
 import { Karta, ModalPotwierdzenia, NaglowekWidoku, Znacznik } from '../../components/Interfejs'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { EchoService } from '../../services/EchoService'
+import type { AkcjaDoPotwierdzeniaEcho, TrybEcho, ZrodloWejsciaEcho } from '../../services/echo/typyEcho'
 
 interface Wiadomosc {
   id: string
@@ -23,35 +24,91 @@ interface RozpoznawanieMowy {
 export function WidokEcho() {
   const echo = useMemo(() => new EchoService(), [])
   const [tekst, ustawTekst] = useState('')
-  const [wiadomosci, ustawWiadomosci] = useState<Wiadomosc[]>([{ id: 'powitanie', autor: 'echo', tresc: 'Jestem lokalnym Echo. Mogę sprawdzić dzisiejsze lub zaległe zadania, zapisać zadanie/notatkę/pomysł i po potwierdzeniu przełożyć zadanie na jutro.', ryzyko: 'niskie' }])
-  const [oczekujacePolecenie, ustawOczekujacePolecenie] = useState<string>()
+  const [tryb, ustawTryb] = useState<TrybEcho>(echo.agent.provider.tryb)
+  const [wiadomosci, ustawWiadomosci] = useState<Wiadomosc[]>([{ id: 'powitanie', autor: 'echo', tresc: 'Napisz albo powiedz, co masz na głowie. Z Echo możesz rozmawiać normalnie.' }])
+  const [oczekujacaAkcja, ustawOczekujacaAkcje] = useState<AkcjaDoPotwierdzeniaEcho>()
   const [bladGlosu, ustawBladGlosu] = useState('')
   const { dane: dziennik } = useRepozytorium('dziennikEcho')
 
-  const wyslij = async (polecenie: string, potwierdzone = false) => {
-    if (!polecenie.trim()) return
-    if (!potwierdzone) ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'uzytkownik', tresc: polecenie }])
-    ustawTekst('')
-    const odpowiedz = await echo.obsluz(polecenie, potwierdzone)
+  const dodajOdpowiedz = (odpowiedz: Awaited<ReturnType<EchoService['obsluz']>>) => {
+    ustawTryb(odpowiedz.tryb)
     ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'echo', tresc: odpowiedz.tekst, ryzyko: odpowiedz.ryzyko }])
-    if (odpowiedz.wymagaPotwierdzenia) ustawOczekujacePolecenie(odpowiedz.polecenieDoPotwierdzenia)
+    ustawOczekujacaAkcje(odpowiedz.akcjaDoPotwierdzenia)
+  }
+
+  const wyslij = async (wypowiedz: string, zrodlo: ZrodloWejsciaEcho = 'tekst') => {
+    if (!wypowiedz.trim()) return
+    ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'uzytkownik', tresc: wypowiedz }])
+    ustawTekst('')
+    dodajOdpowiedz(await echo.obsluz(wypowiedz, zrodlo))
   }
 
   const rozpocznijGlos = () => {
     const Konstruktor = (window as unknown as { webkitSpeechRecognition?: new () => RozpoznawanieMowy; SpeechRecognition?: new () => RozpoznawanieMowy }).SpeechRecognition
       ?? (window as unknown as { webkitSpeechRecognition?: new () => RozpoznawanieMowy }).webkitSpeechRecognition
-    if (!Konstruktor) return ustawBladGlosu('Ta przeglądarka nie udostępnia rozpoznawania mowy. Echo działa w pełni tekstowo.')
+    if (!Konstruktor) return ustawBladGlosu('Rozpoznawanie mowy nie jest dostępne. Możesz kontynuować tę samą rozmowę tekstowo.')
     const rozpoznawanie = new Konstruktor()
-    rozpoznawanie.lang = 'pl-PL'; rozpoznawanie.continuous = false; rozpoznawanie.interimResults = false
-    rozpoznawanie.onresult = (zdarzenie) => ustawTekst(zdarzenie.results[0]?.[0]?.transcript ?? '')
-    rozpoznawanie.onerror = () => ustawBladGlosu('Nie udało się rozpoznać mowy. Wpisz polecenie tekstowo.')
+    rozpoznawanie.lang = 'pl-PL'
+    rozpoznawanie.continuous = false
+    rozpoznawanie.interimResults = false
+    rozpoznawanie.onresult = (zdarzenie) => {
+      const transkrypcja = zdarzenie.results[0]?.[0]?.transcript ?? ''
+      if (transkrypcja) void wyslij(transkrypcja, 'stt')
+    }
+    rozpoznawanie.onerror = () => ustawBladGlosu('Nie udało się rozpoznać mowy. Możesz kontynuować rozmowę tekstowo.')
     rozpoznawanie.start()
   }
 
   const przeczytaj = (tresc: string) => {
-    if (!('speechSynthesis' in window)) return ustawBladGlosu('Synteza mowy nie jest dostępna w tej przeglądarce.')
+    if (!('speechSynthesis' in window)) return ustawBladGlosu('Odczytywanie odpowiedzi nie jest dostępne na tym urządzeniu.')
     speechSynthesis.speak(new SpeechSynthesisUtterance(tresc))
   }
 
-  return <div className="widok widok-echo"><NaglowekWidoku tytul="Echo" opis="Lokalny, deterministyczny asystent bez zewnętrznego API. Dane nie opuszczają tej przeglądarki." /><section className="siatka-echo"><Karta klasa="panel-rozmowy"><div className="wiadomosci">{wiadomosci.map((wiadomosc) => <article className={`wiadomosc wiadomosc--${wiadomosc.autor}`} key={wiadomosc.id}>{wiadomosc.autor === 'echo' && <Bot aria-hidden="true" />}<div><p>{wiadomosc.tresc}</p>{wiadomosc.ryzyko && <Znacznik wariant={wiadomosc.ryzyko === 'wysokie' ? 'blad' : wiadomosc.ryzyko === 'umiarkowane' ? 'ostrzezenie' : 'neutralny'}>ryzyko: {wiadomosc.ryzyko}</Znacznik>}{wiadomosc.autor === 'echo' && <button type="button" className="przycisk-ikona" title="Odczytaj odpowiedź" onClick={() => przeczytaj(wiadomosc.tresc)}><Volume2 aria-hidden="true" /></button>}</div></article>)}</div>{bladGlosu && <p className="tekst-bledu">{bladGlosu}</p>}<form className="formularz-echo" onSubmit={(e: FormEvent) => { e.preventDefault(); wyslij(tekst) }}><button type="button" className="przycisk-ikona" title="Naciśnij i powiedz" onClick={rozpocznijGlos}><Mic aria-hidden="true" /></button><input value={tekst} onChange={(e) => ustawTekst(e.target.value)} placeholder="np. co jest najpilniejsze?" /><button type="submit" className="przycisk przycisk--glowny"><Send aria-hidden="true" />Wyślij</button></form></Karta><aside className="kolumna-echo"><Karta><h2>Przykładowe polecenia</h2><div className="sugestie-echo">{['co jeszcze dzisiaj?', 'jakie mam zaległości?', 'co jest najpilniejsze?', 'ile mam wolnego czasu?', 'zadanie kup karmę', 'notatka pomysł na weekend', 'przełóż raport na jutro'].map((sugestia) => <button type="button" onClick={() => ustawTekst(sugestia)} key={sugestia}>{sugestia}</button>)}</div></Karta><Karta><h2><ShieldCheck aria-hidden="true" /> Kontrola działań</h2><p>Niskie ryzyko jest wykonywane od razu. Zmiany harmonogramu wymagają potwierdzenia. Operacje wrażliwe są kierowane do właściwego ekranu.</p></Karta><Karta><h2>Ostatnie działania</h2>{dziennik.length === 0 ? <p className="tekst-pomocniczy">Brak działań automatycznych.</p> : dziennik.slice(0, 6).map((wpis) => <div className="wpis-audytu" key={wpis.id}><strong>{wpis.opis}</strong><small>{new Date(wpis.createdAt).toLocaleString('pl-PL')} · {wpis.wynik}</small></div>)}</Karta></aside></section>{oczekujacePolecenie && <ModalPotwierdzenia tytul="Potwierdź działanie Echo" opis={`Echo chce wykonać: „${oczekujacePolecenie}”. Ta zmiana wpływa na harmonogram.`} etykietaAkcji="Potwierdź i wykonaj" anuluj={() => ustawOczekujacePolecenie(undefined)} potwierdz={async () => { const polecenie = oczekujacePolecenie; ustawOczekujacePolecenie(undefined); await wyslij(polecenie, true) }} />}</div>
+  const potwierdz = async () => {
+    if (!oczekujacaAkcja) return
+    const akcja = oczekujacaAkcja
+    ustawOczekujacaAkcje(undefined)
+    dodajOdpowiedz(await echo.potwierdz(akcja))
+  }
+
+  const anuluj = () => {
+    echo.anulujPotwierdzenie()
+    ustawOczekujacaAkcje(undefined)
+  }
+
+  const sugestie = [
+    'Co mam jeszcze dzisiaj do zrobienia?',
+    'Przypomnij mi jutro po pracy o zakupach.',
+    'Czy dam radę wcisnąć jutro mechanika?',
+    'Przełóż te mniej ważne rzeczy na weekend.',
+    'Kiedy ostatnio byłem u dentysty?',
+    'Mam w tym miesiącu jakieś większe wydatki?',
+  ]
+
+  return <div className="widok widok-echo">
+    <NaglowekWidoku tytul="Echo" opis="Napisz albo powiedz, co masz na głowie. Z Echo możesz rozmawiać normalnie." />
+    <section className="siatka-echo">
+      <Karta klasa="panel-rozmowy">
+        <div className="wiadomosci">
+          {wiadomosci.map((wiadomosc) => <article className={`wiadomosc wiadomosc--${wiadomosc.autor}`} key={wiadomosc.id}>
+            {wiadomosc.autor === 'echo' && <Bot aria-hidden="true" />}
+            <div><p>{wiadomosc.tresc}</p>{wiadomosc.ryzyko && wiadomosc.ryzyko !== 'niskie' && <Znacznik wariant={wiadomosc.ryzyko === 'wysokie' ? 'blad' : 'ostrzezenie'}>wymaga uwagi</Znacznik>}{wiadomosc.autor === 'echo' && <button type="button" className="przycisk-ikona" title="Odczytaj odpowiedź" onClick={() => przeczytaj(wiadomosc.tresc)}><Volume2 aria-hidden="true" /></button>}</div>
+          </article>)}
+        </div>
+        {bladGlosu && <p className="tekst-bledu">{bladGlosu}</p>}
+        <form className="formularz-echo" onSubmit={(zdarzenie: FormEvent) => { zdarzenie.preventDefault(); void wyslij(tekst) }}>
+          <button type="button" className="przycisk-ikona" title="Powiedz do Echo" onClick={rozpocznijGlos}><Mic aria-hidden="true" /></button>
+          <input value={tekst} onChange={(zdarzenie) => ustawTekst(zdarzenie.target.value)} placeholder="Co masz na głowie?" />
+          <button type="submit" className="przycisk przycisk--glowny"><Send aria-hidden="true" />Wyślij</button>
+        </form>
+      </Karta>
+      <aside className="kolumna-echo">
+        <Karta><h2>Tryb rozmowy</h2><Znacznik wariant={tryb === 'pelny_agent' ? 'sukces' : 'ostrzezenie'}>{tryb === 'pelny_agent' ? 'Pełny agent' : 'Tryb podstawowy'}</Znacznik>{tryb === 'ograniczony_lokalny' && <p className="tekst-pomocniczy">Echo zachowa kontekst rozmowy, ale nie będzie zgadywać znaczenia wypowiedzi ani wykonywać niepewnych działań.</p>}</Karta>
+        <Karta><h2>Możesz powiedzieć na przykład</h2><div className="sugestie-echo">{sugestie.map((sugestia) => <button type="button" onClick={() => ustawTekst(sugestia)} key={sugestia}>{sugestia}</button>)}</div></Karta>
+        <Karta><h2><ShieldCheck aria-hidden="true" /> Kontrola działań</h2><p>Echo może proponować zmiany. Działania o podwyższonym ryzyku wykona dopiero po Twoim potwierdzeniu.</p></Karta>
+        <Karta><h2>Ostatnie działania</h2>{dziennik.length === 0 ? <p className="tekst-pomocniczy">Echo nie wykonało jeszcze żadnych działań.</p> : dziennik.slice(0, 6).map((wpis) => <div className="wpis-audytu" key={wpis.id}><strong>{wpis.opis}</strong><small>{new Date(wpis.createdAt).toLocaleString('pl-PL')} · {wpis.wynik}</small></div>)}</Karta>
+      </aside>
+    </section>
+    {oczekujacaAkcja && <ModalPotwierdzenia tytul="Potwierdź działanie Echo" opis={oczekujacaAkcja.opis} etykietaAkcji="Potwierdź i wykonaj" niebezpieczne={oczekujacaAkcja.ryzyko === 'wysokie'} anuluj={anuluj} potwierdz={potwierdz} />}
+  </div>
 }

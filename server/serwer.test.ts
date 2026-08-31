@@ -38,3 +38,33 @@ test('healthcheck nie ujawnia konfiguracji ani sekretów', async () => {
   await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
   baza.close()
 })
+
+test('endpoint Echo realizuje kontrakt bez dostępu klienta do modelu', async () => {
+  const baza = new DatabaseSync(':memory:')
+  const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ PORT: '8788', DATABASE_PATH: ':memory:' }), baza, async (wiadomosc) => ({
+    rozmowaId: wiadomosc.rozmowaId ?? 'nowa-rozmowa',
+    tryb: 'pelny_agent',
+    odpowiedz: `Przyjęto przez ${wiadomosc.zrodlo}.`,
+  }))
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/api/echo/message`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wiadomosc: 'Co mam jutro?', zrodlo: 'stt' }) })
+  assert.equal(odpowiedz.status, 200)
+  assert.deepEqual(await odpowiedz.json(), { rozmowaId: 'nowa-rozmowa', tryb: 'pelny_agent', odpowiedz: 'Przyjęto przez stt.' })
+  await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+  baza.close()
+})
+
+test('endpoint Echo bez providera zwraca kontrolowany tryb ograniczony', async () => {
+  const baza = new DatabaseSync(':memory:')
+  const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ PORT: '8788', DATABASE_PATH: ':memory:' }), baza)
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/api/echo/message`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wiadomosc: 'Cześć' }) })
+  assert.equal(odpowiedz.status, 503)
+  assert.deepEqual(await odpowiedz.json(), { status: 'niedostepny', tryb: 'ograniczony_lokalny', odpowiedz: 'Pełna rozmowa z Echo nie jest jeszcze dostępna.' })
+  await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+  baza.close()
+})
