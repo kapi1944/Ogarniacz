@@ -39,6 +39,7 @@ export interface DaneUdostepniania {
   tytul?: string
   tekst?: string
   adres?: string
+  pliki?: string[]
 }
 
 export interface PlatformaOgarniacza {
@@ -61,6 +62,7 @@ export interface PlatformaOgarniacza {
   }
   pliki: {
     zapisz: (nazwa: string, dane: Blob) => Promise<boolean>
+    zapiszTymczasowo: (nazwa: string, dane: Blob) => Promise<string | undefined>
   }
   udostepnianie: {
     dostepne: () => boolean

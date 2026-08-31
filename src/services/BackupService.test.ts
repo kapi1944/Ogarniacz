@@ -1,10 +1,13 @@
 import Dexie from 'dexie'
-import { beforeEach, describe, expect, it } from 'vitest'
+// Vitest uruchamia test w JSDOM, a fake-indexeddb potrzebuje natywnego Blob z Node.
+// @ts-expect-error Projekt przeglądarkowy celowo nie dołącza globalnych typów Node.
+import { Blob as BlobWezla } from 'node:buffer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { utworzMetadane } from '../domain/fabryki'
-import type { ElementSkrzynki, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Rachunek, Wizyta, Zadanie } from '../domain/typy'
+import type { Dokument, ElementSkrzynki, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Rachunek, Wizyta, Zadanie } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 import {
   checksumJestPoprawny,
@@ -27,6 +30,17 @@ async function przygotuj(backup: OgarniaczBackup): Promise<OgarniaczBackup> {
   return przygotujBackupDoPrzywracania(JSON.stringify(backup))
 }
 
+async function odczytajTekstBlobu(blob: Blob): Promise<string> {
+  const zTekstem = blob as Blob & { text?: () => Promise<string> }
+  if (zTekstem.text) return zTekstem.text()
+  return new Promise((rozwiaz, odrzuc) => {
+    const czytnik = new FileReader()
+    czytnik.onerror = () => odrzuc(czytnik.error)
+    czytnik.onload = () => rozwiaz(String(czytnik.result))
+    czytnik.readAsText(blob)
+  })
+}
+
 async function zmienManifest(
   backup: OgarniaczBackup,
   zmiana: (manifest: Record<string, unknown>) => void,
@@ -40,9 +54,14 @@ async function zmienManifest(
 
 describe.sequential('wersjonowany backup i bezpieczne restore', () => {
   beforeEach(async () => {
+    vi.stubGlobal('Blob', BlobWezla)
     baza.close()
     await Dexie.delete('ogarniacz-v1')
     await inicjalizujBaze()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('buduje kompletny manifest aktualnego formatu', async () => {
@@ -189,6 +208,53 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     expect(await notatki.lista()).toEqual(backup.payload.notatki?.notatki)
   })
 
+  it('przenosi dokumenty, Bloby i pełne metadane encji bez zapisu Base64 w IndexedDB', async () => {
+    const dokument: Dokument = {
+      id: 'dokument-1',
+      createdAt: '2026-08-01T08:00:00.000Z',
+      updatedAt: '2026-08-02T09:00:00.000Z',
+      nazwa: 'Instrukcja',
+      nazwaPliku: 'instrukcja.txt',
+      mimeType: 'text/plain',
+      rozmiar: 17,
+      plik: new Blob(['Treść dokumentu'], { type: 'text/plain' }),
+      powiazania: [],
+    }
+    const usuniety: Dokument = {
+      ...dokument,
+      id: 'dokument-usuniety',
+      nazwa: 'Usunięty dokument',
+      usunietoAt: '2026-08-03T10:00:00.000Z',
+    }
+    await baza.tabela('dokumenty').bulkPut([dokument, usuniety])
+
+    const backup = await utworzBackup(['dokumenty'], () => STALA_DATA)
+    const transportowyPlik = backup.payload.dokumenty?.dokumenty[0].plik as Record<string, unknown>
+    expect(transportowyPlik).toMatchObject({ __ogarniaczBlob: true, mimeType: 'text/plain' })
+    expect(typeof transportowyPlik.base64).toBe('string')
+
+    await baza.tabela('dokumenty').clear()
+    await przywrocBackup(await przygotuj(backup), ['dokumenty'])
+
+    const przywrocony = await baza.tabela('dokumenty').get(dokument.id)
+    const przywroconyUsuniety = await baza.tabela('dokumenty').get(usuniety.id)
+    expect(przywrocony).toMatchObject({
+      id: dokument.id,
+      createdAt: dokument.createdAt,
+      updatedAt: dokument.updatedAt,
+    })
+    expect(przywrocony?.plik).toBeInstanceOf(Blob)
+    expect(przywrocony?.plik?.type).toBe('text/plain')
+    expect(await odczytajTekstBlobu(przywrocony!.plik!)).toBe('Treść dokumentu')
+    expect(przywroconyUsuniety).toMatchObject({
+      id: usuniety.id,
+      createdAt: usuniety.createdAt,
+      updatedAt: usuniety.updatedAt,
+      usunietoAt: usuniety.usunietoAt,
+    })
+    expect(przywrocony?.plik).not.toHaveProperty('__ogarniaczBlob')
+  })
+
   it('finalnie odzyskuje krytyczne dane wielu kategorii i tworzy pre-restore backup', async () => {
     const zadanie = utworzZadanie({ tytul: 'Recovery zadanie', opis: '', priorytet: 'wysoki' })
     const notatka = utworzNotatke('Recovery notatka')
@@ -248,7 +314,7 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
 
     expect(JSON.stringify(stary)).toBe(wejscie)
     expect(zmigrowany.manifest).toMatchObject({
-      formatVersion: 2,
+      formatVersion: WERSJA_FORMATU_BACKUPU,
       dexieSchemaVersion: WERSJA_SCHEMATU_BAZY,
       backupType: 'export',
     })
@@ -258,12 +324,16 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
   it('zachowuje zgodność backupu v2 utworzonego na schemacie Dexie v4', async () => {
     const aktualny = await utworzBackup(['zadania'], () => STALA_DATA)
     const zEtapu9B = await zmienManifest(aktualny, (manifest) => {
+      manifest.formatVersion = 2
       manifest.dexieSchemaVersion = 4
+      delete manifest.installationId
     })
 
     const przygotowany = await przygotujBackupDoPrzywracania(JSON.stringify(zEtapu9B))
 
+    expect(przygotowany.manifest.formatVersion).toBe(WERSJA_FORMATU_BACKUPU)
     expect(przygotowany.manifest.dexieSchemaVersion).toBe(4)
+    expect(przygotowany.manifest.installationId).toMatch(/^legacy-/)
     expect(await checksumJestPoprawny(przygotowany)).toBe(true)
   })
 

@@ -1,11 +1,11 @@
 import { z } from 'zod'
 import { baza, nazwyTabel, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
-import { pobierzRepozytorium } from '../data/Repozytorium'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { normalizujUstawienia, WERSJA_USTAWIEN } from '../domain/ustawienia'
 import type { NazwaTabeli } from '../domain/typy'
+import { pobierzInstallationId } from './InstallationService'
 
-export const WERSJA_FORMATU_BACKUPU = 2
+export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
 const WERSJA_APLIKACJI = '1.0.0'
 
@@ -19,6 +19,7 @@ export const SEKCJE_BACKUPU = [
   { nazwa: 'finanse', etykieta: 'Finanse i rachunki' },
   { nazwa: 'samochod', etykieta: 'Samochód' },
   { nazwa: 'zakupy', etykieta: 'Zakupy' },
+  { nazwa: 'dokumenty', etykieta: 'Dokumenty i pliki' },
   { nazwa: 'historia', etykieta: 'Historia ważnych zmian' },
 ] as const
 
@@ -35,6 +36,7 @@ export interface ManifestBackupu {
   createdAt: string
   appVersion: string
   dexieSchemaVersion: number
+  installationId: string
   backupType: TypBackupu
   sections: NazwaSekcjiBackupu[]
   recordCounts: Partial<Record<NazwaSekcjiBackupu, number>>
@@ -70,6 +72,7 @@ interface SurowyManifest {
   createdAt: string
   appVersion: string
   dexieSchemaVersion?: number
+  installationId?: string
   backupType?: TypBackupu
   sections: string[]
   recordCounts: Record<string, number>
@@ -87,7 +90,13 @@ const schematEncji = z.object({
   id: z.string().min(1),
   createdAt: z.string().min(1),
   updatedAt: z.string().min(1),
+  usunietoAt: z.string().min(1).optional(),
 }).passthrough()
+const schematTransportowegoBlobu = z.object({
+  __ogarniaczBlob: z.literal(true),
+  mimeType: z.string(),
+  base64: z.string(),
+}).strict()
 
 const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
   ustawienia: schematEncji.extend({
@@ -171,6 +180,11 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     ilosc: z.string(),
     kupione: z.boolean(),
   }),
+  dokumenty: schematEncji.extend({
+    nazwa: z.string(),
+    powiazania: z.array(z.unknown()),
+    plik: schematTransportowegoBlobu.optional(),
+  }),
   historiaZmian: schematEncji.extend({
     modul: z.enum(['finanse', 'leki', 'wizyty', 'samochod', 'zadania']),
     typEncji: z.string(),
@@ -189,6 +203,7 @@ const schematSurowegoBackupu = z.object({
     createdAt: z.string().min(1),
     appVersion: z.string().min(1),
     dexieSchemaVersion: z.number().int().positive().optional(),
+    installationId: z.string().min(1).optional(),
     backupType: z.enum(['export', 'before-restore']).optional(),
     sections: z.array(z.string()),
     recordCounts: z.record(z.string(), z.number().int().nonnegative()),
@@ -198,14 +213,92 @@ const schematSurowegoBackupu = z.object({
   payload: z.record(z.string(), z.unknown()),
 }).strict()
 
-function oczyscWartosc(wartosc: unknown): unknown {
-  if (Array.isArray(wartosc)) return wartosc.map(oczyscWartosc)
+function bajtyNaBase64(bajty: Uint8Array): string {
+  const alfabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let wynik = ''
+  for (let indeks = 0; indeks < bajty.length; indeks += 3) {
+    const pierwszy = bajty[indeks] ?? 0
+    const drugi = bajty[indeks + 1] ?? 0
+    const trzeci = bajty[indeks + 2] ?? 0
+    const liczba = (pierwszy << 16) | (drugi << 8) | trzeci
+    wynik += alfabet[(liczba >> 18) & 63]
+    wynik += alfabet[(liczba >> 12) & 63]
+    wynik += indeks + 1 < bajty.length ? alfabet[(liczba >> 6) & 63] : '='
+    wynik += indeks + 2 < bajty.length ? alfabet[liczba & 63] : '='
+  }
+  return wynik
+}
+
+function base64NaBajty(base64: string): Uint8Array {
+  const alfabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  const oczyszczony = base64.replace(/=+$/, '')
+  const wynik = new Uint8Array(Math.floor((oczyszczony.length * 6) / 8))
+  let bufor = 0
+  let liczbaBitow = 0
+  let indeksWyniku = 0
+  for (const znak of oczyszczony) {
+    const wartosc = alfabet.indexOf(znak)
+    if (wartosc < 0) throw new BladBackupu('Backup zawiera niepoprawne dane pliku.', 'MODEL_DANYCH')
+    bufor = (bufor << 6) | wartosc
+    liczbaBitow += 6
+    if (liczbaBitow >= 8) {
+      liczbaBitow -= 8
+      wynik[indeksWyniku] = (bufor >> liczbaBitow) & 255
+      indeksWyniku += 1
+    }
+  }
+  return wynik
+}
+
+async function odczytajBajty(blob: Blob): Promise<Uint8Array> {
+  const zArrayBuffer = blob as Blob & { arrayBuffer?: () => Promise<ArrayBuffer> }
+  if (zArrayBuffer.arrayBuffer) return new Uint8Array(await zArrayBuffer.arrayBuffer())
+  return new Promise((rozwiaz, odrzuc) => {
+    const czytnik = new FileReader()
+    czytnik.onerror = () => odrzuc(czytnik.error)
+    czytnik.onload = () => rozwiaz(new Uint8Array(czytnik.result as ArrayBuffer))
+    czytnik.readAsArrayBuffer(blob)
+  })
+}
+
+function czyBlob(wartosc: unknown): wartosc is Blob {
+  return wartosc instanceof Blob || Object.prototype.toString.call(wartosc) === '[object Blob]'
+}
+
+async function przygotujWartoscDoTransportu(wartosc: unknown): Promise<unknown> {
+  if (czyBlob(wartosc)) {
+    return {
+      __ogarniaczBlob: true,
+      mimeType: wartosc.type,
+      base64: bajtyNaBase64(await odczytajBajty(wartosc)),
+    }
+  }
+  if (Array.isArray(wartosc)) return Promise.all(wartosc.map(przygotujWartoscDoTransportu))
   if (wartosc && typeof wartosc === 'object') {
     return Object.fromEntries(
-      Object.entries(wartosc)
+      await Promise.all(Object.entries(wartosc)
         .filter(([klucz]) => !niedozwoloneKlucze.test(klucz))
-        .map(([klucz, element]) => [klucz, oczyscWartosc(element)]),
+        .map(async ([klucz, element]) => [klucz, await przygotujWartoscDoTransportu(element)] as const)),
     )
+  }
+  return wartosc
+}
+
+function odtworzWartoscZTransportu(wartosc: unknown): unknown {
+  if (Array.isArray(wartosc)) return wartosc.map(odtworzWartoscZTransportu)
+  if (wartosc && typeof wartosc === 'object') {
+    const rekord = wartosc as Record<string, unknown>
+    if (
+      rekord.__ogarniaczBlob === true
+      && typeof rekord.mimeType === 'string'
+      && typeof rekord.base64 === 'string'
+    ) {
+      const bajty = base64NaBajty(rekord.base64)
+      const bufor = new ArrayBuffer(bajty.byteLength)
+      new Uint8Array(bufor).set(bajty)
+      return new Blob([bufor], { type: rekord.mimeType })
+    }
+    return Object.fromEntries(Object.entries(rekord).map(([klucz, element]) => [klucz, odtworzWartoscZTransportu(element)]))
   }
   return wartosc
 }
@@ -231,7 +324,7 @@ function zrodloRepozytoriow(nazwa: NazwaSekcjiBackupu, tabele: NazwaTabeli[]): D
     wersjaSchematu: 1,
     tabele,
     pobierz: async () => Object.fromEntries(
-      await Promise.all(tabele.map(async (tabela) => [tabela, await pobierzRepozytorium(tabela).lista()])),
+      await Promise.all(tabele.map(async (tabela) => [tabela, await baza.tabela(tabela).toArray()])),
     ) as DaneSekcji,
   }
 }
@@ -251,6 +344,7 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'budzety']),
   zrodloRepozytoriow('samochod', ['pojazdy']),
   zrodloRepozytoriow('zakupy', ['listyZakupow', 'pozycjeZakupow']),
+  zrodloRepozytoriow('dokumenty', ['dokumenty']),
   zrodloRepozytoriow('historia', ['historiaZmian']),
 ]
 
@@ -295,7 +389,7 @@ export async function utworzBackup(
   for (const nazwa of unikalneSekcje) {
     const zrodlo = definicjeSekcji.find((element) => element.nazwa === nazwa)!
     try {
-      const dane = oczyscWartosc(await zrodlo.pobierz()) as DaneSekcji
+      const dane = await przygotujWartoscDoTransportu(await zrodlo.pobierz()) as DaneSekcji
       payload[nazwa] = dane
       recordCounts[nazwa] = Object.values(dane).reduce((suma, rekordy) => suma + rekordy.length, 0)
       schemaVersions[nazwa] = zrodlo.wersjaSchematu
@@ -309,6 +403,7 @@ export async function utworzBackup(
     createdAt: teraz(),
     appVersion: WERSJA_APLIKACJI,
     dexieSchemaVersion: WERSJA_SCHEMATU_BAZY,
+    installationId: pobierzInstallationId(),
     backupType: typBackupu,
     sections: unikalneSekcje,
     recordCounts,
@@ -335,7 +430,7 @@ function sprawdzKompatybilnosc(surowy: SurowyBackup): void {
   if (glownaWersjaAplikacji !== 1) {
     throw new BladBackupu(`Backup pochodzi z niekompatybilnej wersji aplikacji: ${surowy.manifest.appVersion}.`, 'WERSJA_APLIKACJI')
   }
-  if (wersja === WERSJA_FORMATU_BACKUPU) {
+  if (wersja >= 2) {
     if (![4, WERSJA_SCHEMATU_BAZY].includes(surowy.manifest.dexieSchemaVersion ?? -1)) {
       throw new BladBackupu('Backup ma nieobsługiwaną wersję schematu danych.', 'WERSJA_SCHEMATU_BAZY')
     }
@@ -354,9 +449,22 @@ async function migrujBackupV1DoV2(staryBackup: SurowyBackup): Promise<SurowyBack
   return { manifest: { ...manifest, checksum }, payload: structuredClone(staryBackup.payload) }
 }
 
+async function migrujBackupV2DoV3(staryBackup: SurowyBackup): Promise<SurowyBackup> {
+  const { checksum: staryChecksum, ...staryManifest } = staryBackup.manifest
+  const manifest = {
+    ...staryManifest,
+    formatVersion: 3,
+    installationId: staryBackup.manifest.installationId ?? `legacy-${staryChecksum.slice(7, 39)}`,
+  }
+  const checksum = await obliczChecksum({ manifest, payload: staryBackup.payload })
+  return { manifest: { ...manifest, checksum }, payload: structuredClone(staryBackup.payload) }
+}
+
 async function migrujDoAktualnejWersji(surowy: SurowyBackup): Promise<SurowyBackup> {
-  if (surowy.manifest.formatVersion === 1) return migrujBackupV1DoV2(surowy)
-  return structuredClone(surowy)
+  let migrowany = structuredClone(surowy)
+  if (migrowany.manifest.formatVersion === 1) migrowany = await migrujBackupV1DoV2(migrowany)
+  if (migrowany.manifest.formatVersion === 2) migrowany = await migrujBackupV2DoV3(migrowany)
+  return migrowany
 }
 
 function walidujSekcje(backup: SurowyBackup, wybraneSekcje: readonly NazwaSekcjiBackupu[]): void {
@@ -410,6 +518,7 @@ function walidujCaloscBackupu(backup: SurowyBackup): OgarniaczBackup {
   if (
     backup.manifest.formatVersion !== WERSJA_FORMATU_BACKUPU
     || ![4, WERSJA_SCHEMATU_BAZY].includes(backup.manifest.dexieSchemaVersion ?? -1)
+    || !backup.manifest.installationId
     || !backup.manifest.backupType
   ) {
     throw new BladBackupu('Backup nie został poprawnie doprowadzony do aktualnego formatu.', 'STRUKTURA_MANIFESTU')
@@ -492,7 +601,7 @@ export async function przywrocBackup(
       const rekordy = daneSekcji[tabela]
       daneDoZapisu.set(tabela, tabela === 'ustawienia'
         ? rekordy.map((rekord) => normalizujUstawienia(rekord) as unknown as RekordBackupu)
-        : structuredClone(rekordy))
+        : rekordy.map((rekord) => odtworzWartoscZTransportu(rekord) as RekordBackupu))
     }
   }
 

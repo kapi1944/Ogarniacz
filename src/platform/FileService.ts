@@ -27,5 +27,19 @@ export function utworzUslugePlikow(czyAndroid: boolean) {
         return false
       }
     },
+    async zapiszTymczasowo(nazwa: string, dane: Blob) {
+      if (!czyAndroid) return undefined
+      try {
+        const wynik = await Filesystem.writeFile({
+          path: nazwa,
+          data: await dane.text(),
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        })
+        return wynik.uri
+      } catch {
+        return undefined
+      }
+    },
   }
 }

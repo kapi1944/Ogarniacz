@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Bell, Database, Download, History as IkonaHistorii, Shield, Sparkles, Upload, UserCog } from 'lucide-react'
+import { Bell, Database, Download, History as IkonaHistorii, Share2, Shield, Sparkles, Upload, UserCog } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { WidokRejestru } from '../../components/WidokRejestru'
@@ -12,6 +12,7 @@ import { PODSTAWOWE_SEKCJE_BACKUPU, przygotujBackupDoPrzywracania, przywrocBacku
 import { czyMoznaWczytacDemo, wczytajDaneDemonstracyjne } from '../../services/DaneDemonstracyjneService'
 import { importujUstawienia, utworzEksportUstawien } from '../../services/TransferUstawienService'
 import { pobierzNajnowszaHistorie } from '../../services/HistoriaZmianService'
+import { pobierzInstallationId } from '../../services/InstallationService'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { platforma } from '../../platform/platforma'
 import type { StanPowiadomienPlatformy, StanZgody } from '../../platform/typy'
@@ -49,6 +50,7 @@ export function WidokUstawien() {
   const [nowyEdytor, ustawNowegoEdytora] = useState('')
   const [grant, ustawGrant] = useState({ editorId: '', modul: 'zadania' as NazwaModulu, odczyt: true, edycja: false })
   const [stanPowiadomien, ustawStanPowiadomien] = useState<StanPowiadomienPlatformy>()
+  const installationId = pobierzInstallationId()
 
   useEffect(() => {
     czyMoznaWczytacDemo().then(ustawMoznaDemo)
@@ -63,7 +65,7 @@ export function WidokUstawien() {
     try {
       const nowyBackup = await utworzBackup(wybraneSekcje)
       ustawBackup(nowyBackup)
-      ustawKomunikat('Backup został bezpiecznie utworzony. Możesz pobrać plik JSON.')
+      ustawKomunikat('Backup został bezpiecznie utworzony. Możesz zapisać lub udostępnić plik JSON.')
     } catch (bladBackupu) {
       ustawBlad(bladBackupu instanceof Error ? bladBackupu.message : 'Nie udało się utworzyć backupu.')
     } finally {
@@ -71,11 +73,24 @@ export function WidokUstawien() {
     }
   }
 
+  const utworzPlikJson = (dane: unknown) => new Blob([JSON.stringify(dane, null, 2)], { type: 'application/json' })
+
   const pobierzJson = async (dane: unknown, nazwa: string) => {
-    const plik = new Blob([JSON.stringify(dane, null, 2)], { type: 'application/json' })
+    const plik = utworzPlikJson(dane)
     const zapisano = await platforma.pliki.zapisz(nazwa, plik)
     if (!zapisano) ustawBlad('Nie udało się zapisać pliku.')
     else ustawKomunikat(platforma.natywna ? 'Plik zapisano w katalogu Dokumenty/Ogarniacz.' : 'Rozpoczęto pobieranie pliku.')
+  }
+
+  const udostepnijJson = async (dane: unknown, nazwa: string) => {
+    const adresPliku = await platforma.pliki.zapiszTymczasowo(nazwa, utworzPlikJson(dane))
+    if (!adresPliku) return ustawBlad('Nie udało się przygotować pliku do udostępnienia.')
+    const udostepniono = await platforma.udostepnianie.udostepnij({
+      tytul: 'Backup Ogarniacza',
+      tekst: 'Ręczny transfer danych Ogarniacza między urządzeniami.',
+      pliki: [adresPliku],
+    })
+    if (udostepniono) ustawKomunikat('Plik backupu przekazano do wybranej aplikacji.')
   }
 
   const zmienSekcjeBackupu = (nazwa: NazwaSekcjiBackupu, zaznaczona: boolean) => {
@@ -165,11 +180,13 @@ export function WidokUstawien() {
       <Karta><div className="tytul-karty"><Database aria-hidden="true" /><span>Dane lokalne</span></div><h2>IndexedDB</h2><p>Szacowane użycie pamięci tej witryny: <strong>{zajete}</strong>. Dane pozostają w profilu tej przeglądarki.</p><Link to="/grafik" className="przycisk przycisk--drugorzedny">Ustaw grafik pracy</Link></Karta>
     </section>
 
-    <Karta><div className="naglowek-karty"><div><h2>Dane / Backup</h2><p>Eksport i restore korzystają z wersjonowanego formatu, walidacji checksum oraz automatycznej kopii before-restore.</p></div></div>
+    <Karta><div className="naglowek-karty"><div><h2>Przenieś dane między urządzeniami</h2><p>Do czasu automatycznej synchronizacji transfer między desktopem/PWA i Androidem jest ręczny.</p></div></div><p>Na urządzeniu źródłowym utwórz wspólny backup, zapisz go lub udostępnij. Na urządzeniu docelowym wybierz ten sam plik JSON i potwierdź restore po walidacji.</p><p className="tekst-pomocniczy">Id tej instalacji: <code>{installationId}</code>. Jest losowe i nie korzysta z IMEI, Android ID ani identyfikatorów sprzętowych.</p></Karta>
+
+    <Karta><div className="naglowek-karty"><div><h2>Dane / Backup</h2><p>Desktop/PWA i Android używają tego samego wersjonowanego OgarniaczBackup, checksum oraz automatycznej kopii before-restore.</p></div></div>
       <div className="lista-sekcji-backupu">{SEKCJE_BACKUPU.map((sekcja) => <label key={sekcja.nazwa}><input type="checkbox" checked={wybraneSekcje.includes(sekcja.nazwa)} onChange={(e) => zmienSekcjeBackupu(sekcja.nazwa, e.target.checked)} /><span>{sekcja.etykieta}</span></label>)}</div>
-      <div className="akcje-backupu"><button type="button" className="przycisk przycisk--glowny" disabled={wybraneSekcje.length === 0 || tworzenieBackupu} onClick={przygotujBackup}>{tworzenieBackupu ? 'Tworzenie…' : 'Utwórz backup'}</button>{backup && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => pobierzJson(backup, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Download aria-hidden="true" />Pobierz plik JSON</button>}<label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Wybierz backup do restore<input className="sr-only" type="file" accept="application/json,.json" onChange={(e) => { wybierzPlikBackupu(e.target.files?.[0]); e.target.value = '' }} /></label></div>
+      <div className="akcje-backupu"><button type="button" className="przycisk przycisk--glowny" disabled={wybraneSekcje.length === 0 || tworzenieBackupu} onClick={przygotujBackup}>{tworzenieBackupu ? 'Tworzenie…' : 'Utwórz backup'}</button>{backup && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => pobierzJson(backup, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Download aria-hidden="true" />{platforma.natywna ? 'Zapisz plik JSON' : 'Pobierz plik JSON'}</button>}{backup && platforma.natywna && platforma.udostepnianie.dostepne() && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => udostepnijJson(backup, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Share2 aria-hidden="true" />Udostępnij backup</button>}<label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Wybierz backup do restore<input className="sr-only" type="file" accept="application/json,.json" onChange={(e) => { wybierzPlikBackupu(e.target.files?.[0]); e.target.value = '' }} /></label></div>
       {backup && <p className="tekst-pomocniczy">Utworzono: <strong>{new Date(backup.manifest.createdAt).toLocaleString('pl-PL')}</strong> · rekordów: <strong>{Object.values(backup.manifest.recordCounts).reduce((suma, liczba) => suma + (liczba ?? 0), 0)}</strong> · checksum: <code>{backup.manifest.checksum}</code></p>}
-      {backupDoPrzywracania && <div className="podglad-manifestu"><h3>Zweryfikowany manifest przed restore</h3><p>Format v{backupDoPrzywracania.manifest.formatVersion} · aplikacja {backupDoPrzywracania.manifest.appVersion} · Dexie v{backupDoPrzywracania.manifest.dexieSchemaVersion} · {new Date(backupDoPrzywracania.manifest.createdAt).toLocaleString('pl-PL')}</p><code>{backupDoPrzywracania.manifest.checksum}</code><div className="lista-sekcji-backupu">{backupDoPrzywracania.manifest.sections.map((nazwa) => <label key={nazwa}><input type="checkbox" checked={sekcjePrzywracania.includes(nazwa)} onChange={(e) => zmienSekcjePrzywracania(nazwa, e.target.checked)} /><span>{SEKCJE_BACKUPU.find((sekcja) => sekcja.nazwa === nazwa)?.etykieta} ({backupDoPrzywracania.manifest.recordCounts[nazwa] ?? 0})</span></label>)}</div><button type="button" className="przycisk przycisk--niebezpieczny" disabled={sekcjePrzywracania.length === 0} onClick={() => ustawPotwierdzeniePrzywracania(true)}>Przywróć wybrane sekcje</button></div>}
+      {backupDoPrzywracania && <div className="podglad-manifestu"><h3>Zweryfikowany manifest przed restore</h3><p>Format v{backupDoPrzywracania.manifest.formatVersion} · aplikacja {backupDoPrzywracania.manifest.appVersion} · Dexie v{backupDoPrzywracania.manifest.dexieSchemaVersion} · instalacja źródłowa {backupDoPrzywracania.manifest.installationId} · {new Date(backupDoPrzywracania.manifest.createdAt).toLocaleString('pl-PL')}</p><code>{backupDoPrzywracania.manifest.checksum}</code><div className="lista-sekcji-backupu">{backupDoPrzywracania.manifest.sections.map((nazwa) => <label key={nazwa}><input type="checkbox" checked={sekcjePrzywracania.includes(nazwa)} onChange={(e) => zmienSekcjePrzywracania(nazwa, e.target.checked)} /><span>{SEKCJE_BACKUPU.find((sekcja) => sekcja.nazwa === nazwa)?.etykieta} ({backupDoPrzywracania.manifest.recordCounts[nazwa] ?? 0})</span></label>)}</div><button type="button" className="przycisk przycisk--niebezpieczny" disabled={sekcjePrzywracania.length === 0} onClick={() => ustawPotwierdzeniePrzywracania(true)}>Przywróć wybrane sekcje</button></div>}
       {backupPrzedPrzywracaniem && <div className="kopia-before-restore"><strong>Kopia before-restore</strong><span>Pełny stan sprzed ostatniego przywracania.</span><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => pobierzJson(backupPrzedPrzywracaniem, `ogarniacz-before-restore-${backupPrzedPrzywracaniem.manifest.createdAt.slice(0, 10)}.json`)}><Download aria-hidden="true" />Pobierz kopię</button></div>}
       <div className="transfer-ustawien"><h3>Import / eksport samych ustawień</h3><p className="tekst-pomocniczy">Oddzielny format przechodzi przez normalizator AppSettings i nie uruchamia pełnego restore.</p><div className="akcje-backupu"><button type="button" className="przycisk przycisk--drugorzedny" onClick={eksportujSameUstawienia}><Download aria-hidden="true" />Eksportuj ustawienia</button><label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Importuj ustawienia<input className="sr-only" type="file" accept="application/json,.json" onChange={(e) => { wybierzPlikUstawien(e.target.files?.[0]); e.target.value = '' }} /></label></div></div>
     </Karta>

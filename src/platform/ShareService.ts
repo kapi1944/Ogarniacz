@@ -8,7 +8,7 @@ export function utworzUslugeUdostepniania(czyAndroid: boolean) {
       try {
         if (czyAndroid) {
           if (!(await Share.canShare()).value) return false
-          await Share.share({ title: dane.tytul, text: dane.tekst, url: dane.adres, dialogTitle: 'Udostępnij z Ogarniacza' })
+          await Share.share({ title: dane.tytul, text: dane.tekst, url: dane.adres, files: dane.pliki, dialogTitle: 'Udostępnij z Ogarniacza' })
           return true
         }
         if (typeof navigator.share !== 'function') return false
