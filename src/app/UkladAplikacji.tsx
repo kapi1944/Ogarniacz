@@ -7,6 +7,7 @@ import {
   Pill, Plus, Search, Settings, ShoppingCart, Sparkles, Sun, Target, WalletCards, X,
 } from 'lucide-react'
 import type { NazwaModulu } from '../domain/typy'
+import { useObslugaWstecz } from '../platform/obslugaWstecz'
 import { useAplikacja } from './KontekstAplikacji'
 
 interface PozycjaMenu {
@@ -65,6 +66,7 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
   const nazwaWidoku = wszystkiePozycje.find((pozycja) => pozycja.adres === pathname)?.etykieta ?? 'Ogarniacz'
 
   useEffect(() => ustawMenuMobilne(false), [pathname])
+  useObslugaWstecz(menuMobilne, () => ustawMenuMobilne(false), 80)
   useEffect(() => ustawZwiniete(ustawienia.nawigacja.menuDomyslnieZwiniete), [ustawienia.nawigacja.menuDomyslnieZwiniete])
   useEffect(() => {
     const klawisze = (zdarzenie: KeyboardEvent) => {

@@ -12,6 +12,7 @@ import { WidokSamochodu } from './modules/samochod/WidokSamochodu'
 import { WidokEcho } from './modules/echo/WidokEcho'
 import { WidokUstawien } from './modules/ustawienia/WidokUstawien'
 import { EdytorPersonalizacji } from './modules/ustawienia/EdytorPersonalizacji'
+import { NawigacjaPlatformy } from './platform/NawigacjaPlatformy'
 import type { NazwaModulu } from './domain/typy'
 
 const chron = (modul: NazwaModulu, element: React.ReactNode) => <StraznikModulu modul={modul}>{element}</StraznikModulu>
@@ -21,7 +22,7 @@ function NieZnaleziono() {
 }
 
 export default function App() {
-  return <BrowserRouter><DostawcaAplikacji><UkladAplikacji><Routes>
+  return <BrowserRouter><NawigacjaPlatformy /><DostawcaAplikacji><UkladAplikacji><Routes>
     <Route path="/" element={<WidokPulpitu />} />
     <Route path="/skrzynka" element={chron('skrzynka', <WidokSkrzynki />)} />
     <Route path="/zadania" element={chron('zadania', <WidokZadan />)} />

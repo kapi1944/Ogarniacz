@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { AlertTriangle, Inbox, X } from 'lucide-react'
+import { useObslugaWstecz } from '../platform/obslugaWstecz'
 
 export function NaglowekWidoku({ tytul, opis, akcje }: { tytul: string; opis?: string; akcje?: ReactNode }) {
   return (
@@ -33,6 +34,8 @@ export function Znacznik({ children, wariant = 'neutralny' }: { children: ReactN
 }
 
 export function Modal({ tytul, opis, children, zamknij, szeroki = false }: { tytul: string; opis?: string; children: ReactNode; zamknij: () => void; szeroki?: boolean }) {
+  useObslugaWstecz(true, zamknij, 100)
+
   return (
     <div className="modal-tlo" role="presentation" onMouseDown={(zdarzenie) => zdarzenie.target === zdarzenie.currentTarget && zamknij()}>
       <section className={`modal ${szeroki ? 'modal--szeroki' : ''}`} role="dialog" aria-modal="true" aria-labelledby="modal-tytul">

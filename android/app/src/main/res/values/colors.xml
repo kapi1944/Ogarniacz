@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#17665A</color>
+    <color name="colorPrimaryDark">#175C52</color>
+    <color name="colorAccent">#63C9B5</color>
+    <color name="ogarniacz_tlo_startu">#175C52</color>
+</resources>

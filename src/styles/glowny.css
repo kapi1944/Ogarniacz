@@ -61,6 +61,11 @@
 * { box-sizing: border-box; }
 html, body, #root { min-width: 320px; min-height: 100%; margin: 0; }
 body { min-height: 100vh; background: var(--tlo); color: var(--tekst); }
+:root[data-platforma="android"] body { min-height: 100dvh; }
+:root[data-platforma="android"] .sidebar { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+:root[data-platforma="android"] .pasek-gorny { padding-top: max(8px, env(safe-area-inset-top)); }
+:root[data-platforma="android"] .zawartosc { padding-bottom: max(clamp(16px, 2.4vw, 30px), env(safe-area-inset-bottom)); }
+:root[data-platforma="android"] .modal-tlo { padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
 button, input, select, textarea { font: inherit; }
 button, a, input, select, textarea { outline-color: var(--akcent); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--akcent) 38%, transparent); outline-offset: 2px; }
