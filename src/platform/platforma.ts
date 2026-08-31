@@ -32,7 +32,7 @@ export function inicjalizujPlatforme() {
   inicjalizacjaPlatformy ??= Promise.all([
     uslugaPowiadomien.inicjalizuj(),
     App.addListener('backButton', () => {
-      obsluzWstecz()
+      if (!obsluzWstecz()) void App.minimizeApp()
     }),
   ]).then(() => undefined)
 
