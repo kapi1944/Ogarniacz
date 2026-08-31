@@ -1,6 +1,7 @@
 import { LocalNotifications, type LocalNotificationSchema, type PendingLocalNotificationSchema } from '@capacitor/local-notifications'
-import type { NazwaModulu, Przypomnienie, PowiazanieEncji } from '../domain/typy'
+import type { Przypomnienie } from '../domain/typy'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
+import { sciezkaDlaSourceRef } from './trasy'
 import type {
   DanePowiadomienia,
   KanalPowiadomienia,
@@ -17,32 +18,6 @@ const KANALY = [
   { id: 'ogarniacz-finanse', name: 'Finanse', description: 'Rachunki i sprawy finansowe', importance: 3 as const, vibration: true },
 ]
 
-const SCIEZKI_MODULOW: Record<NazwaModulu, string> = {
-  zadania: '/zadania',
-  projekty: '/projekty',
-  skrzynka: '/skrzynka',
-  planer: '/planer',
-  grafik: '/grafik',
-  nawyki: '/nawyki',
-  leki: '/leki',
-  wizyty: '/wizyty',
-  przypomnienia: '/przypomnienia',
-  zakupy: '/zakupy',
-  rachunki: '/rachunki',
-  miasto: '/miasto',
-  cele: '/cele',
-  notatki: '/notatki',
-  pomysly: '/pomysly',
-  na_pozniej: '/na-pozniej',
-  kontakty: '/kontakty',
-  dokumenty: '/dokumenty',
-  finanse: '/finanse',
-  samochod: '/samochod',
-  terminy: '/terminy',
-  echo: '/echo',
-  ustawienia: '/ustawienia',
-}
-
 const STANY_DO_DOSTARCZENIA = new Set<Przypomnienie['stan']>(['nowe', 'dostarczone', 'odroczone', 'eskalowane'])
 
 function stanZgody(wartosc: string): StanZgody {
@@ -58,11 +33,6 @@ function identyfikatorPowiadomienia(tekst: string) {
     wynik = Math.imul(wynik, 16777619)
   }
   return wynik & 0x7fffffff
-}
-
-export function sciezkaDlaSourceRef(sourceRef: PowiazanieEncji | undefined, przypomnienieId: string) {
-  if (!sourceRef) return `/przypomnienia?element=${encodeURIComponent(przypomnienieId)}`
-  return `${SCIEZKI_MODULOW[sourceRef.typ]}?element=${encodeURIComponent(sourceRef.id)}`
 }
 
 function kanalDlaPrzypomnienia(przypomnienie: Przypomnienie): KanalPowiadomienia {
@@ -175,13 +145,15 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
         LocalNotifications.checkPermissions(),
         LocalNotifications.areEnabled(),
         LocalNotifications.listChannels(),
-        LocalNotifications.checkExactNotificationSetting(),
+        LocalNotifications.checkExactNotificationSetting()
+          .then((wynik) => stanZgody(wynik.exact_alarm))
+          .catch(() => 'niedostepna' as const),
       ])
       return {
         zgoda: stanZgody(zgoda.display),
         systemoweWlaczone: systemowe.value,
         kanalyGotowe: KANALY.every((wymagany) => kanaly.channels.some((kanal) => kanal.id === wymagany.id && kanal.importance !== 0)),
-        exactAlarms: stanZgody(exactAlarms.exact_alarm),
+        exactAlarms,
       }
     } catch {
       return { zgoda: 'niedostepna', systemoweWlaczone: false, kanalyGotowe: false, exactAlarms: 'niedostepna' }
@@ -208,8 +180,14 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     return true
   }
 
-  const czyExactAlarmsDostepne = async () =>
-    czyAndroid && (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'
+  const czyExactAlarmsDostepne = async () => {
+    if (!czyAndroid) return false
+    try {
+      return (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'
+    } catch {
+      return false
+    }
+  }
 
   const zaplanuj = async (powiadomienia: PowiadomieniePlatformowe[]) => {
     if (!czyAndroid || powiadomienia.length === 0) return

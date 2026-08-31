@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useRepozytorium } from '../hooks/useRepozytorium'
 import { aktywnePrzypomnienia } from '../services/PrzypomnieniaService'
-import { sciezkaDlaSourceRef } from '../platform/NotificationService'
 import { platforma } from '../platform/platforma'
+import { sciezkaDlaSourceRef } from '../platform/trasy'
 import { useAplikacja } from './KontekstAplikacji'
 
 export function SilnikPrzypomnien() {

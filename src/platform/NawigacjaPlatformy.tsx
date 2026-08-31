@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react'
+import { App } from '@capacitor/app'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useObslugaWstecz } from './obslugaWstecz'
 import { platforma } from './platforma'
+import { parsujDeepLink } from './trasy'
 
 export function NawigacjaPlatformy() {
   const polozenie = useLocation()
@@ -13,6 +15,34 @@ export function NawigacjaPlatformy() {
   }, [polozenie.key])
 
   useEffect(() => platforma.powiadomienia.nasluchujAkcji((sciezka) => nawiguj(sciezka)), [nawiguj])
+
+  useEffect(() => {
+    if (!platforma.natywna) return
+    let aktywna = true
+    let ostatniaTrasa: string | undefined
+    let wyczyscOstatniaTrase: ReturnType<typeof setTimeout> | undefined
+
+    const obsluzAdres = (adres: string) => {
+      if (!aktywna) return
+      const trasa = parsujDeepLink(adres)
+      if (!trasa || trasa === ostatniaTrasa) return
+      ostatniaTrasa = trasa
+      if (wyczyscOstatniaTrase) clearTimeout(wyczyscOstatniaTrase)
+      wyczyscOstatniaTrase = setTimeout(() => { ostatniaTrasa = undefined }, 2_000)
+      nawiguj(trasa)
+    }
+
+    const nasluchiwanie = App.addListener('appUrlOpen', ({ url }) => obsluzAdres(url))
+    void App.getLaunchUrl().then((wynik) => {
+      if (wynik?.url) obsluzAdres(wynik.url)
+    }).catch(() => undefined)
+
+    return () => {
+      aktywna = false
+      if (wyczyscOstatniaTrase) clearTimeout(wyczyscOstatniaTrase)
+      void nasluchiwanie.then((uchwyt) => uchwyt.remove())
+    }
+  }, [nawiguj])
 
   useObslugaWstecz(polozenie.pathname !== '/', () => {
     if (historia.current.length > 1) {
