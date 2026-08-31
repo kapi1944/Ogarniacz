@@ -1,17 +1,22 @@
 import type { EncjaBazowa, NazwaTabeli } from '../domain/typy'
 
+export type NazwaTabeliSynchronizowanej = Exclude<NazwaTabeli, 'stanSynchronizacji' | 'konfliktySynchronizacji'>
+
 export interface ZmianaSynchronizacji {
-  tabela: NazwaTabeli
+  tabela: NazwaTabeliSynchronizowanej
   rekord: EncjaBazowa
+  installationId: string
 }
 
 export interface WynikSynchronizacji {
   wyslane: number
   pobrane: number
   konflikty: number
+  stan: 'zsynchronizowano' | 'offline' | 'konflikt'
 }
 
 export interface RepozytoriumZdalne {
+  trwale?: boolean
   pobierzZmiany(od: string): Promise<ZmianaSynchronizacji[]>
   wyslijZmiany(zmiany: ZmianaSynchronizacji[]): Promise<void>
 }

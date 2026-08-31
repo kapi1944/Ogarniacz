@@ -3,6 +3,7 @@ import { terazIso } from '../domain/fabryki'
 import { baza } from './BazaOgarniacza'
 import type { Table } from 'dexie'
 import { czyHistoriaWlaczona, zbudujWpisHistorii } from '../services/HistoriaZmianService'
+import { powiadomOZmianieDanych } from './ZdarzeniaDanych'
 
 export interface Repozytorium<T extends EncjaBazowa> {
   lista(): Promise<T[]>
@@ -36,22 +37,32 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     const tabela = this.tabela()
     const teraz = terazIso()
     const zapisana = { ...encja, updatedAt: teraz }
-    if (!czyHistoriaWlaczona(this.nazwa)) return tabela.put(zapisana)
+    if (!czyHistoriaWlaczona(this.nazwa)) {
+      const id = await tabela.put(zapisana)
+      powiadomOZmianieDanych(this.nazwa)
+      return id
+    }
     const historia = baza.tabela('historiaZmian')
-    return baza.transaction('rw', [tabela, historia], async () => {
+    const id = await baza.transaction('rw', [tabela, historia], async () => {
       const przed = await tabela.get(encja.id)
       const id = await tabela.put(zapisana)
       const wpis = zbudujWpisHistorii(this.nazwa, przed, zapisana, przed ? 'aktualizacja' : 'utworzenie', teraz)
       if (wpis) await historia.put(wpis)
       return id
     })
+    powiadomOZmianieDanych(this.nazwa)
+    return id
   }
 
   async zapiszWiele(encje: T[]): Promise<void> {
     const tabela = this.tabela()
     const teraz = terazIso()
     const zapisane = encje.map((encja) => ({ ...encja, updatedAt: teraz }))
-    if (!czyHistoriaWlaczona(this.nazwa)) return void await tabela.bulkPut(zapisane)
+    if (!czyHistoriaWlaczona(this.nazwa)) {
+      await tabela.bulkPut(zapisane)
+      powiadomOZmianieDanych(this.nazwa)
+      return
+    }
     const historia = baza.tabela('historiaZmian')
     await baza.transaction('rw', [tabela, historia], async () => {
       const poprzednie = await tabela.bulkGet(encje.map((encja) => encja.id))
@@ -61,6 +72,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
         .filter((wpis) => wpis !== undefined)
       if (wpisy.length > 0) await historia.bulkPut(wpisy)
     })
+    powiadomOZmianieDanych(this.nazwa)
   }
 
   async usun(id: string): Promise<void> {
@@ -69,7 +81,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       const encja = await tabela.get(id)
       if (!encja) return
       const teraz = terazIso()
-      return void await tabela.put({ ...encja, usunietoAt: teraz, updatedAt: teraz })
+      await tabela.put({ ...encja, usunietoAt: teraz, updatedAt: teraz })
+      powiadomOZmianieDanych(this.nazwa)
+      return
     }
     const historia = baza.tabela('historiaZmian')
     await baza.transaction('rw', [tabela, historia], async () => {
@@ -81,6 +95,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       const wpis = zbudujWpisHistorii(this.nazwa, encja, usunieta, 'usuniecie', teraz)
       if (wpis) await historia.put(wpis)
     })
+    powiadomOZmianieDanych(this.nazwa)
   }
 
   async przywroc(id: string): Promise<void> {
@@ -91,7 +106,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       const teraz = terazIso()
       const kopia = { ...encja, updatedAt: teraz }
       delete kopia.usunietoAt
-      return void await tabela.put(kopia)
+      await tabela.put(kopia)
+      powiadomOZmianieDanych(this.nazwa)
+      return
     }
     const historia = baza.tabela('historiaZmian')
     await baza.transaction('rw', [tabela, historia], async () => {
@@ -104,6 +121,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       const wpis = zbudujWpisHistorii(this.nazwa, encja, kopia, 'aktualizacja', teraz)
       if (wpis) await historia.put(wpis)
     })
+    powiadomOZmianieDanych(this.nazwa)
   }
 }
 

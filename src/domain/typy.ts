@@ -356,6 +356,23 @@ export interface WpisHistoriiZmian extends EncjaBazowa {
   po?: Record<string, unknown>
 }
 
+export type StatusSynchronizacji = 'zsynchronizowano' | 'synchronizacja' | 'offline' | 'konflikt' | 'blad'
+
+export interface StanSynchronizacji extends EncjaBazowa {
+  stan: StatusSynchronizacji
+  ostatniSync?: string
+  ostatniBlad?: string
+  liczbaKonfliktow: number
+}
+
+export interface KonfliktSynchronizacji extends EncjaBazowa {
+  tabela: string
+  rekordId: string
+  lokalny: EncjaBazowa
+  zdalny: EncjaBazowa
+  wykrytoAt: string
+}
+
 export type MotywAplikacji = 'jasny' | 'ciemny' | 'systemowy'
 export type GestoscInterfejsu = 'komfortowa' | 'zwarta'
 export type DostepnoscPlanistyczna = 'czesciowa' | 'pelna'
@@ -512,6 +529,8 @@ export interface MapaTabel {
   dziennikEcho: DziennikEcho
   ustawienia: Ustawienia
   historiaZmian: WpisHistoriiZmian
+  stanSynchronizacji: StanSynchronizacji
+  konfliktySynchronizacji: KonfliktSynchronizacji
 }
 
 export type NazwaTabeli = keyof MapaTabel

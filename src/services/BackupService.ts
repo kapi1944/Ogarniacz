@@ -4,6 +4,7 @@ import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { normalizujUstawienia, WERSJA_USTAWIEN } from '../domain/ustawienia'
 import type { NazwaTabeli } from '../domain/typy'
 import { pobierzInstallationId } from './InstallationService'
+import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 
 export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
@@ -431,7 +432,7 @@ function sprawdzKompatybilnosc(surowy: SurowyBackup): void {
     throw new BladBackupu(`Backup pochodzi z niekompatybilnej wersji aplikacji: ${surowy.manifest.appVersion}.`, 'WERSJA_APLIKACJI')
   }
   if (wersja >= 2) {
-    if (![4, WERSJA_SCHEMATU_BAZY].includes(surowy.manifest.dexieSchemaVersion ?? -1)) {
+    if (![4, 5, WERSJA_SCHEMATU_BAZY].includes(surowy.manifest.dexieSchemaVersion ?? -1)) {
       throw new BladBackupu('Backup ma nieobsługiwaną wersję schematu danych.', 'WERSJA_SCHEMATU_BAZY')
     }
   }
@@ -517,7 +518,7 @@ function walidujCaloscBackupu(backup: SurowyBackup): OgarniaczBackup {
   const sekcje = backup.manifest.sections as NazwaSekcjiBackupu[]
   if (
     backup.manifest.formatVersion !== WERSJA_FORMATU_BACKUPU
-    || ![4, WERSJA_SCHEMATU_BAZY].includes(backup.manifest.dexieSchemaVersion ?? -1)
+    || ![4, 5, WERSJA_SCHEMATU_BAZY].includes(backup.manifest.dexieSchemaVersion ?? -1)
     || !backup.manifest.installationId
     || !backup.manifest.backupType
   ) {
@@ -613,6 +614,7 @@ export async function przywrocBackup(
       if (rekordy.length > 0) await repozytorium.bulkPut(rekordy)
     }
   })
+  for (const tabela of tabele) powiadomOZmianieDanych(tabela)
 
   return {
     backupPrzedPrzywracaniem,

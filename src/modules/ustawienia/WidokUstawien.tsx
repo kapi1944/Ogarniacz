@@ -1,18 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Bell, Database, Download, History as IkonaHistorii, Share2, Shield, Sparkles, Upload, UserCog } from 'lucide-react'
+import { Bell, Cloud, Database, Download, History as IkonaHistorii, RefreshCw, Share2, Shield, Sparkles, Upload, UserCog } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { Karta, Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { inicjalizujBaze } from '../../data/BazaOgarniacza'
 import { terazIso, utworzMetadane } from '../../domain/fabryki'
-import type { NazwaModulu, PamiecEcho, ProfilEdytora, Uprawnienie } from '../../domain/typy'
+import type { NazwaModulu, PamiecEcho, ProfilEdytora, StatusSynchronizacji, Uprawnienie } from '../../domain/typy'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { PODSTAWOWE_SEKCJE_BACKUPU, przygotujBackupDoPrzywracania, przywrocBackup, SEKCJE_BACKUPU, utworzBackup, wyczyscDane, type NazwaSekcjiBackupu, type OgarniaczBackup } from '../../services/BackupService'
 import { czyMoznaWczytacDemo, wczytajDaneDemonstracyjne } from '../../services/DaneDemonstracyjneService'
 import { importujUstawienia, utworzEksportUstawien } from '../../services/TransferUstawienService'
 import { pobierzNajnowszaHistorie } from '../../services/HistoriaZmianService'
 import { pobierzInstallationId } from '../../services/InstallationService'
+import { pobierzKonfliktySynchronizacji, pobierzStanSynchronizacji } from '../../services/SyncEngine'
+import { rozstrzygnijKonfliktSynchronizacji, synchronizujTeraz as uruchomSynchronizacje } from '../../services/SynchronizacjaAplikacji'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { platforma } from '../../platform/platforma'
 import type { StanPowiadomienPlatformy, StanZgody } from '../../platform/typy'
@@ -29,12 +31,30 @@ const etykietaZgody = (stan: StanZgody | null | undefined) => {
   return 'niedostępne'
 }
 
+const etykietySynchronizacji: Record<StatusSynchronizacji, string> = {
+  zsynchronizowano: 'zsynchronizowano',
+  synchronizacja: 'synchronizacja',
+  offline: 'offline',
+  konflikt: 'konflikt',
+  blad: 'błąd',
+}
+
+const wariantSynchronizacji = (stan?: StatusSynchronizacji): 'neutralny' | 'sukces' | 'ostrzezenie' | 'blad' | 'informacja' => {
+  if (stan === 'zsynchronizowano') return 'sukces'
+  if (stan === 'synchronizacja') return 'informacja'
+  if (stan === 'konflikt' || stan === 'offline') return 'ostrzezenie'
+  if (stan === 'blad') return 'blad'
+  return 'neutralny'
+}
+
 export function WidokUstawien() {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
   const { dane: pamiec, repozytorium: repoPamieci } = useRepozytorium('pamiecEcho')
   const { dane: edytorzy, repozytorium: repoEdytorow } = useRepozytorium('edytorzy')
   const { dane: uprawnienia, repozytorium: repoUprawnien } = useRepozytorium('uprawnienia')
   const historia = useLiveQuery(() => pobierzNajnowszaHistorie(50), [], [])
+  const stanSynchronizacji = useLiveQuery(() => pobierzStanSynchronizacji(), [], undefined)
+  const konfliktySynchronizacji = useLiveQuery(() => pobierzKonfliktySynchronizacji(), [], [])
   const [komunikat, ustawKomunikat] = useState('')
   const [blad, ustawBlad] = useState('')
   const [wybraneSekcje, ustawWybraneSekcje] = useState<NazwaSekcjiBackupu[]>(PODSTAWOWE_SEKCJE_BACKUPU)
@@ -158,6 +178,24 @@ export function WidokUstawien() {
       : 'Nie przyznano dostępu do powiadomień.')
   }
 
+  const synchronizujTeraz = async () => {
+    ustawBlad('')
+    try {
+      const wynik = await uruchomSynchronizacje()
+      if (wynik.stan === 'offline') ustawKomunikat('Synchronizacja czeka na połączenie z siecią.')
+      else ustawKomunikat(`Synchronizacja zakończona: wysłano ${wynik.wyslane}, pobrano ${wynik.pobrane}, konflikty ${wynik.konflikty}.`)
+    } catch (bladSynchronizacji) {
+      ustawBlad(bladSynchronizacji instanceof Error ? bladSynchronizacji.message : 'Nie udało się zsynchronizować danych.')
+    }
+  }
+
+  const rozstrzygnijKonflikt = async (id: string, wybor: 'lokalny' | 'zdalny') => {
+    await rozstrzygnijKonfliktSynchronizacji(id, wybor)
+    ustawKomunikat(wybor === 'lokalny'
+      ? 'Wybrano wersję lokalną. Zostanie wysłana podczas następnej synchronizacji.'
+      : 'Zastosowano wersję zdalną.')
+  }
+
   const dodajEdytora = async (zdarzenie: FormEvent) => {
     zdarzenie.preventDefault(); if (!nowyEdytor.trim()) return
     const profil: ProfilEdytora = { ...utworzMetadane(), nazwa: nowyEdytor.trim(), aktywny: true }
@@ -179,6 +217,8 @@ export function WidokUstawien() {
       <Karta><div className="tytul-karty"><Sparkles aria-hidden="true" /><span>Echo</span></div><h2>Proaktywność</h2><label className="ustawienie-wiersz"><span><strong>Proaktywność</strong><small>Pozwala Echo prezentować lokalne sugestie.</small></span><input type="checkbox" checked={ustawienia.proaktywnoscEcho} onChange={(e) => zapiszUstawienia({ proaktywnoscEcho: e.target.checked })} /></label><label className="ustawienie-wiersz"><span><strong>Wyciszenie</strong><small>Ukrywa inicjowane sugestie bez wyłączania panelu.</small></span><input type="checkbox" checked={ustawienia.echoWyciszone} onChange={(e) => zapiszUstawienia({ echoWyciszone: e.target.checked })} /></label></Karta>
       <Karta><div className="tytul-karty"><Database aria-hidden="true" /><span>Dane lokalne</span></div><h2>IndexedDB</h2><p>Szacowane użycie pamięci tej witryny: <strong>{zajete}</strong>. Dane pozostają w profilu tej przeglądarki.</p><Link to="/grafik" className="przycisk przycisk--drugorzedny">Ustaw grafik pracy</Link></Karta>
     </section>
+
+    <Karta><div className="naglowek-karty"><div><h2><Cloud aria-hidden="true" /> Synchronizacja</h2><p>UI korzysta z SyncEngine, bez zależności od konkretnego backendu.</p></div><Znacznik wariant={wariantSynchronizacji(stanSynchronizacji?.stan)}>{etykietySynchronizacji[stanSynchronizacji?.stan ?? 'zsynchronizowano']}</Znacznik></div><div className="lista-kompaktowa"><div><span>Ostatni sync</span><strong>{stanSynchronizacji?.ostatniSync ? new Date(stanSynchronizacji.ostatniSync).toLocaleString('pl-PL') : 'jeszcze nie wykonano'}</strong></div><div><span>Konflikty</span><strong>{konfliktySynchronizacji.length}</strong></div><div><span>installationId</span><code>{installationId}</code></div></div>{stanSynchronizacji?.ostatniBlad && <p className="tekst-pomocniczy">Ostatni błąd: {stanSynchronizacji.ostatniBlad}</p>}<p className="tekst-pomocniczy">Obecnie podłączony jest wyłącznie testowy provider in-memory. Dane zdalne znikają po przeładowaniu aplikacji; produkcyjny backend nie został jeszcze wybrany.</p><button type="button" className="przycisk przycisk--glowny" disabled={stanSynchronizacji?.stan === 'synchronizacja'} onClick={synchronizujTeraz}><RefreshCw aria-hidden="true" />Synchronizuj teraz</button>{konfliktySynchronizacji.length > 0 && <div className="podglad-manifestu"><h3>Konflikty wymagające decyzji</h3><div className="lista-kompaktowa">{konfliktySynchronizacji.map((konflikt) => <div key={konflikt.id}><div><strong>{konflikt.tabela} · {konflikt.rekordId}</strong><small>Wykryto {new Date(konflikt.wykrytoAt).toLocaleString('pl-PL')}</small></div><button type="button" className="przycisk przycisk--maly" onClick={() => rozstrzygnijKonflikt(konflikt.id, 'lokalny')}>Wybierz lokalny</button><button type="button" className="przycisk przycisk--maly" onClick={() => rozstrzygnijKonflikt(konflikt.id, 'zdalny')}>Wybierz zdalny</button></div>)}</div></div>}</Karta>
 
     <Karta><div className="naglowek-karty"><div><h2>Przenieś dane między urządzeniami</h2><p>Do czasu automatycznej synchronizacji transfer między desktopem/PWA i Androidem jest ręczny.</p></div></div><p>Na urządzeniu źródłowym utwórz wspólny backup, zapisz go lub udostępnij. Na urządzeniu docelowym wybierz ten sam plik JSON i potwierdź restore po walidacji.</p><p className="tekst-pomocniczy">Id tej instalacji: <code>{installationId}</code>. Jest losowe i nie korzysta z IMEI, Android ID ani identyfikatorów sprzętowych.</p></Karta>
 
@@ -203,7 +243,7 @@ export function WidokUstawien() {
     <WidokRejestru tytul="Pamięć Echo" opis="Właściciel może zobaczyć, edytować i usunąć każdy lokalny fakt, preferencję lub regułę." etykietaDodawania="Dodaj wpis pamięci" dane={pamiec} repozytorium={repoPamieci} pola={[{ klucz: 'tresc', etykieta: 'Treść', typ: 'textarea', wymagane: true }, { klucz: 'typ', etykieta: 'Typ', typ: 'select', wymagane: true, opcje: [{ wartosc: 'fakt', etykieta: 'Fakt' }, { wartosc: 'preferencja', etykieta: 'Preferencja' }, { wartosc: 'regula', etykieta: 'Reguła' }] }, { klucz: 'zrodlo', etykieta: 'Źródło', wymagane: true }, { klucz: 'wrazliwosc', etykieta: 'Wrażliwość', typ: 'select', wymagane: true, opcje: [{ wartosc: 'zwykla', etykieta: 'Zwykła' }, { wartosc: 'wrazliwa', etykieta: 'Wrażliwa' }] }, { klucz: 'sposob', etykieta: 'Sposób zapisu', typ: 'select', wymagane: true, opcje: [{ wartosc: 'reczne', etykieta: 'Ręczne' }, { wartosc: 'zaproponowane', etykieta: 'Zaproponowane przez Echo' }] }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), tresc: f.tresc.trim(), typ: (f.typ || 'fakt') as PamiecEcho['typ'], zrodlo: f.zrodlo, wrazliwosc: (f.wrazliwosc || 'zwykla') as PamiecEcho['wrazliwosc'], sposob: (f.sposob || 'reczne') as PamiecEcho['sposob'], updatedAt: terazIso() })} etykieta={(x) => x.tresc.slice(0, 80)} szczegoly={(x) => <><Znacznik wariant={x.wrazliwosc === 'wrazliwa' ? 'ostrzezenie' : 'neutralny'}>{x.wrazliwosc}</Znacznik><span>{x.typ} · {x.zrodlo} · {x.sposob}</span></>} />
 
     <section className="siatka-dwie-kolumny siatka-dwie-kolumny--rowne"><Karta><h2>Dane demonstracyjne</h2><p>Przykładowe rekordy można wczytać tylko do całkowicie pustej bazy, aby nie mieszać ich z prawdziwymi danymi.</p><button type="button" className="przycisk przycisk--drugorzedny" disabled={!moznaDemo} onClick={async () => { try { await wczytajDaneDemonstracyjne(); ustawMoznaDemo(false); ustawKomunikat('Dane demonstracyjne zostały wczytane.') } catch (e) { ustawBlad(e instanceof Error ? e.message : 'Błąd danych demonstracyjnych.') } }}>Wczytaj dane demonstracyjne</button>{!moznaDemo && <p className="tekst-pomocniczy">Baza zawiera już dane — opcja jest wyłączona.</p>}</Karta><Karta klasa="karta--niebezpieczna"><h2>Wyczyść dane lokalne</h2><p>Operacja trwale usuwa całą bazę na tym urządzeniu. Najpierw wykonaj backup.</p><button type="button" className="przycisk przycisk--niebezpieczny" onClick={() => ustawCzyszczenie(true)}>Wyczyść wszystkie dane</button></Karta></section>
-    <Karta><h2>Informacje o aplikacji</h2><p><strong>Ogarniacz v1.0.0</strong> · local-first PWA i Android · schemat IndexedDB v5 · bez zewnętrznego API.</p><p className="tekst-pomocniczy">Android dostarcza lokalne alarmy także poza aktywnym WebView. Planowany serwer Raspberry Pi pozostaje przyszłym kanałem synchronizacji i nie przejmuje logiki przypomnień klienta.</p></Karta>
+    <Karta><h2>Informacje o aplikacji</h2><p><strong>Ogarniacz v1.0.0</strong> · local-first PWA i Android · schemat IndexedDB v6 · bez zewnętrznego API.</p><p className="tekst-pomocniczy">Android dostarcza lokalne alarmy także poza aktywnym WebView. Planowany serwer Raspberry Pi pozostaje przyszłym kanałem synchronizacji i nie przejmuje logiki przypomnień klienta.</p></Karta>
 
     {potwierdzeniePrzywracania && <ModalPotwierdzenia tytul="Przywrócić wybrane dane?" opis={`Wybrane sekcje (${sekcjePrzywracania.length}) zastąpią bieżące dane tych kategorii. Pozostałe kategorie nie zostaną zmienione. Przed zapisem system utworzy pełną kopię before-restore.`} etykietaAkcji="Utwórz kopię i przywróć" niebezpieczne anuluj={() => ustawPotwierdzeniePrzywracania(false)} potwierdz={wykonajPrzywracanie} />}
     {czyszczenie && <PotwierdzenieCzyszczenia anuluj={() => ustawCzyszczenie(false)} wykonaj={async () => { await wyczyscDane(); await inicjalizujBaze(); window.location.assign('/') }} />}

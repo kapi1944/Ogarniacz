@@ -6,6 +6,7 @@ import { utworzUslugeCykluZycia } from './LifecycleService'
 import { utworzUslugePowiadomien } from './NotificationService'
 import { obsluzWstecz } from './obslugaWstecz'
 import { utworzUslugeUdostepniania } from './ShareService'
+import { utworzMostMigawekWidgetow } from './WidgetBridgeService'
 import type { PlatformaOgarniacza } from './typy'
 
 const czyAndroid = Capacitor.getPlatform() === 'android' && Capacitor.isNativePlatform()
@@ -19,10 +20,7 @@ export const platforma: PlatformaOgarniacza = {
   pliki: utworzUslugePlikow(czyAndroid),
   udostepnianie: utworzUslugeUdostepniania(czyAndroid),
   haptyka: utworzUslugeHaptyki(czyAndroid),
-  migawkiWidgetow: {
-    dostepne: () => false,
-    zapisz: () => Promise.resolve(false),
-  },
+  migawkiWidgetow: utworzMostMigawekWidgetow(czyAndroid),
 }
 
 let inicjalizacjaPlatformy: Promise<void> | undefined
