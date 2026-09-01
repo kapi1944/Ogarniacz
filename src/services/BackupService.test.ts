@@ -263,6 +263,31 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     expect(await notatki.lista()).toEqual(backup.payload.notatki?.notatki)
   })
 
+  it('zachowuje polskie znaki oraz datę i godzinę wizyty po round-tripie', async () => {
+    const zadanie = utworzZadanie({ tytul: 'Zażółć gęślą jaźń — Łódź, Środa, ąćęłńóśźż', opis: '', priorytet: 'normalny' })
+    const wizyta: Wizyta = {
+      ...utworzMetadane('wizyta-z-data'),
+      nazwa: 'Kontrola',
+      status: 'umowiona',
+      data: '2026-09-15',
+      godzina: '12:30',
+      notatka: '',
+      pytania: [],
+      dokumentyIds: [],
+      checklista: [],
+    }
+    await pobierzRepozytorium('zadania').zapisz(zadanie)
+    await pobierzRepozytorium('wizyty').zapisz(wizyta)
+    const backup = await przygotuj(await utworzBackup(['zadania', 'wizyty'], () => STALA_DATA))
+    await baza.tabela('zadania').clear()
+    await baza.tabela('wizyty').clear()
+
+    await przywrocBackup(backup, ['zadania', 'wizyty'])
+
+    expect((await baza.tabela('zadania').get(zadanie.id))?.tytul).toBe(zadanie.tytul)
+    expect(await baza.tabela('wizyty').get(wizyta.id)).toMatchObject({ data: wizyta.data, godzina: wizyta.godzina })
+  })
+
   it('przenosi dokumenty, Bloby i pełne metadane encji bez zapisu Base64 w IndexedDB', async () => {
     const dokument: Dokument = {
       id: 'dokument-1',

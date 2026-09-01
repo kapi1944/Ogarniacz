@@ -1,26 +1,78 @@
-import { useState } from 'react'
-import { Karta, NaglowekWidoku, Znacznik } from '../../components/Interfejs'
+import { useState, type FormEvent } from 'react'
+import { Edit3, Plus } from 'lucide-react'
+import { Karta, Modal, NaglowekWidoku, Znacznik } from '../../components/Interfejs'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
-import type { Budzet, Wydatek } from '../../domain/typy'
+import type { Budzet, PlanRat, PlatnoscStala, Rata, Wydatek } from '../../domain/typy'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
+import { przeliczRatyPoNadplacie, utworzRaty, zaplanowanePlatnosciStale } from '../../services/FinanseService'
+
+const formatujKwote = (kwota: number) => kwota.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })
 
 export function WidokFinansow() {
   const [miesiac, ustawMiesiac] = useState(dzisiajIso().slice(0, 7))
+  const [formularzPlanuOtwarty, ustawFormularzPlanuOtwarty] = useState(false)
+  const [formularzPlanu, ustawFormularzPlanu] = useState({ nazwa: '', kwotaCalkowita: '', liczbaRat: '', dataPierwszejRaty: dzisiajIso(), kategoria: '' })
+  const [wybranyPlanId, ustawWybranyPlanId] = useState<string>()
+  const [edytowanaRata, ustawEdytowanaRate] = useState<Rata>()
+  const [formularzRaty, ustawFormularzRaty] = useState({ kwota: '', nadplata: '', zaplacona: false })
   const { dane: wydatki, repozytorium: repoWydatkow } = useRepozytorium('wydatki')
+  const { dane: platnosciStale, repozytorium: repoPlatnosciStalych } = useRepozytorium('platnosciStale')
+  const { dane: planyRat, repozytorium: repoPlanowRat } = useRepozytorium('planyRat')
+  const { dane: raty, repozytorium: repoRat } = useRepozytorium('raty')
   const { dane: budzety, repozytorium: repoBudzetow } = useRepozytorium('budzety')
   const miesieczne = wydatki.filter((wydatek) => wydatek.data.startsWith(miesiac))
+  const staleWMiesiacu = zaplanowanePlatnosciStale(platnosciStale, miesiac).filter((platnosc) => !wydatki.some((wydatek) => wydatek.data.startsWith(miesiac) && wydatek.platnoscStalaId === platnosc.id))
+  const ratyWMiesiacu = raty.filter((rata) => rata.data.startsWith(miesiac) && rata.status === 'planowana')
   const suma = miesieczne.reduce((wynik, wydatek) => wynik + wydatek.kwota, 0)
-  const limity = budzety.filter((budzet) => budzet.okres === miesiac)
-  const limit = limity.reduce((wynik, budzet) => wynik + budzet.limit, 0)
+  const planowane = staleWMiesiacu.reduce((wynik, platnosc) => wynik + platnosc.kwota, 0) + ratyWMiesiacu.reduce((wynik, rata) => wynik + rata.kwota, 0)
+  const limit = budzety.filter((budzet) => budzet.okres === miesiac).reduce((wynik, budzet) => wynik + budzet.limit, 0)
   const kategorie = Object.entries(miesieczne.reduce<Record<string, number>>((wynik, wydatek) => ({ ...wynik, [wydatek.kategoria]: (wynik[wydatek.kategoria] ?? 0) + wydatek.kwota }), {})).sort((a, b) => b[1] - a[1])
+  const wybranyPlan = planyRat.find((plan) => plan.id === wybranyPlanId)
+  const ratyWybranegoPlanu = raty.filter((rata) => rata.planRatId === wybranyPlanId).sort((a, b) => a.numer - b.numer)
+
+  const zapiszPlanRat = async (zdarzenie: FormEvent) => {
+    zdarzenie.preventDefault()
+    const kwotaCalkowita = Number(formularzPlanu.kwotaCalkowita), liczbaRat = Number(formularzPlanu.liczbaRat)
+    if (!formularzPlanu.nazwa.trim() || !formularzPlanu.kategoria.trim() || kwotaCalkowita <= 0 || !Number.isInteger(liczbaRat) || liczbaRat < 1) return
+    const plan: PlanRat = { ...utworzMetadane(), nazwa: formularzPlanu.nazwa.trim(), kwotaCalkowita, liczbaRat, dataPierwszejRaty: formularzPlanu.dataPierwszejRaty, kategoria: formularzPlanu.kategoria.trim(), status: 'aktywny' }
+    await repoPlanowRat.zapisz(plan); await repoRat.zapiszWiele(utworzRaty(plan)); ustawFormularzPlanuOtwarty(false)
+  }
+  const zapiszRate = async (zdarzenie: FormEvent) => {
+    zdarzenie.preventDefault()
+    if (!edytowanaRata) return
+    const kwota = Number(formularzRaty.kwota), nadplata = Number(formularzRaty.nadplata)
+    if (kwota < 0 || nadplata < 0) return
+    const rata: Rata = { ...edytowanaRata, kwota, nadplata, status: formularzRaty.zaplacona ? 'zaplacona' : 'planowana', updatedAt: terazIso() }
+    const ratyPoZapisie = rata.status === 'zaplacona'
+      ? przeliczRatyPoNadplacie(ratyWybranegoPlanu, rata)
+      : ratyWybranegoPlanu.map((pozycja) => pozycja.id === rata.id ? rata : pozycja)
+    await repoRat.zapiszWiele(ratyPoZapisie)
+    const plan = planyRat.find((pozycja) => pozycja.id === rata.planRatId)
+    if (rata.status === 'zaplacona' && edytowanaRata.status !== 'zaplacona' && plan) await repoWydatkow.zapisz({ ...utworzMetadane(), opis: `${plan.nazwa} — rata ${rata.numer}`, kwota: rata.kwota + rata.nadplata, data: rata.data, kategoria: plan.kategoria, rataId: rata.id })
+    if (plan && ratyPoZapisie.every((pozycja) => pozycja.status === 'zaplacona')) await repoPlanowRat.zapisz({ ...plan, status: 'splacony' })
+    ustawEdytowanaRate(undefined)
+  }
+  const zaksiegujPlatnoscStala = async (platnosc: PlatnoscStala) => {
+    const data = `${miesiac}-${String(Math.min(platnosc.dzienMiesiaca, new Date(Number(miesiac.slice(0, 4)), Number(miesiac.slice(5, 7)), 0).getDate())).padStart(2, '0')}`
+    await repoWydatkow.zapisz({ ...utworzMetadane(), opis: platnosc.nazwa, kwota: platnosc.kwota, data, kategoria: platnosc.kategoria, platnoscStalaId: platnosc.id })
+  }
+  const polaWydatku = [{ klucz: 'opis', etykieta: 'Opis', wymagane: true }, { klucz: 'kwota', etykieta: 'Kwota', typ: 'number' as const, wymagane: true, min: 0.01, krok: 0.01 }, { klucz: 'data', etykieta: 'Data', typ: 'date' as const, wymagane: true }, { klucz: 'kategoria', etykieta: 'Kategoria', wymagane: true }]
+
   return <div className="widok">
-    <NaglowekWidoku tytul="Wydatki i budżet" opis="Praktyczny rejestr i limity — bez udawania pełnej księgowości." akcje={<label className="pole-inline"><span>Miesiąc</span><input type="month" value={miesiac} onChange={(e) => ustawMiesiac(e.target.value)} /></label>} />
-    <div className="podsumowanie-finansowe"><Karta><small>Wydano</small><strong>{suma.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}</strong></Karta><Karta><small>Limit</small><strong>{limit ? limit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) : 'brak'}</strong></Karta><Karta><small>Pozostało</small><strong className={limit && limit - suma < 0 ? 'tekst-bledu' : ''}>{limit ? (limit - suma).toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' }) : '—'}</strong></Karta></div>
+    <NaglowekWidoku tytul="Wydatki i budżet" opis="Rejestr wydatków, płatności stałych i rat." akcje={<label className="pole-inline"><span>Miesiąc</span><input type="month" value={miesiac} onChange={(e) => ustawMiesiac(e.target.value)} /></label>} />
+    <div className="podsumowanie-finansowe"><Karta><small>Wydano</small><strong>{formatujKwote(suma)}</strong></Karta><Karta><small>Zaplanowane</small><strong>{formatujKwote(planowane)}</strong></Karta><Karta><small>Limit</small><strong>{limit ? formatujKwote(limit) : 'brak'}</strong></Karta><Karta><small>Pozostało po planie</small><strong className={limit && limit - suma - planowane < 0 ? 'tekst-bledu' : ''}>{limit ? formatujKwote(limit - suma - planowane) : '—'}</strong></Karta></div>
     {kategorie.length > 0 && <Karta><h2>Wydatki według kategorii</h2><div className="wykres-kategorii">{kategorie.map(([nazwa, kwota]) => <div key={nazwa}><div><span>{nazwa}</span><strong>{kwota.toFixed(2)} zł</strong></div><span className="wykres-kategorii__tor"><span style={{ width: `${Math.max(3, (kwota / suma) * 100)}%` }} /></span></div>)}</div></Karta>}
     <section className="siatka-dwie-kolumny siatka-dwie-kolumny--rowne">
-      <WidokRejestru tytul="Wydatki" opis="Kwota, data, kategoria i opis." etykietaDodawania="Dodaj wydatek" dane={wydatki} repozytorium={repoWydatkow} pola={[{ klucz: 'opis', etykieta: 'Opis', wymagane: true }, { klucz: 'kwota', etykieta: 'Kwota', typ: 'number', wymagane: true, min: 0.01, krok: 0.01 }, { klucz: 'data', etykieta: 'Data', typ: 'date', wymagane: true }, { klucz: 'kategoria', etykieta: 'Kategoria', wymagane: true }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), opis: f.opis.trim(), kwota: Number(f.kwota), data: f.data || dzisiajIso(), kategoria: f.kategoria.trim(), updatedAt: terazIso() } as Wydatek)} etykieta={(x) => x.opis} szczegoly={(x) => <><strong>{x.kwota.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}</strong><Znacznik>{x.kategoria}</Znacznik><span>{x.data}</span></>} />
-      <WidokRejestru tytul="Budżety" opis="Limity kategorii lub całego okresu." etykietaDodawania="Dodaj budżet" dane={budzety} repozytorium={repoBudzetow} pola={[{ klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true }, { klucz: 'kategoria', etykieta: 'Kategoria (opcjonalna)' }, { klucz: 'okres', etykieta: 'Miesiąc', typ: 'text', wymagane: true, podpowiedz: 'YYYY-MM' }, { klucz: 'limit', etykieta: 'Limit', typ: 'number', wymagane: true, min: 0.01, krok: 0.01 }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), nazwa: f.nazwa.trim(), kategoria: f.kategoria || undefined, okres: f.okres, limit: Number(f.limit), updatedAt: terazIso() } as Budzet)} etykieta={(x) => x.nazwa} szczegoly={(x) => <><strong>{x.limit.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}</strong><span>{x.okres}</span>{x.kategoria && <Znacznik>{x.kategoria}</Znacznik>}</>} />
+      <WidokRejestru tytul="Wydatki" opis="Kwota, data, kategoria i opis." etykietaDodawania="Dodaj wydatek" dane={wydatki} repozytorium={repoWydatkow} pola={polaWydatku} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), opis: f.opis.trim(), kwota: Number(f.kwota), data: f.data || dzisiajIso(), kategoria: f.kategoria.trim(), updatedAt: terazIso() } as Wydatek)} etykieta={(x) => x.opis} szczegoly={(x) => <><strong>{formatujKwote(x.kwota)}</strong><Znacznik>{x.kategoria}</Znacznik><span>{x.data}</span></>} />
+      <WidokRejestru tytul="Płatności stałe" opis="Czynsz, subskrypcje i inne miesięczne zobowiązania." etykietaDodawania="Dodaj płatność stałą" dane={platnosciStale} repozytorium={repoPlatnosciStalych} pola={[{ klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true }, { klucz: 'kwota', etykieta: 'Kwota', typ: 'number', wymagane: true, min: 0.01, krok: 0.01 }, { klucz: 'dzienMiesiaca', etykieta: 'Dzień miesiąca', typ: 'number', wymagane: true, min: 1, krok: 1 }, { klucz: 'dataStartu', etykieta: 'Od kiedy', typ: 'date', wymagane: true }, { klucz: 'kategoria', etykieta: 'Kategoria', wymagane: true }, { klucz: 'aktywna', etykieta: 'Status', typ: 'select', wymagane: true, domyslnaWartosc: 'tak', opcje: [{ wartosc: 'tak', etykieta: 'Aktywna' }, { wartosc: 'nie', etykieta: 'Wstrzymana' }] }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), nazwa: f.nazwa.trim(), kwota: Number(f.kwota), dzienMiesiaca: Math.min(31, Math.max(1, Number(f.dzienMiesiaca))), dataStartu: f.dataStartu || dzisiajIso(), kategoria: f.kategoria.trim(), aktywna: f.aktywna !== 'nie', updatedAt: terazIso() } as PlatnoscStala)} etykieta={(x) => x.nazwa} szczegoly={(x) => <><strong>{formatujKwote(x.kwota)}</strong><Znacznik>{x.kategoria}</Znacznik><span>{x.dzienMiesiaca}. dzień miesiąca</span><Znacznik>{x.aktywna ? 'aktywna' : 'wstrzymana'}</Znacznik></>} akcje={(x) => x.aktywna && !wydatki.some((wydatek) => wydatek.data.startsWith(miesiac) && wydatek.platnoscStalaId === x.id) ? <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void zaksiegujPlatnoscStala(x)}>Zaksięguj</button> : undefined} />
     </section>
+    <section className="widok"><NaglowekWidoku tytul="Zakupy na raty" opis="Raty są wyliczane automatycznie; każdą możesz później zmienić." akcje={<button className="przycisk przycisk--glowny" type="button" onClick={() => ustawFormularzPlanuOtwarty(true)}><Plus aria-hidden="true" />Dodaj zakup na raty</button>} />
+      {planyRat.length === 0 ? <Karta><p>Nie masz jeszcze zaplanowanych rat.</p></Karta> : <div className="lista-rekordow">{planyRat.map((plan) => { const ratyPlanu = raty.filter((rata) => rata.planRatId === plan.id), pozostalo = ratyPlanu.filter((rata) => rata.status === 'planowana').reduce((wynik, rata) => wynik + rata.kwota, 0); return <article className="rekord" key={plan.id}><div className="rekord__tresc"><h3>{plan.nazwa}</h3><div className="rekord__szczegoly"><strong>Pozostało: {formatujKwote(pozostalo)}</strong><Znacznik>{plan.kategoria}</Znacznik><span>{ratyPlanu.filter((rata) => rata.status === 'zaplacona').length}/{plan.liczbaRat} rat spłaconych</span></div></div><div className="rekord__akcje"><button className="przycisk przycisk--drugorzedny" type="button" onClick={() => ustawWybranyPlanId(plan.id)}><Edit3 aria-hidden="true" />Raty</button></div></article> })}</div>}
+    </section>
+    <WidokRejestru tytul="Budżety" opis="Limity kategorii lub całego okresu." etykietaDodawania="Dodaj budżet" dane={budzety} repozytorium={repoBudzetow} pola={[{ klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true }, { klucz: 'kategoria', etykieta: 'Kategoria (opcjonalna)' }, { klucz: 'okres', etykieta: 'Miesiąc', wymagane: true, podpowiedz: 'YYYY-MM' }, { klucz: 'limit', etykieta: 'Limit', typ: 'number', wymagane: true, min: 0.01, krok: 0.01 }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), nazwa: f.nazwa.trim(), kategoria: f.kategoria || undefined, okres: f.okres, limit: Number(f.limit), updatedAt: terazIso() } as Budzet)} etykieta={(x) => x.nazwa} szczegoly={(x) => <><strong>{formatujKwote(x.limit)}</strong><span>{x.okres}</span>{x.kategoria && <Znacznik>{x.kategoria}</Znacznik>}</>} />
+    {formularzPlanuOtwarty && <Modal tytul="Dodaj zakup na raty" zamknij={() => ustawFormularzPlanuOtwarty(false)}><form className="formularz" onSubmit={zapiszPlanRat}><label className="pole pole--pelne"><span>Opis zakupu *</span><input required value={formularzPlanu.nazwa} onChange={(e) => ustawFormularzPlanu({ ...formularzPlanu, nazwa: e.target.value })} /></label><label className="pole"><span>Kwota końcowa *</span><input required type="number" min="0.01" step="0.01" value={formularzPlanu.kwotaCalkowita} onChange={(e) => ustawFormularzPlanu({ ...formularzPlanu, kwotaCalkowita: e.target.value })} /></label><label className="pole"><span>Liczba rat *</span><input required type="number" min="1" step="1" value={formularzPlanu.liczbaRat} onChange={(e) => ustawFormularzPlanu({ ...formularzPlanu, liczbaRat: e.target.value })} /></label><label className="pole"><span>Pierwsza rata *</span><input required type="date" value={formularzPlanu.dataPierwszejRaty} onChange={(e) => ustawFormularzPlanu({ ...formularzPlanu, dataPierwszejRaty: e.target.value })} /></label><label className="pole"><span>Kategoria *</span><input required value={formularzPlanu.kategoria} onChange={(e) => ustawFormularzPlanu({ ...formularzPlanu, kategoria: e.target.value })} /></label><div className="akcje-formularza pole--pelne"><button className="przycisk przycisk--drugorzedny" type="button" onClick={() => ustawFormularzPlanuOtwarty(false)}>Anuluj</button><button className="przycisk przycisk--glowny" type="submit">Utwórz raty</button></div></form></Modal>}
+    {wybranyPlan && <Modal tytul={`Raty: ${wybranyPlan.nazwa}`} zamknij={() => ustawWybranyPlanId(undefined)}><div className="lista-rekordow">{ratyWybranegoPlanu.map((rata) => <article className="rekord" key={rata.id}><div className="rekord__tresc"><h3>Rata {rata.numer}</h3><div className="rekord__szczegoly"><strong>{formatujKwote(rata.kwota)}</strong><span>{rata.data}</span>{rata.nadplata > 0 && <Znacznik>Nadpłata: {formatujKwote(rata.nadplata)}</Znacznik>}<Znacznik>{rata.status === 'zaplacona' ? 'opłacona' : 'planowana'}</Znacznik></div></div><button className="przycisk-ikona" type="button" title="Edytuj ratę" onClick={() => { ustawEdytowanaRate(rata); ustawFormularzRaty({ kwota: String(rata.kwota), nadplata: String(rata.nadplata), zaplacona: rata.status === 'zaplacona' }) }}><Edit3 aria-hidden="true" /></button></article>)}</div></Modal>}
+    {edytowanaRata && <Modal tytul={`Edytuj ratę ${edytowanaRata.numer}`} zamknij={() => ustawEdytowanaRate(undefined)}><form className="formularz" onSubmit={zapiszRate}><label className="pole"><span>Wysokość raty</span><input required type="number" min="0" step="0.01" value={formularzRaty.kwota} onChange={(e) => ustawFormularzRaty({ ...formularzRaty, kwota: e.target.value })} /></label><label className="pole"><span>Nadpłata</span><input required type="number" min="0" step="0.01" value={formularzRaty.nadplata} onChange={(e) => ustawFormularzRaty({ ...formularzRaty, nadplata: e.target.value })} /><small>Nadpłata obniży równo kolejne nieopłacone raty.</small></label><label className="pole pole-checkbox pole--pelne"><input type="checkbox" checked={formularzRaty.zaplacona} onChange={(e) => ustawFormularzRaty({ ...formularzRaty, zaplacona: e.target.checked })} /><span>Rata opłacona</span></label><div className="akcje-formularza pole--pelne"><button className="przycisk przycisk--drugorzedny" type="button" onClick={() => ustawEdytowanaRate(undefined)}>Anuluj</button><button className="przycisk przycisk--glowny" type="submit">Zapisz ratę</button></div></form></Modal>}
   </div>
 }

@@ -278,6 +278,35 @@ export interface Wydatek extends EncjaBazowa {
   kategoria: string
   opis: string
   powiazanie?: PowiazanieEncji
+  platnoscStalaId?: Id
+  rataId?: Id
+}
+
+export interface PlatnoscStala extends EncjaBazowa {
+  nazwa: string
+  kwota: number
+  dzienMiesiaca: number
+  dataStartu: string
+  kategoria: string
+  aktywna: boolean
+}
+
+export interface PlanRat extends EncjaBazowa {
+  nazwa: string
+  kwotaCalkowita: number
+  liczbaRat: number
+  dataPierwszejRaty: string
+  kategoria: string
+  status: 'aktywny' | 'splacony'
+}
+
+export interface Rata extends EncjaBazowa {
+  planRatId: Id
+  numer: number
+  data: string
+  kwota: number
+  nadplata: number
+  status: 'planowana' | 'zaplacona'
 }
 
 export interface Budzet extends EncjaBazowa {
@@ -520,6 +549,9 @@ export interface MapaTabel {
   kontakty: Kontakt
   dokumenty: Dokument
   wydatki: Wydatek
+  platnosciStale: PlatnoscStala
+  planyRat: PlanRat
+  raty: Rata
   budzety: Budzet
   pojazdy: Pojazd
   terminyWaznosci: TerminWaznosci

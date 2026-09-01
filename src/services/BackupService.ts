@@ -166,6 +166,15 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     kategoria: z.string(),
     opis: z.string(),
   }),
+  platnosciStale: schematEncji.extend({
+    nazwa: z.string(), kwota: z.number(), dzienMiesiaca: z.number(), dataStartu: z.string(), kategoria: z.string(), aktywna: z.boolean(),
+  }),
+  planyRat: schematEncji.extend({
+    nazwa: z.string(), kwotaCalkowita: z.number(), liczbaRat: z.number(), dataPierwszejRaty: z.string(), kategoria: z.string(), status: z.enum(['aktywny', 'splacony']),
+  }),
+  raty: schematEncji.extend({
+    planRatId: z.string(), numer: z.number(), data: z.string(), kwota: z.number(), nadplata: z.number(), status: z.enum(['planowana', 'zaplacona']),
+  }),
   budzety: schematEncji.extend({
     nazwa: z.string(),
     okres: z.string(),
@@ -360,7 +369,7 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('poczekalnia', ['skrzynka']),
   zrodloRepozytoriow('leki', ['leki', 'dziennikLekow']),
   zrodloRepozytoriow('wizyty', ['wizyty']),
-  zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'budzety']),
+  zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'platnosciStale', 'planyRat', 'raty', 'budzety']),
   zrodloRepozytoriow('samochod', ['pojazdy']),
   zrodloRepozytoriow('zakupy', ['listyZakupow', 'pozycjeZakupow']),
   zrodloRepozytoriow('dokumenty', ['dokumenty']),

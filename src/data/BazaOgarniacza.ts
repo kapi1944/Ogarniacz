@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 6
+export const WERSJA_SCHEMATU_BAZY = 7
 
 export const nazwyTabel: NazwaTabeli[] = [
   'zadania',
@@ -30,6 +30,9 @@ export const nazwyTabel: NazwaTabeli[] = [
   'kontakty',
   'dokumenty',
   'wydatki',
+  'platnosciStale',
+  'planyRat',
+  'raty',
   'budzety',
   'pojazdy',
   'terminyWaznosci',
@@ -67,6 +70,9 @@ const schematPelny = {
   kontakty: 'id, updatedAt, usunietoAt',
   dokumenty: 'id, terminWaznosci, updatedAt, usunietoAt',
   wydatki: 'id, data, kategoria, updatedAt, usunietoAt',
+  platnosciStale: 'id, aktywna, dataStartu, updatedAt, usunietoAt',
+  planyRat: 'id, status, updatedAt, usunietoAt',
+  raty: 'id, planRatId, data, status, updatedAt, usunietoAt',
   budzety: 'id, okres, kategoria, updatedAt, usunietoAt',
   pojazdy: 'id, ocDo, przegladDo, wymianaOlejuDo, planowanySerwisData, updatedAt, usunietoAt',
   terminyWaznosci: 'id, dataWaznosci, status, updatedAt, usunietoAt',
