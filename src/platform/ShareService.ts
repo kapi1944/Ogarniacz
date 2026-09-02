@@ -1,5 +1,21 @@
 import { Share } from '@capacitor/share'
-import type { DaneUdostepniania } from './typy'
+import { registerPlugin, type PluginListenerHandle } from '@capacitor/core'
+import type { DaneUdostepniania, OdebraneDaneUdostepniania } from './typy'
+
+interface WtyczkaOdbioruUdostepniania {
+  addListener(nazwa: 'odebranoUdostepnienie', obsluga: (dane: unknown) => void): Promise<PluginListenerHandle>
+}
+
+const odbiorUdostepniania = registerPlugin<WtyczkaOdbioruUdostepniania>('OdbiorUdostepniania')
+
+export function normalizujOdebraneUdostepnienie(dane: unknown): OdebraneDaneUdostepniania | null {
+  if (!dane || typeof dane !== 'object') return null
+  const zrodlo = dane as Record<string, unknown>
+  if (typeof zrodlo.tekst !== 'string') return null
+  const tekst = zrodlo.tekst.trim().slice(0, 10_000)
+  const tytul = typeof zrodlo.tytul === 'string' ? zrodlo.tytul.trim().slice(0, 200) : ''
+  return tekst ? { tekst, ...(tytul ? { tytul } : {}) } : null
+}
 
 export function utworzUslugeUdostepniania(czyAndroid: boolean) {
   return {
@@ -17,6 +33,14 @@ export function utworzUslugeUdostepniania(czyAndroid: boolean) {
       } catch {
         return false
       }
+    },
+    async nasluchujOdebrania(obsluga: (dane: OdebraneDaneUdostepniania) => void) {
+      if (!czyAndroid) return () => undefined
+      const uchwyt = await odbiorUdostepniania.addListener('odebranoUdostepnienie', (dane) => {
+        const znormalizowane = normalizujOdebraneUdostepnienie(dane)
+        if (znormalizowane) obsluga(znormalizowane)
+      })
+      return () => void uchwyt.remove()
     },
   }
 }

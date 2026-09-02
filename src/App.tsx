@@ -22,7 +22,7 @@ function NieZnaleziono() {
 }
 
 export default function App() {
-  return <BrowserRouter><NawigacjaPlatformy /><DostawcaAplikacji><UkladAplikacji><Routes>
+  return <BrowserRouter><DostawcaAplikacji><NawigacjaPlatformy /><UkladAplikacji><Routes>
     <Route path="/" element={<WidokPulpitu />} />
     <Route path="/skrzynka" element={chron('skrzynka', <WidokSkrzynki />)} />
     <Route path="/zadania" element={chron('zadania', <WidokZadan />)} />

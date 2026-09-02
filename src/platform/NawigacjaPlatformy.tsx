@@ -1,20 +1,28 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { App } from '@capacitor/app'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { obsluzWstecz, useObslugaWstecz } from './obslugaWstecz'
 import { platforma } from './platforma'
-import { parsujDeepLink } from './trasy'
+import { daneSzybkiegoDodawaniaZeSciezki, parsujDeepLink } from './trasy'
+import { useAplikacja } from '../app/KontekstAplikacji'
 
 export function NawigacjaPlatformy() {
   const polozenie = useLocation()
   const nawiguj = useNavigate()
+  const { otworzSzybkieDodawanieZDanymi } = useAplikacja()
   const historia = useRef([polozenie.key])
+
+  const obsluzCel = useCallback((sciezka: string) => {
+    const szybkieDodawanie = daneSzybkiegoDodawaniaZeSciezki(sciezka)
+    if (szybkieDodawanie) otworzSzybkieDodawanieZDanymi(szybkieDodawanie)
+    else nawiguj(sciezka)
+  }, [nawiguj, otworzSzybkieDodawanieZDanymi])
 
   useEffect(() => {
     if (historia.current.at(-1) !== polozenie.key) historia.current.push(polozenie.key)
   }, [polozenie.key])
 
-  useEffect(() => platforma.powiadomienia.nasluchujAkcji((sciezka) => nawiguj(sciezka)), [nawiguj])
+  useEffect(() => platforma.powiadomienia.nasluchujAkcji(obsluzCel), [obsluzCel])
 
   useEffect(() => {
     if (!platforma.natywna) return
@@ -41,7 +49,7 @@ export function NawigacjaPlatformy() {
       ostatniaTrasa = trasa
       if (wyczyscOstatniaTrase) clearTimeout(wyczyscOstatniaTrase)
       wyczyscOstatniaTrase = setTimeout(() => { ostatniaTrasa = undefined }, 2_000)
-      nawiguj(trasa)
+      obsluzCel(trasa)
     }
 
     const nasluchiwanie = App.addListener('appUrlOpen', ({ url }) => obsluzAdres(url))
@@ -54,7 +62,7 @@ export function NawigacjaPlatformy() {
       if (wyczyscOstatniaTrase) clearTimeout(wyczyscOstatniaTrase)
       void nasluchiwanie.then((uchwyt) => uchwyt.remove())
     }
-  }, [nawiguj])
+  }, [obsluzCel])
 
   useObslugaWstecz(polozenie.pathname !== '/', () => {
     if (historia.current.length > 1) {

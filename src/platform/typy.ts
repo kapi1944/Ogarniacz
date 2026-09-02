@@ -42,6 +42,11 @@ export interface DaneUdostepniania {
   pliki?: string[]
 }
 
+export interface OdebraneDaneUdostepniania {
+  tekst: string
+  tytul?: string
+}
+
 export interface PlatformaOgarniacza {
   rodzaj: RodzajPlatformy
   natywna: boolean
@@ -67,6 +72,7 @@ export interface PlatformaOgarniacza {
   udostepnianie: {
     dostepne: () => boolean
     udostepnij: (dane: DaneUdostepniania) => Promise<boolean>
+    nasluchujOdebrania: (obsluga: (dane: OdebraneDaneUdostepniania) => void) => Promise<() => void>
   }
   haptyka: {
     dostepna: () => boolean

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizujSciezkePowiadomienia, parsujDeepLink, sciezkaDlaSourceRef } from './trasy'
+import { daneSzybkiegoDodawaniaZeSciezki, normalizujSciezkePowiadomienia, parsujDeepLink, sciezkaDlaCeluNawigacji, sciezkaDlaSourceRef } from './trasy'
 
 describe('parser deep linków Ogarniacza', () => {
   it('mapuje poprawny URL na trasę aplikacji', () => {
@@ -16,6 +16,17 @@ describe('parser deep linków Ogarniacza', () => {
 
   it('zachowuje dozwolony identyfikator elementu', () => {
     expect(parsujDeepLink('ogarniacz://zadania?element=zadanie%207')).toBe('/zadania?element=zadanie+7')
+  })
+
+  it('otwiera wspólne szybkie dodawanie z typu skrótu i przekazanej treści', () => {
+    const sciezka = parsujDeepLink('ogarniacz://dodaj?typ=notatka&tekst=https%3A%2F%2Fexample.com')
+    expect(sciezka).toBe('/dodaj?typ=notatka&tekst=https%3A%2F%2Fexample.com')
+    expect(daneSzybkiegoDodawaniaZeSciezki(sciezka!)).toEqual({ typ: 'notatka', tresc: 'https://example.com' })
+  })
+
+  it('buduje trasę z jednego celu route, entityId i sourceRef', () => {
+    expect(sciezkaDlaCeluNawigacji({ route: '/przypomnienia', entityId: 'r-1' })).toBe('/przypomnienia?element=r-1')
+    expect(sciezkaDlaCeluNawigacji({ route: '/przypomnienia', entityId: 'r-1', sourceRef: { typ: 'zadania', id: 'z-1' } })).toBe('/zadania?element=z-1')
   })
 
   it('odrzuca nieznaną trasę i niedozwolony parametr', () => {

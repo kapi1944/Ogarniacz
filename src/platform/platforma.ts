@@ -1,4 +1,4 @@
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core'
 import { utworzUslugePlikow } from './FileService'
 import { utworzUslugeHaptyki } from './HapticsService'
 import { utworzUslugeCykluZycia } from './LifecycleService'
@@ -23,9 +23,22 @@ export const platforma: PlatformaOgarniacza = {
 
 let inicjalizacjaPlatformy: Promise<void> | undefined
 
+function dopasujPaskiSystemowe() {
+  const styl = document.documentElement.dataset.motyw === 'ciemny'
+    ? SystemBarsStyle.Dark
+    : SystemBarsStyle.Light
+  void SystemBars.setStyle({ style: styl }).catch(() => undefined)
+}
+
 export function inicjalizujPlatforme() {
   document.documentElement.dataset.platforma = platforma.rodzaj
   if (!czyAndroid) return Promise.resolve()
+
+  dopasujPaskiSystemowe()
+  new MutationObserver(dopasujPaskiSystemowe).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-motyw'],
+  })
 
   inicjalizacjaPlatformy ??= Promise.all([
     uslugaPowiadomien.inicjalizuj(),

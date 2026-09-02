@@ -18,7 +18,7 @@ export const DOMYSLNE_KAFELKI_PULPITU: KonfiguracjaKafelkaPulpitu[] = [
 
 
 const domyslneTypySzybkiegoDodawania: TypSzybkiegoDodawania[] = [
-  'zadanie', 'notatka', 'wizyta', 'lek', 'wydatek', 'samochod',
+  'zadanie', 'notatka', 'wydarzenie', 'przypomnienie', 'wizyta', 'lek', 'wydatek', 'samochod',
 ]
 
 export const DOMYSLNE_USTAWIENIA: Ustawienia = {
@@ -72,7 +72,7 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
     kolejnoscTypow: [...domyslneTypySzybkiegoDodawania],
     uczKolejnosci: true,
     parserWlaczony: true,
-    licznikiUzyc: { zadanie: 0, notatka: 0, wizyta: 0, lek: 0, wydatek: 0, samochod: 0 },
+    licznikiUzyc: { zadanie: 0, notatka: 0, wydarzenie: 0, przypomnienie: 0, wizyta: 0, lek: 0, wydatek: 0, samochod: 0 },
   },
   dostepnosc: {
     ograniczRuch: false,

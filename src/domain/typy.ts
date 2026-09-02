@@ -377,7 +377,13 @@ export type MotywAplikacji = 'jasny' | 'ciemny' | 'systemowy'
 export type GestoscInterfejsu = 'komfortowa' | 'zwarta'
 export type DostepnoscPlanistyczna = 'czesciowa' | 'pelna'
 export type ZakresZmianyHarmonogramu = 'tylko_ten_dzien' | 'nowa_regula'
-export type TypSzybkiegoDodawania = 'zadanie' | 'notatka' | 'wizyta' | 'lek' | 'wydatek' | 'samochod'
+export type TypSzybkiegoDodawania = 'zadanie' | 'notatka' | 'wydarzenie' | 'przypomnienie' | 'wizyta' | 'lek' | 'wydatek' | 'samochod'
+
+export interface DaneSzybkiegoDodawania {
+  typ?: TypSzybkiegoDodawania
+  tresc?: string
+  tytul?: string
+}
 
 export type TypKafelkaPulpitu = 'zadania' | 'pilne' | 'wizyty' | 'leki' | 'finanse' | 'samochod' | 'zakupy' | 'poczekalnia' | 'notatki'
 export type RozmiarKafelkaPulpitu = 'small' | 'medium' | 'large'

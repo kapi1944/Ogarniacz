@@ -4,4 +4,8 @@
     <string name="title_activity_main">Ogarniacz</string>
     <string name="package_name">pl.ogarniacz.app</string>
     <string name="custom_url_scheme">pl.ogarniacz.app</string>
+    <string name="shortcut_zadanie">Nowe zadanie</string>
+    <string name="shortcut_notatka">Nowa notatka</string>
+    <string name="shortcut_wydarzenie">Nowe wydarzenie</string>
+    <string name="shortcut_przypomnienie">Nowe przypomnienie</string>
 </resources>
