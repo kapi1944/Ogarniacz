@@ -34,6 +34,13 @@ describe.sequential('SyncEngine', () => {
     for (const tabela of nazwyTabelSynchronizowanych) await baza.table(tabela).clear()
   })
 
+  it('nie synchronizuje lokalnego stanu ani danych pamięci i historii Echo', () => {
+    expect(nazwyTabelSynchronizowanych).not.toContain('stanSynchronizacji')
+    expect(nazwyTabelSynchronizowanych).not.toContain('konfliktySynchronizacji')
+    expect(nazwyTabelSynchronizowanych).not.toContain('pamiecEcho')
+    expect(nazwyTabelSynchronizowanych).not.toContain('dziennikEcho')
+  })
+
   it('wysyła lokalną zmianę przy synchronizacji przyrostowej', async () => {
     const zdalne = new RepozytoriumZdalneInMemory()
     await baza.tabela('zadania').put(zadanie('lokalne', 'Lokalne', '2026-08-20T10:00:00.000Z'))
@@ -121,5 +128,44 @@ describe.sequential('SyncEngine', () => {
     await utworzSilnik().synchronizuj(zdalne)
 
     expect(pobierzZmiany).toHaveBeenCalledTimes(2)
+  })
+
+  it('przenosi aktualny rekord z urządzenia A na urządzenie B', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    await baza.tabela('zadania').put(zadanie('wspolne-a-b', 'Z urządzenia A', '2026-08-26T10:00:00.000Z'))
+    await utworzSilnik().synchronizuj(zdalne)
+
+    await baza.tabela('zadania').clear()
+    await baza.tabela('stanSynchronizacji').clear()
+    const urzadzenieB = new SyncEngine({
+      teraz: () => CZAS_SYNCHRONIZACJI,
+      czyOnline: () => true,
+      installationId: () => 'instalacja-b',
+      opoznieniePonowieniaMs: 0,
+    })
+    const wynik = await urzadzenieB.synchronizuj(zdalne)
+
+    expect(wynik.pobrane).toBe(1)
+    expect(await baza.tabela('zadania').get('wspolne-a-b')).toMatchObject({ tytul: 'Z urządzenia A' })
+  })
+
+  it('zachowuje zmianę offline i wysyła ją po odzyskaniu połączenia', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    let online = false
+    const silnik = new SyncEngine({
+      teraz: () => CZAS_SYNCHRONIZACJI,
+      czyOnline: () => online,
+      installationId: () => 'instalacja-offline',
+      opoznieniePonowieniaMs: 0,
+    })
+    await baza.tabela('zadania').put(zadanie('offline', 'Zapisane offline', '2026-08-27T10:00:00.000Z'))
+
+    expect((await silnik.synchronizuj(zdalne)).stan).toBe('offline')
+    expect(await zdalne.pobierzWszystkie()).toHaveLength(0)
+    online = true
+    const wynik = await silnik.synchronizuj(zdalne)
+
+    expect(wynik.wyslane).toBe(1)
+    expect((await zdalne.pobierzWszystkie())[0].rekord).toMatchObject({ id: 'offline', tytul: 'Zapisane offline' })
   })
 })

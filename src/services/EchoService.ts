@@ -1,8 +1,9 @@
 import { AgentEcho, type OpcjeAgentaEcho } from './echo/AgentEcho'
 import type { AkcjaDoPotwierdzeniaEcho, OdpowiedzEcho, ZrodloWejsciaEcho } from './echo/typyEcho'
 
-export type { OdpowiedzEcho, ProviderModeluEcho, TrybEcho } from './echo/typyEcho'
+export type { OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, TrybEcho } from './echo/typyEcho'
 export { LokalnyOgraniczonyProviderEcho } from './echo/LokalnyOgraniczonyProviderEcho'
+export { LokalnySemantycznyProviderEcho } from './echo/LokalnySemantycznyProviderEcho'
 
 export class EchoService {
   readonly agent: AgentEcho

@@ -284,7 +284,7 @@ function czyBlob(wartosc: unknown): wartosc is Blob {
   return wartosc instanceof Blob || Object.prototype.toString.call(wartosc) === '[object Blob]'
 }
 
-async function przygotujWartoscDoTransportu(wartosc: unknown): Promise<unknown> {
+export async function przygotujWartoscDoTransportu(wartosc: unknown): Promise<unknown> {
   if (czyBlob(wartosc)) {
     return {
       __ogarniaczBlob: true,
@@ -303,7 +303,7 @@ async function przygotujWartoscDoTransportu(wartosc: unknown): Promise<unknown> 
   return wartosc
 }
 
-function odtworzWartoscZTransportu(wartosc: unknown): unknown {
+export function odtworzWartoscZTransportu(wartosc: unknown): unknown {
   if (Array.isArray(wartosc)) return wartosc.map(odtworzWartoscZTransportu)
   if (wartosc && typeof wartosc === 'object') {
     const rekord = wartosc as Record<string, unknown>

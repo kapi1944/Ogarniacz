@@ -14,7 +14,7 @@ import { importujUstawienia, utworzEksportUstawien } from '../../services/Transf
 import { pobierzNajnowszaHistorie } from '../../services/HistoriaZmianService'
 import { pobierzInstallationId } from '../../services/InstallationService'
 import { pobierzKonfliktySynchronizacji, pobierzStanSynchronizacji } from '../../services/SyncEngine'
-import { rozstrzygnijKonfliktSynchronizacji, synchronizujTeraz as uruchomSynchronizacje } from '../../services/SynchronizacjaAplikacji'
+import { czySynchronizacjaSkonfigurowana, rozstrzygnijKonfliktSynchronizacji, synchronizujTeraz as uruchomSynchronizacje } from '../../services/SynchronizacjaAplikacji'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { platforma } from '../../platform/platforma'
 import type { StanPowiadomienPlatformy, StanZgody } from '../../platform/typy'
@@ -34,6 +34,7 @@ const etykietaZgody = (stan: StanZgody | null | undefined) => {
 const etykietySynchronizacji: Record<StatusSynchronizacji, string> = {
   zsynchronizowano: 'zsynchronizowano',
   synchronizacja: 'synchronizacja',
+  oczekuje: 'oczekuje na synchronizację',
   offline: 'offline',
   konflikt: 'konflikt',
   blad: 'błąd',
@@ -42,7 +43,7 @@ const etykietySynchronizacji: Record<StatusSynchronizacji, string> = {
 const wariantSynchronizacji = (stan?: StatusSynchronizacji): 'neutralny' | 'sukces' | 'ostrzezenie' | 'blad' | 'informacja' => {
   if (stan === 'zsynchronizowano') return 'sukces'
   if (stan === 'synchronizacja') return 'informacja'
-  if (stan === 'konflikt' || stan === 'offline') return 'ostrzezenie'
+  if (stan === 'konflikt' || stan === 'offline' || stan === 'oczekuje') return 'ostrzezenie'
   if (stan === 'blad') return 'blad'
   return 'neutralny'
 }
@@ -71,6 +72,7 @@ export function WidokUstawien() {
   const [grant, ustawGrant] = useState({ editorId: '', modul: 'zadania' as NazwaModulu, odczyt: true, edycja: false })
   const [stanPowiadomien, ustawStanPowiadomien] = useState<StanPowiadomienPlatformy>()
   const installationId = pobierzInstallationId()
+  const synchronizacjaSkonfigurowana = czySynchronizacjaSkonfigurowana()
 
   useEffect(() => {
     czyMoznaWczytacDemo().then(ustawMoznaDemo)
@@ -218,7 +220,7 @@ export function WidokUstawien() {
       <Karta><div className="tytul-karty"><Database aria-hidden="true" /><span>Dane lokalne</span></div><h2>IndexedDB</h2><p>Szacowane użycie pamięci tej witryny: <strong>{zajete}</strong>. Dane pozostają w profilu tej przeglądarki.</p><Link to="/grafik" className="przycisk przycisk--drugorzedny">Ustaw grafik pracy</Link></Karta>
     </section>
 
-    <Karta><div className="naglowek-karty"><div><h2><Cloud aria-hidden="true" /> Synchronizacja</h2><p>UI korzysta z SyncEngine, bez zależności od konkretnego backendu.</p></div><Znacznik wariant={wariantSynchronizacji(stanSynchronizacji?.stan)}>{etykietySynchronizacji[stanSynchronizacji?.stan ?? 'zsynchronizowano']}</Znacznik></div><div className="lista-kompaktowa"><div><span>Ostatni sync</span><strong>{stanSynchronizacji?.ostatniSync ? new Date(stanSynchronizacji.ostatniSync).toLocaleString('pl-PL') : 'jeszcze nie wykonano'}</strong></div><div><span>Konflikty</span><strong>{konfliktySynchronizacji.length}</strong></div><div><span>installationId</span><code>{installationId}</code></div></div>{stanSynchronizacji?.ostatniBlad && <p className="tekst-pomocniczy">Ostatni błąd: {stanSynchronizacji.ostatniBlad}</p>}<p className="tekst-pomocniczy">Obecnie podłączony jest wyłącznie testowy provider in-memory. Dane zdalne znikają po przeładowaniu aplikacji; produkcyjny backend nie został jeszcze wybrany.</p><button type="button" className="przycisk przycisk--glowny" disabled={stanSynchronizacji?.stan === 'synchronizacja'} onClick={synchronizujTeraz}><RefreshCw aria-hidden="true" />Synchronizuj teraz</button>{konfliktySynchronizacji.length > 0 && <div className="podglad-manifestu"><h3>Konflikty wymagające decyzji</h3><div className="lista-kompaktowa">{konfliktySynchronizacji.map((konflikt) => <div key={konflikt.id}><div><strong>{konflikt.tabela} · {konflikt.rekordId}</strong><small>Wykryto {new Date(konflikt.wykrytoAt).toLocaleString('pl-PL')}</small></div><button type="button" className="przycisk przycisk--maly" onClick={() => rozstrzygnijKonflikt(konflikt.id, 'lokalny')}>Wybierz lokalny</button><button type="button" className="przycisk przycisk--maly" onClick={() => rozstrzygnijKonflikt(konflikt.id, 'zdalny')}>Wybierz zdalny</button></div>)}</div></div>}</Karta>
+    <Karta><div className="naglowek-karty"><div><h2><Cloud aria-hidden="true" /> Synchronizacja</h2><p>Lokalne dane są okresowo wymieniane z serwerem Ogarniacza.</p></div><Znacznik wariant={wariantSynchronizacji(stanSynchronizacji?.stan)}>{etykietySynchronizacji[stanSynchronizacji?.stan ?? 'zsynchronizowano']}</Znacznik></div><div className="lista-kompaktowa"><div><span>Ostatni sync</span><strong>{stanSynchronizacji?.ostatniSync ? new Date(stanSynchronizacji.ostatniSync).toLocaleString('pl-PL') : 'jeszcze nie wykonano'}</strong></div><div><span>Konflikty</span><strong>{konfliktySynchronizacji.length}</strong></div><div><span>installationId</span><code>{installationId}</code></div></div>{stanSynchronizacji?.ostatniBlad && <p className="tekst-pomocniczy">Ostatni błąd: {stanSynchronizacji.ostatniBlad}</p>}<p className="tekst-pomocniczy">{synchronizacjaSkonfigurowana ? 'Synchronizacja działa przy starcie, wznowieniu, odzyskaniu sieci, okresowo i po lokalnych zmianach.' : 'Ustaw VITE_SYNC_API_URL i VITE_SYNC_ACCESS_KEY podczas budowania aplikacji, aby połączyć to urządzenie z serwerem.'}</p><button type="button" className="przycisk przycisk--glowny" disabled={!synchronizacjaSkonfigurowana || stanSynchronizacji?.stan === 'synchronizacja'} onClick={synchronizujTeraz}><RefreshCw aria-hidden="true" />Synchronizuj teraz</button>{konfliktySynchronizacji.length > 0 && <div className="podglad-manifestu"><h3>Konflikty wymagające decyzji</h3><div className="lista-kompaktowa">{konfliktySynchronizacji.map((konflikt) => <div key={konflikt.id}><div><strong>{konflikt.tabela} · {konflikt.rekordId}</strong><small>Wykryto {new Date(konflikt.wykrytoAt).toLocaleString('pl-PL')}</small></div><button type="button" className="przycisk przycisk--maly" onClick={() => rozstrzygnijKonflikt(konflikt.id, 'lokalny')}>Wybierz lokalny</button><button type="button" className="przycisk przycisk--maly" onClick={() => rozstrzygnijKonflikt(konflikt.id, 'zdalny')}>Wybierz zdalny</button></div>)}</div></div>}</Karta>
 
     <Karta><div className="naglowek-karty"><div><h2>Przenieś dane między urządzeniami</h2><p>Do czasu automatycznej synchronizacji transfer między desktopem/PWA i Androidem jest ręczny.</p></div></div><p>Na urządzeniu źródłowym utwórz wspólny backup, zapisz go lub udostępnij. Na urządzeniu docelowym wybierz ten sam plik JSON i potwierdź restore po walidacji.</p><p className="tekst-pomocniczy">Id tej instalacji: <code>{installationId}</code>. Jest losowe i nie korzysta z IMEI, Android ID ani identyfikatorów sprzętowych.</p></Karta>
 

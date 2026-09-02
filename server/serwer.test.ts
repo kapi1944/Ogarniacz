@@ -68,3 +68,56 @@ test('endpoint Echo bez providera zwraca kontrolowany tryb ograniczony', async (
   await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
   baza.close()
 })
+
+test('sync przenosi rekord z instalacji A do instalacji B', async () => {
+  const baza = new DatabaseSync(':memory:')
+  uruchomMigracje(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({
+    PORT: '8788',
+    DATABASE_PATH: ':memory:',
+    SYNC_USER_ID: 'wlasciciel',
+    SYNC_ACCESS_KEY: 'sekretny-klucz-testowy',
+  })
+  const serwer = utworzSerwer(konfiguracja, baza)
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const url = `http://127.0.0.1:${adres.port}/api/sync/changes`
+  const rekord = { id: 'zadanie-a', createdAt: '2026-09-01T08:00:00.000Z', updatedAt: '2026-09-01T09:00:00.000Z', tytul: 'Z urządzenia A' }
+  const naglowkiA = { authorization: 'Bearer sekretny-klucz-testowy', 'x-ogarniacz-installation-id': 'instalacja-a', 'content-type': 'application/json' }
+  const wyslanie = await fetch(url, { method: 'POST', headers: naglowkiA, body: JSON.stringify({ od: '1970-01-01T00:00:00.000Z', installationId: 'instalacja-a', zmiany: [{ tabela: 'zadania', rekord, installationId: 'instalacja-a' }] }) })
+  assert.equal(wyslanie.status, 200)
+
+  const pobranie = await fetch(`${url}?od=1970-01-01T00%3A00%3A00.000Z`, { headers: { authorization: 'Bearer sekretny-klucz-testowy', 'x-ogarniacz-installation-id': 'instalacja-b' } })
+  assert.equal(pobranie.status, 200)
+  assert.deepEqual(await pobranie.json(), { zmiany: [{ tabela: 'zadania', rekord, installationId: 'instalacja-a' }] })
+  assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM instalacje').get()?.liczba, 2)
+  await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+  baza.close()
+})
+
+test('sync odrzuca ciche nadpisanie nowszej wersji z innej instalacji', async () => {
+  const baza = new DatabaseSync(':memory:')
+  uruchomMigracje(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:', SYNC_USER_ID: 'wlasciciel', SYNC_ACCESS_KEY: 'sekretny-klucz-testowy' })
+  const serwer = utworzSerwer(konfiguracja, baza)
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const url = `http://127.0.0.1:${adres.port}/api/sync/changes`
+  const wyslij = (instalacja: string, tytul: string, updatedAt: string) => fetch(url, {
+    method: 'POST',
+    headers: { authorization: 'Bearer sekretny-klucz-testowy', 'x-ogarniacz-installation-id': instalacja, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      od: '1970-01-01T00:00:00.000Z',
+      installationId: instalacja,
+      zmiany: [{ tabela: 'zadania', installationId: instalacja, rekord: { id: 'wspolne', createdAt: '2026-09-01T08:00:00.000Z', updatedAt, tytul } }],
+    }),
+  })
+
+  assert.equal((await wyslij('instalacja-a', 'Wersja A', '2026-09-01T09:00:00.000Z')).status, 200)
+  assert.equal((await wyslij('instalacja-b', 'Wersja B', '2026-09-01T10:00:00.000Z')).status, 409)
+  assert.equal(JSON.parse(String(baza.prepare('SELECT dane_json FROM rekordy_synchronizacji').get()?.dane_json)).tytul, 'Wersja A')
+  await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+  baza.close()
+})

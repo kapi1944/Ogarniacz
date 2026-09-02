@@ -356,7 +356,7 @@ export interface WpisHistoriiZmian extends EncjaBazowa {
   po?: Record<string, unknown>
 }
 
-export type StatusSynchronizacji = 'zsynchronizowano' | 'synchronizacja' | 'offline' | 'konflikt' | 'blad'
+export type StatusSynchronizacji = 'zsynchronizowano' | 'synchronizacja' | 'oczekuje' | 'offline' | 'konflikt' | 'blad'
 
 export interface StanSynchronizacji extends EncjaBazowa {
   stan: StatusSynchronizacji

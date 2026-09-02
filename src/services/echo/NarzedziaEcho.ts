@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { pobierzRepozytorium } from '../../data/Repozytorium'
 import { utworzMetadane } from '../../domain/fabryki'
 import type { DziennikEcho, Przypomnienie, RyzykoDzialania } from '../../domain/typy'
-import { czyZadanieZalegle, utworzZadanie } from '../ZadaniaService'
+import { czyZadanieZalegle, odroczZadanie, utworzZadanie } from '../ZadaniaService'
 import { PolitykaDzialanEcho } from './PolitykaDzialanEcho'
 import type { DefinicjaNarzedziaEcho, WynikNarzedziaEcho, WywolanieNarzedziaEcho } from './typyEcho'
 
@@ -89,8 +89,32 @@ export class WykonawcaNarzedziEcho {
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const priorytet = z.enum(['niski', 'normalny', 'wysoki', 'krytyczny'])
 
+function uproscDoWyszukiwania(tekst: string): string[] {
+  return tekst.toLocaleLowerCase('pl-PL').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l')
+    .split(/[^a-z0-9]+/).filter((slowo) => slowo.length > 2)
+}
+
+function pasujaOdmiany(lewe: string, prawe: string): boolean {
+  if (lewe.includes(prawe) || prawe.includes(lewe)) return true
+  const dlugoscRdzenia = Math.min(lewe.length, prawe.length) - 1
+  return dlugoscRdzenia >= 4 && lewe.slice(0, dlugoscRdzenia) === prawe.slice(0, dlugoscRdzenia)
+}
+
 export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
   const rejestr = new RejestrNarzedziEcho()
+
+  rejestr.zarejestruj({
+    nazwa: 'search_tasks',
+    opis: 'Wyszukuje zadania po słowach z tytułu i opisu. Nie modyfikuje danych.',
+    schematArgumentow: z.object({ fraza: z.string().trim().min(2).max(160) }),
+    ryzyko: 'niskie',
+    wykonaj: async ({ fraza }) => {
+      const szukane = uproscDoWyszukiwania(fraza)
+      return (await pobierzRepozytorium('zadania').lista())
+        .filter((zadanie) => szukane.every((slowo) => uproscDoWyszukiwania(`${zadanie.tytul} ${zadanie.opis}`).some((wartosc) => pasujaOdmiany(wartosc, slowo))))
+        .map(({ id, tytul, status, termin }) => ({ id, tytul, status, termin }))
+    },
+  })
 
   rejestr.zarejestruj({
     nazwa: 'list_tasks',
@@ -134,15 +158,43 @@ export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
     nazwa: 'update_task',
     opis: 'Zmienia wskazane pola istniejącego zadania.',
     schematArgumentow: z.object({ id: z.string().min(1), zmiany: z.object({ tytul: z.string().trim().min(1).max(160).optional(), opis: z.string().max(5000).optional(), status: z.enum(['otwarte', 'w_toku', 'wykonane']).optional(), priorytet: priorytet.optional(), termin: dataIso.nullable().optional() }).refine((zmiany) => Object.keys(zmiany).length > 0) }),
-    ryzyko: 'umiarkowane',
+    ryzyko: 'niskie',
     wykonaj: async ({ id, zmiany }) => {
       const repozytorium = pobierzRepozytorium('zadania')
       const zadanie = await repozytorium.pobierz(id)
       if (!zadanie) return null
       const termin = zmiany.termin === null ? undefined : (zmiany.termin ?? zadanie.termin)
-      const zaktualizowane = { ...zadanie, ...zmiany, termin }
+      const polaczone = { ...zadanie, ...zmiany, termin }
+      const zaktualizowane = typeof zmiany.termin === 'string' ? odroczZadanie(polaczone, zmiany.termin) : polaczone
       await repozytorium.zapisz(zaktualizowane)
       return { id, tytul: zaktualizowane.tytul, status: zaktualizowane.status, termin: zaktualizowane.termin }
+    },
+  })
+
+  rejestr.zarejestruj({
+    nazwa: 'delete_task',
+    opis: 'Usuwa jedno wskazane zadanie. Usunięcie można cofnąć w standardowej warstwie danych.',
+    schematArgumentow: z.object({ id: z.string().min(1) }),
+    ryzyko: 'niskie',
+    wykonaj: async ({ id }) => {
+      const repozytorium = pobierzRepozytorium('zadania')
+      const zadanie = await repozytorium.pobierz(id)
+      if (!zadanie) throw new Error('Nie znaleziono zadania.')
+      await repozytorium.usun(id)
+      return { id, tytul: zadanie.tytul, usunieto: true }
+    },
+  })
+
+  rejestr.zarejestruj({
+    nazwa: 'delete_tasks_bulk',
+    opis: 'Usunięcie wielu zadań z podanego zakresu dat.',
+    schematArgumentow: z.object({ terminOd: dataIso, terminDo: dataIso }),
+    ryzyko: 'wysokie',
+    wykonaj: async ({ terminOd, terminDo }) => {
+      const repozytorium = pobierzRepozytorium('zadania')
+      const zadania = (await repozytorium.lista()).filter((zadanie) => zadanie.termin && zadanie.termin >= terminOd && zadanie.termin <= terminDo)
+      for (const zadanie of zadania) await repozytorium.usun(zadanie.id)
+      return { liczba: zadania.length, tytuly: zadania.map(({ tytul }) => tytul) }
     },
   })
 
@@ -166,6 +218,21 @@ export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
       const przypomnienie: Przypomnienie = { ...utworzMetadane(), tytul, typ: 'absolutne', czas, priorytet: poziom ?? 'normalny', stan: 'nowe', eskalacja: false }
       await pobierzRepozytorium('przypomnienia').zapisz(przypomnienie)
       return { id: przypomnienie.id, tytul, czas }
+    },
+  })
+
+  rejestr.zarejestruj({
+    nazwa: 'reschedule_reminder',
+    opis: 'Przenosi jedno wskazane przypomnienie na nowy termin.',
+    schematArgumentow: z.object({ id: z.string().min(1), czas: z.string().datetime() }),
+    ryzyko: 'niskie',
+    wykonaj: async ({ id, czas }) => {
+      const repozytorium = pobierzRepozytorium('przypomnienia')
+      const przypomnienie = await repozytorium.pobierz(id)
+      if (!przypomnienie) throw new Error('Nie znaleziono przypomnienia.')
+      const zaktualizowane: Przypomnienie = { ...przypomnienie, czas, odroczoneDo: undefined, stan: 'nowe' }
+      await repozytorium.zapisz(zaktualizowane)
+      return { id, tytul: zaktualizowane.tytul, czas }
     },
   })
 

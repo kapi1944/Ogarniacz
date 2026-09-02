@@ -3,6 +3,8 @@ export interface KonfiguracjaSerwera {
   host: string
   sciezkaBazy: string
   publicznyUrl?: string
+  syncUserId?: string
+  syncAccessKey?: string
 }
 
 function odczytajPort(wartosc: string | undefined): number {
@@ -21,5 +23,7 @@ export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env):
     host: env.HOST?.trim() || '127.0.0.1',
     sciezkaBazy,
     publicznyUrl: env.PUBLIC_URL?.trim() || undefined,
+    syncUserId: env.SYNC_USER_ID?.trim() || undefined,
+    syncAccessKey: env.SYNC_ACCESS_KEY?.trim() || undefined,
   }
 }
