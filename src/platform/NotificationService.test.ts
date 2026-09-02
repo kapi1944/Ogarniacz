@@ -13,6 +13,7 @@ const lokalnePowiadomienia = vi.hoisted(() => ({
   createChannel: vi.fn(),
   getPending: vi.fn(),
   listChannels: vi.fn(),
+  registerActionTypes: vi.fn(),
   requestPermissions: vi.fn(),
   schedule: vi.fn(),
   update: vi.fn(),
@@ -36,6 +37,7 @@ beforeEach(() => {
     { id: 'ogarniacz-finanse', importance: 3 },
   ] })
   lokalnePowiadomienia.requestPermissions.mockResolvedValue({ display: 'granted' })
+  lokalnePowiadomienia.registerActionTypes.mockResolvedValue(undefined)
   lokalnePowiadomienia.schedule.mockResolvedValue({ notifications: [] })
   lokalnePowiadomienia.update.mockResolvedValue(undefined)
 })
@@ -78,6 +80,7 @@ describe('mapowanie przypomnienia na kanał platformowy', () => {
     expect(wynik?.termin).toBe('2026-09-01T09:30:00.000Z')
     expect(wynik?.kanal).toBe('ogarniacz-wazne')
     expect(wynik?.sciezka).toBe('/wizyty?element=wizyta-1')
+    expect(wynik?.wymagaDokladnosci).toBe(false)
   })
 
   it.each([
@@ -112,12 +115,30 @@ describe('routing sourceRef', () => {
     usluga.nasluchujAkcji(obsluga)
     const akcja = lokalnePowiadomienia.addListener.mock.calls[0][1]
 
-    akcja({ notification: { extra: { sciezka: '/zadania?element=zadanie-1' } } })
-    akcja({ notification: { extra: { sciezka: '/zadania?element=zadanie-1' } } })
-    akcja({ notification: { extra: { sciezka: '/admin?element=zadanie-1' } } })
+    akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/zadania?element=zadanie-1' } } })
+    akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/zadania?element=zadanie-1' } } })
+    akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/admin?element=zadanie-1' } } })
 
     expect(obsluga).toHaveBeenCalledTimes(1)
-    expect(obsluga).toHaveBeenCalledWith('/zadania?element=zadanie-1')
+    expect(obsluga).toHaveBeenCalledWith({
+      typ: 'otworz',
+      przypomnienieId: 'przypomnienie-1',
+      sciezka: '/zadania?element=zadanie-1',
+    })
+  })
+
+  it('rejestruje tylko dwie proste akcje przypomnienia', async () => {
+    await utworzUslugePowiadomien(true).inicjalizuj()
+
+    expect(lokalnePowiadomienia.registerActionTypes).toHaveBeenCalledWith({
+      types: [{
+        id: 'ogarniacz-przypomnienie',
+        actions: [
+          { id: 'wykonane', title: 'Wykonane' },
+          { id: 'odrocz', title: 'Za 15 min' },
+        ],
+      }],
+    })
   })
 })
 

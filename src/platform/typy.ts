@@ -4,6 +4,13 @@ export type RodzajPlatformy = 'web' | 'android'
 export type StanCykluZycia = 'aktywny' | 'nieaktywny'
 export type StanZgody = 'przyznana' | 'odrzucona' | 'pytaj' | 'niedostepna'
 export type KanalPowiadomienia = 'ogarniacz-wazne' | 'ogarniacz-zwykle' | 'ogarniacz-zdrowie' | 'ogarniacz-finanse'
+export type TypAkcjiPowiadomienia = 'otworz' | 'wykonane' | 'odrocz'
+
+export interface AkcjaPowiadomienia {
+  typ: TypAkcjiPowiadomienia
+  przypomnienieId?: string
+  sciezka: string
+}
 
 export interface DanePowiadomienia {
   tytul: string
@@ -63,7 +70,7 @@ export interface PlatformaOgarniacza {
     anuluj: (identyfikatory: number[]) => Promise<void>
     przeplanuj: (powiadomienia: PowiadomieniePlatformowe[]) => Promise<void>
     synchronizuj: (przypomnienia: Przypomnienie[], wlaczone: boolean) => Promise<WynikSynchronizacjiPowiadomien>
-    nasluchujAkcji: (obsluga: (sciezka: string) => void) => () => void
+    nasluchujAkcji: (obsluga: (akcja: AkcjaPowiadomienia) => void) => () => void
   }
   pliki: {
     zapisz: (nazwa: string, dane: Blob) => Promise<boolean>
