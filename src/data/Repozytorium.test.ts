@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { baza, inicjalizujBaze } from './BazaOgarniacza'
 import { utworzMetadane } from '../domain/fabryki'
-import type { Przypomnienie, Wizyta } from '../domain/typy'
+import type { Przypomnienie, Skierowanie, Wizyta } from '../domain/typy'
 import { pobierzRepozytorium } from './Repozytorium'
 
 describe.sequential('powiązane przypomnienia rekordów źródłowych', () => {
@@ -85,5 +85,35 @@ describe.sequential('powiązane przypomnienia rekordów źródłowych', () => {
     await pobierzRepozytorium('wizyty').zapisz({ ...wizyta, status: 'odbyta' })
 
     expect(await baza.tabela('przypomnienia').get(przypomnienie.id)).toMatchObject({ usunietoAt: expect.any(String) })
+  })
+})
+
+describe.sequential('skierowania', () => {
+  beforeEach(async () => {
+    baza.close()
+    await Dexie.delete('ogarniacz-v1')
+    await inicjalizujBaze()
+  })
+
+  it('zapisuje zmianę statusu i powiązanie z wizytą po ponownym odczycie', async () => {
+    const skierowanie: Skierowanie = {
+      ...utworzMetadane('skierowanie-1'),
+      nazwa: 'Konsultacja specjalistyczna',
+      dataWystawienia: '2026-09-03',
+      typCelu: 'specjalista',
+      cel: 'Konsultacja',
+      status: 'do_umowienia',
+    }
+    const repozytorium = pobierzRepozytorium('skierowania')
+    await repozytorium.zapisz(skierowanie)
+    await repozytorium.zapisz({ ...skierowanie, status: 'umowiono', wizytaId: 'wizyta-1' })
+
+    await baza.close()
+    await inicjalizujBaze()
+
+    await expect(pobierzRepozytorium('skierowania').pobierz(skierowanie.id)).resolves.toMatchObject({
+      status: 'umowiono',
+      wizytaId: 'wizyta-1',
+    })
   })
 })

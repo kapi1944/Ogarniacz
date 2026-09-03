@@ -4,7 +4,7 @@ import {
   AlarmClock, Archive, Bell, BookOpen, CalendarClock, CalendarDays, CheckSquare, ChevronLeft,
   ChevronRight, CircleDollarSign, Clock3, ContactRound, FileClock, Files, HeartPulse, Inbox,
   Car, Ellipsis, LayoutDashboard, Lightbulb, ListChecks, MessageCircle, Moon, NotebookPen, PackageCheck,
-  Pill, Plus, Search, Settings, ShoppingCart, Sparkles, Sun, Target, WalletCards, X,
+  Plus, Search, Settings, ShoppingCart, Sparkles, Sun, Target, WalletCards, X,
 } from 'lucide-react'
 import type { NazwaModulu } from '../domain/typy'
 import { useObslugaWstecz } from '../platform/obslugaWstecz'
@@ -29,8 +29,7 @@ const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
     { etykieta: 'Grafik pracy', adres: '/grafik', modul: 'grafik', ikona: Clock3 },
   ] },
   { etykieta: 'Zdrowie', pozycje: [
-    { etykieta: 'Leki', adres: '/leki', modul: 'leki', ikona: Pill },
-    { etykieta: 'Wizyty', adres: '/wizyty', modul: 'wizyty', ikona: HeartPulse },
+    { etykieta: 'Zdrowie', adres: '/zdrowie', modul: 'zdrowie', ikona: HeartPulse },
     { etykieta: 'Nawyki', adres: '/nawyki', modul: 'nawyki', ikona: ListChecks },
   ] },
   { etykieta: 'Organizacja', pozycje: [

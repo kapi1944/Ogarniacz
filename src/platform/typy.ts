@@ -70,7 +70,7 @@ export interface PlatformaOgarniacza {
     zaplanuj: (powiadomienia: PowiadomieniePlatformowe[]) => Promise<void>
     anuluj: (identyfikatory: number[]) => Promise<void>
     przeplanuj: (powiadomienia: PowiadomieniePlatformowe[]) => Promise<void>
-    synchronizuj: (przypomnienia: Przypomnienie[], wlaczone: boolean) => Promise<WynikSynchronizacjiPowiadomien>
+      synchronizuj: (przypomnienia: Przypomnienie[], wlaczone: boolean, ukrywajSzczegolyZdrowotne?: boolean) => Promise<WynikSynchronizacjiPowiadomien>
     nasluchujAkcji: (obsluga: (akcja: AkcjaPowiadomienia) => void) => () => void
   }
   pliki: {

@@ -40,26 +40,31 @@ function identyfikatorPowiadomienia(tekst: string) {
   return wynik & 0x7fffffff
 }
 
+function czyZdrowotne(przypomnienie: Przypomnienie): boolean {
+  return ['leki', 'wizyty', 'skierowania', 'zdrowie'].includes(przypomnienie.zrodlo?.typ ?? '')
+}
+
 function kanalDlaPrzypomnienia(przypomnienie: Przypomnienie): KanalPowiadomienia {
   if (przypomnienie.eskalacja || przypomnienie.priorytet === 'krytyczny' || przypomnienie.priorytet === 'wysoki') return 'ogarniacz-wazne'
-  if (przypomnienie.zrodlo?.typ === 'leki' || przypomnienie.zrodlo?.typ === 'wizyty') return 'ogarniacz-zdrowie'
+  if (czyZdrowotne(przypomnienie)) return 'ogarniacz-zdrowie'
   if (przypomnienie.zrodlo?.typ === 'finanse' || przypomnienie.zrodlo?.typ === 'rachunki') return 'ogarniacz-finanse'
   return 'ogarniacz-zwykle'
 }
 
-export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie): PowiadomieniePlatformowe | undefined {
+export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, ukrywajSzczegolyZdrowotne = false): PowiadomieniePlatformowe | undefined {
   if (!STANY_DO_DOSTARCZENIA.has(przypomnienie.stan)) return undefined
   const termin = czasUruchomienia(przypomnienie)
   if (!termin || Number.isNaN(termin.getTime())) return undefined
   const kanal = kanalDlaPrzypomnienia(przypomnienie)
   const sciezka = sciezkaDlaSourceRef(przypomnienie.zrodlo, przypomnienie.id)
   const wymagaDokladnosci = przypomnienie.priorytet === 'krytyczny' && przypomnienie.typ === 'absolutne'
-  const wersja = [termin.toISOString(), przypomnienie.tytul, kanal, sciezka, wymagaDokladnosci].join('|')
+  const tresc = ukrywajSzczegolyZdrowotne && czyZdrowotne(przypomnienie) ? 'Przypomnienie dotyczące zdrowia' : przypomnienie.tytul
+  const wersja = [termin.toISOString(), tresc, kanal, sciezka, wymagaDokladnosci].join('|')
   return {
     id: identyfikatorPowiadomienia(`ogarniacz:${przypomnienie.id}`),
     przypomnienieId: przypomnienie.id,
     tytul: 'Ogarniacz',
-    tresc: przypomnienie.tytul,
+    tresc,
     termin: termin.toISOString(),
     kanal,
     sourceRef: przypomnienie.zrodlo,
@@ -243,7 +248,7 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     await LocalNotifications.update({ notifications: powiadomienia.map((element) => schematNatywny(element, exactAlarmsDostepne)) })
   }
 
-  const wykonajSynchronizacje = async (przypomnienia: Przypomnienie[], wlaczone: boolean) => {
+  const wykonajSynchronizacje = async (przypomnienia: Przypomnienie[], wlaczone: boolean, ukrywajSzczegolyZdrowotne = false) => {
     if (!czyAndroid) return { zaplanowanePrzypomnieniaIds: [] }
     await inicjalizuj()
     const oczekujace = (await LocalNotifications.getPending()).notifications.filter(czyOgarniacza)
@@ -257,7 +262,7 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     const oczekujacePoId = new Map(oczekujace.map((element) => [element.id, element]))
     const teraz = Date.now()
     const docelowe = przypomnienia
-      .map((przypomnienie) => ({ przypomnienie, powiadomienie: mapujPrzypomnienieNaPowiadomienie(przypomnienie) }))
+      .map((przypomnienie) => ({ przypomnienie, powiadomienie: mapujPrzypomnienieNaPowiadomienie(przypomnienie, ukrywajSzczegolyZdrowotne) }))
       .filter((element): element is { przypomnienie: Przypomnienie; powiadomienie: PowiadomieniePlatformowe } => Boolean(element.powiadomienie))
       .filter(({ przypomnienie, powiadomienie }) =>
         przypomnienie.stan !== 'dostarczone' || Date.parse(powiadomienie.termin) > teraz || oczekujacePoId.has(powiadomienie.id),
@@ -286,9 +291,9 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     zaplanuj,
     anuluj,
     przeplanuj,
-    synchronizuj(przypomnienia: Przypomnienie[], wlaczone: boolean) {
+    synchronizuj(przypomnienia: Przypomnienie[], wlaczone: boolean, ukrywajSzczegolyZdrowotne = false) {
       kolejkaSynchronizacji = kolejkaSynchronizacji
-        .then(() => wykonajSynchronizacje(przypomnienia, wlaczone))
+        .then(() => wykonajSynchronizacje(przypomnienia, wlaczone, ukrywajSzczegolyZdrowotne))
         .catch(() => ({ zaplanowanePrzypomnieniaIds: [] }))
       return kolejkaSynchronizacji
     },

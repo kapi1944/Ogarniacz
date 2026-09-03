@@ -170,6 +170,65 @@ export interface Wizyta extends EncjaBazowa {
   checklista: string[]
 }
 
+export type TypCeluSkierowania = 'specjalista' | 'badanie' | 'zabieg' | 'rehabilitacja' | 'inne'
+export type StatusSkierowania = 'nowe' | 'do_umowienia' | 'umowiono' | 'zrealizowano' | 'anulowano' | 'wygaslo'
+
+export interface Skierowanie extends EncjaBazowa {
+  nazwa: string
+  wystawca?: string
+  dataWystawienia: string
+  typCelu: TypCeluSkierowania
+  cel: string
+  kod?: string
+  terminWaznosci?: string
+  placowka?: string
+  notatka?: string
+  status: StatusSkierowania
+  wizytaId?: Id
+}
+
+export interface PozycjaRecepty {
+  id: Id
+  nazwaLeku: string
+  lekId?: Id
+  ilosc: number
+  iloscZrealizowana: number
+  dawkowanie?: string
+  odplatnosc?: string
+  notatka?: string
+}
+
+export interface Recepta extends EncjaBazowa {
+  kod?: string
+  dataWystawienia: string
+  wystawca?: string
+  terminRealizacji?: string
+  status: 'do_realizacji' | 'czesciowo_zrealizowana' | 'zrealizowana' | 'wygasla' | 'anulowana'
+  notatka?: string
+  pozycje: PozycjaRecepty[]
+  wizytaId?: Id
+}
+
+export interface Terapia extends EncjaBazowa {
+  nazwa: string
+  rodzaj?: 'psychoterapia' | 'rehabilitacja' | 'leczenie' | 'inne'
+  dataRozpoczecia?: string
+  status: 'aktywna' | 'zakonczona' | 'wstrzymana'
+  notatka?: string
+}
+
+export interface WpisTerapii extends EncjaBazowa {
+  terapiaId: Id
+  dataCzas: string
+  tytul?: string
+  tresc: string
+  samopoczucie?: number
+  obserwacje?: string
+  zalecenia?: string
+  tematNastepnegoSpotkania?: string
+  wizytaId?: Id
+}
+
 export interface Przypomnienie extends EncjaBazowa {
   tytul: string
   zrodlo?: PowiazanieEncji
@@ -508,6 +567,7 @@ export interface Ustawienia extends EncjaBazowa {
   szybkieDodawanie: UstawieniaSzybkiegoDodawania
   dostepnosc: UstawieniaDostepnosci
   powiadomienia: boolean
+  ukrywajSzczegolyZdrowotneWPowiadomieniach: boolean
   proaktywnoscEcho: boolean
   echoWyciszone: boolean
   trybUzytkownika: 'wlasciciel' | 'edytor'
@@ -523,6 +583,8 @@ export type NazwaModulu =
   | 'nawyki'
   | 'leki'
   | 'wizyty'
+  | 'zdrowie'
+  | 'skierowania'
   | 'przypomnienia'
   | 'zakupy'
   | 'rachunki'
@@ -552,6 +614,10 @@ export interface MapaTabel {
   leki: Lek
   dziennikLekow: DziennikLeku
   wizyty: Wizyta
+  skierowania: Skierowanie
+  recepty: Recepta
+  terapie: Terapia
+  wpisyTerapii: WpisTerapii
   przypomnienia: Przypomnienie
   listyZakupow: ListaZakupow
   pozycjeZakupow: PozycjaZakupow

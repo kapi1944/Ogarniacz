@@ -4,6 +4,7 @@ import type { ElementOgarniacza, ReferencjaZrodla } from '../../domain/elementyO
 import type { KonfiguracjaKafelkaPulpitu, RozmiarKafelkaPulpitu } from '../../domain/typy'
 import { czasDawkiDoUwagi } from '../../services/LekiService'
 import { PROG_STARZENIA_POCZEKALNI_DNI } from '../../providers/DostawcaPoczekalniPulpitu'
+import type { Recepta, Skierowanie } from '../../domain/typy'
 
 export interface AlertPulpitu {
   id: string
@@ -91,7 +92,7 @@ export function klasaRozmiaruKafelka(rozmiar: RozmiarKafelkaPulpitu) {
 }
 
 export function adresReferencjiZrodla(sourceRef: ReferencjaZrodla): string {
-  const adresy = { zadania: '/zadania', leki: '/leki', wizyty: '/wizyty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy', notatki: '/notatki', skrzynka: '/skrzynka' } as const
+  const adresy = { zadania: '/zadania', leki: '/zdrowie/leki', wizyty: '/zdrowie/wizyty', skierowania: '/zdrowie/skierowania', zdrowie: '/zdrowie/recepty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy', notatki: '/notatki', skrzynka: '/skrzynka' } as const
   const adres = adresy[sourceRef.modul as keyof typeof adresy] ?? '/'
   const parametry = new URLSearchParams({ element: sourceRef.encjaId })
   if (sourceRef.wystapienieId) parametry.set('wystapienie', sourceRef.wystapienieId)
@@ -169,6 +170,14 @@ export function alertyWizyt(elementy: readonly ElementOgarniacza[], dataReferenc
 
 function dataHoryzontu(dataReferencyjna: Date, dni: number): string {
   return format(addDays(dataReferencyjna, dni), 'yyyy-MM-dd')
+}
+
+export function alertyZdrowia(skierowania: readonly Skierowanie[], recepty: readonly Recepta[], dataReferencyjna: Date, horyzontDni = 14): AlertPulpitu[] {
+  const dzisiaj = format(dataReferencyjna, 'yyyy-MM-dd')
+  const granica = dataHoryzontu(dataReferencyjna, horyzontDni)
+  const zeSkierowan = skierowania.filter((x) => ['nowe', 'do_umowienia'].includes(x.status) || Boolean(x.terminWaznosci && x.terminWaznosci <= granica)).map((x) => ({ id: `skierowanie:${x.id}`, tytul: x.nazwa, opis: ['nowe', 'do_umowienia'].includes(x.status) ? 'Skierowanie wymaga umówienia' : 'Zbliża się termin skierowania', severity: x.terminWaznosci && x.terminWaznosci < dzisiaj ? 'critical' as const : 'warning' as const, termin: x.terminWaznosci, typ: x.terminWaznosci && x.terminWaznosci < dzisiaj ? 'overdue' as const : 'near' as const, sourceRef: { modul: 'skierowania' as const, encjaId: x.id }, createdAt: x.createdAt }))
+  const zRecept = recepty.filter((x) => ['do_realizacji', 'czesciowo_zrealizowana'].includes(x.status) && (!x.terminRealizacji || x.terminRealizacji <= granica)).map((x) => ({ id: `recepta:${x.id}`, tytul: x.kod ? `Recepta ${x.kod}` : 'Recepta do realizacji', opis: x.terminRealizacji ? 'Zbliża się termin recepty' : 'Recepta do realizacji', severity: x.terminRealizacji && x.terminRealizacji < dzisiaj ? 'critical' as const : 'warning' as const, termin: x.terminRealizacji, typ: x.terminRealizacji && x.terminRealizacji < dzisiaj ? 'overdue' as const : 'near' as const, sourceRef: { modul: 'zdrowie' as const, encjaId: x.id }, createdAt: x.createdAt }))
+  return [...zeSkierowan, ...zRecept]
 }
 
 export function alertyFinansow(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date, horyzontDni = 7): AlertPulpitu[] {

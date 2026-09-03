@@ -79,7 +79,7 @@ describe('mapowanie przypomnienia na kanał platformowy', () => {
 
     expect(wynik?.termin).toBe('2026-09-01T09:30:00.000Z')
     expect(wynik?.kanal).toBe('ogarniacz-wazne')
-    expect(wynik?.sciezka).toBe('/wizyty?element=wizyta-1')
+    expect(wynik?.sciezka).toBe('/zdrowie/wizyty?element=wizyta-1')
     expect(wynik?.wymagaDokladnosci).toBe(false)
   })
 

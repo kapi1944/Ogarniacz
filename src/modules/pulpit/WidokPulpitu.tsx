@@ -19,10 +19,12 @@ import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
 import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
 import { DostawcaPoczekalniPulpitu } from '../../providers/DostawcaPoczekalniPulpitu'
 import { repozytoriumElementowZadan } from '../../data/RepozytoriumElementowZadan'
+import { pobierzRepozytorium } from '../../data/Repozytorium'
 import {
   adresReferencjiZrodla,
   alertyFinansow,
   alertyLekow,
+  alertyZdrowia,
   alertySamochodu,
   alertyWizyt,
   alertyZakupow,
@@ -212,6 +214,7 @@ export function WidokPulpitu() {
     ])
     return { leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia }
   }, [dzisiaj])
+  const zdrowieDoAlertow = useLiveQuery(async () => ({ skierowania: await pobierzRepozytorium('skierowania').lista(), recepty: await pobierzRepozytorium('recepty').lista() }), [], { skierowania: [], recepty: [] })
   const elementyDnia = [
     ...zadaniaDnia,
     ...(modulyDnia?.leki.elementy ?? []),
@@ -237,13 +240,14 @@ export function WidokPulpitu() {
       ...alertyZadan(zadaniaKafelkow, teraz),
       ...alertyLekow(modulyAlertow?.leki.elementy ?? [], teraz),
       ...alertyWizyt(modulyAlertow?.wizyty.elementy ?? [], teraz),
+      ...alertyZdrowia(zdrowieDoAlertow.skierowania, zdrowieDoAlertow.recepty, teraz),
       ...alertyFinansow(modulyAlertow?.finanse.elementy ?? [], teraz),
       ...alertySamochodu(modulyAlertow?.samochod.elementy ?? [], teraz),
       ...alertyZakupow(modulyAlertow?.zakupy.elementy ?? [], teraz),
       ...alertyNotatek(modulyAlertow?.notatki.elementy ?? [], teraz),
       ...alertyPoczekalni(modulyAlertow?.poczekalnia.elementy ?? [], teraz),
     ]))
-  }, [modulyAlertow, zadaniaKafelkow])
+  }, [modulyAlertow, zadaniaKafelkow, zdrowieDoAlertow])
   const widoczneAlerty = ograniczAlerty(alerty, ustawienia.pulpit.limitAlertow, pokazWiecejAlertow).widoczne
   const kafelki = useMemo(() => sortujKafelki(ustawienia.pulpit.kafelki).filter((kafelek) => filtrKafelkow === 'wszystkie' || kafelek.typ === filtrKafelkow), [ustawienia.pulpit.kafelki, filtrKafelkow])
   const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])

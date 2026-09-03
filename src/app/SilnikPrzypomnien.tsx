@@ -36,7 +36,7 @@ export function SilnikPrzypomnien() {
     let anulowano = false
     const dostarcz = async () => {
       if (platforma.natywna) {
-        const wynik = await platforma.powiadomienia.synchronizuj(dane, ustawienia.powiadomienia)
+        const wynik = await platforma.powiadomienia.synchronizuj(dane, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach)
         if (anulowano || wynik.zaplanowanePrzypomnieniaIds.length === 0) return
         const zaplanowane = new Set(wynik.zaplanowanePrzypomnieniaIds)
         const doAktualizacji = dane
@@ -50,7 +50,7 @@ export function SilnikPrzypomnien() {
       for (const element of aktywnePrzypomnienia(dane, teraz).filter((przypomnienie) => przypomnienie.stan === 'nowe')) {
         const pokazano = await platforma.powiadomienia.pokaz({
           tytul: 'Ogarniacz',
-          tresc: element.tytul,
+          tresc: ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach && ['leki', 'wizyty', 'skierowania', 'zdrowie'].includes(element.zrodlo?.typ ?? '') ? 'Przypomnienie dotyczące zdrowia' : element.tytul,
           sciezka: sciezkaDlaSourceRef(element.zrodlo, element.id),
         })
         if (pokazano && !anulowano) await repozytorium.zapisz({ ...element, stan: 'dostarczone' })

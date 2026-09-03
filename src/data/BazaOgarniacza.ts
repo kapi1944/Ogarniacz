@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 7
+export const WERSJA_SCHEMATU_BAZY = 9
 
 export const nazwyTabel: NazwaTabeli[] = [
   'zadania',
@@ -18,6 +18,10 @@ export const nazwyTabel: NazwaTabeli[] = [
   'leki',
   'dziennikLekow',
   'wizyty',
+  'skierowania',
+  'recepty',
+  'terapie',
+  'wpisyTerapii',
   'przypomnienia',
   'listyZakupow',
   'pozycjeZakupow',
@@ -58,6 +62,10 @@ const schematPelny = {
   leki: 'id, aktywny, updatedAt, usunietoAt',
   dziennikLekow: 'id, [lekId+data+planowanaGodzina], lekId, data, status, updatedAt, usunietoAt',
   wizyty: 'id, status, data, terminGraniczny, updatedAt, usunietoAt',
+  skierowania: 'id, status, terminWaznosci, wizytaId, updatedAt, usunietoAt',
+  recepty: 'id, status, dataWystawienia, terminRealizacji, wizytaId, updatedAt, usunietoAt',
+  terapie: 'id, status, dataRozpoczecia, updatedAt, usunietoAt',
+  wpisyTerapii: 'id, terapiaId, dataCzas, wizytaId, updatedAt, usunietoAt',
   przypomnienia: 'id, stan, czas, priorytet, updatedAt, usunietoAt',
   listyZakupow: 'id, aktywna, updatedAt, usunietoAt',
   pozycjeZakupow: 'id, listaId, kupione, updatedAt, usunietoAt',

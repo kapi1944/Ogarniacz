@@ -42,7 +42,9 @@ type ZamiarZadaniaEcho =
   | { typ: 'usun_zadanie'; id: string; tytul: string }
   | { typ: 'usun_zadania_masowo'; od: string; do: string }
 
-type ZamiarWywolaniaEcho = ZamiarSemantycznyEcho | ZamiarZadaniaEcho
+type ZamiarZdrowiaEcho = { typ: 'odczytaj_zdrowie'; rodzaj: 'wizyty' | 'skierowania' | 'recepty' | 'leki' | 'terapie'; status?: string; okreslenie: string; od?: string; do?: string }
+
+type ZamiarWywolaniaEcho = ZamiarSemantycznyEcho | ZamiarZadaniaEcho | ZamiarZdrowiaEcho
 
 const dniTygodnia = new Map<string, number>([
   ['niedziela', 0], ['niedziele', 0], ['niedzieli', 0], ['poniedzialek', 1], ['poniedzialku', 1],
@@ -224,6 +226,18 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     const ostatnieZadanie = zadania.at(-1)
     const tokeny = new Set(lista.map(({ uproszczone }) => uproszczone))
 
+    const czyWizyty = [...tokeny].some((token) => token.startsWith('wizyt'))
+    const czySkierowania = [...tokeny].some((token) => token.startsWith('skierowan'))
+    const czyRecepty = [...tokeny].some((token) => token.startsWith('recept'))
+    const czyLeki = [...tokeny].some((token) => token.startsWith('lek'))
+    const czyTerapie = [...tokeny].some((token) => token.startsWith('terap'))
+    const czyPytanieZdrowotne = ['kiedy', 'pokaz', 'jakie', 'co'].some((token) => tokeny.has(token))
+    if (czyPytanieZdrowotne && czyWizyty) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'wizyty', status: 'umowiona', od: czas.data ?? zadanie.kontekstCzasu.dataLokalna, okreslenie: czas.etykietaDaty ?? 'najbliższym czasie' })
+    if (czyPytanieZdrowotne && czySkierowania) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'skierowania', status: [...tokeny].some((token) => ['ogarnięcia', 'ogarniecia', 'umowienia'].includes(token)) ? 'do_umowienia' : undefined, okreslenie: 'skierowania' })
+    if (czyPytanieZdrowotne && czyRecepty) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'recepty', status: [...tokeny].some((token) => token.startsWith('niezrealiz')) ? 'do_realizacji' : undefined, okreslenie: 'recepty' })
+    if (czyPytanieZdrowotne && czyLeki) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'leki', status: 'true', okreslenie: 'leki' })
+    if (czyPytanieZdrowotne && czyTerapie) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'terapie', status: 'aktywna', okreslenie: 'terapie' })
+
     const czyUsuniecie = [...tokeny].some((token) => token.startsWith('usun'))
     if (czyUsuniecie && tokeny.has('wszystkie') && (tokeny.has('tygodnia') || tokeny.has('tygodniu'))) {
       const zakres = zakresBiezacegoTygodnia(zadanie.kontekstCzasu.dataLokalna)
@@ -369,12 +383,25 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     return { typ: 'narzedzia', wywolania: [wywolanie], aktualizacjaKontekstu: { temat: 'zadania', ostatniaIntencja: zamiar.typ, oczekujacaAkcja: { intencja: zamiar.typ, dane: wywolanie.argumenty }, oczekujaceDoprecyzowanie: null } }
   }
 
+  private wywolajZdrowie(zamiar: ZamiarZdrowiaEcho): DecyzjaModeluEcho {
+    this.licznikWywolan += 1
+    const id = `lokalne-${this.licznikWywolan}`
+    this.zamiaryWywolan.set(id, zamiar)
+    const argumenty = { rodzaj: zamiar.rodzaj, ...(zamiar.status ? { status: zamiar.status } : {}), ...(zamiar.od ? { od: zamiar.od } : {}), ...(zamiar.do ? { do: zamiar.do } : {}) }
+    return { typ: 'narzedzia', wywolania: [{ id, nazwa: 'list_health', argumenty }], aktualizacjaKontekstu: { temat: 'zdrowie', ostatniaIntencja: zamiar.typ, oczekujacaAkcja: { intencja: zamiar.typ, dane: argumenty }, oczekujaceDoprecyzowanie: null } }
+  }
+
   private odpowiedzPoWyniku(wynik: WynikNarzedziaEcho, zamiar: ZamiarWywolaniaEcho): DecyzjaModeluEcho {
     this.obsluzoneWyniki.add(wynik.wywolanieId)
     this.zamiaryWywolan.delete(wynik.wywolanieId)
     const wartosciDomyslne = 'wartosciDomyslne' in zamiar ? zamiar.wartosciDomyslne : []
     const aktualizacjaKontekstu = { oczekujacaAkcja: null, oczekujaceDoprecyzowanie: null, wartosciDomyslne }
     if (wynik.status !== 'wykonane') return { typ: 'odpowiedz', tresc: 'Nie udało mi się zapisać tej zmiany.', aktualizacjaKontekstu }
+    if (zamiar.typ === 'odczytaj_zdrowie') {
+      const znalezione = Array.isArray(wynik.dane) ? wynik.dane.filter((element): element is { tytul: string; data?: string; godzina?: string } => Boolean(element && typeof element === 'object' && typeof (element as { tytul?: unknown }).tytul === 'string')) : []
+      const etykiety = znalezione.map(({ tytul, data, godzina }) => [tytul, data, godzina].filter(Boolean).join(' · '))
+      return { typ: 'odpowiedz', tresc: etykiety.length ? `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)}: ${etykiety.join(', ')}.` : `Nie masz zapisanych danych: ${zamiar.okreslenie}.`, aktualizacjaKontekstu }
+    }
     if (zamiar.typ === 'odczytaj_zadania' || zamiar.typ === 'wyszukaj_zadania' || zamiar.typ === 'znajdz_do_edycji' || zamiar.typ === 'znajdz_do_usuniecia') {
       const znalezione = Array.isArray(wynik.dane) ? wynik.dane.filter((element): element is { id: string; tytul: string } => Boolean(element && typeof element === 'object' && typeof (element as { id?: unknown }).id === 'string' && typeof (element as { tytul?: unknown }).tytul === 'string')) : []
       if (zamiar.typ === 'odczytaj_zadania') return { typ: 'odpowiedz', tresc: znalezione.length ? `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)} masz: ${znalezione.map(({ tytul }) => tytul).join(', ')}.` : `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)} nie masz zapisanych zadań.`, aktualizacjaKontekstu }

@@ -4,7 +4,7 @@ import { StraznikModulu, UkladAplikacji } from './app/UkladAplikacji'
 import { WidokPulpitu } from './modules/pulpit/WidokPulpitu'
 import { WidokProjektow, WidokSkrzynki, WidokZadan } from './modules/praca/WidokiPracy'
 import { WidokGrafiku, WidokPlanera } from './modules/czas/WidokiCzasu'
-import { WidokLekow, WidokWizyt } from './modules/zdrowie/WidokiZdrowia'
+import { WidokDziennikaTerapii, WidokHistoriiZdrowia, WidokLekow, WidokRecept, WidokSkierowan, WidokWizyt, WidokZdrowia } from './modules/zdrowie/WidokiZdrowia'
 import { WidokMiasta, WidokNawykow, WidokPrzypomnien, WidokRachunkow, WidokZakupow } from './modules/organizacja/WidokiOrganizacji'
 import { WidokCelow, WidokDokumentow, WidokKontaktow, WidokNaPozniej, WidokNotatek, WidokPomyslow, WidokTerminow } from './modules/wiedza/WidokiWiedzy'
 import { WidokFinansow } from './modules/finanse/WidokFinansow'
@@ -29,6 +29,13 @@ export default function App() {
     <Route path="/projekty" element={chron('projekty', <WidokProjektow />)} />
     <Route path="/planer" element={chron('planer', <WidokPlanera />)} />
     <Route path="/grafik" element={chron('grafik', <WidokGrafiku />)} />
+    <Route path="/zdrowie" element={chron('zdrowie', <WidokZdrowia />)} />
+    <Route path="/zdrowie/leki" element={chron('leki', <WidokLekow />)} />
+    <Route path="/zdrowie/wizyty" element={chron('wizyty', <WidokWizyt />)} />
+    <Route path="/zdrowie/skierowania" element={chron('skierowania', <WidokSkierowan />)} />
+    <Route path="/zdrowie/dziennik-terapii" element={chron('zdrowie', <WidokDziennikaTerapii />)} />
+    <Route path="/zdrowie/recepty" element={chron('zdrowie', <WidokRecept />)} />
+    <Route path="/zdrowie/historia" element={chron('zdrowie', <WidokHistoriiZdrowia />)} />
     <Route path="/leki" element={chron('leki', <WidokLekow />)} />
     <Route path="/wizyty" element={chron('wizyty', <WidokWizyt />)} />
     <Route path="/nawyki" element={chron('nawyki', <WidokNawykow />)} />
