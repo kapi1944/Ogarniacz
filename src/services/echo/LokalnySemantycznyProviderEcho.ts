@@ -10,6 +10,7 @@ import type {
 
 const DOMYSLNA_GODZINA_RANO = '08:00'
 const DOMYSLNA_GODZINA_PO_PRACY = '17:00'
+const DOMYSLNA_GODZINA_PO_POLUDNIU = '15:00'
 
 interface SlowoWypowiedzi { oryginalne: string; uproszczone: string }
 
@@ -42,7 +43,7 @@ type ZamiarZadaniaEcho =
   | { typ: 'usun_zadanie'; id: string; tytul: string }
   | { typ: 'usun_zadania_masowo'; od: string; do: string }
 
-type ZamiarZdrowiaEcho = { typ: 'odczytaj_zdrowie'; rodzaj: 'wizyty' | 'skierowania' | 'recepty' | 'leki' | 'terapie'; status?: string; okreslenie: string; od?: string; do?: string }
+type ZamiarZdrowiaEcho = { typ: 'odczytaj_zdrowie'; rodzaj: 'wizyty' | 'skierowania' | 'recepty' | 'leki' | 'terapie'; status?: string; okreslenie: string; od?: string; do?: string } | { typ: 'akcja_zdrowia'; nazwa: string; argumenty: Record<string, unknown>; potwierdzenie: string }
 
 type ZamiarWywolaniaEcho = ZamiarSemantycznyEcho | ZamiarZadaniaEcho | ZamiarZdrowiaEcho
 
@@ -92,6 +93,8 @@ function rozpoznajCzas(lista: SlowoWypowiedzi[], dataLokalna: string): Rozpoznan
       godziny.push({ indeksy: [indeks], godzina: DOMYSLNA_GODZINA_RANO, etykieta: 'rano', domyslna: { pole: 'godzina', wartosc: DOMYSLNA_GODZINA_RANO, opis: 'dla określenia „rano”' } })
     } else if (slowo.uproszczone === 'po' && lista[indeks + 1]?.uproszczone === 'pracy') {
       godziny.push({ indeksy: [indeks, indeks + 1], godzina: DOMYSLNA_GODZINA_PO_PRACY, etykieta: 'po pracy', domyslna: { pole: 'godzina', wartosc: DOMYSLNA_GODZINA_PO_PRACY, opis: 'dla określenia „po pracy”' } })
+    } else if (slowo.uproszczone === 'po' && lista[indeks + 1]?.uproszczone === 'poludniu') {
+      godziny.push({ indeksy: [indeks, indeks + 1], godzina: DOMYSLNA_GODZINA_PO_POLUDNIU, etykieta: 'po południu', domyslna: { pole: 'godzina', wartosc: DOMYSLNA_GODZINA_PO_POLUDNIU, opis: 'dla określenia „po południu”' } })
     } else if (/^(?:[01]?\d|2[0-3])(?::[0-5]\d)?$/.test(slowo.uproszczone)) {
       const [godzina, minuta = '00'] = slowo.uproszczone.split(':')
       const indeksy = lista[indeks - 1]?.uproszczone === 'o' ? [indeks - 1, indeks] : [indeks]
@@ -178,8 +181,12 @@ function czasyPrzypomnienia(kontekst: MigawkaKontekstuEcho, id: string): string[
 function pytanieDlaDoprecyzowania(doprecyzowanie: OczekujaceDoprecyzowanieEcho): string {
   const ile = doprecyzowanie.brakujacePola.length
   const wstep = ile > 1 ? `Potrzebuję jeszcze ${ile === 2 ? 'dwóch' : 'kilku'} informacji. ` : ''
+  if (doprecyzowanie.intencja === 'utworz_wizyte' && doprecyzowanie.brakujacePola[0] === 'data') return 'Na kiedy?'
   if (doprecyzowanie.brakujacePola[0] === 'tytul') return `${wstep}Czego mam Ci przypomnieć?`
   if (doprecyzowanie.brakujacePola[0] === 'data') return `${wstep}Na kiedy mam ustawić przypomnienie?`
+  if (doprecyzowanie.brakujacePola[0] === 'godzina') return 'O której?'
+  if (doprecyzowanie.brakujacePola[0] === 'terapia') return 'Której terapii dotyczy wpis?'
+  if (doprecyzowanie.brakujacePola[0] === 'pozycje') return 'Jakie leki są na tej recepcie?'
   return `${wstep}Którego ${doprecyzowanie.intencja.includes('zadanie') ? 'zadania' : 'przypomnienia'} dotyczy zmiana?`
 }
 
@@ -199,6 +206,23 @@ function zamiarUtworzenia(tytul: string, czas: RozpoznanyCzas): ZamiarSemantyczn
   const godzina = czas.godzina ?? DOMYSLNA_GODZINA_RANO
   const wartosciDomyslne = czas.godzina ? czas.wartosciDomyslne : [{ pole: 'godzina', wartosc: godzina, opis: 'brak podanej godziny' } satisfies WartoscDomyslnaEcho]
   return { typ: 'utworz_przypomnienie', tytul, data: czas.data!, godzina, okreslenieCzasu: okreslenieCzasu(czas, godzina), wartosciDomyslne }
+}
+
+function nazwaPo(tekst: string, wzorzec: RegExp): string {
+  return (tekst.match(wzorzec)?.[1] ?? '').replace(/\b(mi|na|w|o|jutro|dzisiaj|dzis|po południu)\b/gi, ' ').replace(/\s+/g, ' ').trim().replace(/[.]+$/, '')
+}
+
+function trescPoZe(tekst: string): string {
+  return (tekst.match(/(?:^|\s)że\s+(.+)/i)?.[1] ?? '').trim().replace(/[.]+$/, '')
+}
+
+function ostatniTerminWizyty(kontekst: MigawkaKontekstuEcho, id: string): { data?: string; godzina?: string } | undefined {
+  for (const wynik of [...kontekst.ostatnieWynikiNarzedzi].reverse()) {
+    if (!['create_appointment', 'update_appointment'].includes(wynik.nazwa) || !wynik.dane || typeof wynik.dane !== 'object') continue
+    const dane = wynik.dane as { id?: unknown; data?: unknown; godzina?: unknown }
+    if (dane.id === id) return { data: typeof dane.data === 'string' ? dane.data : undefined, godzina: typeof dane.godzina === 'string' ? dane.godzina : undefined }
+  }
+  return undefined
 }
 
 export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
@@ -231,12 +255,67 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     const czyRecepty = [...tokeny].some((token) => token.startsWith('recept'))
     const czyLeki = [...tokeny].some((token) => token.startsWith('lek'))
     const czyTerapie = [...tokeny].some((token) => token.startsWith('terap'))
+    const czyRehabilitacja = [...tokeny].some((token) => token.startsWith('rehabilit'))
     const czyPytanieZdrowotne = ['kiedy', 'pokaz', 'jakie', 'co'].some((token) => tokeny.has(token))
     if (czyPytanieZdrowotne && czyWizyty) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'wizyty', status: 'umowiona', od: czas.data ?? zadanie.kontekstCzasu.dataLokalna, okreslenie: czas.etykietaDaty ?? 'najbliższym czasie' })
     if (czyPytanieZdrowotne && czySkierowania) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'skierowania', status: [...tokeny].some((token) => ['ogarnięcia', 'ogarniecia', 'umowienia'].includes(token)) ? 'do_umowienia' : undefined, okreslenie: 'skierowania' })
     if (czyPytanieZdrowotne && czyRecepty) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'recepty', status: [...tokeny].some((token) => token.startsWith('niezrealiz')) ? 'do_realizacji' : undefined, okreslenie: 'recepty' })
     if (czyPytanieZdrowotne && czyLeki) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'leki', status: 'true', okreslenie: 'leki' })
     if (czyPytanieZdrowotne && czyTerapie) return this.wywolajZdrowie({ typ: 'odczytaj_zdrowie', rodzaj: 'terapie', status: 'aktywna', okreslenie: 'terapie' })
+
+    const ostatniaWizyta = zadanie.kontekstRozmowy.ostatnieEncje.filter((x) => x.typ === 'wizyta').at(-1)
+    const ostatnieSkierowanie = zadanie.kontekstRozmowy.ostatnieEncje.filter((x) => x.typ === 'skierowanie').at(-1)
+    const ostatniaRecepta = zadanie.kontekstRozmowy.ostatnieEncje.filter((x) => x.typ === 'recepta').at(-1)
+    const ostatniaTerapia = zadanie.kontekstRozmowy.ostatnieEncje.filter((x) => x.typ === 'terapia').at(-1)
+    const czyAnulowanie = ['odwolaj', 'anuluj'].some((x) => tokeny.has(x))
+    const czyKorektaWizyty = ['jednak', 'wlasciwie'].some((x) => tokeny.has(x)) || (tokeny.has('nie') && tokeny.has('czekaj'))
+    const czyGodzinePozniej = [...tokeny].some((token) => token.startsWith('godzin')) && tokeny.has('pozniej')
+    const czyPrzelozenieWizyty = ['przeloz', 'przenies', 'zmien'].some((x) => tokeny.has(x)) || (czyKorektaWizyty && Boolean(czas.data || czas.godzina)) || czyGodzinePozniej
+    if ((czyAnulowanie || czyPrzelozenieWizyty) && ostatniaWizyta) {
+      const poprzedniTermin = ostatniTerminWizyty(zadanie.kontekstRozmowy, ostatniaWizyta.id)
+      const godzinaPozniej = poprzedniTermin?.godzina ? `${String((Number(poprzedniTermin.godzina.slice(0, 2)) + 1) % 24).padStart(2, '0')}:${poprzedniTermin.godzina.slice(3)}` : undefined
+      const zmiany = czyAnulowanie ? { status: 'anulowana' } : { ...(czas.data ? { data: czas.data } : {}), ...(czas.godzina || godzinaPozniej ? { godzina: czas.godzina ?? godzinaPozniej } : {}) }
+      return this.wywolajAkcjeZdrowia('update_appointment', { id: ostatniaWizyta.id, zmiany }, czyAnulowanie ? `Anulowałem wizytę „${ostatniaWizyta.etykieta ?? ''}”.` : `Zmieniono termin wizyty „${ostatniaWizyta.etykieta ?? ''}”.`)
+    }
+    const czyDodanieWizyty = ['dodaj', 'umow'].some((x) => tokeny.has(x) || [...tokeny].some((t) => t.startsWith(x))) && !czySkierowania && !czyRecepty && !czyTerapie && /(dentyst|dermatolog|lekarz|wizyta)/i.test(tekst)
+    if (czyDodanieWizyty) {
+      const nazwa = nazwaPo(tekst, /(?:dodaj(?: mi)?|umów(?: mi)?)\s+(.+?)(?:\s+(?:jutro|dzisiaj|w |o )|$)/i) || 'Wizyta'
+      if (!czas.data) return this.pytanie({ intencja: 'utworz_wizyte', brakujacePola: ['data'], zebrane: { tytul: nazwa } })
+      if (!czas.godzina) return this.pytanie({ intencja: 'utworz_wizyte', brakujacePola: ['godzina'], zebrane: { tytul: nazwa, data: czas.data } })
+      return this.wywolajAkcjeZdrowia('create_appointment', { nazwa, data: czas.data, godzina: czas.godzina }, `Dodałem wizytę „${nazwa}”.`)
+    }
+    if (czySkierowania && ['mam', 'dodaj'].some((x) => tokeny.has(x))) {
+      const cel = nazwaPo(tekst, /(?:skierowanie\s+(?:na|do)|dodaj skierowanie\s+(?:na|do))\s+(.+)/i)
+      if (!cel) return this.pytanie({ intencja: 'utworz_skierowanie', brakujacePola: ['cel'], zebrane: {} })
+      return this.wywolajAkcjeZdrowia('create_referral', { nazwa: `Skierowanie: ${cel}`, cel, dataWystawienia: zadanie.kontekstCzasu.dataLokalna, typCelu: /rehabilit/i.test(cel) ? 'rehabilitacja' : /ortoped/i.test(cel) ? 'specjalista' : 'badanie' }, `Dodałem skierowanie na „${cel}”.`)
+    }
+    if (ostatnieSkierowanie && (tokeny.has('umowilem') || tokeny.has('zrealizowane'))) return this.wywolajAkcjeZdrowia('update_referral', { id: ostatnieSkierowanie.id, status: tokeny.has('zrealizowane') ? 'zrealizowano' : 'umowiono' }, 'Zaktualizowałem status skierowania.')
+    if (ostatnieSkierowanie && ostatniaWizyta && [...tokeny].some((token) => token.startsWith('powiaz') || token.startsWith('polacz'))) return this.wywolajAkcjeZdrowia('update_referral', { id: ostatnieSkierowanie.id, wizytaId: ostatniaWizyta.id }, 'Powiązałem skierowanie z wizytą.')
+    if (czyRecepty && ['dodaj', 'mam'].some((x) => tokeny.has(x))) {
+      const kod = tekst.match(/kod\s+([\w-]+)/i)?.[1]
+      return this.wywolajAkcjeZdrowia('create_prescription', { ...(kod ? { kod } : {}), dataWystawienia: zadanie.kontekstCzasu.dataLokalna, pozycje: [] }, kod ? `Dodałem receptę ${kod}.` : 'Dodałem receptę.')
+    }
+    if (ostatniaRecepta && tokeny.has('dodaj') && /(?:do niej|tej recept)/i.test(tekst)) {
+      const nazwaLeku = nazwaPo(tekst, /dodaj\s+(?:do niej|do tej recepty)\s+(.+)/i)
+      if (nazwaLeku) return this.wywolajAkcjeZdrowia('add_prescription_item', { receptaId: ostatniaRecepta.id, nazwaLeku }, `Dodałem „${nazwaLeku}” do recepty.`)
+    }
+    if (ostatniaRecepta && (tokeny.has('wykupilem') || tokeny.has('zrealizowana'))) {
+      const daneRecepty = [...zadanie.kontekstRozmowy.ostatnieWynikiNarzedzi].reverse().find((x) => x.nazwa === 'create_prescription' || x.nazwa === 'add_prescription_item')?.dane as { pozycje?: { id: string; ilosc: number }[] } | undefined
+      if (tokeny.has('zrealizowana') && !tokeny.has('pierwszy') && !tokeny.has('drugi')) return this.wywolajAkcjeZdrowia('realize_prescription_item', { receptaId: ostatniaRecepta.id }, 'Oznaczyłem receptę jako zrealizowaną.')
+      const indeks = tokeny.has('drugi') ? 1 : 0
+      const pozycja = daneRecepty?.pozycje?.[indeks]
+      if (pozycja) return this.wywolajAkcjeZdrowia('realize_prescription_item', { receptaId: ostatniaRecepta.id, pozycjaId: pozycja.id, iloscZrealizowana: pozycja.ilosc }, 'Oznaczyłem pozycję recepty jako zrealizowaną.')
+    }
+    if ((czyTerapie || czyRehabilitacja) && ['dodaj'].some((x) => tokeny.has(x)) && !tokeny.has('wpis')) {
+      const nazwa = nazwaPo(tekst, /dodaj\s+(.+)/i)
+      if (nazwa) return this.wywolajAkcjeZdrowia('create_therapy', { nazwa, rodzaj: /rehabilit/i.test(nazwa) ? 'rehabilitacja' : 'inne', dataRozpoczecia: zadanie.kontekstCzasu.dataLokalna }, `Dodałem terapię „${nazwa}”.`)
+    }
+    const czyWpisTerapii = (tokeny.has('zapisz') || tokeny.has('dopisz') || tokeny.has('wpis')) && (czyTerapie || czyRehabilitacja || Boolean(ostatniaTerapia))
+    if (czyWpisTerapii) {
+      const tresc = trescPoZe(tekst)
+      if (!ostatniaTerapia) return this.pytanie({ intencja: 'dodaj_wpis_terapii', brakujacePola: ['terapia'], zebrane: { tresc } })
+      if (tresc) return this.wywolajAkcjeZdrowia('create_therapy_entry', { terapiaId: ostatniaTerapia.id, tresc, dataCzas: czasIso(zadanie.kontekstCzasu.dataLokalna, '12:00') }, 'Dodałem wpis do terapii.')
+    }
 
     const czyUsuniecie = [...tokeny].some((token) => token.startsWith('usun'))
     if (czyUsuniecie && tokeny.has('wszystkie') && (tokeny.has('tygodnia') || tokeny.has('tygodniu'))) {
@@ -323,6 +402,19 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
 
   private kontynuujDoprecyzowanie(zadanie: ZadanieModeluEcho, oczekujace: OczekujaceDoprecyzowanieEcho): DecyzjaModeluEcho {
     const tekst = ostatniaWypowiedz(zadanie.kontekstRozmowy)
+    if (oczekujace.intencja === 'utworz_wizyte') {
+      const czas = rozpoznajCzas(slowa(tekst), zadanie.kontekstCzasu.dataLokalna)
+      const data = oczekujace.zebrane.data ?? czas.data
+      const godzina = czas.godzina
+      if (!data) return this.pytanie({ ...oczekujace, brakujacePola: ['data'] })
+      if (!godzina) return this.pytanie({ ...oczekujace, brakujacePola: ['godzina'], zebrane: { ...oczekujace.zebrane, data } })
+      return this.wywolajAkcjeZdrowia('create_appointment', { nazwa: oczekujace.zebrane.tytul!, data, godzina }, `Dodałem wizytę „${oczekujace.zebrane.tytul}”.`)
+    }
+    if (oczekujace.intencja === 'dodaj_wpis_terapii') {
+      const kandydat = wybierzKandydata(tekst, oczekujace.zebrane.kandydaci ?? [])
+      if (!kandydat) return this.pytanie(oczekujace)
+      return this.wywolajAkcjeZdrowia('create_therapy_entry', { terapiaId: kandydat.id, tresc: oczekujace.zebrane.tresc ?? tekst, dataCzas: czasIso(zadanie.kontekstCzasu.dataLokalna, '12:00') }, 'Dodałem wpis do terapii.')
+    }
     if (oczekujace.intencja === 'edytuj_zadanie' || oczekujace.intencja === 'usun_zadanie') {
       const kandydat = wybierzKandydata(tekst, oczekujace.zebrane.kandydaci ?? [])
       if (!kandydat) return this.pytanie(oczekujace)
@@ -384,11 +476,19 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
   }
 
   private wywolajZdrowie(zamiar: ZamiarZdrowiaEcho): DecyzjaModeluEcho {
+    if (zamiar.typ === 'akcja_zdrowia') return this.wywolajAkcjeZdrowia(zamiar.nazwa, zamiar.argumenty, zamiar.potwierdzenie)
     this.licznikWywolan += 1
     const id = `lokalne-${this.licznikWywolan}`
     this.zamiaryWywolan.set(id, zamiar)
     const argumenty = { rodzaj: zamiar.rodzaj, ...(zamiar.status ? { status: zamiar.status } : {}), ...(zamiar.od ? { od: zamiar.od } : {}), ...(zamiar.do ? { do: zamiar.do } : {}) }
     return { typ: 'narzedzia', wywolania: [{ id, nazwa: 'list_health', argumenty }], aktualizacjaKontekstu: { temat: 'zdrowie', ostatniaIntencja: zamiar.typ, oczekujacaAkcja: { intencja: zamiar.typ, dane: argumenty }, oczekujaceDoprecyzowanie: null } }
+  }
+
+  private wywolajAkcjeZdrowia(nazwa: string, argumenty: Record<string, unknown>, potwierdzenie: string): DecyzjaModeluEcho {
+    this.licznikWywolan += 1
+    const id = `lokalne-${this.licznikWywolan}`
+    this.zamiaryWywolan.set(id, { typ: 'akcja_zdrowia', nazwa, argumenty, potwierdzenie })
+    return { typ: 'narzedzia', wywolania: [{ id, nazwa, argumenty }], aktualizacjaKontekstu: { temat: 'zdrowie', ostatniaIntencja: nazwa, oczekujacaAkcja: { intencja: nazwa, dane: argumenty }, oczekujaceDoprecyzowanie: null } }
   }
 
   private odpowiedzPoWyniku(wynik: WynikNarzedziaEcho, zamiar: ZamiarWywolaniaEcho): DecyzjaModeluEcho {
@@ -402,6 +502,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       const etykiety = znalezione.map(({ tytul, data, godzina }) => [tytul, data, godzina].filter(Boolean).join(' · '))
       return { typ: 'odpowiedz', tresc: etykiety.length ? `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)}: ${etykiety.join(', ')}.` : `Nie masz zapisanych danych: ${zamiar.okreslenie}.`, aktualizacjaKontekstu }
     }
+    if (zamiar.typ === 'akcja_zdrowia') return { typ: 'odpowiedz', tresc: zamiar.potwierdzenie, aktualizacjaKontekstu }
     if (zamiar.typ === 'odczytaj_zadania' || zamiar.typ === 'wyszukaj_zadania' || zamiar.typ === 'znajdz_do_edycji' || zamiar.typ === 'znajdz_do_usuniecia') {
       const znalezione = Array.isArray(wynik.dane) ? wynik.dane.filter((element): element is { id: string; tytul: string } => Boolean(element && typeof element === 'object' && typeof (element as { id?: unknown }).id === 'string' && typeof (element as { tytul?: unknown }).tytul === 'string')) : []
       if (zamiar.typ === 'odczytaj_zadania') return { typ: 'odpowiedz', tresc: znalezione.length ? `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)} masz: ${znalezione.map(({ tytul }) => tytul).join(', ')}.` : `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)} nie masz zapisanych zadań.`, aktualizacjaKontekstu }

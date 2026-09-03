@@ -163,9 +163,9 @@ export class AgentEcho {
       return
     }
     if (!dane || typeof dane !== 'object') return
-    const wynik = dane as { id?: unknown; tytul?: unknown }
+    const wynik = dane as { id?: unknown; tytul?: unknown; typ?: unknown }
     if (typeof wynik.id !== 'string') return
-    const typ = narzedzie.includes('reminder') ? 'przypomnienie' : narzedzie.includes('task') ? 'zadanie' : undefined
+    const typ = narzedzie.includes('reminder') ? 'przypomnienie' : narzedzie.includes('task') ? 'zadanie' : typeof wynik.typ === 'string' ? wynik.typ : undefined
     if (!typ) return
     const obecne = this.kontekst.migawka().ostatnieEncje.filter((encja) => !(encja.typ === typ && encja.id === wynik.id))
     if (narzedzie.startsWith('delete_')) {

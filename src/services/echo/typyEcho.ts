@@ -31,8 +31,8 @@ export interface WartoscDomyslnaEcho {
 }
 
 export interface OczekujaceDoprecyzowanieEcho {
-  intencja: 'utworz_przypomnienie' | 'przeloz_przypomnienie' | 'edytuj_zadanie' | 'usun_zadanie'
-  brakujacePola: ('tytul' | 'data' | 'encja')[]
+  intencja: 'utworz_przypomnienie' | 'przeloz_przypomnienie' | 'edytuj_zadanie' | 'usun_zadanie' | 'utworz_wizyte' | 'utworz_skierowanie' | 'utworz_recepte' | 'dodaj_wpis_terapii'
+  brakujacePola: ('tytul' | 'data' | 'godzina' | 'encja' | 'cel' | 'pozycje' | 'terapia')[]
   zebrane: {
     tytul?: string
     data?: string
@@ -41,6 +41,9 @@ export interface OczekujaceDoprecyzowanieEcho {
     fraza?: string
     termin?: string
     kandydaci?: { typ: string; id: string; etykieta?: string }[]
+    rodzaj?: string
+    kod?: string
+    tresc?: string
   }
 }
 

@@ -5,7 +5,7 @@ import { pobierzRepozytorium } from '../../data/Repozytorium'
 import { utworzZadanie } from '../ZadaniaService'
 import { AgentEcho } from './AgentEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
-import { RejestrNarzedziEcho, WykonawcaNarzedziEcho } from './NarzedziaEcho'
+import { RejestrNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho, WykonawcaNarzedziEcho } from './NarzedziaEcho'
 import type { DecyzjaModeluEcho, ProviderModeluEcho, ZadanieModeluEcho } from './typyEcho'
 
 class ProviderSkryptowy implements ProviderModeluEcho {
@@ -319,5 +319,37 @@ describe('Agent Echo', () => {
     const po = await agent.potwierdz(przed.akcjaDoPotwierdzenia!)
     expect(po.tekst).toBe('Gotowe. Usunąłem zadania z tego tygodnia.')
     expect(await repozytorium.pobierz(zadanie.id)).toBeUndefined()
+  })
+
+  it('prowadzi wizytę przez jedno doprecyzowanie, narzędzie i korektę kontekstową', async () => {
+    await baza.tabela('wizyty').clear()
+    const agent = new AgentEcho({ provider: new LokalnySemantycznyProviderEcho(), rejestr: utworzDomyslnyRejestrNarzedziEcho(), pobierzCzas: () => ({ teraz: '2026-08-31T10:00:00.000Z', dataLokalna: '2026-08-31', strefaCzasowa: 'Europe/Warsaw' }) })
+    expect((await agent.obsluz('Umów dermatologa.')).tekst).toBe('Na kiedy?')
+    expect((await agent.obsluz('Jutro.')).tekst).toBe('O której?')
+    await agent.obsluz('O 16.')
+    expect((await pobierzRepozytorium('wizyty').lista())[0]).toMatchObject({ nazwa: 'dermatologa', data: '2026-09-01', godzina: '16:00' })
+    await agent.obsluz('Przełóż tę wizytę na czwartek.')
+    await agent.obsluz('Jednak o 15.')
+    expect((await pobierzRepozytorium('wizyty').lista())[0]).toMatchObject({ data: '2026-09-03', godzina: '15:00' })
+  })
+
+  it('obsługuje potoczne dodawanie danych zdrowia oraz referencje recepty i terapii', async () => {
+    await Promise.all([baza.tabela('wizyty').clear(), baza.tabela('skierowania').clear(), baza.tabela('recepty').clear(), baza.tabela('terapie').clear(), baza.tabela('wpisyTerapii').clear()])
+    const agent = new AgentEcho({ provider: new LokalnySemantycznyProviderEcho(), rejestr: utworzDomyslnyRejestrNarzedziEcho(), pobierzCzas: () => ({ teraz: '2026-08-31T10:00:00.000Z', dataLokalna: '2026-08-31', strefaCzasowa: 'Europe/Warsaw' }) })
+
+    await agent.obsluz('Dodaj mi dentystę w przyszły wtorek o 16.')
+    expect((await pobierzRepozytorium('wizyty').lista())[0]).toMatchObject({ nazwa: 'dentystę', data: '2026-09-01', godzina: '16:00' })
+
+    await agent.obsluz('Mam skierowanie na RTG kolana.')
+    expect((await pobierzRepozytorium('skierowania').lista())[0]).toMatchObject({ cel: 'RTG kolana' })
+
+    await agent.obsluz('Dodaj receptę, kod 1234.')
+    await agent.obsluz('Dodaj do niej Ibuprofen.')
+    await agent.obsluz('Ten pierwszy lek już wykupiłem.')
+    expect((await pobierzRepozytorium('recepty').lista())[0]).toMatchObject({ kod: '1234', status: 'zrealizowana', pozycje: [{ nazwaLeku: 'Ibuprofen', iloscZrealizowana: 1 }] })
+
+    await agent.obsluz('Dodaj rehabilitację kolana.')
+    await agent.obsluz('Zapisz w rehabilitacji kolana, że dzisiaj było lepiej.')
+    expect((await pobierzRepozytorium('wpisyTerapii').lista())[0]).toMatchObject({ tresc: 'dzisiaj było lepiej' })
   })
 })
