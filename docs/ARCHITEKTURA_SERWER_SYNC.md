@@ -101,7 +101,7 @@ SQLite będzie backupowane jako spójna kopia bazy, najlepiej przez mechanizm SQ
 
 Dodano `server/` z konfiguracją env, otwarciem SQLite, migracjami i endpointem `GET /health` oraz `GET /api/health`. Pierwsza migracja tworzy tabele użytkowników, instalacji i rekordów synchronizacji z kluczem złożonym oraz indeksem po czasie zmiany. Dodano `.env.example`, osobny build serwera i trzy testy: błędna konfiguracja, idempotentne migracje i brak wycieku ścieżki/sekretów w healthchecku.
 
-Nie dodano auth, API encji ani adaptera klienta. Pierwsza encja do pionowego wycinka to **zadanie**: ma stabilne UUID, istniejące `createdAt`/`updatedAt`/`usunietoAt`, prostą ścieżkę Repozytorium i sensowny test create/update/delete bez ryzyka związanego z auth lub finansami.
+Etap 7 dodał trwałe API `/api/sync/changes` oraz klientowy `RepozytoriumZdalneHttp` za istniejącym `SyncEngine`. Prywatny model jednego właściciela mapuje klucz dostępu na serwerowy `SYNC_USER_ID`, a każda instalacja nadal zachowuje osobny `installationId`. Jest to działający model synchronizacji prywatnego wdrożenia, nie docelowy system sesji dla publicznej usługi.
 
 ## 12. Kolejność wdrożenia
 

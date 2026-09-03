@@ -13,10 +13,15 @@ import type { EncjaBazowa, KonfliktSynchronizacji, StanSynchronizacji } from '..
 import { pobierzInstallationId } from './InstallationService'
 
 const POCZATEK_SYNCHRONIZACJI = '1970-01-01T00:00:00.000Z'
-const TABELE_LOKALNE = new Set(['stanSynchronizacji', 'konfliktySynchronizacji'])
+const TABELE_NIESYNCHRONIZOWANE = new Set([
+  'stanSynchronizacji',
+  'konfliktySynchronizacji',
+  'pamiecEcho',
+  'dziennikEcho',
+])
 
 export const nazwyTabelSynchronizowanych = nazwyTabel.filter(
-  (nazwa): nazwa is NazwaTabeliSynchronizowanej => !TABELE_LOKALNE.has(nazwa),
+  (nazwa): nazwa is NazwaTabeliSynchronizowanej => !TABELE_NIESYNCHRONIZOWANE.has(nazwa),
 )
 
 interface OpcjeSyncEngine {
@@ -83,6 +88,30 @@ export async function pobierzStanSynchronizacji(): Promise<StanSynchronizacji> {
 
 export async function pobierzKonfliktySynchronizacji(): Promise<KonfliktSynchronizacji[]> {
   return baza.tabela('konfliktySynchronizacji').orderBy('wykrytoAt').reverse().toArray()
+}
+
+export async function oznaczOczekujacaSynchronizacje(online = typeof navigator === 'undefined' || navigator.onLine): Promise<void> {
+  const obecny = await pobierzStanSynchronizacji()
+  if (obecny.stan === 'synchronizacja' || obecny.stan === 'konflikt') return
+  const teraz = new Date().toISOString()
+  await baza.tabela('stanSynchronizacji').put({
+    ...obecny,
+    stan: online ? 'oczekuje' : 'offline',
+    ostatniBlad: undefined,
+    updatedAt: teraz,
+  })
+}
+
+export async function odtworzOczekujacaSynchronizacje(online = typeof navigator === 'undefined' || navigator.onLine): Promise<boolean> {
+  const obecny = await pobierzStanSynchronizacji()
+  if (obecny.stan === 'synchronizacja' || obecny.stan === 'konflikt') return false
+  const od = obecny.ostatniSync ?? POCZATEK_SYNCHRONIZACJI
+  const wyniki = await Promise.all(nazwyTabelSynchronizowanych.map((tabela) =>
+    tabelaLokalna(tabela).where('updatedAt').above(od).limit(1).count(),
+  ))
+  if (!wyniki.some(Boolean)) return false
+  await oznaczOczekujacaSynchronizacje(online)
+  return true
 }
 
 export class SyncEngine implements DostawcaSynchronizacji {
@@ -165,7 +194,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
         !konfliktoweKlucze.has(kluczZmiany(zmiana)) && !zgodneKlucze.has(kluczZmiany(zmiana)))
 
       if (doWyslania.length > 0) {
-        await this.zPonowieniami(() => repozytoriumZdalne.wyslijZmiany(doWyslania))
+        await this.zPonowieniami(() => repozytoriumZdalne.wyslijZmiany(doWyslania, od))
       }
       await this.zapiszPobrane(doPobrania)
       await this.zapiszKonflikty(konflikty)

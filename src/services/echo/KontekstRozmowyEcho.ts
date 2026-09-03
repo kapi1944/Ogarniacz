@@ -1,4 +1,4 @@
-import type { MigawkaKontekstuEcho, TuraRozmowyEcho, WynikNarzedziaEcho } from './typyEcho'
+import type { AktualizacjaKontekstuEcho, MigawkaKontekstuEcho, TuraRozmowyEcho, WynikNarzedziaEcho } from './typyEcho'
 
 const LIMIT_TUR = 12
 const LIMIT_WYNIKOW = 8
@@ -12,6 +12,10 @@ export class KontekstRozmowyEcho {
   private ostatnieEncje: MigawkaKontekstuEcho['ostatnieEncje'] = []
   private ostatnieWynikiNarzedzi: WynikNarzedziaEcho[] = []
   private ostatniaAkcja?: MigawkaKontekstuEcho['ostatniaAkcja']
+  private ostatniaIntencja?: string
+  private oczekujacaAkcja?: MigawkaKontekstuEcho['oczekujacaAkcja']
+  private oczekujaceDoprecyzowanie?: MigawkaKontekstuEcho['oczekujaceDoprecyzowanie']
+  private wartosciDomyslne: MigawkaKontekstuEcho['wartosciDomyslne'] = []
   private nierozwiazanePytanie?: string
   private odniesieniaCzasowe: string[] = []
 
@@ -29,6 +33,15 @@ export class KontekstRozmowyEcho {
 
   ustawOstatniaAkcje(narzedzie: string, argumenty: unknown): void {
     this.ostatniaAkcja = { narzedzie, argumenty }
+  }
+
+  zastosujAktualizacje(aktualizacja?: AktualizacjaKontekstuEcho): void {
+    if (!aktualizacja) return
+    if (aktualizacja.temat !== undefined) this.temat = aktualizacja.temat
+    if (aktualizacja.ostatniaIntencja !== undefined) this.ostatniaIntencja = aktualizacja.ostatniaIntencja
+    if (aktualizacja.oczekujacaAkcja !== undefined) this.oczekujacaAkcja = aktualizacja.oczekujacaAkcja ?? undefined
+    if (aktualizacja.oczekujaceDoprecyzowanie !== undefined) this.oczekujaceDoprecyzowanie = aktualizacja.oczekujaceDoprecyzowanie ?? undefined
+    if (aktualizacja.wartosciDomyslne !== undefined) this.wartosciDomyslne = [...aktualizacja.wartosciDomyslne]
   }
 
   ustawTemat(temat?: string): void { this.temat = temat }
@@ -51,6 +64,10 @@ export class KontekstRozmowyEcho {
       ostatnieEncje: [...this.ostatnieEncje],
       ostatnieWynikiNarzedzi: [...this.ostatnieWynikiNarzedzi],
       ostatniaAkcja: this.ostatniaAkcja,
+      ostatniaIntencja: this.ostatniaIntencja,
+      oczekujacaAkcja: this.oczekujacaAkcja,
+      oczekujaceDoprecyzowanie: this.oczekujaceDoprecyzowanie,
+      wartosciDomyslne: [...this.wartosciDomyslne],
       nierozwiazanePytanie: this.nierozwiazanePytanie,
       odniesieniaCzasowe: [...this.odniesieniaCzasowe],
     }

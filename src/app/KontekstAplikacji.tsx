@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useRepozytorium } from '../hooks/useRepozytorium'
-import type { NazwaModulu, Ustawienia } from '../domain/typy'
+import type { DaneSzybkiegoDodawania, NazwaModulu, Ustawienia } from '../domain/typy'
 import { DOMYSLNE_USTAWIENIA, normalizujUstawienia, zastosujUstawieniaInterfejsu } from '../domain/ustawienia'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { czyDozwolone } from '../services/UprawnieniaService'
+import { platforma } from '../platform/platforma'
 import { SzybkieDodawanie } from './SzybkieDodawanie'
 import { WyszukiwanieGlobalne } from './WyszukiwanieGlobalne'
 import { SilnikPrzypomnien } from './SilnikPrzypomnien'
@@ -16,6 +17,7 @@ interface WartoscKontekstu {
   ustawPodgladUstawien: (ustawienia: Ustawienia) => void
   wyczyscPodgladUstawien: () => void
   otworzSzybkieDodawanie: () => void
+  otworzSzybkieDodawanieZDanymi: (dane: DaneSzybkiegoDodawania) => void
   otworzWyszukiwanie: () => void
   moze: (modul: NazwaModulu, operacja?: 'odczyt' | 'edycja', sekcja?: string) => boolean
 }
@@ -25,7 +27,7 @@ const KontekstAplikacji = createContext<WartoscKontekstu | null>(null)
 export function DostawcaAplikacji({ children }: { children: ReactNode }) {
   const zapisaneUstawienia = useLiveQuery(() => repozytoriumUstawien.wczytaj(), [], DOMYSLNE_USTAWIENIA)
   const { dane: uprawnienia } = useRepozytorium('uprawnienia')
-  const [szybkieDodawanie, ustawSzybkieDodawanie] = useState(false)
+  const [szybkieDodawanie, ustawSzybkieDodawanie] = useState<DaneSzybkiegoDodawania | null>(null)
   const [wyszukiwanie, ustawWyszukiwanie] = useState(false)
   const zapisaneUstawieniaRef = useRef(zapisaneUstawienia)
   const podgladUstawienRef = useRef<Ustawienia | null>(null)
@@ -53,6 +55,9 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
     zastosujBiezaceUstawienia(zapisaneUstawieniaRef.current)
   }, [zastosujBiezaceUstawienia])
 
+  const otworzSzybkieDodawanie = useCallback(() => ustawSzybkieDodawanie({}), [])
+  const otworzSzybkieDodawanieZDanymi = useCallback((dane: DaneSzybkiegoDodawania) => ustawSzybkieDodawanie(dane), [])
+
   useEffect(() => {
     const mediaMotywu = window.matchMedia('(prefers-color-scheme: dark)')
     const mediaRuchu = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -74,6 +79,22 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
     if (!podgladUstawienRef.current) zastosujBiezaceUstawienia(zapisaneUstawienia)
   }, [zapisaneUstawienia, zastosujBiezaceUstawienia])
 
+  useEffect(() => {
+    let zakonczNasluchiwanie: (() => void) | undefined
+    let aktywne = true
+    void platforma.udostepnianie.nasluchujOdebrania((dane) => {
+      if (!aktywne) return
+      ustawSzybkieDodawanie({ typ: 'notatka', tresc: dane.tekst, tytul: dane.tytul })
+    }).then((zakoncz) => {
+      if (aktywne) zakonczNasluchiwanie = zakoncz
+      else zakoncz()
+    }).catch(() => undefined)
+    return () => {
+      aktywne = false
+      zakonczNasluchiwanie?.()
+    }
+  }, [])
+
   const zapiszUstawienia = async (zmiany: Partial<Ustawienia>) => {
     const zapisane = await repozytoriumUstawien.zapisz({ ...zapisaneUstawienia, ...zmiany })
     zapisaneUstawieniaRef.current = zapisane
@@ -91,13 +112,14 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
       zapiszUstawienia,
       ustawPodgladUstawien,
       wyczyscPodgladUstawien,
-      otworzSzybkieDodawanie: () => ustawSzybkieDodawanie(true),
+      otworzSzybkieDodawanie,
+      otworzSzybkieDodawanieZDanymi,
       otworzWyszukiwanie: () => ustawWyszukiwanie(true),
       moze,
     }}>
       {children}
       <SilnikPrzypomnien />
-      {szybkieDodawanie && <SzybkieDodawanie moze={moze} zamknij={() => ustawSzybkieDodawanie(false)} />}
+      {szybkieDodawanie && <SzybkieDodawanie danePoczatkowe={szybkieDodawanie} moze={moze} zamknij={() => ustawSzybkieDodawanie(null)} />}
       {wyszukiwanie && <WyszukiwanieGlobalne moze={moze} zamknij={() => ustawWyszukiwanie(false)} />}
     </KontekstAplikacji.Provider>
   )

@@ -1,4 +1,10 @@
-import type { NazwaModulu, PowiazanieEncji } from '../domain/typy'
+import type { DaneSzybkiegoDodawania, NazwaModulu, PowiazanieEncji, TypSzybkiegoDodawania } from '../domain/typy'
+
+export interface CelNawigacji {
+  sourceRef?: PowiazanieEncji
+  route: string
+  entityId?: string
+}
 
 const SCIEZKI_MODULOW: Record<NazwaModulu, string> = {
   zadania: '/zadania',
@@ -30,17 +36,26 @@ const SCIEZKI_DEEP_LINKOW = new Set([
   '/',
   ...Object.values(SCIEZKI_MODULOW),
   '/ustawienia/personalizacja',
+  '/dodaj',
 ])
 const DOZWOLONE_PARAMETRY = new Set(['element', 'wystapienie'])
+const TYPY_SZYBKIEGO_DODAWANIA = new Set<TypSzybkiegoDodawania>(['zadanie', 'notatka', 'wydarzenie', 'przypomnienie', 'wizyta', 'lek', 'wydatek', 'samochod'])
+
+export function sciezkaDlaCeluNawigacji({ sourceRef, route, entityId }: CelNawigacji): string | null {
+  const powiazanie = sourceRef && SCIEZKI_MODULOW[sourceRef.typ] && typeof sourceRef.id === 'string' && sourceRef.id.length > 0 && sourceRef.id.length <= 200
+    ? sourceRef
+    : undefined
+  const sciezka = normalizujSciezke(powiazanie ? SCIEZKI_MODULOW[powiazanie.typ] : route)
+  if (!sciezka) return null
+  const identyfikator = powiazanie?.id ?? entityId
+  const bezpiecznyId = typeof identyfikator === 'string' && identyfikator.length > 0 && identyfikator.length <= 200
+    ? identyfikator
+    : undefined
+  return `${sciezka}${bezpiecznyId ? `?element=${encodeURIComponent(bezpiecznyId)}` : ''}`
+}
 
 export function sciezkaDlaSourceRef(sourceRef: PowiazanieEncji | undefined, przypomnienieId: string) {
-  const bezpiecznyIdPrzypomnienia = typeof przypomnienieId === 'string' && przypomnienieId.length > 0 && przypomnienieId.length <= 200
-    ? przypomnienieId
-    : undefined
-  if (!sourceRef || !SCIEZKI_MODULOW[sourceRef.typ] || typeof sourceRef.id !== 'string' || sourceRef.id.length === 0 || sourceRef.id.length > 200) {
-    return bezpiecznyIdPrzypomnienia ? `/przypomnienia?element=${encodeURIComponent(bezpiecznyIdPrzypomnienia)}` : '/przypomnienia'
-  }
-  return `${SCIEZKI_MODULOW[sourceRef.typ]}?element=${encodeURIComponent(sourceRef.id)}`
+  return sciezkaDlaCeluNawigacji({ sourceRef, route: '/przypomnienia', entityId: przypomnienieId }) ?? '/przypomnienia'
 }
 
 function normalizujSciezke(sciezka: string): string | null {
@@ -51,13 +66,28 @@ function normalizujSciezke(sciezka: string): string | null {
     if (!SCIEZKI_DEEP_LINKOW.has(znormalizowanaSciezka)) return null
 
     for (const [nazwa, wartosc] of url.searchParams) {
-      if (!DOZWOLONE_PARAMETRY.has(nazwa) || !wartosc || wartosc.length > 200 || url.searchParams.getAll(nazwa).length !== 1) return null
+      const dozwolony = znormalizowanaSciezka === '/dodaj'
+        ? (nazwa === 'typ' && TYPY_SZYBKIEGO_DODAWANIA.has(wartosc as TypSzybkiegoDodawania)) || (nazwa === 'tekst' && wartosc.length <= 10_000)
+        : DOZWOLONE_PARAMETRY.has(nazwa) && wartosc.length <= 200
+      if (!dozwolony || !wartosc || url.searchParams.getAll(nazwa).length !== 1) return null
     }
 
     const parametry = url.searchParams.toString()
     return `${znormalizowanaSciezka}${parametry ? `?${parametry}` : ''}`
   } catch {
     return null
+  }
+}
+
+export function daneSzybkiegoDodawaniaZeSciezki(sciezka: string): DaneSzybkiegoDodawania | null {
+  const znormalizowana = normalizujSciezke(sciezka)
+  if (!znormalizowana) return null
+  const url = new URL(znormalizowana, 'https://ogarniacz.local')
+  if (url.pathname !== '/dodaj') return null
+  const typ = url.searchParams.get('typ')
+  return {
+    ...(typ ? { typ: typ as TypSzybkiegoDodawania } : {}),
+    ...(url.searchParams.get('tekst') ? { tresc: url.searchParams.get('tekst')! } : {}),
   }
 }
 

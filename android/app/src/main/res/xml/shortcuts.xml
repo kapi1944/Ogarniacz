@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="dodaj_zadanie" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_zadanie">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="pl.ogarniacz.app" android:targetClass="pl.ogarniacz.app.MainActivity" android:data="ogarniacz://dodaj?typ=zadanie" />
+    </shortcut>
+    <shortcut android:shortcutId="dodaj_notatke" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_notatka">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="pl.ogarniacz.app" android:targetClass="pl.ogarniacz.app.MainActivity" android:data="ogarniacz://dodaj?typ=notatka" />
+    </shortcut>
+    <shortcut android:shortcutId="dodaj_wydarzenie" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_wydarzenie">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="pl.ogarniacz.app" android:targetClass="pl.ogarniacz.app.MainActivity" android:data="ogarniacz://dodaj?typ=wydarzenie" />
+    </shortcut>
+    <shortcut android:shortcutId="dodaj_przypomnienie" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_przypomnienie">
+        <intent android:action="android.intent.action.VIEW" android:targetPackage="pl.ogarniacz.app" android:targetClass="pl.ogarniacz.app.MainActivity" android:data="ogarniacz://dodaj?typ=przypomnienie" />
+    </shortcut>
+</shortcuts>

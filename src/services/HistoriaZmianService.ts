@@ -14,7 +14,7 @@ const konfiguracjaHistorii: Partial<Record<NazwaTabeli, {
   platnosciRachunkow: { modul: 'finanse', pola: ['rachunekId', 'kwota', 'zaplaconoAt', 'usunietoAt'] },
   wydatki: { modul: 'finanse', pola: ['kwota', 'data', 'kategoria', 'opis', 'usunietoAt'] },
   budzety: { modul: 'finanse', pola: ['nazwa', 'kategoria', 'okres', 'limit', 'usunietoAt'] },
-  pojazdy: { modul: 'samochod', pola: ['nazwa', 'przebieg', 'ocDo', 'przegladDo', 'wymianaOlejuDo', 'wymianaOlejuPrzebieg', 'planowanySerwisData', 'planowanySerwisGodzina', 'usunietoAt'] },
+  pojazdy: { modul: 'samochod', pola: ['nazwa', 'marka', 'model', 'rok', 'numerRejestracyjny', 'vin', 'przebieg', 'historiaPrzebiegu', 'historiaSerwisowa', 'ocDo', 'ubezpieczyciel', 'numerPolisy', 'przegladDo', 'wymianaOlejuDo', 'wymianaOlejuPrzebieg', 'planowanySerwisData', 'planowanySerwisGodzina', 'usunietoAt'] },
 }
 
 const niedozwolonyKlucz = /^(access_?token|refresh_?token|token|secret|sekret|password|haslo|session|sesja|credentials|daneLogowania)$/i

@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { describe, expect, it, vi } from 'vitest'
+import { baza } from '../../data/BazaOgarniacza'
+import { pobierzRepozytorium } from '../../data/Repozytorium'
+import { utworzZadanie } from '../ZadaniaService'
 import { AgentEcho } from './AgentEcho'
+import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho } from './NarzedziaEcho'
 import type { DecyzjaModeluEcho, ProviderModeluEcho, ZadanieModeluEcho } from './typyEcho'
 
@@ -21,6 +25,22 @@ class ProviderSkryptowy implements ProviderModeluEcho {
 
 function utworzWykonawce(rejestr: RejestrNarzedziEcho): WykonawcaNarzedziEcho {
   return new WykonawcaNarzedziEcho(rejestr, undefined, async () => undefined)
+}
+
+function utworzAgentaRozmowy() {
+  let licznik = 0
+  const utworz = vi.fn(async ({ tytul, czas }: { tytul: string; czas: string }) => ({ id: `przypomnienie-${++licznik}`, tytul, czas }))
+  const przeloz = vi.fn(async ({ id, czas }: { id: string; czas: string }) => ({ id, tytul: id === 'przypomnienie-1' ? 'Telefon do mechanika' : 'Odebrać paczkę', czas }))
+  const rejestr = new RejestrNarzedziEcho()
+    .zarejestruj({ nazwa: 'create_reminder', opis: 'Utwórz przypomnienie', schematArgumentow: z.object({ tytul: z.string(), czas: z.string().datetime() }), ryzyko: 'niskie', wykonaj: utworz })
+    .zarejestruj({ nazwa: 'reschedule_reminder', opis: 'Przełóż przypomnienie', schematArgumentow: z.object({ id: z.string(), czas: z.string().datetime() }), ryzyko: 'niskie', wykonaj: przeloz })
+  const agent = new AgentEcho({
+    provider: new LokalnySemantycznyProviderEcho(),
+    rejestr,
+    wykonawca: utworzWykonawce(rejestr),
+    pobierzCzas: () => ({ teraz: '2026-08-31T10:00:00.000Z', dataLokalna: '2026-08-31', strefaCzasowa: 'Europe/Warsaw' }),
+  })
+  return { agent, utworz, przeloz }
 }
 
 describe('Agent Echo', () => {
@@ -132,5 +152,172 @@ describe('Agent Echo', () => {
 
     expect(provider.zadania[1]?.kontekstRozmowy.tury.map((tura) => tura.tresc)).toContain('Wiadomość tekstowa')
     expect(provider.zadania[1]?.kontekstRozmowy.tury.map((tura) => tura.tresc)).toContain('Dalsza wypowiedź')
+  })
+
+  it.each([
+    'Przypomnij mi jutro rano zadzwonić do mechanika.',
+    'Ej, jutro rano muszę zadzwonić do mechanika, przypomnij mi.',
+    'Dopisz mi na jutro rano telefon do mechanika.',
+  ])('interpretuje naturalne utworzenie przypomnienia: %s', async (wypowiedz) => {
+    const utworz = vi.fn(async ({ tytul, czas }: { tytul: string; czas: string }) => ({ id: 'przypomnienie-1', tytul, czas }))
+    const rejestr = new RejestrNarzedziEcho().zarejestruj({
+      nazwa: 'create_reminder',
+      opis: 'Utwórz przypomnienie',
+      schematArgumentow: z.object({ tytul: z.string(), czas: z.string().datetime() }),
+      ryzyko: 'niskie',
+      wykonaj: utworz,
+    })
+    const agent = new AgentEcho({
+      provider: new LokalnySemantycznyProviderEcho(),
+      rejestr,
+      wykonawca: utworzWykonawce(rejestr),
+      pobierzCzas: () => ({ teraz: '2026-08-31T10:00:00.000Z', dataLokalna: '2026-08-31', strefaCzasowa: 'Europe/Warsaw' }),
+    })
+
+    const odpowiedz = await agent.obsluz(wypowiedz)
+
+    expect(utworz).toHaveBeenCalledOnce()
+    const argumenty = utworz.mock.calls[0][0]
+    expect(argumenty.tytul.toLocaleLowerCase('pl-PL')).toContain('mechanika')
+    expect(new Date(argumenty.czas).getFullYear()).toBe(2026)
+    expect(new Date(argumenty.czas).getMonth()).toBe(8)
+    expect(new Date(argumenty.czas).getDate()).toBe(1)
+    expect(new Date(argumenty.czas).getHours()).toBe(8)
+    expect(odpowiedz.tekst).toMatch(/^Jasne, dodałem/)
+  })
+
+  it('przekłada poprzednio utworzone przypomnienie wskazane przez „to”', async () => {
+    await baza.tabela('przypomnienia').clear()
+    await baza.tabela('dziennikEcho').clear()
+    const agent = new AgentEcho({
+      provider: new LokalnySemantycznyProviderEcho(),
+      pobierzCzas: () => ({ teraz: '2026-08-31T10:00:00.000Z', dataLokalna: '2026-08-31', strefaCzasowa: 'Europe/Warsaw' }),
+    })
+
+    await agent.obsluz('Przypomnij mi jutro rano zadzwonić do mechanika.')
+    const odpowiedz = await agent.obsluz('Jednak przełóż to na czwartek.')
+
+    const zapisane = await pobierzRepozytorium('przypomnienia').lista()
+    expect(zapisane).toHaveLength(1)
+    expect(zapisane[0].tytul).toBe('Zadzwonić do mechanika')
+    expect(new Date(zapisane[0].czas!).getMonth()).toBe(8)
+    expect(new Date(zapisane[0].czas!).getDate()).toBe(3)
+    expect(new Date(zapisane[0].czas!).getHours()).toBe(8)
+    expect(odpowiedz.tekst).toMatch(/^Jasne, przełożyłem/)
+  })
+
+  it('zbiera dwie brakujące informacje pojedynczymi pytaniami w jednej intencji', async () => {
+    const { agent, utworz } = utworzAgentaRozmowy()
+
+    const pierwsza = await agent.obsluz('Dodaj przypomnienie.')
+    expect(pierwsza.tekst).toBe('Potrzebuję jeszcze dwóch informacji. Czego mam Ci przypomnieć?')
+    expect(agent.kontekst.migawka().oczekujaceDoprecyzowanie?.brakujacePola).toEqual(['tytul', 'data'])
+
+    const druga = await agent.obsluz('Telefon do mechanika.')
+    expect(druga.tekst).toBe('Na kiedy mam ustawić przypomnienie?')
+    expect(agent.kontekst.migawka().oczekujaceDoprecyzowanie?.zebrane.tytul).toBe('Telefon do mechanika')
+
+    const trzecia = await agent.obsluz('Jutro rano.')
+    expect(trzecia.tekst).toMatch(/^Jasne, dodałem/)
+    expect(utworz).toHaveBeenCalledOnce()
+    expect(agent.kontekst.migawka().oczekujaceDoprecyzowanie).toBeUndefined()
+    expect(agent.kontekst.migawka().tury).toHaveLength(6)
+  })
+
+  it('wybiera ostatnią korektę czasu z tej samej wypowiedzi', async () => {
+    const { agent, utworz } = utworzAgentaRozmowy()
+
+    await agent.obsluz('Dodaj to na jutro rano… nie, czekaj, na czwartek: telefon do mechanika.')
+
+    const czas = new Date(utworz.mock.calls[0][0].czas)
+    expect(czas.getMonth()).toBe(8)
+    expect(czas.getDate()).toBe(3)
+    expect(utworz.mock.calls[0][0].tytul).toBe('Telefon do mechanika')
+  })
+
+  it('rozumie „godzinę później” i przywraca poprzedni termin korektą', async () => {
+    const { agent, przeloz } = utworzAgentaRozmowy()
+    await agent.obsluz('Dodaj mi jutro rano telefon do mechanika.')
+    await agent.obsluz('Właściwie przełóż to na czwartek.')
+    await agent.obsluz('Godzinę później.')
+
+    expect(new Date(przeloz.mock.calls[1][0].czas).getHours()).toBe(9)
+    const odpowiedz = await agent.obsluz('Nie, ten poprzedni.')
+    expect(new Date(przeloz.mock.calls[2][0].czas).getHours()).toBe(8)
+    expect(odpowiedz.tekst).toContain('przywróciłem poprzedni termin')
+  })
+
+  it('dopytuje o encję i rozumie odpowiedź „ten poprzedni”', async () => {
+    const { agent, przeloz } = utworzAgentaRozmowy()
+    await agent.obsluz('Dodaj jutro o 8 telefon do mechanika.')
+    await agent.obsluz('Dodaj jutro o 9 odebrać paczkę.')
+
+    const pytanie = await agent.obsluz('Przełóż na piątek.')
+    expect(pytanie.tekst).toBe('Którego przypomnienia dotyczy zmiana?')
+    expect(przeloz).not.toHaveBeenCalled()
+
+    await agent.obsluz('Nie, ten poprzedni.')
+    expect(przeloz).toHaveBeenCalledOnce()
+    expect(przeloz.mock.calls[0][0].id).toBe('przypomnienie-1')
+  })
+
+  it('ujawnia automatyczną godzinę i pozwala zmienić ją kolejną wypowiedzią', async () => {
+    const { agent, przeloz } = utworzAgentaRozmowy()
+    const utworzenie = await agent.obsluz('Dodaj jutro telefon do mechanika.')
+
+    expect(utworzenie.wartosciDomyslne).toEqual([{ pole: 'godzina', wartosc: '08:00', opis: 'brak podanej godziny' }])
+    const zmiana = await agent.obsluz('Zmień godzinę na 9.')
+    expect(new Date(przeloz.mock.calls[0][0].czas).getHours()).toBe(9)
+    expect(zmiana.wartosciDomyslne).toEqual([])
+  })
+
+  it('czyta, wyszukuje, przekłada i usuwa pojedyncze zadanie przez domain tools', async () => {
+    await baza.tabela('zadania').clear()
+    await baza.tabela('dziennikEcho').clear()
+    const repozytorium = pobierzRepozytorium('zadania')
+    const mechanik = utworzZadanie({ tytul: 'Telefon do mechanika', opis: '', termin: '2026-09-01' })
+    const zakupy = utworzZadanie({ tytul: 'Zrobić zakupy', opis: '', termin: '2026-09-01' })
+    await repozytorium.zapisz(mechanik)
+    await repozytorium.zapisz(zakupy)
+    const agent = new AgentEcho({
+      provider: new LokalnySemantycznyProviderEcho(),
+      pobierzCzas: () => ({ teraz: '2026-08-31T10:00:00.000Z', dataLokalna: '2026-08-31', strefaCzasowa: 'Europe/Warsaw' }),
+    })
+
+    const odczyt = await agent.obsluz('Co mam jutro?')
+    expect(odczyt.tekst).toContain('Telefon do mechanika')
+    expect(odczyt.tekst).toContain('Zrobić zakupy')
+
+    const wyszukiwanie = await agent.obsluz('Znajdź mi to zadanie o mechaniku.')
+    expect(wyszukiwanie.tekst).toBe('Znalazłem „Telefon do mechanika”.')
+
+    const edycja = await agent.obsluz('Przenieś mechanika na piątek.')
+    expect(edycja.tekst).toMatch(/^Gotowe\. Przeniosłem/)
+    expect((await repozytorium.pobierz(mechanik.id))?.termin).toBe('2026-09-04')
+
+    const usuniecie = await agent.obsluz('Usuń to zadanie.')
+    expect(usuniecie.wymagaPotwierdzenia).not.toBe(true)
+    expect(usuniecie.tekst).toMatch(/^Gotowe\. Usunąłem/)
+    expect(await repozytorium.pobierz(mechanik.id)).toBeUndefined()
+  })
+
+  it('wymaga potwierdzenia przed masowym usunięciem z tygodnia', async () => {
+    await baza.tabela('zadania').clear()
+    await baza.tabela('dziennikEcho').clear()
+    const repozytorium = pobierzRepozytorium('zadania')
+    const zadanie = utworzZadanie({ tytul: 'Raport tygodniowy', opis: '', termin: '2026-09-02' })
+    await repozytorium.zapisz(zadanie)
+    const agent = new AgentEcho({
+      provider: new LokalnySemantycznyProviderEcho(),
+      pobierzCzas: () => ({ teraz: '2026-09-02T10:00:00.000Z', dataLokalna: '2026-09-02', strefaCzasowa: 'Europe/Warsaw' }),
+    })
+
+    const przed = await agent.obsluz('Usuń wszystkie zadania z tego tygodnia.')
+    expect(przed.wymagaPotwierdzenia).toBe(true)
+    expect(await repozytorium.pobierz(zadanie.id)).toBeDefined()
+
+    const po = await agent.potwierdz(przed.akcjaDoPotwierdzenia!)
+    expect(po.tekst).toBe('Gotowe. Usunąłem zadania z tego tygodnia.')
+    expect(await repozytorium.pobierz(zadanie.id)).toBeUndefined()
   })
 })

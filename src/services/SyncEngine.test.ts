@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { RepozytoriumZdalneInMemory } from '../data/RepozytoriumZdalneInMemory'
 import { utworzZadanie } from './ZadaniaService'
-import { nazwyTabelSynchronizowanych, SyncEngine } from './SyncEngine'
+import { nazwyTabelSynchronizowanych, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
 
 const CZAS_SYNCHRONIZACJI = '2026-09-01T12:00:00.000Z'
 
@@ -32,6 +32,13 @@ describe.sequential('SyncEngine', () => {
     await Dexie.delete('ogarniacz-v1')
     await inicjalizujBaze()
     for (const tabela of nazwyTabelSynchronizowanych) await baza.table(tabela).clear()
+  })
+
+  it('nie synchronizuje lokalnego stanu ani danych pamięci i historii Echo', () => {
+    expect(nazwyTabelSynchronizowanych).not.toContain('stanSynchronizacji')
+    expect(nazwyTabelSynchronizowanych).not.toContain('konfliktySynchronizacji')
+    expect(nazwyTabelSynchronizowanych).not.toContain('pamiecEcho')
+    expect(nazwyTabelSynchronizowanych).not.toContain('dziennikEcho')
   })
 
   it('wysyła lokalną zmianę przy synchronizacji przyrostowej', async () => {
@@ -121,5 +128,98 @@ describe.sequential('SyncEngine', () => {
     await utworzSilnik().synchronizuj(zdalne)
 
     expect(pobierzZmiany).toHaveBeenCalledTimes(2)
+  })
+
+  it('przenosi aktualny rekord z urządzenia A na urządzenie B', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    await baza.tabela('zadania').put(zadanie('wspolne-a-b', 'Z urządzenia A', '2026-08-26T10:00:00.000Z'))
+    await utworzSilnik().synchronizuj(zdalne)
+
+    await baza.tabela('zadania').clear()
+    await baza.tabela('stanSynchronizacji').clear()
+    const urzadzenieB = new SyncEngine({
+      teraz: () => CZAS_SYNCHRONIZACJI,
+      czyOnline: () => true,
+      installationId: () => 'instalacja-b',
+      opoznieniePonowieniaMs: 0,
+    })
+    const wynik = await urzadzenieB.synchronizuj(zdalne)
+
+    expect(wynik.pobrane).toBe(1)
+    expect(await baza.tabela('zadania').get('wspolne-a-b')).toMatchObject({ tytul: 'Z urządzenia A' })
+  })
+
+  it('zachowuje zmianę offline i wysyła ją po odzyskaniu połączenia', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    let online = false
+    const silnik = new SyncEngine({
+      teraz: () => CZAS_SYNCHRONIZACJI,
+      czyOnline: () => online,
+      installationId: () => 'instalacja-offline',
+      opoznieniePonowieniaMs: 0,
+    })
+    await baza.tabela('zadania').put(zadanie('offline', 'Zapisane offline', '2026-08-27T10:00:00.000Z'))
+
+    expect((await silnik.synchronizuj(zdalne)).stan).toBe('offline')
+    expect(await zdalne.pobierzWszystkie()).toHaveLength(0)
+    online = true
+    const wynik = await silnik.synchronizuj(zdalne)
+
+    expect(wynik.wyslane).toBe(1)
+    expect((await zdalne.pobierzWszystkie())[0].rekord).toMatchObject({ id: 'offline', tytul: 'Zapisane offline' })
+  })
+
+  it('odtwarza trwały pending po ponownym otwarciu IndexedDB', async () => {
+    await baza.tabela('stanSynchronizacji').update('glowny', { ostatniSync: '2026-08-26T10:00:00.000Z' })
+    await baza.tabela('zadania').put(zadanie('pending', 'Czeka po restarcie', '2026-08-27T10:00:00.000Z'))
+
+    baza.close()
+    await baza.open()
+
+    expect(await odtworzOczekujacaSynchronizacje(false)).toBe(true)
+    expect((await pobierzStanSynchronizacji()).stan).toBe('offline')
+  })
+
+  it('łączy równoległe żądania resume i reconnect w jeden sync', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    let zwolnijPobieranie: (() => void) | undefined
+    const oczekujacePobieranie = new Promise<void>((rozwiaz) => { zwolnijPobieranie = rozwiaz })
+    const pobierzZmiany = vi.spyOn(zdalne, 'pobierzZmiany').mockImplementation(async () => {
+      await oczekujacePobieranie
+      return []
+    })
+    const silnik = utworzSilnik()
+
+    const zResume = silnik.synchronizuj(zdalne)
+    const zReconnect = silnik.synchronizuj(zdalne)
+
+    expect(zReconnect).toBe(zResume)
+    zwolnijPobieranie?.()
+    await expect(zResume).resolves.toMatchObject({ stan: 'zsynchronizowano' })
+    expect(pobierzZmiany).toHaveBeenCalledTimes(1)
+  })
+
+  it('zapisuje rozróżnialne stany: pending, offline, synced i error', async () => {
+    await baza.tabela('zadania').put(zadanie('status', 'Status pending', '2026-08-27T10:00:00.000Z'))
+    expect(await odtworzOczekujacaSynchronizacje(true)).toBe(true)
+    expect((await pobierzStanSynchronizacji()).stan).toBe('oczekuje')
+
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const offline = new SyncEngine({ czyOnline: () => false, opoznieniePonowieniaMs: 0 })
+    await offline.synchronizuj(zdalne)
+    expect((await pobierzStanSynchronizacji()).stan).toBe('offline')
+
+    await utworzSilnik().synchronizuj(zdalne)
+    expect((await pobierzStanSynchronizacji()).stan).toBe('zsynchronizowano')
+
+    await baza.tabela('zadania').put(zadanie('blad', 'Czeka po błędzie', '2026-08-28T10:00:00.000Z'))
+    zdalne.ustawOnline(false)
+    const zBledem = new SyncEngine({ czyOnline: () => true, liczbaProb: 1, opoznieniePonowieniaMs: 0 })
+    await expect(zBledem.synchronizuj(zdalne)).rejects.toThrow('Testowy provider synchronizacji jest offline.')
+    expect((await pobierzStanSynchronizacji()).stan).toBe('blad')
+
+    zdalne.ustawOnline(true)
+    await expect(zBledem.synchronizuj(zdalne)).resolves.toMatchObject({ wyslane: 1, stan: 'zsynchronizowano' })
+    expect((await pobierzStanSynchronizacji()).stan).toBe('zsynchronizowano')
   })
 })

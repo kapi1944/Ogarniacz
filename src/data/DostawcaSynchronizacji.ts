@@ -18,7 +18,7 @@ export interface WynikSynchronizacji {
 export interface RepozytoriumZdalne {
   trwale?: boolean
   pobierzZmiany(od: string): Promise<ZmianaSynchronizacji[]>
-  wyslijZmiany(zmiany: ZmianaSynchronizacji[]): Promise<void>
+  wyslijZmiany(zmiany: ZmianaSynchronizacji[], od?: string): Promise<void>
 }
 
 export interface DostawcaSynchronizacji {

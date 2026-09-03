@@ -2,6 +2,7 @@ import type { RyzykoDzialania } from '../../domain/typy'
 
 export type TrybEcho = 'pelny_agent' | 'ograniczony_lokalny'
 export type ZrodloWejsciaEcho = 'tekst' | 'stt'
+export type StanPracyEcho = 'gotowy' | 'slucham' | 'rozumiem' | 'wykonuje' | 'gotowe'
 
 export interface KontekstCzasuEcho {
   teraz: string
@@ -23,6 +24,34 @@ export interface WynikNarzedziaEcho {
   komunikat?: string
 }
 
+export interface WartoscDomyslnaEcho {
+  pole: 'godzina'
+  wartosc: string
+  opis: string
+}
+
+export interface OczekujaceDoprecyzowanieEcho {
+  intencja: 'utworz_przypomnienie' | 'przeloz_przypomnienie' | 'edytuj_zadanie' | 'usun_zadanie'
+  brakujacePola: ('tytul' | 'data' | 'encja')[]
+  zebrane: {
+    tytul?: string
+    data?: string
+    godzina?: string
+    okreslenieCzasu?: string
+    fraza?: string
+    termin?: string
+    kandydaci?: { typ: string; id: string; etykieta?: string }[]
+  }
+}
+
+export interface AktualizacjaKontekstuEcho {
+  temat?: string
+  ostatniaIntencja?: string
+  oczekujacaAkcja?: { intencja: string; dane: unknown } | null
+  oczekujaceDoprecyzowanie?: OczekujaceDoprecyzowanieEcho | null
+  wartosciDomyslne?: WartoscDomyslnaEcho[]
+}
+
 export interface MigawkaKontekstuEcho {
   tury: TuraRozmowyEcho[]
   streszczenie?: string
@@ -30,6 +59,10 @@ export interface MigawkaKontekstuEcho {
   ostatnieEncje: { typ: string; id: string; etykieta?: string }[]
   ostatnieWynikiNarzedzi: WynikNarzedziaEcho[]
   ostatniaAkcja?: { narzedzie: string; argumenty: unknown }
+  ostatniaIntencja?: string
+  oczekujacaAkcja?: { intencja: string; dane: unknown }
+  oczekujaceDoprecyzowanie?: OczekujaceDoprecyzowanieEcho
+  wartosciDomyslne: WartoscDomyslnaEcho[]
   nierozwiazanePytanie?: string
   odniesieniaCzasowe: string[]
 }
@@ -48,9 +81,9 @@ export interface WywolanieNarzedziaEcho {
 }
 
 export type DecyzjaModeluEcho =
-  | { typ: 'odpowiedz'; tresc: string }
-  | { typ: 'pytanie'; tresc: string }
-  | { typ: 'narzedzia'; wywolania: WywolanieNarzedziaEcho[] }
+  | { typ: 'odpowiedz'; tresc: string; aktualizacjaKontekstu?: AktualizacjaKontekstuEcho; wartosciDomyslne?: WartoscDomyslnaEcho[] }
+  | { typ: 'pytanie'; tresc: string; aktualizacjaKontekstu?: AktualizacjaKontekstuEcho }
+  | { typ: 'narzedzia'; wywolania: WywolanieNarzedziaEcho[]; aktualizacjaKontekstu?: AktualizacjaKontekstuEcho }
 
 export interface ZadanieModeluEcho {
   instrukcjeSystemowe: string[]
@@ -78,6 +111,7 @@ export interface OdpowiedzEcho {
   tryb: TrybEcho
   wymagaPotwierdzenia?: boolean
   akcjaDoPotwierdzenia?: AkcjaDoPotwierdzeniaEcho
+  wartosciDomyslne?: WartoscDomyslnaEcho[]
 }
 
 export interface KandydatPamieciEcho {

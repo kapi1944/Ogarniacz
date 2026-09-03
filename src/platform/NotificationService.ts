@@ -3,6 +3,7 @@ import type { Przypomnienie } from '../domain/typy'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
 import { normalizujSciezkePowiadomienia, sciezkaDlaSourceRef } from './trasy'
 import type {
+  AkcjaPowiadomienia,
   DanePowiadomienia,
   KanalPowiadomienia,
   PowiadomieniePlatformowe,
@@ -10,6 +11,10 @@ import type {
   StanZgody,
   WynikSynchronizacjiPowiadomien,
 } from './typy'
+
+const TYP_AKCJI_PRZYPOMNIENIA = 'ogarniacz-przypomnienie'
+const AKCJA_WYKONANE = 'wykonane'
+const AKCJA_ODROCZ = 'odrocz'
 
 const KANALY = [
   { id: 'ogarniacz-wazne', name: 'Ważne przypomnienia', description: 'Pilne i eskalowane przypomnienia', importance: 4 as const, vibration: true },
@@ -48,7 +53,7 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie):
   if (!termin || Number.isNaN(termin.getTime())) return undefined
   const kanal = kanalDlaPrzypomnienia(przypomnienie)
   const sciezka = sciezkaDlaSourceRef(przypomnienie.zrodlo, przypomnienie.id)
-  const wymagaDokladnosci = przypomnienie.priorytet === 'krytyczny' || przypomnienie.eskalacja
+  const wymagaDokladnosci = przypomnienie.priorytet === 'krytyczny' && przypomnienie.typ === 'absolutne'
   const wersja = [termin.toISOString(), przypomnienie.tytul, kanal, sciezka, wymagaDokladnosci].join('|')
   return {
     id: identyfikatorPowiadomienia(`ogarniacz:${przypomnienie.id}`),
@@ -83,6 +88,7 @@ function schematNatywny(powiadomienie: PowiadomieniePlatformowe, exactAlarmsDost
     channelId: powiadomienie.kanal,
     autoCancel: true,
     group: 'ogarniacz-przypomnienia',
+    actionTypeId: TYP_AKCJI_PRZYPOMNIENIA,
     extra: daneDodatkowe(powiadomienie),
     isExactNotification: dokladne,
     isExactMandatory: false,
@@ -102,21 +108,24 @@ function wersjaOczekujacego(powiadomienie: PendingLocalNotificationSchema) {
 }
 
 export function utworzUslugePowiadomien(czyAndroid: boolean) {
-  const obslugiAkcji = new Set<(sciezka: string) => void>()
+  const obslugiAkcji = new Set<(akcja: AkcjaPowiadomienia) => void>()
   const ostatnieAkcje = new Map<string, number>()
-  let oczekujacaSciezka: string | undefined
+  let oczekujacaAkcja: AkcjaPowiadomienia | undefined
   let inicjalizacja: Promise<void> | undefined
   let kolejkaSynchronizacji = Promise.resolve<WynikSynchronizacjiPowiadomien>({ zaplanowanePrzypomnieniaIds: [] })
 
-  const przekazSciezke = (sciezka: string) => {
+  const przekazAkcje = (akcja: AkcjaPowiadomienia) => {
+    const { sciezka, przypomnienieId, typ } = akcja
     const bezpiecznaSciezka = normalizujSciezkePowiadomienia(sciezka)
-    if (!bezpiecznaSciezka) return
+    if (!bezpiecznaSciezka || (przypomnienieId && przypomnienieId.length > 200) || (typ !== 'otworz' && !przypomnienieId)) return
     const teraz = Date.now()
-    const poprzedniaAkcja = ostatnieAkcje.get(bezpiecznaSciezka)
+    const kluczAkcji = `${typ}:${przypomnienieId ?? bezpiecznaSciezka}`
+    const poprzedniaAkcja = ostatnieAkcje.get(kluczAkcji)
     if (poprzedniaAkcja !== undefined && teraz - poprzedniaAkcja < 2_000) return
-    ostatnieAkcje.set(bezpiecznaSciezka, teraz)
-    if (obslugiAkcji.size === 0) oczekujacaSciezka = bezpiecznaSciezka
-    else obslugiAkcji.forEach((obsluga) => obsluga(bezpiecznaSciezka))
+    ostatnieAkcje.set(kluczAkcji, teraz)
+    const bezpiecznaAkcja = { ...akcja, sciezka: bezpiecznaSciezka }
+    if (obslugiAkcji.size === 0) oczekujacaAkcja = bezpiecznaAkcja
+    else obslugiAkcji.forEach((obsluga) => obsluga(bezpiecznaAkcja))
   }
 
   const przygotujKanaly = async () => {
@@ -124,13 +133,30 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     await Promise.all(KANALY.map((kanal) => LocalNotifications.createChannel(kanal)))
   }
 
+  const przygotujAkcje = async () => {
+    if (!czyAndroid) return
+    await LocalNotifications.registerActionTypes({
+      types: [{
+        id: TYP_AKCJI_PRZYPOMNIENIA,
+        actions: [
+          { id: AKCJA_WYKONANE, title: 'Wykonane' },
+          { id: AKCJA_ODROCZ, title: 'Za 15 min' },
+        ],
+      }],
+    })
+  }
+
   const inicjalizuj = () => {
     if (!czyAndroid) return Promise.resolve()
     inicjalizacja ??= Promise.all([
       przygotujKanaly(),
-      LocalNotifications.addListener('localNotificationActionPerformed', ({ notification }) => {
+      przygotujAkcje(),
+      LocalNotifications.addListener('localNotificationActionPerformed', ({ actionId, notification }) => {
         const sciezka = notification.extra?.sciezka
-        if (typeof sciezka === 'string') przekazSciezke(sciezka)
+        const przypomnienieId = notification.extra?.przypomnienieId
+        if (typeof sciezka !== 'string' || typeof przypomnienieId !== 'string') return
+        const typ = actionId === AKCJA_WYKONANE ? 'wykonane' : actionId === AKCJA_ODROCZ ? 'odrocz' : 'otworz'
+        przekazAkcje({ typ, przypomnienieId, sciezka })
       }),
     ]).then(() => undefined).catch(() => undefined)
     return inicjalizacja
@@ -183,7 +209,10 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
   const pokaz = async ({ tytul, tresc, sciezka }: DanePowiadomienia) => {
     if (czyAndroid || !('Notification' in window) || Notification.permission !== 'granted') return false
     const powiadomienie = new Notification(tytul, { body: tresc })
-    if (sciezka) powiadomienie.onclick = () => { window.focus(); przekazSciezke(sciezka) }
+    if (sciezka) powiadomienie.onclick = () => {
+      window.focus()
+      przekazAkcje({ typ: 'otworz', sciezka })
+    }
     return true
   }
 
@@ -262,12 +291,12 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
         .catch(() => ({ zaplanowanePrzypomnieniaIds: [] }))
       return kolejkaSynchronizacji
     },
-    nasluchujAkcji(obsluga: (sciezka: string) => void) {
+    nasluchujAkcji(obsluga: (akcja: AkcjaPowiadomienia) => void) {
       obslugiAkcji.add(obsluga)
-      if (oczekujacaSciezka) {
-        const sciezka = oczekujacaSciezka
-        oczekujacaSciezka = undefined
-        obsluga(sciezka)
+      if (oczekujacaAkcja) {
+        const akcja = oczekujacaAkcja
+        oczekujacaAkcja = undefined
+        obsluga(akcja)
       }
       return () => {
         obslugiAkcji.delete(obsluga)

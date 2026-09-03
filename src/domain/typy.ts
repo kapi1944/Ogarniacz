@@ -318,8 +318,17 @@ export interface Budzet extends EncjaBazowa {
 
 export interface Pojazd extends EncjaBazowa {
   nazwa: string
+  marka?: string
+  model?: string
+  rok?: number
+  numerRejestracyjny?: string
+  vin?: string
   przebieg?: number
+  historiaPrzebiegu?: { data: string; przebieg: number }[]
+  historiaSerwisowa?: { id: Id; typ: 'olej' | 'serwis' | 'opony' | 'naprawa' | 'inne'; data: string; przebieg?: number; opis: string; koszt?: number }[]
   ocDo?: string
+  ubezpieczyciel?: string
+  numerPolisy?: string
   przegladDo?: string
   wymianaOlejuDo?: string
   wymianaOlejuPrzebieg?: number
@@ -385,7 +394,7 @@ export interface WpisHistoriiZmian extends EncjaBazowa {
   po?: Record<string, unknown>
 }
 
-export type StatusSynchronizacji = 'zsynchronizowano' | 'synchronizacja' | 'offline' | 'konflikt' | 'blad'
+export type StatusSynchronizacji = 'zsynchronizowano' | 'synchronizacja' | 'oczekuje' | 'offline' | 'konflikt' | 'blad'
 
 export interface StanSynchronizacji extends EncjaBazowa {
   stan: StatusSynchronizacji
@@ -406,7 +415,13 @@ export type MotywAplikacji = 'jasny' | 'ciemny' | 'systemowy'
 export type GestoscInterfejsu = 'komfortowa' | 'zwarta'
 export type DostepnoscPlanistyczna = 'czesciowa' | 'pelna'
 export type ZakresZmianyHarmonogramu = 'tylko_ten_dzien' | 'nowa_regula'
-export type TypSzybkiegoDodawania = 'zadanie' | 'notatka' | 'wizyta' | 'lek' | 'wydatek' | 'samochod'
+export type TypSzybkiegoDodawania = 'zadanie' | 'notatka' | 'wydarzenie' | 'przypomnienie' | 'wizyta' | 'lek' | 'wydatek' | 'samochod'
+
+export interface DaneSzybkiegoDodawania {
+  typ?: TypSzybkiegoDodawania
+  tresc?: string
+  tytul?: string
+}
 
 export type TypKafelkaPulpitu = 'zadania' | 'pilne' | 'wizyty' | 'leki' | 'finanse' | 'samochod' | 'zakupy' | 'poczekalnia' | 'notatki'
 export type RozmiarKafelkaPulpitu = 'small' | 'medium' | 'large'

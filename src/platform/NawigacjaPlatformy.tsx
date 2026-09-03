@@ -1,20 +1,46 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { App } from '@capacitor/app'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { obsluzWstecz, useObslugaWstecz } from './obslugaWstecz'
 import { platforma } from './platforma'
-import { parsujDeepLink } from './trasy'
+import { daneSzybkiegoDodawaniaZeSciezki, parsujDeepLink } from './trasy'
+import { useAplikacja } from '../app/KontekstAplikacji'
+import { pobierzRepozytorium } from '../data/Repozytorium'
+import { odroczPrzypomnienie, zakonczPrzypomnienie } from '../services/PrzypomnieniaService'
 
 export function NawigacjaPlatformy() {
   const polozenie = useLocation()
   const nawiguj = useNavigate()
+  const { moze, otworzSzybkieDodawanieZDanymi } = useAplikacja()
   const historia = useRef([polozenie.key])
+
+  const obsluzCel = useCallback((sciezka: string) => {
+    const szybkieDodawanie = daneSzybkiegoDodawaniaZeSciezki(sciezka)
+    if (szybkieDodawanie) otworzSzybkieDodawanieZDanymi(szybkieDodawanie)
+    else nawiguj(sciezka)
+  }, [nawiguj, otworzSzybkieDodawanieZDanymi])
 
   useEffect(() => {
     if (historia.current.at(-1) !== polozenie.key) historia.current.push(polozenie.key)
   }, [polozenie.key])
 
-  useEffect(() => platforma.powiadomienia.nasluchujAkcji((sciezka) => nawiguj(sciezka)), [nawiguj])
+  useEffect(() => platforma.powiadomienia.nasluchujAkcji((akcja) => {
+    if (akcja.typ === 'otworz') return obsluzCel(akcja.sciezka)
+    if (!akcja.przypomnienieId || !moze('przypomnienia', 'edycja')) return
+    const przypomnienieId = akcja.przypomnienieId
+    void (async () => {
+      const repozytorium = pobierzRepozytorium('przypomnienia')
+      const przypomnienie = await repozytorium.pobierz(przypomnienieId)
+      if (!przypomnienie || ['wykonane', 'pominiete'].includes(przypomnienie.stan)) return
+      if (akcja.typ === 'odrocz') {
+        await repozytorium.zapisz(odroczPrzypomnienie(przypomnienie, 15))
+        return
+      }
+      const wynik = zakonczPrzypomnienie(przypomnienie)
+      await repozytorium.zapisz(wynik.wykonane)
+      if (wynik.nastepne) await repozytorium.zapisz(wynik.nastepne)
+    })().catch(() => undefined)
+  }), [moze, obsluzCel])
 
   useEffect(() => {
     if (!platforma.natywna) return
@@ -41,7 +67,7 @@ export function NawigacjaPlatformy() {
       ostatniaTrasa = trasa
       if (wyczyscOstatniaTrase) clearTimeout(wyczyscOstatniaTrase)
       wyczyscOstatniaTrase = setTimeout(() => { ostatniaTrasa = undefined }, 2_000)
-      nawiguj(trasa)
+      obsluzCel(trasa)
     }
 
     const nasluchiwanie = App.addListener('appUrlOpen', ({ url }) => obsluzAdres(url))
@@ -54,7 +80,7 @@ export function NawigacjaPlatformy() {
       if (wyczyscOstatniaTrase) clearTimeout(wyczyscOstatniaTrase)
       void nasluchiwanie.then((uchwyt) => uchwyt.remove())
     }
-  }, [nawiguj])
+  }, [obsluzCel])
 
   useObslugaWstecz(polozenie.pathname !== '/', () => {
     if (historia.current.length > 1) {

@@ -5,6 +5,10 @@ import type { UstawieniaSzybkiegoDodawania } from './typy'
 
 const kontekst = { referenceDate: new Date(2026, 7, 27, 12) }
 describe('parser szybkiego dodawania', () => {
+  it('rozpoznaje wydarzenie i przypomnienie', () => {
+    expect(parserRegulowySzybkiegoDodawania.parse('spotkanie jutro o 12', { referenceDate: new Date(2026, 8, 2) }).suggestedType).toBe('wydarzenie')
+    expect(parserRegulowySzybkiegoDodawania.parse('przypomnij jutro o 9', { referenceDate: new Date(2026, 8, 2) }).suggestedType).toBe('przypomnienie')
+  })
   it.each([
     ['dentysta jutro 15:30', 'wizyta', '2026-08-28', '15:30'], ['kup olej do auta w sobotę', 'samochod', '2026-08-29', undefined],
     ['zapłać internet do 10 września', 'wydatek', '2026-09-10', undefined], ['weź lek o 20', 'lek', undefined, '20:00'],

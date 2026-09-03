@@ -19,7 +19,7 @@ export interface ParserSzybkiegoDodawania {
   parse(input: string, context: KontekstParseraSzybkiegoDodawania): SugestiaSzybkiegoDodawania
 }
 
-const typy: TypSzybkiegoDodawania[] = ['zadanie', 'notatka', 'wizyta', 'lek', 'wydatek', 'samochod']
+const typy: TypSzybkiegoDodawania[] = ['zadanie', 'notatka', 'wydarzenie', 'przypomnienie', 'wizyta', 'lek', 'wydatek', 'samochod']
 const dni: Record<string, number> = { poniedzialek: 1, poniedzialku: 1, wtorek: 2, wtorku: 2, sroda: 3, srode: 3, srody: 3, czwartek: 4, czwartku: 4, piatek: 5, piatku: 5, sobota: 6, sobote: 6, soboty: 6, niedziela: 0, niedziele: 0, niedzieli: 0 }
 const miesiace: Record<string, number> = { stycznia: 1, lutego: 2, marca: 3, kwietnia: 4, maja: 5, czerwca: 6, lipca: 7, sierpnia: 8, wrzesnia: 9, pazdziernika: 10, listopada: 11, grudnia: 12 }
 
@@ -74,16 +74,18 @@ function rozpoznajGodzine(tekst: string): { godzina?: string; fragment?: string 
 
 function rankingTypow(tekst: string): { typ: TypSzybkiegoDodawania; confidence: SugestiaSzybkiegoDodawania['confidence']; alternatives: TypSzybkiegoDodawania[] } {
   const normalny = bezPolskichZnakow(tekst)
-  const punkty: Record<TypSzybkiegoDodawania, number> = { zadanie: 0, notatka: 0, wizyta: 0, lek: 0, wydatek: 0, samochod: 0 }
+  const punkty: Record<TypSzybkiegoDodawania, number> = { zadanie: 0, notatka: 0, wydarzenie: 0, przypomnienie: 0, wizyta: 0, lek: 0, wydatek: 0, samochod: 0 }
   const dodaj = (typ: TypSzybkiegoDodawania, wzorzec: RegExp, wartosc = 2) => { if (wzorzec.test(normalny)) punkty[typ] += wartosc }
   dodaj('wizyta', /\b(dentysta|lekarz|fryzjer|wizyta|stomatolog|okulista|badanie|konsultacja)\b/)
   dodaj('lek', /\b(lek|tabletka|tabletki|zazyj|dawka)\b/); dodaj('lek', /\bwez\b(?=.*\b(lek|tabletka|tabletki|dawka)\b)/)
   dodaj('wydatek', /\b(zaplac|oplac|rachunek|faktura|internet|czynsz|rata|subskrypcja)\b/)
   dodaj('samochod', /\b(auto|auta|samochod|olej|oc|opony|serwis|mechanik\w*)\b/)
   dodaj('notatka', /\b(zanotuj|notatka|zapisz sobie|pamietaj ze)\b/)
+  dodaj('wydarzenie', /\b(wydarzenie|spotkanie|termin|kalendarz)\b/)
+  dodaj('przypomnienie', /\b(przypomnij|przypomnienie|alarm)\b/)
   const uporzadkowane = [...typy].sort((a, b) => punkty[b] - punkty[a] || typy.indexOf(a) - typy.indexOf(b))
   const najlepszy = uporzadkowane[0]
-  const confidence = punkty[najlepszy] >= 2 && (punkty[najlepszy] > punkty[uporzadkowane[1]] || ['wizyta', 'lek', 'wydatek', 'notatka'].includes(najlepszy)) ? 'wysoka' : punkty[najlepszy] ? 'srednia' : 'niska'
+  const confidence = punkty[najlepszy] >= 2 && (punkty[najlepszy] > punkty[uporzadkowane[1]] || ['wizyta', 'lek', 'wydatek', 'notatka', 'wydarzenie', 'przypomnienie'].includes(najlepszy)) ? 'wysoka' : punkty[najlepszy] ? 'srednia' : 'niska'
   return { typ: najlepszy, confidence, alternatives: uporzadkowane.slice(1, 3) }
 }
 
