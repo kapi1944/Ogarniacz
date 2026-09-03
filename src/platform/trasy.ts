@@ -41,10 +41,18 @@ const SCIEZKI_DEEP_LINKOW = new Set([
 const DOZWOLONE_PARAMETRY = new Set(['element', 'wystapienie'])
 const TYPY_SZYBKIEGO_DODAWANIA = new Set<TypSzybkiegoDodawania>(['zadanie', 'notatka', 'wydarzenie', 'przypomnienie', 'wizyta', 'lek', 'wydatek', 'samochod'])
 
+export function poprawnePowiazanieEncji(wartosc: unknown): wartosc is PowiazanieEncji {
+  if (!wartosc || typeof wartosc !== 'object') return false
+  const powiazanie = wartosc as Partial<PowiazanieEncji>
+  return typeof powiazanie.typ === 'string'
+    && powiazanie.typ in SCIEZKI_MODULOW
+    && typeof powiazanie.id === 'string'
+    && powiazanie.id.length > 0
+    && powiazanie.id.length <= 200
+}
+
 export function sciezkaDlaCeluNawigacji({ sourceRef, route, entityId }: CelNawigacji): string | null {
-  const powiazanie = sourceRef && SCIEZKI_MODULOW[sourceRef.typ] && typeof sourceRef.id === 'string' && sourceRef.id.length > 0 && sourceRef.id.length <= 200
-    ? sourceRef
-    : undefined
+  const powiazanie = poprawnePowiazanieEncji(sourceRef) ? sourceRef : undefined
   const sciezka = normalizujSciezke(powiazanie ? SCIEZKI_MODULOW[powiazanie.typ] : route)
   if (!sciezka) return null
   const identyfikator = powiazanie?.id ?? entityId

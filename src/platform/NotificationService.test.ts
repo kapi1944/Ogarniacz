@@ -115,8 +115,8 @@ describe('routing sourceRef', () => {
     usluga.nasluchujAkcji(obsluga)
     const akcja = lokalnePowiadomienia.addListener.mock.calls[0][1]
 
-    akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/zadania?element=zadanie-1' } } })
-    akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/zadania?element=zadanie-1' } } })
+    akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/zadania?element=zadanie-1', sourceRef: { typ: 'zadania', id: 'zadanie-1' } } } })
+    akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/zadania?element=zadanie-1', sourceRef: { typ: 'zadania', id: 'zadanie-1' } } } })
     akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/admin?element=zadanie-1' } } })
 
     expect(obsluga).toHaveBeenCalledTimes(1)
@@ -124,6 +124,7 @@ describe('routing sourceRef', () => {
       typ: 'otworz',
       przypomnienieId: 'przypomnienie-1',
       sciezka: '/zadania?element=zadanie-1',
+      sourceRef: { typ: 'zadania', id: 'zadanie-1' },
     })
   })
 

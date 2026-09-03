@@ -10,6 +10,7 @@ export interface AkcjaPowiadomienia {
   typ: TypAkcjiPowiadomienia
   przypomnienieId?: string
   sciezka: string
+  sourceRef?: PowiazanieEncji
 }
 
 export interface DanePowiadomienia {

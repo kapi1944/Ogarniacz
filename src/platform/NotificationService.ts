@@ -1,7 +1,7 @@
 import { LocalNotifications, type LocalNotificationSchema, type PendingLocalNotificationSchema } from '@capacitor/local-notifications'
 import type { Przypomnienie } from '../domain/typy'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
-import { normalizujSciezkePowiadomienia, sciezkaDlaSourceRef } from './trasy'
+import { normalizujSciezkePowiadomienia, poprawnePowiazanieEncji, sciezkaDlaSourceRef } from './trasy'
 import type {
   AkcjaPowiadomienia,
   DanePowiadomienia,
@@ -156,7 +156,8 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
         const przypomnienieId = notification.extra?.przypomnienieId
         if (typeof sciezka !== 'string' || typeof przypomnienieId !== 'string') return
         const typ = actionId === AKCJA_WYKONANE ? 'wykonane' : actionId === AKCJA_ODROCZ ? 'odrocz' : 'otworz'
-        przekazAkcje({ typ, przypomnienieId, sciezka })
+        const sourceRef = poprawnePowiazanieEncji(notification.extra?.sourceRef) ? notification.extra.sourceRef : undefined
+        przekazAkcje({ typ, przypomnienieId, sciezka, sourceRef })
       }),
     ]).then(() => undefined).catch(() => undefined)
     return inicjalizacja
