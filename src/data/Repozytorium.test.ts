@@ -75,4 +75,15 @@ describe.sequential('powiązane przypomnienia rekordów źródłowych', () => {
       odroczoneDo: undefined,
     })
   })
+
+  it('anuluje aktywne przypomnienie po odbyciu wizyty', async () => {
+    const wizyta: Wizyta = { ...utworzMetadane('wizyta-1'), nazwa: 'Dentysta', status: 'umowiona', data: '2026-09-03', notatka: '', pytania: [], dokumentyIds: [], checklista: [] }
+    const przypomnienie: Przypomnienie = { ...utworzMetadane('przypomnienie-1'), tytul: 'Dentysta', zrodlo: { typ: 'wizyty', id: wizyta.id }, typ: 'absolutne', czas: '2026-09-03T10:00:00.000Z', priorytet: 'wysoki', stan: 'nowe', eskalacja: true }
+    await baza.tabela('wizyty').put(wizyta)
+    await baza.tabela('przypomnienia').put(przypomnienie)
+
+    await pobierzRepozytorium('wizyty').zapisz({ ...wizyta, status: 'odbyta' })
+
+    expect(await baza.tabela('przypomnienia').get(przypomnienie.id)).toMatchObject({ usunietoAt: expect.any(String) })
+  })
 })

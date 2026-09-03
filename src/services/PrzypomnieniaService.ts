@@ -24,6 +24,32 @@ export function aktywnePrzypomnienia(przypomnienia: Przypomnienie[], teraz = new
     })
 }
 
+export function nadchodzacePrzypomnienia(przypomnienia: Przypomnienie[], teraz = new Date(), horyzontMinuty = 7 * 24 * 60): Przypomnienie[] {
+  const od = teraz.getTime()
+  const doCzasu = od + Math.max(0, horyzontMinuty) * 60_000
+  return przypomnienia
+    .filter((element) => ['nowe', 'dostarczone', 'odroczone', 'eskalowane'].includes(element.stan))
+    .filter((element) => {
+      const czas = czasUruchomienia(element)?.getTime()
+      return czas !== undefined && czas > od && czas <= doCzasu
+    })
+    .sort((a, b) => czasUruchomienia(a)!.getTime() - czasUruchomienia(b)!.getTime())
+}
+
+export function zapiszPowiazanePrzypomnienie(przypomnienia: Przypomnienie[], nowe: Przypomnienie): Przypomnienie {
+  const istniejace = przypomnienia.find((element) => element.zrodlo?.typ === nowe.zrodlo?.typ
+    && element.zrodlo?.id === nowe.zrodlo?.id
+    && ['nowe', 'dostarczone', 'odroczone', 'eskalowane'].includes(element.stan))
+  if (!istniejace) return nowe
+  return {
+    ...nowe,
+    id: istniejace.id,
+    createdAt: istniejace.createdAt,
+    stan: 'nowe',
+    odroczoneDo: undefined,
+  }
+}
+
 export function odroczPrzypomnienie(przypomnienie: Przypomnienie, minuty: number, teraz = new Date()): Przypomnienie {
   return {
     ...przypomnienie,

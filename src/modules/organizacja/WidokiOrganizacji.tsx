@@ -8,13 +8,14 @@ import type { DziennikNawyku, ListaZakupow, Nawyk, PlatnoscRachunku, PozycjaZaku
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { statystykaNawyku } from '../../services/NawykiService'
 import { nastepnaData } from '../../services/PowtarzanieService'
-import { aktywnePrzypomnienia, odroczPrzypomnienie, zakonczPrzypomnienie } from '../../services/PrzypomnieniaService'
+import { aktywnePrzypomnienia, nadchodzacePrzypomnienia, odroczPrzypomnienie, zakonczPrzypomnienie } from '../../services/PrzypomnieniaService'
 import { ukonczZadanie, utworzZadanie } from '../../services/ZadaniaService'
 
 export function WidokPrzypomnien() {
   const [parametryAdresu] = useSearchParams()
   const { dane, repozytorium } = useRepozytorium('przypomnienia')
   const aktywne = aktywnePrzypomnienia(dane)
+  const nadchodzace = nadchodzacePrzypomnienia(dane).slice(0, 6)
   const zakoncz = async (element: Przypomnienie) => {
     const wynik = zakonczPrzypomnienie(element)
     await repozytorium.zapisz(wynik.wykonane)
@@ -26,6 +27,7 @@ export function WidokPrzypomnien() {
       <div className="naglowek-karty"><div><h2>Wymagają reakcji</h2><p>{aktywne.length} aktywnych przypomnień</p></div></div>
       {aktywne.length === 0 ? <PustyStan tytul="Brak aktywnych przypomnień" opis="Nic nie wymaga teraz reakcji." /> : <div className="lista-rekordow lista-rekordow--wewnetrzna">{aktywne.map((element) => <article className="rekord" key={element.id}><div className="rekord__tresc"><h3>{element.tytul}</h3><div className="rekord__szczegoly"><Znacznik wariant={element.priorytet === 'krytyczny' ? 'blad' : element.priorytet === 'wysoki' ? 'ostrzezenie' : 'neutralny'}>{element.priorytet}</Znacznik><span>{element.stan}</span></div></div><div className="rekord__akcje"><button type="button" className="przycisk przycisk--maly" onClick={() => repozytorium.zapisz(odroczPrzypomnienie(element, 15))}><Clock3 aria-hidden="true" />15 min</button><button type="button" className="przycisk przycisk--maly" onClick={() => repozytorium.zapisz(odroczPrzypomnienie(element, 60))}>1 godz.</button><button type="button" className="przycisk-ikona przycisk-ikona--sukces" title="Zrobione" onClick={() => zakoncz(element)}><Check aria-hidden="true" /></button></div></article>)}</div>}
     </Karta>
+    <Karta><div className="naglowek-karty"><div><h2>Nadchodzące</h2><p>Najbliższe 7 dni wraz z rekordem źródłowym.</p></div></div>{nadchodzace.length === 0 ? <p className="tekst-pomocniczy">Brak nadchodzących przypomnień.</p> : <div className="lista-kompaktowa">{nadchodzace.map((element) => <div key={element.id}><div><strong>{element.tytul}</strong><small>{new Date(element.odroczoneDo ?? element.czas!).toLocaleString('pl-PL')} · {element.zrodlo ? `${element.zrodlo.typ}: ${element.zrodlo.id}` : 'samodzielne przypomnienie'}</small></div></div>)}</div>}</Karta>
     <WidokRejestru
       tytul="Wszystkie przypomnienia"
       opis="Absolutne, względne i cykliczne. Systemowe powiadomienia zależą od przeglądarki i nie są gwarantowane po całkowitym zamknięciu PWA."

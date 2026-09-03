@@ -9,6 +9,7 @@ import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { utworzZadanie } from '../../services/ZadaniaService'
 import { platforma } from '../../platform/platforma'
+import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
 
 export function WidokCelow() {
   const { dane: cele, repozytorium } = useRepozytorium('cele')
@@ -118,9 +119,9 @@ export function WidokDokumentow() {
 
 export function WidokTerminow() {
   const { dane, repozytorium } = useRepozytorium('terminyWaznosci')
-  const { repozytorium: repoPrzypomnien } = useRepozytorium('przypomnienia')
+  const { dane: przypomnienia, repozytorium: repoPrzypomnien } = useRepozytorium('przypomnienia')
   const { dane: dokumenty } = useRepozytorium('dokumenty')
   const [komunikat, ustawKomunikat] = useState('')
-  const dodajPrzypomnienie = async (termin: TerminWaznosci) => { const przypomnienie: Przypomnienie = { ...utworzMetadane(), tytul: `Wygasa: ${termin.nazwa}`, zrodlo: { typ: 'terminy', id: termin.id }, typ: 'wzgledne', czas: `${termin.dataWaznosci}T09:00:00`, przesuniecieMin: 30 * 24 * 60, priorytet: 'wysoki', stan: 'nowe', eskalacja: true }; await repoPrzypomnien.zapisz(przypomnienie); ustawKomunikat('Dodano przypomnienie 30 dni przed terminem.') }
+  const dodajPrzypomnienie = async (termin: TerminWaznosci) => { const przypomnienie: Przypomnienie = { ...utworzMetadane(), tytul: `Wygasa: ${termin.nazwa}`, zrodlo: { typ: 'terminy', id: termin.id }, typ: 'wzgledne', czas: `${termin.dataWaznosci}T09:00:00`, przesuniecieMin: 30 * 24 * 60, priorytet: 'wysoki', stan: 'nowe', eskalacja: true }; await repoPrzypomnien.zapisz(zapiszPowiazanePrzypomnienie(przypomnienia, przypomnienie)); ustawKomunikat('Zapisano przypomnienie 30 dni przed terminem.') }
   return <div className="widok">{komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}<WidokRejestru tytul="Terminy ważności" opis="Dokumenty, badania, ubezpieczenia, przeglądy, recepty i inne odnawialne sprawy." etykietaDodawania="Nowy termin" dane={dane} repozytorium={repozytorium} pola={[{ klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true }, { klucz: 'typ', etykieta: 'Typ', wymagane: true }, { klucz: 'dataWaznosci', etykieta: 'Data ważności', typ: 'date', wymagane: true }, { klucz: 'status', etykieta: 'Status', typ: 'select', wymagane: true, opcje: [{ wartosc: 'aktualne', etykieta: 'Aktualne' }, { wartosc: 'do_odnowienia', etykieta: 'Do odnowienia' }, { wartosc: 'odnowione', etykieta: 'Odnowione' }] }, { klucz: 'dokumentId', etykieta: 'Dokument', typ: 'select', opcje: dokumenty.map((x) => ({ wartosc: x.id, etykieta: x.nazwa })) }, { klucz: 'odnowienieTyp', etykieta: 'Reguła odnowienia', typ: 'select', opcje: [{ wartosc: 'brak', etykieta: 'Brak' }, { wartosc: 'miesiecznie', etykieta: 'Miesięcznie' }, { wartosc: 'rocznie', etykieta: 'Rocznie' }] }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), nazwa: f.nazwa.trim(), typ: f.typ, dataWaznosci: f.dataWaznosci, status: (f.status || 'aktualne') as TerminWaznosci['status'], dokumentId: f.dokumentId || undefined, regulaOdnowienia: f.odnowienieTyp && f.odnowienieTyp !== 'brak' ? { typ: f.odnowienieTyp as NonNullable<TerminWaznosci['regulaOdnowienia']>['typ'], coIle: 1, dataStartu: f.dataWaznosci } : undefined, updatedAt: terazIso() })} etykieta={(x) => x.nazwa} szczegoly={(x) => <><Znacznik wariant={x.dataWaznosci < new Date().toISOString().slice(0, 10) ? 'blad' : x.status === 'odnowione' ? 'sukces' : 'ostrzezenie'}>{x.status.replaceAll('_', ' ')}</Znacznik><span>{x.typ}</span><strong>{x.dataWaznosci}</strong>{x.dokumentId && <span>Dokument: {dokumenty.find((d) => d.id === x.dokumentId)?.nazwa}</span>}</>} akcje={(x) => <button type="button" className="przycisk-ikona" title="Przypomnij 30 dni wcześniej" onClick={() => dodajPrzypomnienie(x)}><BellPlus aria-hidden="true" /></button>} /></div>
 }

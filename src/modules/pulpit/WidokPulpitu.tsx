@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { addDays, format } from 'date-fns'
-import { AlertCircle, CheckCircle2, Clock3, LayoutGrid, Plus } from 'lucide-react'
+import { AlertCircle, Check, CheckCircle2, Clock3, LayoutGrid, Plus } from 'lucide-react'
 import { Karta, Komunikat, NaglowekWidoku, PustyStan } from '../../components/Interfejs'
 import { utworzMetadane, dzisiajIso } from '../../domain/fabryki'
 import { poprawnaGodzinaTerminu } from '../../domain/logikaTerminuZadania'
@@ -18,6 +18,7 @@ import { DostawcaSamochoduPulpitu } from '../../providers/DostawcaSamochoduPulpi
 import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
 import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
 import { DostawcaPoczekalniPulpitu } from '../../providers/DostawcaPoczekalniPulpitu'
+import { repozytoriumElementowZadan } from '../../data/RepozytoriumElementowZadan'
 import {
   adresReferencjiZrodla,
   alertyFinansow,
@@ -39,6 +40,7 @@ import {
 import { FormularzHarmonogramuDnia } from './FormularzHarmonogramuDnia'
 import { NawigatorDnia } from './NawigatorDnia'
 import { OsCzasu } from './OsCzasu'
+import { sortujElementyDzisiaj, wybierzElementTeraz } from './logikaDniaPulpitu'
 import {
   utworzHarmonogramDnia,
   utworzNowaReguleHarmonogramu,
@@ -95,11 +97,6 @@ function wagaPriorytetuElementu(priorytet: string | undefined): number {
 
 function ograniczMinuty(wartosc: number): number {
   return Number.isFinite(wartosc) ? Math.min(180, Math.max(0, Math.round(wartosc))) : 0
-}
-
-function minutyGodziny(godzina: string): number {
-  const [godziny, minuty] = godzina.split(':').map(Number)
-  return godziny * 60 + minuty
 }
 
 function etykietaKafelka(kafelek: KonfiguracjaKafelkaPulpitu): string {
@@ -162,7 +159,7 @@ export function WidokPulpitu() {
   const [pokazWiecejAlertow, ustawPokazWiecejAlertow] = useState(false)
   const [filtrKafelkow, ustawFiltrKafelkow] = useState<'wszystkie' | 'zadania' | 'pilne'>('wszystkie')
   const nawiguj = useNavigate()
-  const { ustawienia, zapiszUstawienia, otworzSzybkieDodawanie } = useAplikacja()
+  const { ustawienia, zapiszUstawienia, otworzSzybkieDodawanie, moze } = useAplikacja()
   const { dane: wyjatki, repozytorium: repozytoriumWyjatkow } = useRepozytorium('wyjatkiGrafiku')
   const dzisiaj = dzisiajIso()
   const zakresModulow = useMemo(() => {
@@ -256,15 +253,19 @@ export function WidokPulpitu() {
     .filter((element) => element.typ === 'lek' || element.status !== 'wykonany')
     .filter((element) => element.status !== 'anulowany')
     .sort((a, b) => (a.godzina ?? '').localeCompare(b.godzina ?? '') || a.typ.localeCompare(b.typ, 'pl') || a.tytul.localeCompare(b.tytul, 'pl') || a.id.localeCompare(b.id))
-  const elementyBezGodziny = elementyDnia
-    .filter((element) => element.status !== 'wykonany' && element.status !== 'anulowany' && !elementyOsi.some((elementOsi) => elementOsi.id === element.id))
+  const elementyDzisiaj = useMemo(() => sortujElementyDzisiaj(elementyKafelkow, dzisiaj), [dzisiaj, elementyKafelkow])
+  const elementyBezGodziny = elementyDzisiaj
+    .filter((element) => !element.godzina)
     .sort((a, b) => wagaElementuBezGodziny(b.trybTerminu) - wagaElementuBezGodziny(a.trybTerminu) || wagaPriorytetuElementu(b.priorytet) - wagaPriorytetuElementu(a.priorytet) || a.tytul.localeCompare(b.tytul, 'pl'))
-  const elementyWykonane = elementyDnia.filter((element) => element.status === 'wykonany')
+  const elementyWykonane = elementyKafelkow.filter((element) => element.data === dzisiaj && element.status === 'wykonany')
   const terazPulpitu = new Date()
-  const progNajblizszych = data === dzisiaj ? terazPulpitu.getHours() * 60 + terazPulpitu.getMinutes() : 0
-  const najblizszeElementy = elementyOsi
-    .filter((element) => element.godzina && minutyGodziny(element.godzina) >= progNajblizszych)
-    .slice(0, 3)
+  const elementTeraz = wybierzElementTeraz(elementyKafelkow, dzisiaj, terazPulpitu)
+
+  const oznaczZadanieJakoWykonane = async (element: ElementOgarniacza) => {
+    if (element.typ !== 'zadanie') return
+    await repozytoriumElementowZadan.aktualizuj(element.id, { status: 'wykonany' })
+    ustawKomunikat(`Oznaczono „${element.tytul}” jako wykonane.`)
+  }
 
   const zapiszWyjatekDnia = async (edycja: EdycjaHarmonogramuDnia) => {
     await repozytoriumWyjatkow.zapisz({
@@ -316,12 +317,12 @@ export function WidokPulpitu() {
 
     {ustawienia.pulpit.pokazAlerty && <Karta klasa="strefa-pulpitu strefa-pulpitu--alerty pulpit-sekcja--alerty"><div className="tytul-karty"><AlertCircle aria-hidden="true" /><span>Smart Alerts</span></div><h2>Najważniejsze sygnały</h2>{widoczneAlerty.length === 0 ? <p>Brak alertów wymagających uwagi.</p> : <div className="lista-kompaktowa">{widoczneAlerty.map((alert) => <div key={alert.id}><div><Link to={adresReferencjiZrodla(alert.sourceRef)}><strong>{alert.tytul}</strong></Link><small>{alert.severity === 'critical' ? 'Krytyczne' : alert.severity === 'warning' ? 'Ostrzeżenie' : 'Informacja'} · {alert.opis}</small></div></div>)}</div>}{alerty.length > ustawienia.pulpit.limitAlertow && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPokazWiecejAlertow((wartosc) => !wartosc)}>{pokazWiecejAlertow ? 'Pokaż mniej' : 'Pokaż więcej'}</button>}</Karta>}
     {ustawienia.pulpit.pokazOsCzasu && <OsCzasu data={data} harmonogram={harmonogram} zakresSnu={{ od: ustawienia.harmonogram.poczatekSnu, do: ustawienia.harmonogram.koniecSnu, skala: ustawienia.harmonogram.skalaSnuNaOsi }} elementy={elementyOsi} zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu} edytujHarmonogram={() => ustawEdycjeHarmonogramu(true)} przelaczDostepnosc={przelaczDostepnosc} usunWyjatek={usunWyjatek} otworzElement={(element) => { if (element.referencjaZrodla) nawiguj(adresReferencjiZrodla(element.referencjaZrodla)) }} />}
-    <Karta klasa="pulpit-sekcja--teraz"><div className="tytul-karty"><Clock3 aria-hidden="true" /><span>Teraz / najbliższe</span></div>{najblizszeElementy.length === 0 ? <p className="tekst-pomocniczy">Brak kolejnych elementów z godziną dla wybranego dnia.</p> : <div className="lista-kompaktowa">{najblizszeElementy.map((element) => <div key={element.id}><div>{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla)}><strong>{element.godzina} · {element.tytul}</strong></Link> : <strong>{element.godzina} · {element.tytul}</strong>}<small>{opisElementuKafelka(element)}</small></div></div>)}</div>}</Karta>
+    <Karta klasa="pulpit-sekcja--teraz"><div className="tytul-karty"><Clock3 aria-hidden="true" /><span>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższe'}</span></div>{!elementTeraz ? <PustyStan tytul="Spokojny dzień" opis="Brak trwających i zaplanowanych elementów na dziś. Możesz dodać następny krok, gdy będzie potrzebny." akcja={<button type="button" className="przycisk przycisk--maly" onClick={otworzSzybkieDodawanie}>Dodaj element</button>} /> : <div className="lista-kompaktowa"><div><div>{elementTeraz.element.referencjaZrodla ? <Link to={adresReferencjiZrodla(elementTeraz.element.referencjaZrodla)}><strong>{elementTeraz.element.godzina} · {elementTeraz.element.tytul}</strong></Link> : <strong>{elementTeraz.element.godzina} · {elementTeraz.element.tytul}</strong>}<small>{elementTeraz.stan === 'trwa' ? 'Trwa teraz' : 'Najbliższy zaplanowany element'} · {opisElementuKafelka(elementTeraz.element)}</small></div></div></div>}</Karta>
     {ustawienia.pulpit.pokazKafelki && <section className="pulpit-sekcja--kafelki"><div className="akcje-formularza"><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('wszystkie')}>Wszystkie</button><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('zadania')}>Zadania</button><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('pilne')}>Pilne</button></div><div className="strefy-pulpitu">{kafelki.map((kafelek) => <Karta key={kafelek.id} klasa={`strefa-pulpitu strefa-pulpitu--${kafelek.typ} ${klasaRozmiaruKafelka(kafelek.rozmiar)}`}><div className="tytul-karty"><LayoutGrid aria-hidden="true" /><span>{etykietaKafelka(kafelek)}</span></div><ZawartoscKafelka kafelek={kafelek} elementy={elementyKafelkow} wynikiModulow={modulyKafelkow} dataReferencyjna={dataReferencyjnaKafelkow} /></Karta>)}</div></section>}
 
     <section className="sekcje-elementow-pulpitu pulpit-sekcja--reszta">
-      <Karta><div className="naglowek-karty"><div><h2>Bez godziny</h2><p>Elementy przypisane do wybranego dnia bez konkretnej godziny.</p></div></div>{elementyBezGodziny.length === 0 ? <PustyStan tytul="Brak elementów bez godziny" opis="Zadania i wizyty bez konkretnej godziny pojawią się tutaj." /> : <div className="lista-kompaktowa">{elementyBezGodziny.map((element) => <div key={element.id}><div><strong>{element.tytul}</strong><small>{etykietaTerminuBezGodziny(element.trybTerminu)}</small></div></div>)}</div>}</Karta>
-      {ustawienia.pulpit.pokazWykonane && <Karta><div className="naglowek-karty"><div><h2><CheckCircle2 aria-hidden="true" /> Wykonane</h2><p>Elementy zakończone dla wybranej daty.</p></div></div>{elementyWykonane.length === 0 ? <p className="tekst-pomocniczy">Brak wykonanych elementów.</p> : <div className="lista-kompaktowa">{elementyWykonane.map((element) => <div key={element.id}><div><strong>{element.tytul}</strong><small>{element.godzina ?? 'Bez godziny'}</small></div></div>)}</div>}</Karta>}
+      <Karta><div className="naglowek-karty"><div><h2>Dzisiaj</h2><p>Najważniejsze elementy dnia bez konkretnej godziny.</p></div></div>{elementyBezGodziny.length === 0 ? <PustyStan tytul="Dzień jest uporządkowany" opis="Nie masz dziś elementów bez godziny. Zaplanowane sprawy pozostają na osi czasu." /> : <div className="lista-kompaktowa">{elementyBezGodziny.map((element) => <div key={element.id}>{element.typ === 'zadanie' && <button type="button" className="przycisk-check" disabled={!moze('zadania', 'edycja')} onClick={() => void oznaczZadanieJakoWykonane(element)} title={`Oznacz „${element.tytul}” jako wykonane`}><Check aria-hidden="true" /><span className="sr-only">Oznacz jako wykonane</span></button>}<div>{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla)}><strong>{element.tytul}</strong></Link> : <strong>{element.tytul}</strong>}<small>{etykietaTerminuBezGodziny(element.trybTerminu)}</small></div></div>)}</div>}</Karta>
+      {ustawienia.pulpit.pokazWykonane && <Karta><div className="naglowek-karty"><div><h2><CheckCircle2 aria-hidden="true" /> Wykonane</h2><p>Elementy zakończone dzisiaj.</p></div></div>{elementyWykonane.length === 0 ? <p className="tekst-pomocniczy">Brak wykonanych elementów.</p> : <div className="lista-kompaktowa">{elementyWykonane.map((element) => <div key={element.id}><div><strong>{element.tytul}</strong><small>{element.godzina ?? 'Bez godziny'}</small></div></div>)}</div>}</Karta>}
     </section>
 
     {edycjaHarmonogramu && <FormularzHarmonogramuDnia harmonogram={harmonogram} opis={wyjatekDnia?.opis} domyslnyZakres={ustawienia.harmonogram.domyslnyZakresZmiany} zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu} zamknij={() => ustawEdycjeHarmonogramu(false)} zapisz={zapiszZmianeHarmonogramu} />}

@@ -13,6 +13,7 @@
     "android:open": "cap open android",
     "android:run": "npm run android:sync && cap run android",
     "android:build": "npm run android:sync && cd android && gradlew.bat assembleDebug",
+    "android:release": "npm run build && cap sync android && cd android && gradlew.bat assembleRelease",
     "lint": "oxlint",
     "typecheck": "tsc -b",
     "test": "vitest run",

@@ -102,6 +102,18 @@ export async function oznaczOczekujacaSynchronizacje(online = typeof navigator =
   })
 }
 
+export async function odtworzOczekujacaSynchronizacje(online = typeof navigator === 'undefined' || navigator.onLine): Promise<boolean> {
+  const obecny = await pobierzStanSynchronizacji()
+  if (obecny.stan === 'synchronizacja' || obecny.stan === 'konflikt') return false
+  const od = obecny.ostatniSync ?? POCZATEK_SYNCHRONIZACJI
+  const wyniki = await Promise.all(nazwyTabelSynchronizowanych.map((tabela) =>
+    tabelaLokalna(tabela).where('updatedAt').above(od).limit(1).count(),
+  ))
+  if (!wyniki.some(Boolean)) return false
+  await oznaczOczekujacaSynchronizacje(online)
+  return true
+}
+
 export class SyncEngine implements DostawcaSynchronizacji {
   private readonly teraz: () => string
   private readonly czyOnline: () => boolean

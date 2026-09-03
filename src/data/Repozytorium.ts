@@ -8,6 +8,7 @@ import { powiadomOZmianieDanych } from './ZdarzeniaDanych'
 const modulyZrodelPrzypomnien: Partial<Record<NazwaTabeli, NazwaModulu>> = {
   wizyty: 'wizyty',
   terminyWaznosci: 'terminy',
+  pojazdy: 'samochod',
 }
 
 const AKTYWNE_STANY_PRZYPOMNIEN = new Set<Przypomnienie['stan']>(['nowe', 'dostarczone', 'odroczone', 'eskalowane'])
@@ -23,7 +24,19 @@ function czasZrodlaPrzypomnienia(nazwa: NazwaTabeli, encja: EncjaBazowa | undefi
     const termin = encja as MapaTabel['terminyWaznosci']
     return `${termin.dataWaznosci}T09:00:00`
   }
+  if (nazwa === 'pojazdy') {
+    const pojazd = encja as MapaTabel['pojazdy']
+    return [pojazd.ocDo, pojazd.przegladDo, pojazd.planowanySerwisData, pojazd.wymianaOlejuDo]
+      .filter((data): data is string => Boolean(data))
+      .sort()[0] && `${[pojazd.ocDo, pojazd.przegladDo, pojazd.planowanySerwisData, pojazd.wymianaOlejuDo].filter((data): data is string => Boolean(data)).sort()[0]}T09:00:00`
+  }
   return undefined
+}
+
+function czyZrodloZakonczone(nazwa: NazwaTabeli, encja: EncjaBazowa): boolean {
+  if (nazwa === 'wizyty') return ['odbyta', 'anulowana'].includes((encja as MapaTabel['wizyty']).status)
+  if (nazwa === 'terminyWaznosci') return (encja as MapaTabel['terminyWaznosci']).status === 'odnowione'
+  return false
 }
 
 export interface Repozytorium<T extends EncjaBazowa> {
@@ -64,21 +77,22 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     const zmienioneCzasy = new Map(zmiany
       .filter(({ przed, po }) => czasZrodlaPrzypomnienia(this.nazwa, przed) !== czasZrodlaPrzypomnienia(this.nazwa, po))
       .map(({ po }) => [po.id, czasZrodlaPrzypomnienia(this.nazwa, po)]))
-    if (zmienioneCzasy.size === 0) return
+    const zakonczoneZrodla = new Set(zmiany.filter(({ po }) => czyZrodloZakonczone(this.nazwa, po)).map(({ po }) => po.id))
+    if (zmienioneCzasy.size === 0 && zakonczoneZrodla.size === 0) return
     const tabelaPrzypomnien = baza.tabela('przypomnienia')
     const powiazane = (await tabelaPrzypomnien.toArray()).filter((przypomnienie) =>
       !przypomnienie.usunietoAt
       && przypomnienie.zrodlo?.typ === modul
-      && zmienioneCzasy.has(przypomnienie.zrodlo.id)
+      && (zmienioneCzasy.has(przypomnienie.zrodlo.id) || zakonczoneZrodla.has(przypomnienie.zrodlo.id))
       && AKTYWNE_STANY_PRZYPOMNIEN.has(przypomnienie.stan),
     )
     if (powiazane.length === 0) return
     const teraz = terazIso()
     await tabelaPrzypomnien.bulkPut(powiazane.map((przypomnienie) => ({
       ...przypomnienie,
-      czas: zmienioneCzasy.get(przypomnienie.zrodlo!.id),
-      stan: 'nowe',
-      odroczoneDo: undefined,
+      ...(zakonczoneZrodla.has(przypomnienie.zrodlo!.id)
+        ? { usunietoAt: teraz }
+        : { czas: zmienioneCzasy.get(przypomnienie.zrodlo!.id), stan: 'nowe' as const, odroczoneDo: undefined }),
       updatedAt: teraz,
     } satisfies Przypomnienie)))
     powiadomOZmianieDanych('przypomnienia')

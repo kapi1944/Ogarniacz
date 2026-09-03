@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { RepozytoriumZdalneInMemory } from '../data/RepozytoriumZdalneInMemory'
 import { utworzZadanie } from './ZadaniaService'
-import { nazwyTabelSynchronizowanych, SyncEngine } from './SyncEngine'
+import { nazwyTabelSynchronizowanych, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
 
 const CZAS_SYNCHRONIZACJI = '2026-09-01T12:00:00.000Z'
 
@@ -167,5 +167,59 @@ describe.sequential('SyncEngine', () => {
 
     expect(wynik.wyslane).toBe(1)
     expect((await zdalne.pobierzWszystkie())[0].rekord).toMatchObject({ id: 'offline', tytul: 'Zapisane offline' })
+  })
+
+  it('odtwarza trwały pending po ponownym otwarciu IndexedDB', async () => {
+    await baza.tabela('stanSynchronizacji').update('glowny', { ostatniSync: '2026-08-26T10:00:00.000Z' })
+    await baza.tabela('zadania').put(zadanie('pending', 'Czeka po restarcie', '2026-08-27T10:00:00.000Z'))
+
+    baza.close()
+    await baza.open()
+
+    expect(await odtworzOczekujacaSynchronizacje(false)).toBe(true)
+    expect((await pobierzStanSynchronizacji()).stan).toBe('offline')
+  })
+
+  it('łączy równoległe żądania resume i reconnect w jeden sync', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    let zwolnijPobieranie: (() => void) | undefined
+    const oczekujacePobieranie = new Promise<void>((rozwiaz) => { zwolnijPobieranie = rozwiaz })
+    const pobierzZmiany = vi.spyOn(zdalne, 'pobierzZmiany').mockImplementation(async () => {
+      await oczekujacePobieranie
+      return []
+    })
+    const silnik = utworzSilnik()
+
+    const zResume = silnik.synchronizuj(zdalne)
+    const zReconnect = silnik.synchronizuj(zdalne)
+
+    expect(zReconnect).toBe(zResume)
+    zwolnijPobieranie?.()
+    await expect(zResume).resolves.toMatchObject({ stan: 'zsynchronizowano' })
+    expect(pobierzZmiany).toHaveBeenCalledTimes(1)
+  })
+
+  it('zapisuje rozróżnialne stany: pending, offline, synced i error', async () => {
+    await baza.tabela('zadania').put(zadanie('status', 'Status pending', '2026-08-27T10:00:00.000Z'))
+    expect(await odtworzOczekujacaSynchronizacje(true)).toBe(true)
+    expect((await pobierzStanSynchronizacji()).stan).toBe('oczekuje')
+
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const offline = new SyncEngine({ czyOnline: () => false, opoznieniePonowieniaMs: 0 })
+    await offline.synchronizuj(zdalne)
+    expect((await pobierzStanSynchronizacji()).stan).toBe('offline')
+
+    await utworzSilnik().synchronizuj(zdalne)
+    expect((await pobierzStanSynchronizacji()).stan).toBe('zsynchronizowano')
+
+    await baza.tabela('zadania').put(zadanie('blad', 'Czeka po błędzie', '2026-08-28T10:00:00.000Z'))
+    zdalne.ustawOnline(false)
+    const zBledem = new SyncEngine({ czyOnline: () => true, liczbaProb: 1, opoznieniePonowieniaMs: 0 })
+    await expect(zBledem.synchronizuj(zdalne)).rejects.toThrow('Testowy provider synchronizacji jest offline.')
+    expect((await pobierzStanSynchronizacji()).stan).toBe('blad')
+
+    zdalne.ustawOnline(true)
+    await expect(zBledem.synchronizuj(zdalne)).resolves.toMatchObject({ wyslane: 1, stan: 'zsynchronizowano' })
+    expect((await pobierzStanSynchronizacji()).stan).toBe('zsynchronizowano')
   })
 })

@@ -8,6 +8,7 @@ import type { Lek, Przypomnienie, Wizyta } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { generujDawkiDnia, zapiszStatusDawki } from '../../services/LekiService'
+import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
 
 export function WidokLekow() {
   const [parametryAdresu] = useSearchParams()
@@ -50,7 +51,7 @@ export function WidokWizyt() {
   const [parametryAdresu] = useSearchParams()
   const { dane: wizyty, repozytorium } = useRepozytorium('wizyty')
   const { dane: kontakty } = useRepozytorium('kontakty')
-  const { repozytorium: repoPrzypomnien } = useRepozytorium('przypomnienia')
+  const { dane: przypomnienia, repozytorium: repoPrzypomnien } = useRepozytorium('przypomnienia')
   const [komunikat, ustawKomunikat] = useState('')
   usePodswietlenie(wizyty.length)
 
@@ -58,8 +59,8 @@ export function WidokWizyt() {
     const dataCzas = wizyta.data ? `${wizyta.data}T${wizyta.godzina ?? '09:00'}:00` : wizyta.terminGraniczny ? `${wizyta.terminGraniczny}T09:00:00` : undefined
     if (!dataCzas) return ustawKomunikat('Najpierw podaj datę wizyty albo termin graniczny.')
     const przypomnienie: Przypomnienie = { ...utworzMetadane(), tytul: `Wizyta: ${wizyta.nazwa}`, zrodlo: { typ: 'wizyty', id: wizyta.id }, typ: 'wzgledne', czas: dataCzas, przesuniecieMin: 1440, priorytet: 'wysoki', stan: 'nowe', eskalacja: true }
-    await repoPrzypomnien.zapisz(przypomnienie)
-    ustawKomunikat('Dodano przypomnienie na dzień przed wizytą.')
+    await repoPrzypomnien.zapisz(zapiszPowiazanePrzypomnienie(przypomnienia, przypomnienie))
+    ustawKomunikat('Zapisano przypomnienie na dzień przed wizytą.')
   }
 
   return <div className="widok">

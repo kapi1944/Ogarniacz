@@ -2,7 +2,7 @@ import { nasluchujZmianDanych } from '../data/ZdarzeniaDanych'
 import { RepozytoriumZdalneHttp } from '../data/RepozytoriumZdalneHttp'
 import type { RepozytoriumZdalne } from '../data/DostawcaSynchronizacji'
 import { platforma } from '../platform/platforma'
-import { nazwyTabelSynchronizowanych, oznaczOczekujacaSynchronizacje, SyncEngine } from './SyncEngine'
+import { nazwyTabelSynchronizowanych, oznaczOczekujacaSynchronizacje, odtworzOczekujacaSynchronizacje, SyncEngine } from './SyncEngine'
 
 const syncEngine = new SyncEngine()
 const INTERWAL_SYNCHRONIZACJI_MS = 5 * 60 * 1000
@@ -35,6 +35,7 @@ export function inicjalizujSynchronizacjeAplikacji(): Promise<() => void> {
     repozytoriumZdalne = utworzRepozytoriumZdalne()
     if (!repozytoriumZdalne) return () => undefined
 
+    await odtworzOczekujacaSynchronizacje()
     let opoznienie: ReturnType<typeof setTimeout> | undefined
     const uruchomBezBlokowania = () => { void synchronizujTeraz().catch(() => undefined) }
     const poZmianie = nasluchujZmianDanych((tabela) => {

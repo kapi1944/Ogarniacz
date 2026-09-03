@@ -1,4 +1,19 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+def pakietAplikacji = new JsonSlurper().parse(rootProject.file('../package.json'))
+def wersjaAplikacji = pakietAplikacji.version as String
+def skladoweWersji = wersjaAplikacji =~ /^(\d+)\.(\d+)\.(\d+)$/
+if (!skladoweWersji.matches()) {
+    throw new GradleException('Wersja w package.json musi mieć format X.Y.Z.')
+}
+def kodWersjiAplikacji = skladoweWersji[0][1].toInteger() * 1_000_000 + skladoweWersji[0][2].toInteger() * 1_000 + skladoweWersji[0][3].toInteger()
+def plikWlasciwosciPodpisu = rootProject.file('keystore.properties')
+def wlasciwosciPodpisu = new Properties()
+if (plikWlasciwosciPodpisu.exists()) {
+    plikWlasciwosciPodpisu.withInputStream { wlasciwosciPodpisu.load(it) }
+}
 
 android {
     namespace = "pl.ogarniacz.app"
@@ -7,8 +22,8 @@ android {
         applicationId "pl.ogarniacz.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode kodWersjiAplikacji
+        versionName wersjaAplikacji
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,11 +31,31 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (plikWlasciwosciPodpisu.exists()) {
+                storeFile rootProject.file(wlasciwosciPodpisu.getProperty('storeFile'))
+                storePassword wlasciwosciPodpisu.getProperty('storePassword')
+                keyAlias wlasciwosciPodpisu.getProperty('keyAlias')
+                keyPassword wlasciwosciPodpisu.getProperty('keyPassword')
+            }
+        }
+    }
     buildTypes {
         release {
+            if (!plikWlasciwosciPodpisu.exists()) {
+                throw new GradleException('Brak android/keystore.properties z danymi istniejącego klucza release.')
+            }
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+android.applicationVariants.all { wariant ->
+    wariant.outputs.all { wyjscie ->
+        wyjscie.outputFileName = "Ogarniacz-${wersjaAplikacji}-${wariant.buildType.name}.apk"
     }
 }
 

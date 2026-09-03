@@ -289,8 +289,17 @@ export interface Budzet extends EncjaBazowa {
 
 export interface Pojazd extends EncjaBazowa {
   nazwa: string
+  marka?: string
+  model?: string
+  rok?: number
+  numerRejestracyjny?: string
+  vin?: string
   przebieg?: number
+  historiaPrzebiegu?: { data: string; przebieg: number }[]
+  historiaSerwisowa?: { id: Id; typ: 'olej' | 'serwis' | 'opony' | 'naprawa' | 'inne'; data: string; przebieg?: number; opis: string; koszt?: number }[]
   ocDo?: string
+  ubezpieczyciel?: string
+  numerPolisy?: string
   przegladDo?: string
   wymianaOlejuDo?: string
   wymianaOlejuPrzebieg?: number

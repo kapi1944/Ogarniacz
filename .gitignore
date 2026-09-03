@@ -12,6 +12,9 @@ dist
 dist-server
 dist-ssr
 *.local
+android/keystore.properties
+android/*.jks
+android/*.keystore
 
 # Editor directories and files
 .vscode/*

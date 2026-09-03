@@ -71,4 +71,10 @@ describe('Dostawca Samochodu Pulpitu', () => {
     await repozytorium.usun(rekord.id)
     expect(await repozytorium.pobierz(rekord.id)).toBeUndefined()
   })
+
+  it('przekazuje zbliżający się przegląd jako element wymagający uwagi Pulpitu', async () => {
+    const elementy = await new DostawcaSamochoduPulpitu(zrodlo(() => [pojazd({ przegladDo: '2026-08-29' })]))
+      .pobierzElementy({ od: '2026-08-28', do: '2026-09-27' })
+    expect(elementy.find((element) => element.dane?.rodzajTerminu === 'przeglad')).toMatchObject({ data: '2026-08-29', referencjaZrodla: { modul: 'samochod', encjaId: 'auto-1' } })
+  })
 })

@@ -9,14 +9,13 @@ import { inicjalizujWidgetSnapshotService } from './services/WidgetSnapshotServi
 import { inicjalizujSynchronizacjeAplikacji } from './services/SynchronizacjaAplikacji'
 import './styles/glowny.css'
 
-await inicjalizujPlatforme()
 await inicjalizujBaze()
+await inicjalizujPlatforme()
 zastosujUstawieniaInterfejsu(
   await repozytoriumUstawien.wczytaj(),
   window.matchMedia('(prefers-color-scheme: dark)').matches,
   window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 )
 inicjalizujWidgetSnapshotService()
-void inicjalizujSynchronizacjeAplikacji()
-
 createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
+void inicjalizujSynchronizacjeAplikacji()

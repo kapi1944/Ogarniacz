@@ -1808,8 +1808,8 @@ input[type="radio"] {
 }
 
 /* Wspólny shell mobile: ten sam React działa w Web/PWA, Androidzie i na przyszłym hoście sieciowym. */
-.dolna-nawigacja,
-.pulpit-sekcja--teraz { display: none; }
+.dolna-nawigacja { display: none; }
+.pulpit-sekcja--teraz { display: block; }
 
 @media (max-width: 980px) {
   :root { --wysokosc-nawigacji-mobilnej: 68px; }
