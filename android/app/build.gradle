@@ -43,13 +43,21 @@ android {
     }
     buildTypes {
         release {
-            if (!plikWlasciwosciPodpisu.exists()) {
-                throw new GradleException('Brak android/keystore.properties z danymi istniejącego klucza release.')
+            if (plikWlasciwosciPodpisu.exists()) {
+                signingConfig signingConfigs.release
             }
-            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+gradle.taskGraph.whenReady { grafZadan ->
+    def czyPowstajeArtefaktRelease = grafZadan.allTasks.any { zadanie ->
+        zadanie.path == ':app:packageRelease' || zadanie.path == ':app:packageReleaseBundle'
+    }
+    if (czyPowstajeArtefaktRelease && !plikWlasciwosciPodpisu.exists()) {
+        throw new GradleException('Brak android/keystore.properties z danymi istniejącego klucza release.')
     }
 }
 
