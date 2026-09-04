@@ -6,6 +6,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle zapisanyStan) {
+        registerPlugin(AktualizacjePlugin.class);
         registerPlugin(OdbiorUdostepnianiaPlugin.class);
         super.onCreate(zapisanyStan);
     }
