@@ -384,18 +384,52 @@ function sprawdzKonfiguracjePodpisu() {
   return { plikKlucza, alias: wartosci.keyAlias }
 }
 
+function znajdzApkSigner(sdk) {
+  const katalog = join(sdk, 'build-tools')
+  if (!existsSync(katalog)) return undefined
+  const nazwa = czyWindows ? 'apksigner.bat' : 'apksigner'
+  return podkatalogi(katalog)
+    .sort((a, b) => basename(b).localeCompare(basename(a), undefined, { numeric: true }))
+    .map((wersja) => join(wersja, nazwa))
+    .find(existsSync)
+}
+
+function sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko) {
+  const apkSigner = znajdzApkSigner(diagnostyka.sdk)
+  if (!apkSigner) throw new Error('Nie znaleziono apksigner w Android SDK build-tools.')
+  if (czyWindows) {
+    wykonajEtap('Weryfikacja podpisu release APK', process.env.ComSpec ?? 'cmd.exe', [
+      '/d',
+      '/s',
+      '/c',
+      `""${apkSigner}" verify --verbose "${sciezkaApk}""`,
+    ], { srodowisko })
+    return
+  }
+  wykonajEtap('Weryfikacja podpisu release APK', apkSigner, ['verify', '--verbose', sciezkaApk], { srodowisko })
+}
+
 async function wykonajRelease(opcje) {
-  const { srodowisko } = wymagajSrodowiska()
+  const podpisWstepny = sprawdzKonfiguracjePodpisu()
+  const { diagnostyka, srodowisko } = wymagajSrodowiska()
   zbudujFrontend(srodowisko)
   synchronizujCapacitor(srodowisko)
   const podpis = sprawdzKonfiguracjePodpisu()
+  if (podpis.plikKlucza !== podpisWstepny.plikKlucza || podpis.alias !== podpisWstepny.alias) {
+    throw new Error('Konfiguracja release signing zmieniła się podczas budowania. Uruchom release ponownie.')
+  }
   console.log(`\nSIGNING: OK — stały alias ${podpis.alias}; plik klucza pozostaje poza repozytorium`)
   zbudujGradle('Release', srodowisko)
   const sciezkaApk = znajdzNajnowszyApk('Release')
+  sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko)
+  const bazowyAdres = typeof opcje['base-url'] === 'string' ? opcje['base-url'] : process.env.OGARNIACZ_UPDATE_BASE_URL
+  if (bazowyAdres && new URL(bazowyAdres).protocol !== 'https:') {
+    throw new Error('Bazowy adres aktualizacji musi używać HTTPS.')
+  }
   const manifest = walidujManifestAktualizacji(await utworzManifestAktualizacji({
     wersja: pakiet.version,
     sciezkaApk,
-    bazowyAdres: typeof opcje['base-url'] === 'string' ? opcje['base-url'] : process.env.OGARNIACZ_UPDATE_BASE_URL,
+    bazowyAdres,
   }))
   const katalogWyjscia = dirname(sciezkaApk)
   const sciezkaManifestu = join(katalogWyjscia, 'latest.json')
