@@ -13,7 +13,7 @@ Ogarniacz to prywatne, lokalne centrum dowodzenia codziennym życiem. Łączy za
 PowerShell, Terminal Windows lub Git Bash:
 
 ```bash
-cd C:/GitHub/Projects/Ogarniacz/Ogarniacz_v1
+cd C:/GitHub/Projects/Ogarniacz/Ogarniacz
 npm install
 ```
 
@@ -82,6 +82,7 @@ PWA ma manifest, ikony, service worker i offline shell. Dane lokalne pozostają 
 
 ## Dokumentacja
 
+- [Android: deploy, release i aktualizacje bez kabla](docs/ANDROID.md)
 - [Architektura](docs/ARCHITECTURE.md)
 - [Model danych](docs/DATA_MODEL.md)
 - [Specyfikacja v1](docs/SPECYFIKACJA_OGARNIACZ_V1.md)
