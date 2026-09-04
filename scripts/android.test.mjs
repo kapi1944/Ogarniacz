@@ -6,8 +6,10 @@ import test from 'node:test'
 import {
   obliczKodWersji,
   obliczSha256,
+  parsujUrzadzeniaAdb,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
+  wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
 
 test('oblicza rosnący versionCode z wersji package.json', () => {
@@ -46,4 +48,22 @@ test('tworzy i waliduje latest.json z względnym adresem APK', async () => {
   } finally {
     await rm(katalog, { recursive: true, force: true })
   }
+})
+
+test('rozpoznaje USB i Wi-Fi oraz wymaga wyboru przy wielu urządzeniach', () => {
+  const urzadzenia = parsujUrzadzeniaAdb(`List of devices attached
+R5CT123456A device product:dm3q model:SM_S918B device:dm3q usb:1-2 transport_id:1
+192.168.1.20:37141 device product:dm3q model:SM_S918B device:dm3q transport_id:2
+`)
+  assert.equal(urzadzenia[0].transport, 'USB')
+  assert.equal(urzadzenia[1].transport, 'Wi-Fi')
+  assert.throws(() => wybierzUrzadzenieAdb(urzadzenia), /więcej niż jedno/)
+  assert.equal(wybierzUrzadzenieAdb(urzadzenia, '192.168.1.20:37141').serial, '192.168.1.20:37141')
+})
+
+test('zgłasza status unauthorized i offline bez wyboru starego APK', () => {
+  const nieautoryzowane = parsujUrzadzeniaAdb('List of devices attached\nABC unauthorized transport_id:1\n')
+  const offline = parsujUrzadzeniaAdb('List of devices attached\n192.168.1.20:37141 offline transport_id:2\n')
+  assert.throws(() => wybierzUrzadzenieAdb(nieautoryzowane), /unauthorized/)
+  assert.throws(() => wybierzUrzadzenieAdb(offline), /offline/)
 })

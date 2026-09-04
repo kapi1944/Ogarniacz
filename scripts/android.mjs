@@ -12,8 +12,10 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { fileURLToPath } from 'node:url'
 import {
   obliczKodWersji,
+  parsujUrzadzeniaAdb,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
+  wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
 
 const katalogRepozytorium = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -201,48 +203,11 @@ function znajdzAdb(sdk) {
   return unikalneIstniejace(kandydaci)[0]
 }
 
-function parsujUrzadzenia(tekst) {
-  return tekst.split(/\r?\n/).slice(1).map((wiersz) => wiersz.trim()).filter(Boolean).map((wiersz) => {
-    const [serial, stan, ...pola] = wiersz.split(/\s+/)
-    const wartosci = Object.fromEntries(pola.filter((pole) => pole.includes(':')).map((pole) => {
-      const indeks = pole.indexOf(':')
-      return [pole.slice(0, indeks), pole.slice(indeks + 1)]
-    }))
-    return {
-      serial,
-      stan,
-      model: (wartosci.model ?? wartosci.device ?? 'Android').replaceAll('_', ' '),
-      transport: wartosci.usb ? 'USB' : 'Wi-Fi',
-    }
-  })
-}
-
-function wybierzUrzadzenie(urzadzenia, wskazanySerial) {
-  if (wskazanySerial) {
-    const wskazane = urzadzenia.find((urzadzenie) => urzadzenie.serial === wskazanySerial)
-    if (!wskazane) throw new Error(`ADB nie widzi urządzenia o serialu ${wskazanySerial}.`)
-    if (wskazane.stan !== 'device') throw new Error(`Urządzenie ${wskazanySerial} ma status ${wskazane.stan}.`)
-    return wskazane
-  }
-
-  const aktywne = urzadzenia.filter((urzadzenie) => urzadzenie.stan === 'device')
-  if (aktywne.length === 1) return aktywne[0]
-  if (aktywne.length > 1) {
-    const lista = aktywne.map((urzadzenie) => `${urzadzenie.serial} (${urzadzenie.model}, ${urzadzenie.transport})`).join(', ')
-    throw new Error(`Wykryto więcej niż jedno aktywne urządzenie: ${lista}. Użyj --device SERIAL.`)
-  }
-  const nieautoryzowane = urzadzenia.filter((urzadzenie) => urzadzenie.stan === 'unauthorized')
-  if (nieautoryzowane.length) throw new Error(`Urządzenie ${nieautoryzowane.map((urzadzenie) => urzadzenie.serial).join(', ')} jest unauthorized. Potwierdź klucz RSA na telefonie.`)
-  const offline = urzadzenia.filter((urzadzenie) => urzadzenie.stan === 'offline')
-  if (offline.length) throw new Error(`Urządzenie ${offline.map((urzadzenie) => urzadzenie.serial).join(', ')} jest offline. Połącz je ponownie przez USB lub adb connect.`)
-  throw new Error('ADB nie widzi żadnego urządzenia. Podłącz USB albo uruchom Wireless Debugging i adb connect.')
-}
-
 function pobierzUrzadzenia(adb) {
   if (!adb) return { urzadzenia: [], blad: 'Brak adb.' }
   const wynik = wykonajPrzechwytywanie(adb, ['devices', '-l'])
   if (wynik.status !== 0) return { urzadzenia: [], blad: (wynik.stderr || wynik.stdout).trim() || 'Nie udało się uruchomić adb.' }
-  return { urzadzenia: parsujUrzadzenia(wynik.stdout) }
+  return { urzadzenia: parsujUrzadzeniaAdb(wynik.stdout) }
 }
 
 function zbierzDiagnostyke({ urzadzenieWymagane, wskazanySerial } = {}) {
@@ -254,7 +219,7 @@ function zbierzDiagnostyke({ urzadzenieWymagane, wskazanySerial } = {}) {
   let bladUrzadzenia = urzadzeniaAdb.blad
   if (!bladUrzadzenia && urzadzenieWymagane) {
     try {
-      urzadzenie = wybierzUrzadzenie(urzadzeniaAdb.urzadzenia, wskazanySerial)
+      urzadzenie = wybierzUrzadzenieAdb(urzadzeniaAdb.urzadzenia, wskazanySerial)
     } catch (blad) {
       bladUrzadzenia = blad.message
     }
