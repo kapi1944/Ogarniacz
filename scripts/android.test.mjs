@@ -50,6 +50,22 @@ test('tworzy i waliduje latest.json z względnym adresem APK', async () => {
   }
 })
 
+test('pozwala skonfigurować bazowy adres manifestu bez wiązania z dostawcą', async () => {
+  const katalog = await mkdtemp(join(tmpdir(), 'ogarniacz-adres-'))
+  try {
+    const plikApk = join(katalog, 'Ogarniacz-1.0.1-release.apk')
+    await writeFile(plikApk, 'apk')
+    const manifest = await utworzManifestAktualizacji({
+      wersja: '1.0.1',
+      sciezkaApk: plikApk,
+      bazowyAdres: 'https://ogarniacz.local/updates',
+    })
+    assert.equal(manifest.apkUrl, 'https://ogarniacz.local/updates/Ogarniacz-1.0.1-release.apk')
+  } finally {
+    await rm(katalog, { recursive: true, force: true })
+  }
+})
+
 test('rozpoznaje USB i Wi-Fi oraz wymaga wyboru przy wielu urządzeniach', () => {
   const urzadzenia = parsujUrzadzeniaAdb(`List of devices attached
 R5CT123456A device product:dm3q model:SM_S918B device:dm3q usb:1-2 transport_id:1
