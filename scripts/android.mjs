@@ -142,11 +142,6 @@ function wersjaJdk(katalog) {
   return { katalog: resolve(katalog), wersja: Number(dopasowanie[1]), opis: tekst.split(/\r?\n/).find(Boolean)?.trim() ?? '' }
 }
 
-function znajdzJdk() {
-  const wszystkie = kandydaciJdk().map(wersjaJdk).filter(Boolean)
-  return wszystkie.find((jdk) => jdk.wersja >= wymaganyJdk && jdk.wersja <= maksymalnyJdk)
-}
-
 function odkodujWartoscProperties(wartosc) {
   return wartosc
     .replace(/\\\\/g, '\\')
@@ -211,7 +206,8 @@ function pobierzUrzadzenia(adb) {
 }
 
 function zbierzDiagnostyke({ urzadzenieWymagane, wskazanySerial } = {}) {
-  const jdk = znajdzJdk()
+  const znalezioneJdk = kandydaciJdk().map(wersjaJdk).filter(Boolean)
+  const jdk = znalezioneJdk.find((kandydat) => kandydat.wersja >= wymaganyJdk && kandydat.wersja <= maksymalnyJdk)
   const sdk = znajdzSdk()
   const adb = znajdzAdb(sdk)
   const urzadzeniaAdb = pobierzUrzadzenia(adb)
@@ -237,6 +233,7 @@ function zbierzDiagnostyke({ urzadzenieWymagane, wskazanySerial } = {}) {
     node: { poprawny: wersjaNode >= wymaganyNode, wersja: process.version },
     npm: { poprawny: npm.status === 0, wersja: npm.stdout.trim() },
     jdk,
+    znalezioneJdk,
     sdk,
     platformaSdk,
     adb,
@@ -259,6 +256,9 @@ function drukujRaport(diagnostyka) {
     console.log(`JAVA_HOME: ${zrodlo} — ${diagnostyka.jdk.katalog}`)
   } else {
     console.log(`JAVA_HOME: ${process.env.JAVA_HOME ? `NIEZGODNY — ${process.env.JAVA_HOME}` : 'BRAK'}`)
+    for (const kandydat of diagnostyka.znalezioneJdk) {
+      console.log(`JDK CANDIDATE: NIEZGODNY — JDK ${kandydat.wersja} — ${kandydat.katalog}`)
+    }
   }
   console.log(`ANDROID SDK: ${diagnostyka.sdk ? 'OK' : 'BŁĄD'}${diagnostyka.sdk ? ` — ${diagnostyka.sdk}` : ' — nie znaleziono SDK'}`)
   if (diagnostyka.sdk) {
@@ -326,11 +326,15 @@ function synchronizujCapacitor(srodowisko) {
 }
 
 function zbudujGradle(wariant, srodowisko) {
-  wykonajEtap(`Gradle assemble${wariant}`, nazwaGradle, [`assemble${wariant}`], {
-    katalog: katalogAndroida,
-    srodowisko,
-    powłoka: czyWindows,
-  })
+  const zadanie = `assemble${wariant}`
+  if (czyWindows) {
+    wykonajEtap(`Gradle ${zadanie}`, process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `${nazwaGradle} ${zadanie}`], {
+      katalog: katalogAndroida,
+      srodowisko,
+    })
+    return
+  }
+  wykonajEtap(`Gradle ${zadanie}`, nazwaGradle, [zadanie], { katalog: katalogAndroida, srodowisko })
 }
 
 function znajdzNajnowszyApk(wariant) {
