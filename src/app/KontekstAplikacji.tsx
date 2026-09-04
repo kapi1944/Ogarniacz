@@ -120,7 +120,7 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
       {children}
       <SilnikPrzypomnien />
       {szybkieDodawanie && <SzybkieDodawanie danePoczatkowe={szybkieDodawanie} moze={moze} zamknij={() => ustawSzybkieDodawanie(null)} />}
-      {wyszukiwanie && <WyszukiwanieGlobalne moze={moze} zamknij={() => ustawWyszukiwanie(false)} />}
+      {wyszukiwanie && <WyszukiwanieGlobalne moze={moze} otworzDodawanie={otworzSzybkieDodawanie} zamknij={() => ustawWyszukiwanie(false)} />}
     </KontekstAplikacji.Provider>
   )
 }

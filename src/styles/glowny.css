@@ -2100,3 +2100,11 @@ input[type="radio"] {
   .plan-dnia__agenda { padding: 13px; }
   .plan-dnia__decyzje .lista-kompaktowa > div { align-items: flex-start; }
 }
+
+.paleta-polecen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 12px; }
+.paleta-polecen button { display: flex; min-width: 0; align-items: center; padding: 10px; gap: 9px; color: var(--tekst); background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); cursor: pointer; text-align: left; }
+.paleta-polecen button:hover { border-color: var(--akcent); background: var(--akcent-jasny); }
+.paleta-polecen svg { width: 18px; color: var(--akcent); }
+.paleta-polecen span { display: grid; min-width: 0; gap: 2px; }
+.paleta-polecen small { color: var(--tekst-2); font-size: .7rem; }
+@media (max-width: 520px) { .paleta-polecen { grid-template-columns: 1fr; } }

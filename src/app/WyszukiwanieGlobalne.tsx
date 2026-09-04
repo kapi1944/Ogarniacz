@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Search } from 'lucide-react'
+import { Bot, CalendarDays, LayoutDashboard, Plus, Search } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Modal, PustyStan } from '../components/Interfejs'
 import { szukajGlobalnie, type WynikWyszukiwania } from '../services/WyszukiwanieService'
 import type { NazwaModulu } from '../domain/typy'
 
-export function WyszukiwanieGlobalne({ zamknij, moze }: { zamknij: () => void; moze: (modul: NazwaModulu) => boolean }) {
+export function WyszukiwanieGlobalne({ zamknij, moze, otworzDodawanie }: { zamknij: () => void; moze: (modul: NazwaModulu) => boolean; otworzDodawanie: () => void }) {
   const [fraza, ustawFraze] = useState('')
   const [wyniki, ustawWyniki] = useState<WynikWyszukiwania[]>([])
   const [szukanie, ustawSzukanie] = useState(false)
@@ -30,6 +30,12 @@ export function WyszukiwanieGlobalne({ zamknij, moze }: { zamknij: () => void; m
         <Search aria-hidden="true" />
         <input autoFocus value={fraza} onChange={(e) => ustawFraze(e.target.value)} placeholder="Wpisz co najmniej 2 znaki…" />
       </label>
+      {fraza.length < 2 && <div className="paleta-polecen" aria-label="Szybkie akcje">
+        <button type="button" onClick={() => { zamknij(); otworzDodawanie() }}><Plus aria-hidden="true" /><span><strong>Dodaj</strong><small>Szybko zapisz nową rzecz</small></span></button>
+        <button type="button" onClick={() => { przejdz('/echo'); zamknij() }}><Bot aria-hidden="true" /><span><strong>Otwórz Echo</strong><small>Porozmawiaj z asystentem</small></span></button>
+        <button type="button" onClick={() => { przejdz('/'); zamknij() }}><LayoutDashboard aria-hidden="true" /><span><strong>Pulpit</strong><small>Najważniejsze sygnały</small></span></button>
+        <button type="button" onClick={() => { przejdz('/dzisiaj'); zamknij() }}><CalendarDays aria-hidden="true" /><span><strong>Dzisiaj</strong><small>Plan dnia krok po kroku</small></span></button>
+      </div>}
       <div className="wyniki-wyszukiwania">
         {szukanie && <span className="tekst-pomocniczy">Szukam…</span>}
         {!szukanie && fraza.length >= 2 && wyniki.length === 0 && <PustyStan tytul="Brak wyników" opis="Spróbuj innej frazy." />}
