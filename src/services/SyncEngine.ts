@@ -8,20 +8,14 @@ import type {
   ZmianaSynchronizacji,
 } from '../data/DostawcaSynchronizacji'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
+import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki } from '../data/KolejkaSynchronizacji'
 import { utworzMetadane } from '../domain/fabryki'
 import type { EncjaBazowa, KonfliktSynchronizacji, StanSynchronizacji } from '../domain/typy'
 import { pobierzInstallationId } from './InstallationService'
 
 const POCZATEK_SYNCHRONIZACJI = '1970-01-01T00:00:00.000Z'
-const TABELE_NIESYNCHRONIZOWANE = new Set([
-  'stanSynchronizacji',
-  'konfliktySynchronizacji',
-  'pamiecEcho',
-  'dziennikEcho',
-])
-
 export const nazwyTabelSynchronizowanych = nazwyTabel.filter(
-  (nazwa): nazwa is NazwaTabeliSynchronizowanej => !TABELE_NIESYNCHRONIZOWANE.has(nazwa),
+  (nazwa): nazwa is NazwaTabeliSynchronizowanej => czyTabelaSynchronizowana(nazwa),
 )
 
 interface OpcjeSyncEngine {
@@ -70,20 +64,39 @@ function walidujZmianyZdalne(zmiany: ZmianaSynchronizacji[]): void {
   }
 }
 
-async function pobierzLokalneZmiany(od: string, installationId: string): Promise<ZmianaSynchronizacji[]> {
-  const paczki = await Promise.all(nazwyTabelSynchronizowanych.map(async (tabela) =>
-    (await tabelaLokalna(tabela).where('updatedAt').above(od).toArray())
-      .map((rekord) => ({ tabela, rekord, installationId })),
-  ))
-  return paczki.flat()
+async function pobierzLokalneZmiany(installationId: string): Promise<ZmianaSynchronizacji[]> {
+  return (await pobierzKolejkeSynchronizacji()).map((zmiana) => ({
+    zmianaId: zmiana.id,
+    bazowyUpdatedAt: zmiana.bazowyUpdatedAt,
+    tabela: zmiana.tabela as NazwaTabeliSynchronizowanej,
+    rekord: structuredClone(zmiana.rekord),
+    installationId,
+  }))
+}
+
+async function uzupelnijKolejkePoMigracji(): Promise<void> {
+  const stan = await baza.tabela('stanSynchronizacji').get('glowny')
+  if (stan?.kolejkaZmigrowana) return
+  const od = stan?.ostatniSync ?? POCZATEK_SYNCHRONIZACJI
+  for (const tabela of nazwyTabelSynchronizowanych) {
+    const rekordy = await tabelaLokalna(tabela).where('updatedAt').above(od).toArray()
+    for (const rekord of rekordy) {
+      const istnieje = await tabelaKolejki().where('[tabela+rekordId]').equals([tabela, rekord.id]).count()
+      if (!istnieje) await dodajDoKolejkiSynchronizacji(tabela, rekord)
+    }
+  }
+  if (stan) await baza.tabela('stanSynchronizacji').update('glowny', { kolejkaZmigrowana: true })
 }
 
 export async function pobierzStanSynchronizacji(): Promise<StanSynchronizacji> {
-  return (await baza.tabela('stanSynchronizacji').get('glowny')) ?? {
+  const stan = (await baza.tabela('stanSynchronizacji').get('glowny')) ?? {
     ...utworzMetadane('glowny'),
     stan: 'zsynchronizowano',
     liczbaKonfliktow: 0,
+    liczbaOczekujacych: 0,
+    kolejkaZmigrowana: false,
   }
+  return { ...stan, liczbaOczekujacych: await tabelaKolejki().count() }
 }
 
 export async function pobierzKonfliktySynchronizacji(): Promise<KonfliktSynchronizacji[]> {
@@ -116,11 +129,8 @@ export async function oznaczSynchronizacjeOffline(): Promise<void> {
 export async function odtworzOczekujacaSynchronizacje(online = typeof navigator === 'undefined' || navigator.onLine): Promise<boolean> {
   const obecny = await pobierzStanSynchronizacji()
   if (obecny.stan === 'synchronizacja' || obecny.stan === 'konflikt') return false
-  const od = obecny.ostatniSync ?? POCZATEK_SYNCHRONIZACJI
-  const wyniki = await Promise.all(nazwyTabelSynchronizowanych.map((tabela) =>
-    tabelaLokalna(tabela).where('updatedAt').above(od).limit(1).count(),
-  ))
-  if (!wyniki.some(Boolean)) return false
+  await uzupelnijKolejkePoMigracji()
+  if (await tabelaKolejki().count() === 0) return false
   await oznaczOczekujacaSynchronizacje(online)
   return true
 }
@@ -163,6 +173,11 @@ export class SyncEngine implements DostawcaSynchronizacji {
       await tabelaLokalna(tabela).put(rekord)
       await baza.tabela('konfliktySynchronizacji').delete(id)
     })
+    if (wybor === 'lokalny') await dodajDoKolejkiSynchronizacji(tabela, rekord, konflikt.zdalny)
+    else {
+      const oczekujace = await tabelaKolejki().where('[tabela+rekordId]').equals([tabela, rekord.id]).primaryKeys()
+      await usunWyslaneZmiany(oczekujace)
+    }
     powiadomOZmianieDanych(tabela)
     await this.ustawStanPoKonfliktach()
   }
@@ -181,20 +196,25 @@ export class SyncEngine implements DostawcaSynchronizacji {
     await this.zapiszStan({ stan: 'synchronizacja', ostatniBlad: undefined })
 
     try {
-      const [lokalne, zdalne] = await Promise.all([
-        pobierzLokalneZmiany(od, this.installationId()),
+      await uzupelnijKolejkePoMigracji()
+      const installationId = this.installationId()
+      const [lokalne, wszystkieZdalne] = await Promise.all([
+        pobierzLokalneZmiany(installationId),
         this.zPonowieniami(() => repozytoriumZdalne.pobierzZmiany(od)),
       ])
-      walidujZmianyZdalne(zdalne)
+      walidujZmianyZdalne(wszystkieZdalne)
+      const zdalne = wszystkieZdalne.filter((zmiana) => zmiana.installationId !== installationId)
       const lokalnePoKluczu = new Map(lokalne.map((zmiana) => [kluczZmiany(zmiana), zmiana]))
       const zdalnePoKluczu = new Map(zdalne.map((zmiana) => [kluczZmiany(zmiana), zmiana]))
       const konflikty: { lokalna: ZmianaSynchronizacji; zdalna: ZmianaSynchronizacji }[] = []
       const zgodneKlucze = new Set<string>()
+      const bazoweKlucze = new Set<string>()
 
       for (const [klucz, lokalna] of lokalnePoKluczu) {
         const zdalna = zdalnePoKluczu.get(klucz)
         if (!zdalna) continue
         if (takieSame(lokalna.rekord, zdalna.rekord)) zgodneKlucze.add(klucz)
+        else if (lokalna.bazowyUpdatedAt === zdalna.rekord.updatedAt) bazoweKlucze.add(klucz)
         else konflikty.push({ lokalna, zdalna })
       }
 
@@ -202,11 +222,15 @@ export class SyncEngine implements DostawcaSynchronizacji {
       const doWyslania = lokalne.filter((zmiana) =>
         !konfliktoweKlucze.has(kluczZmiany(zmiana)) && !zgodneKlucze.has(kluczZmiany(zmiana)))
       const doPobrania = zdalne.filter((zmiana) =>
-        !konfliktoweKlucze.has(kluczZmiany(zmiana)) && !zgodneKlucze.has(kluczZmiany(zmiana)))
+        !konfliktoweKlucze.has(kluczZmiany(zmiana))
+        && !zgodneKlucze.has(kluczZmiany(zmiana))
+        && !bazoweKlucze.has(kluczZmiany(zmiana)))
 
       if (doWyslania.length > 0) {
         await this.zPonowieniami(() => repozytoriumZdalne.wyslijZmiany(doWyslania, od))
+        await usunWyslaneZmiany(doWyslania.flatMap((zmiana) => zmiana.zmianaId ? [zmiana.zmianaId] : []))
       }
+      await usunWyslaneZmiany([...zgodneKlucze].flatMap((klucz) => lokalnePoKluczu.get(klucz)?.zmianaId ? [lokalnePoKluczu.get(klucz)!.zmianaId!] : []))
       await this.zapiszPobrane(doPobrania)
       await this.zapiszKonflikty(konflikty)
 
@@ -214,15 +238,19 @@ export class SyncEngine implements DostawcaSynchronizacji {
       const stan = liczbaKonfliktow > 0 ? 'konflikt' : 'zsynchronizowano'
       await this.zapiszStan({
         stan,
-        ostatniSync: synchronizowanoDo,
+        ostatniSync: repozytoriumZdalne.pobierzKursor?.() ?? synchronizowanoDo,
         ostatniBlad: undefined,
         liczbaKonfliktow,
+        liczbaOczekujacych: await tabelaKolejki().count(),
       })
       return { wyslane: doWyslania.length, pobrane: doPobrania.length, konflikty: konflikty.length, stan }
     } catch (blad) {
+      const komunikat = blad instanceof Error ? blad.message : 'Nieznany błąd synchronizacji.'
+      await zapiszBladKolejki((await pobierzKolejkeSynchronizacji()).map((zmiana) => zmiana.id), komunikat)
       await this.zapiszStan({
         stan: 'blad',
-        ostatniBlad: blad instanceof Error ? blad.message : 'Nieznany błąd synchronizacji.',
+        ostatniBlad: komunikat,
+        liczbaOczekujacych: await tabelaKolejki().count(),
       })
       throw blad
     }
@@ -254,6 +282,8 @@ export class SyncEngine implements DostawcaSynchronizacji {
         lokalny: structuredClone(lokalna.rekord),
         zdalny: structuredClone(zdalna.rekord),
         wykrytoAt,
+        lokalnaInstallationId: lokalna.installationId,
+        zdalnaInstallationId: zdalna.installationId,
         updatedAt: wykrytoAt,
       })
     }
@@ -274,6 +304,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       ...obecny,
       ...zmiany,
       id: 'glowny',
+      liczbaOczekujacych: await tabelaKolejki().count(),
       updatedAt: this.teraz(),
     })
   }

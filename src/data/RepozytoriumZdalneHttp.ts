@@ -4,6 +4,7 @@ import { pobierzInstallationId } from '../services/InstallationService'
 
 interface OdpowiedzZmian {
   zmiany: ZmianaSynchronizacji[]
+  synchronizowanoDo?: string
 }
 
 function polaczAdres(baza: string, sciezka: string): string {
@@ -12,6 +13,7 @@ function polaczAdres(baza: string, sciezka: string): string {
 
 export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   readonly trwale = true
+  private kursor?: string
 
   constructor(
     private readonly adresApi: string,
@@ -24,7 +26,12 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
       headers: this.naglowki(),
     })
     const dane = await this.odczytajOdpowiedz(odpowiedz) as OdpowiedzZmian
+    this.kursor = dane.synchronizowanoDo
     return odtworzWartoscZTransportu(dane.zmiany) as ZmianaSynchronizacji[]
+  }
+
+  pobierzKursor(): string | undefined {
+    return this.kursor
   }
 
   async wyslijZmiany(zmiany: ZmianaSynchronizacji[], od = '1970-01-01T00:00:00.000Z'): Promise<void> {

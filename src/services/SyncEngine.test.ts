@@ -2,6 +2,7 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { RepozytoriumZdalneInMemory } from '../data/RepozytoriumZdalneInMemory'
+import { pobierzRepozytorium } from '../data/Repozytorium'
 import { utworzZadanie } from './ZadaniaService'
 import { nazwyTabelSynchronizowanych, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
 
@@ -212,7 +213,7 @@ describe.sequential('SyncEngine', () => {
     await utworzSilnik().synchronizuj(zdalne)
     expect((await pobierzStanSynchronizacji()).stan).toBe('zsynchronizowano')
 
-    await baza.tabela('zadania').put(zadanie('blad', 'Czeka po błędzie', '2026-08-28T10:00:00.000Z'))
+    await pobierzRepozytorium('zadania').zapisz(zadanie('blad', 'Czeka po błędzie', '2026-08-28T10:00:00.000Z'))
     zdalne.ustawOnline(false)
     const zBledem = new SyncEngine({ czyOnline: () => true, liczbaProb: 1, opoznieniePonowieniaMs: 0 })
     await expect(zBledem.synchronizuj(zdalne)).rejects.toThrow('Testowy provider synchronizacji jest offline.')
@@ -227,5 +228,55 @@ describe.sequential('SyncEngine', () => {
     await oznaczSynchronizacjeOffline()
 
     expect((await pobierzStanSynchronizacji()).stan).toBe('offline')
+  })
+
+  it('realizuje pełny przepływ A → B → A oraz wysyła zmianę A po pracy offline', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const repozytorium = pobierzRepozytorium('zadania')
+    const urzadzenieA = new SyncEngine({
+      teraz: () => CZAS_SYNCHRONIZACJI,
+      czyOnline: () => true,
+      installationId: () => 'instalacja-a',
+      opoznieniePonowieniaMs: 0,
+    })
+    await repozytorium.zapisz(zadanie('dwa-klienty', 'Utworzone na A', '2026-08-28T10:00:00.000Z'))
+    await urzadzenieA.synchronizuj(zdalne)
+
+    await baza.tabela('zadania').clear()
+    await baza.tabela('stanSynchronizacji').clear()
+    await baza.tabela('kolejkaSynchronizacji').clear()
+    const urzadzenieB = new SyncEngine({
+      teraz: () => CZAS_SYNCHRONIZACJI,
+      czyOnline: () => true,
+      installationId: () => 'instalacja-b',
+      opoznieniePonowieniaMs: 0,
+    })
+    await urzadzenieB.synchronizuj(zdalne)
+    const naB = await repozytorium.pobierz('dwa-klienty')
+    expect(naB).toMatchObject({ tytul: 'Utworzone na A' })
+    await repozytorium.zapisz({ ...naB!, tytul: 'Edytowane na B' })
+    await urzadzenieB.synchronizuj(zdalne)
+
+    await baza.tabela('zadania').clear()
+    await baza.tabela('stanSynchronizacji').clear()
+    await baza.tabela('kolejkaSynchronizacji').clear()
+    await urzadzenieA.synchronizuj(zdalne)
+    expect(await repozytorium.pobierz('dwa-klienty')).toMatchObject({ tytul: 'Edytowane na B' })
+
+    let online = false
+    const urzadzenieAOffline = new SyncEngine({
+      teraz: () => '2026-09-01T12:05:00.000Z',
+      czyOnline: () => online,
+      installationId: () => 'instalacja-a',
+      opoznieniePonowieniaMs: 0,
+    })
+    const naA = await repozytorium.pobierz('dwa-klienty')
+    await repozytorium.zapisz({ ...naA!, tytul: 'Offline na A' })
+    expect((await urzadzenieAOffline.synchronizuj(zdalne)).stan).toBe('offline')
+    expect((await pobierzStanSynchronizacji()).liczbaOczekujacych).toBe(1)
+    online = true
+    await urzadzenieAOffline.synchronizuj(zdalne)
+    expect((await zdalne.pobierzWszystkie()).find(({ rekord }) => rekord.id === 'dwa-klienty')?.rekord)
+      .toMatchObject({ tytul: 'Offline na A' })
   })
 })

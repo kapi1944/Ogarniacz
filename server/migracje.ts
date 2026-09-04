@@ -39,6 +39,26 @@ const migracje: Migracja[] = [
         ON rekordy_synchronizacji (uzytkownik_id, updated_at);
     `,
   },
+  {
+    wersja: 2,
+    sql: `
+      CREATE TABLE IF NOT EXISTS przetworzone_zmiany_synchronizacji (
+        uzytkownik_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        zmiana_id TEXT NOT NULL,
+        przetworzono_at TEXT NOT NULL,
+        PRIMARY KEY (uzytkownik_id, zmiana_id)
+      );
+    `,
+  },
+  {
+    wersja: 3,
+    sql: `
+      ALTER TABLE rekordy_synchronizacji ADD COLUMN server_updated_at TEXT;
+      UPDATE rekordy_synchronizacji SET server_updated_at = updated_at WHERE server_updated_at IS NULL;
+      CREATE INDEX IF NOT EXISTS idx_rekordy_sync_server_updated
+        ON rekordy_synchronizacji (uzytkownik_id, server_updated_at);
+    `,
+  },
 ]
 
 export function uruchomMigracje(baza: DatabaseSync): number {

@@ -10,7 +10,8 @@ const TABELE_SYNCHRONIZOWANE = new Set([
   'nawyki', 'dziennikNawykow', 'leki', 'dziennikLekow', 'wizyty', 'przypomnienia', 'listyZakupow',
   'pozycjeZakupow', 'rachunki', 'platnosciRachunkow', 'notatki', 'pomysly', 'naPozniej', 'cele',
   'kontakty', 'dokumenty', 'wydatki', 'budzety', 'pojazdy', 'terminyWaznosci', 'uprawnienia',
-  'edytorzy', 'ustawienia', 'historiaZmian',
+  'edytorzy', 'ustawienia', 'skierowania', 'recepty', 'terapie', 'wpisyTerapii',
+  'platnosciStale', 'planyRat', 'raty',
 ])
 
 interface RekordSynchronizacji {
@@ -22,6 +23,8 @@ interface RekordSynchronizacji {
 }
 
 interface ZmianaSynchronizacjiApi {
+  zmianaId?: string
+  bazowyUpdatedAt?: string
   tabela: string
   rekord: RekordSynchronizacji
   installationId: string
@@ -75,6 +78,8 @@ function walidujZmiane(zmiana: unknown, installationId: string): asserts zmiana 
   if (
     !TABELE_SYNCHRONIZOWANE.has(kandydat.tabela ?? '')
     || kandydat.installationId !== installationId
+    || (kandydat.zmianaId !== undefined && (typeof kandydat.zmianaId !== 'string' || kandydat.zmianaId.length < 8 || kandydat.zmianaId.length > 200))
+    || (kandydat.bazowyUpdatedAt !== undefined && !poprawnyIso(kandydat.bazowyUpdatedAt))
     || !rekord
     || typeof rekord.id !== 'string'
     || !poprawnyIso(rekord.createdAt)
@@ -102,8 +107,8 @@ export function pobierzZmianySynchronizacji(baza: DatabaseSync, userId: string, 
   return baza.prepare(`
     SELECT tabela, dane_json, ostatnia_instalacja_id
     FROM rekordy_synchronizacji
-    WHERE uzytkownik_id = ? AND updated_at > ?
-    ORDER BY updated_at, tabela, rekord_id
+    WHERE uzytkownik_id = ? AND COALESCE(server_updated_at, updated_at) > ?
+    ORDER BY COALESCE(server_updated_at, updated_at), tabela, rekord_id
   `).all(userId, od).map((wiersz) => ({
     tabela: String(wiersz.tabela),
     rekord: JSON.parse(String(wiersz.dane_json)) as RekordSynchronizacji,
@@ -112,6 +117,9 @@ export function pobierzZmianySynchronizacji(baza: DatabaseSync, userId: string, 
 }
 
 export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, paczka: PaczkaSynchronizacji): void {
+  const czyPrzetworzona = baza.prepare(`
+    SELECT 1 FROM przetworzone_zmiany_synchronizacji WHERE uzytkownik_id = ? AND zmiana_id = ?
+  `)
   const pobierzIstniejacy = baza.prepare(`
     SELECT dane_json, updated_at, ostatnia_instalacja_id
     FROM rekordy_synchronizacji
@@ -119,10 +127,13 @@ export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, p
   `)
   const konflikty: string[] = []
   for (const zmiana of paczka.zmiany) {
+    if (zmiana.zmianaId && czyPrzetworzona.get(userId, zmiana.zmianaId)) continue
     const istniejacy = pobierzIstniejacy.get(userId, zmiana.tabela, zmiana.rekord.id)
     if (
       istniejacy
-      && String(istniejacy.updated_at) > paczka.od
+      && (zmiana.bazowyUpdatedAt
+        ? String(istniejacy.updated_at) !== zmiana.bazowyUpdatedAt
+        : String(istniejacy.updated_at) > paczka.od)
       && String(istniejacy.ostatnia_instalacja_id) !== paczka.installationId
       && String(istniejacy.dane_json) !== JSON.stringify(zmiana.rekord)
     ) konflikty.push(`${zmiana.tabela}:${zmiana.rekord.id}`)
@@ -131,21 +142,24 @@ export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, p
 
   const zapisz = baza.prepare(`
     INSERT INTO rekordy_synchronizacji (
-      uzytkownik_id, tabela, rekord_id, dane_json, created_at, updated_at, version, deleted_at, ostatnia_instalacja_id
-    ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+      uzytkownik_id, tabela, rekord_id, dane_json, created_at, updated_at, version, deleted_at, ostatnia_instalacja_id, server_updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
     ON CONFLICT(uzytkownik_id, tabela, rekord_id) DO UPDATE SET
       dane_json = excluded.dane_json,
       updated_at = excluded.updated_at,
       version = rekordy_synchronizacji.version + 1,
       deleted_at = excluded.deleted_at,
-      ostatnia_instalacja_id = excluded.ostatnia_instalacja_id
-    WHERE excluded.updated_at > rekordy_synchronizacji.updated_at
-       OR (excluded.updated_at = rekordy_synchronizacji.updated_at
-           AND excluded.ostatnia_instalacja_id > COALESCE(rekordy_synchronizacji.ostatnia_instalacja_id, ''))
+      ostatnia_instalacja_id = excluded.ostatnia_instalacja_id,
+      server_updated_at = excluded.server_updated_at
+  `)
+  const oznaczPrzetworzona = baza.prepare(`
+    INSERT OR IGNORE INTO przetworzone_zmiany_synchronizacji (uzytkownik_id, zmiana_id, przetworzono_at)
+    VALUES (?, ?, ?)
   `)
   baza.exec('BEGIN')
   try {
     for (const zmiana of paczka.zmiany) {
+      if (zmiana.zmianaId && czyPrzetworzona.get(userId, zmiana.zmianaId)) continue
       zapisz.run(
         userId,
         zmiana.tabela,
@@ -155,7 +169,9 @@ export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, p
         zmiana.rekord.updatedAt,
         zmiana.rekord.usunietoAt ?? null,
         paczka.installationId,
+        new Date().toISOString(),
       )
+      if (zmiana.zmianaId) oznaczPrzetworzona.run(userId, zmiana.zmianaId, new Date().toISOString())
     }
     baza.exec('COMMIT')
   } catch (blad) {

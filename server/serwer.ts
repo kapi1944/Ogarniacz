@@ -34,7 +34,8 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
         zapewnijProfilSynchronizacji(baza, konfiguracja.syncUserId, installationId)
         if (zadanie.method === 'GET' && zadanie.url.startsWith('/api/sync/changes')) {
           const od = new URL(zadanie.url, 'http://localhost').searchParams.get('od') ?? ''
-          odpowiedzJson(odpowiedz, 200, { zmiany: pobierzZmianySynchronizacji(baza, konfiguracja.syncUserId, od) })
+          const synchronizowanoDo = new Date().toISOString()
+          odpowiedzJson(odpowiedz, 200, { zmiany: pobierzZmianySynchronizacji(baza, konfiguracja.syncUserId, od), synchronizowanoDo })
           return
         }
         if (zadanie.method === 'POST' && zadanie.url === '/api/sync/changes') {

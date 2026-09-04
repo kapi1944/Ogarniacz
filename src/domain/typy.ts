@@ -460,6 +460,18 @@ export interface StanSynchronizacji extends EncjaBazowa {
   ostatniSync?: string
   ostatniBlad?: string
   liczbaKonfliktow: number
+  liczbaOczekujacych: number
+  kolejkaZmigrowana?: boolean
+}
+
+export interface ZmianaKolejkiSynchronizacji extends EncjaBazowa {
+  tabela: string
+  rekordId: string
+  operacja: 'utworzenie' | 'aktualizacja' | 'usuniecie'
+  rekord: EncjaBazowa
+  bazowyUpdatedAt?: string
+  liczbaProb: number
+  ostatniBlad?: string
 }
 
 export interface KonfliktSynchronizacji extends EncjaBazowa {
@@ -468,6 +480,8 @@ export interface KonfliktSynchronizacji extends EncjaBazowa {
   lokalny: EncjaBazowa
   zdalny: EncjaBazowa
   wykrytoAt: string
+  lokalnaInstallationId?: string
+  zdalnaInstallationId?: string
 }
 
 export type MotywAplikacji = 'jasny' | 'ciemny' | 'systemowy'
@@ -644,6 +658,7 @@ export interface MapaTabel {
   historiaZmian: WpisHistoriiZmian
   stanSynchronizacji: StanSynchronizacji
   konfliktySynchronizacji: KonfliktSynchronizacji
+  kolejkaSynchronizacji: ZmianaKolejkiSynchronizacji
 }
 
 export type NazwaTabeli = keyof MapaTabel

@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 9
+export const WERSJA_SCHEMATU_BAZY = 10
 
 export const nazwyTabel: NazwaTabeli[] = [
   'zadania',
@@ -48,6 +48,7 @@ export const nazwyTabel: NazwaTabeli[] = [
   'historiaZmian',
   'stanSynchronizacji',
   'konfliktySynchronizacji',
+  'kolejkaSynchronizacji',
 ]
 
 const schematPelny = {
@@ -124,6 +125,7 @@ class BazaOgarniacza extends Dexie {
       historiaZmian: 'id, znacznikCzasu, modul, typEncji, encjaId, operacja, updatedAt, usunietoAt',
       stanSynchronizacji: 'id, stan, ostatniSync, updatedAt',
       konfliktySynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, wykrytoAt, updatedAt',
+      kolejkaSynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, operacja, createdAt, updatedAt',
     })
   }
 
@@ -147,6 +149,8 @@ export async function inicjalizujBaze(): Promise<void> {
       ...utworzMetadane('glowny'),
       stan: 'zsynchronizowano',
       liczbaKonfliktow: 0,
+      liczbaOczekujacych: 0,
+      kolejkaZmigrowana: false,
     })
   }
 

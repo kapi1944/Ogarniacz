@@ -12,16 +12,16 @@ test('konfiguracja odrzuca niepoprawny port', () => {
 
 test('migracje tworzą schemat centralnej bazy idempotentnie', () => {
   const baza = new DatabaseSync(':memory:')
-  assert.equal(uruchomMigracje(baza), 1)
-  assert.equal(uruchomMigracje(baza), 1)
+  assert.equal(uruchomMigracje(baza), 3)
+  assert.equal(uruchomMigracje(baza), 3)
   assert.equal(baza.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'rekordy_synchronizacji'").get()?.name, 'rekordy_synchronizacji')
   baza.close()
 })
 
 test('otwarcie bazy uruchamia migracje', () => {
   const otwartaBaza = otworzBaze(utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:' }))
-  assert.equal(otwartaBaza.liczbaMigracji, 1)
-  assert.equal(otwartaBaza.baza.prepare('SELECT COUNT(*) AS liczba FROM migracje').get()?.liczba, 1)
+  assert.equal(otwartaBaza.liczbaMigracji, 3)
+  assert.equal(otwartaBaza.baza.prepare('SELECT COUNT(*) AS liczba FROM migracje').get()?.liczba, 3)
   otwartaBaza.baza.close()
 })
 
@@ -85,12 +85,19 @@ test('sync przenosi rekord z instalacji A do instalacji B', async () => {
   const url = `http://127.0.0.1:${adres.port}/api/sync/changes`
   const rekord = { id: 'zadanie-a', createdAt: '2026-09-01T08:00:00.000Z', updatedAt: '2026-09-01T09:00:00.000Z', tytul: 'Z urządzenia A' }
   const naglowkiA = { authorization: 'Bearer sekretny-klucz-testowy', 'x-ogarniacz-installation-id': 'instalacja-a', 'content-type': 'application/json' }
-  const wyslanie = await fetch(url, { method: 'POST', headers: naglowkiA, body: JSON.stringify({ od: '1970-01-01T00:00:00.000Z', installationId: 'instalacja-a', zmiany: [{ tabela: 'zadania', rekord, installationId: 'instalacja-a' }] }) })
+  const paczka = { od: '1970-01-01T00:00:00.000Z', installationId: 'instalacja-a', zmiany: [{ zmianaId: 'zmiana-idempotentna-a', tabela: 'zadania', rekord, installationId: 'instalacja-a' }] }
+  const wyslanie = await fetch(url, { method: 'POST', headers: naglowkiA, body: JSON.stringify(paczka) })
   assert.equal(wyslanie.status, 200)
+  const ponowienie = await fetch(url, { method: 'POST', headers: naglowkiA, body: JSON.stringify(paczka) })
+  assert.equal(ponowienie.status, 200)
+  assert.equal(baza.prepare('SELECT version FROM rekordy_synchronizacji WHERE rekord_id = ?').get('zadanie-a')?.version, 1)
+  assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM przetworzone_zmiany_synchronizacji').get()?.liczba, 1)
 
   const pobranie = await fetch(`${url}?od=1970-01-01T00%3A00%3A00.000Z`, { headers: { authorization: 'Bearer sekretny-klucz-testowy', 'x-ogarniacz-installation-id': 'instalacja-b' } })
   assert.equal(pobranie.status, 200)
-  assert.deepEqual(await pobranie.json(), { zmiany: [{ tabela: 'zadania', rekord, installationId: 'instalacja-a' }] })
+  const pobraneDane = await pobranie.json() as { zmiany: unknown[]; synchronizowanoDo: string }
+  assert.deepEqual(pobraneDane.zmiany, [{ tabela: 'zadania', rekord, installationId: 'instalacja-a' }])
+  assert.ok(!Number.isNaN(Date.parse(pobraneDane.synchronizowanoDo)))
   assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM instalacje').get()?.liczba, 2)
   await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
   baza.close()

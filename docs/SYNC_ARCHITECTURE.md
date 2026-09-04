@@ -2,7 +2,7 @@
 
 ## SyncEngine
 
-`SyncEngine` zachowuje model local-first: moduły czytają i zapisują bieżące repozytoria Dexie, a synchronizacja działa obok UI. Silnik pobiera rekordy zmienione po `updatedAt`, wysyła lokalne zmiany, pobiera zdalne i przenosi tombstones przez `usunietoAt`. Ostatni udany sync, stan offline/błędu i konflikty są trwałe w IndexedDB. Operacje dostawcy mają ograniczony retry, a równoległe wywołania korzystają z jednego przebiegu.
+`SyncEngine` zachowuje model local-first: moduły czytają i zapisują wspólne repozytoria Dexie, a synchronizacja działa obok UI na webie/PWA i Androidzie. Każdy lokalny zapis trafia do trwałej `kolejkaSynchronizacji`; kolejne zmiany tego samego rekordu są scalane, a tombstone jest przenoszony przez `usunietoAt`. Wysłana paczka zachowuje `zmianaId` podczas retry, więc serwer może ją rozpoznać bez ponownego zastosowania. Ostatni udany sync, liczba oczekujących zmian, ostatni błąd i konflikty są trwałe lub wyliczane z IndexedDB.
 
 ## Provider
 
@@ -12,13 +12,13 @@ Serwer mapuje poprawny `SYNC_ACCESS_KEY` na jeden skonfigurowany `SYNC_USER_ID`.
 
 ## Konflikty
 
-Jeżeli lokalna i zdalna wersja tego samego rekordu zmieniły się od ostatniego sync i nie są identyczne, żadna nie nadpisuje drugiej. Obie wersje trafiają do lokalnego rejestru konfliktów. Ustawienia pozwalają wybrać wersję lokalną albo zdalną. Nie zastosowano CRDT.
+Jeżeli lokalna i zdalna wersja tego samego rekordu zmieniły się od ostatniego sync i nie są identyczne, żadna nie nadpisuje drugiej. Obie wersje oraz identyfikatory instalacji trafiają do lokalnego rejestru konfliktów. Ustawienia pozwalają wybrać wersję lokalną albo zdalną. Nie zastosowano CRDT.
 
 ## Offline
 
-Bez połączenia silnik nie modyfikuje danych i zapisuje stan `offline`. Lokalne rekordy z `updatedAt` nowszym niż ostatni udany sync pełnią rolę trwałej kolejki oczekujących zmian. Błąd providera po wyczerpaniu retry zapisuje stan `błąd`; znacznik ostatniego udanego sync nie przesuwa się.
+Bez połączenia silnik nie modyfikuje danych i zapisuje stan `offline`. Trwała kolejka przeżywa restart aplikacji; błąd providera zwiększa licznik prób i zachowuje ostatni błąd, a znacznik ostatniego udanego sync nie przesuwa się. Migracja jednorazowo odbudowuje kolejkę z `updatedAt` dla wcześniejszych baz.
 
-Po skonfigurowaniu klient synchronizuje przy starcie, co pięć minut, po wznowieniu aplikacji, po odzyskaniu sieci i trzy sekundy po zmianie zapisanej przez wspólne repozytorium. Żaden z tych przebiegów nie blokuje lokalnego zapisu ani interfejsu.
+Po skonfigurowaniu klient synchronizuje przy starcie, po wznowieniu aplikacji, po odzyskaniu sieci i trzy sekundy po zmianie zapisanej przez wspólne repozytorium. Żaden z tych przebiegów nie blokuje lokalnego zapisu ani interfejsu. Service worker stosuje dla `/api/` wyłącznie `NetworkOnly` i nie używa odpowiedzi API jako danych offline.
 
 ## Widget bridge
 
