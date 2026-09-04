@@ -1,4 +1,5 @@
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core'
+import { utworzUslugeAktualizacji } from './AktualizacjeService'
 import { utworzUslugePlikow } from './FileService'
 import { utworzUslugeHaptyki } from './HapticsService'
 import { utworzUslugeCykluZycia } from './LifecycleService'
@@ -19,6 +20,7 @@ export const platforma: PlatformaOgarniacza = {
   udostepnianie: utworzUslugeUdostepniania(czyAndroid),
   haptyka: utworzUslugeHaptyki(czyAndroid),
   migawkiWidgetow: utworzMostMigawekWidgetow(czyAndroid),
+  aktualizacje: utworzUslugeAktualizacji(czyAndroid),
 }
 
 let inicjalizacjaPlatformy: Promise<void> | undefined

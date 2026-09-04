@@ -50,6 +50,35 @@ export interface DaneUdostepniania {
   pliki?: string[]
 }
 
+export interface InformacjeOWersjiAplikacji {
+  wersja: string
+  kod: number
+}
+
+export interface ManifestAktualizacji {
+  version: string
+  versionCode: number
+  apkUrl: string
+  sha256: string
+  publishedAt: string
+}
+
+export interface WynikSprawdzeniaAktualizacji {
+  manifest: ManifestAktualizacji
+  adresApk: string
+  czyNowsza: boolean
+}
+
+export interface PobranaAktualizacja {
+  nazwaPliku: string
+  sha256: string
+}
+
+export interface WynikUruchomieniaInstalatora {
+  uruchomiono: boolean
+  wymagaZgody: boolean
+}
+
 export interface OdebraneDaneUdostepniania {
   tekst: string
   tytul?: string
@@ -91,5 +120,16 @@ export interface PlatformaOgarniacza {
   migawkiWidgetow: {
     dostepne: () => boolean
     zapisz: (dane: unknown) => Promise<boolean>
+  }
+  aktualizacje: {
+    skonfigurowane: () => boolean
+    pobierzInformacje: () => Promise<InformacjeOWersjiAplikacji>
+    sprawdz: () => Promise<WynikSprawdzeniaAktualizacji>
+    pobierz: (
+      manifest: ManifestAktualizacji,
+      adresApk: string,
+      obslugaStanu: (stan: 'pobieranie' | 'weryfikacja', procent: number) => void,
+    ) => Promise<PobranaAktualizacja>
+    uruchomInstalator: (aktualizacja: PobranaAktualizacja) => Promise<WynikUruchomieniaInstalatora>
   }
 }
