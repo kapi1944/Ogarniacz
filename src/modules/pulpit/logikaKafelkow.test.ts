@@ -3,12 +3,14 @@ import type { ElementOgarniacza } from '../../domain/elementyOgarniacza'
 import type { KonfiguracjaKafelkaPulpitu } from '../../domain/typy'
 import {
   adresReferencjiZrodla,
+  alertyKonfliktowTerminow,
   alertyLekow,
   alertyWizyt,
   deduplikujAlerty,
   elementyDlaKafelka,
   klasaRozmiaruKafelka,
   ograniczAlerty,
+  poziomSmartSygnalu,
   rangujAlerty,
   rozwiazDaneKafelka,
   rozwiazZakresKafelka,
@@ -210,5 +212,15 @@ describe('logika kafelków Pulpitu', () => {
     expect(klasaRozmiaruKafelka('small')).toBe('strefa-pulpitu--small')
     expect(klasaRozmiaruKafelka('medium')).toBe('strefa-pulpitu--medium')
     expect(klasaRozmiaruKafelka('large')).toBe('strefa-pulpitu--large')
+  })
+  it('klasyfikuje poziom Smart Signals i wykrywa tylko nakładające się bloki z czasem trwania', () => {
+    expect(poziomSmartSygnalu(alert('zalegle', 'overdue', undefined, 'critical'))).toBe('pilne')
+    expect(poziomSmartSygnalu(alert('bliskie', 'near', undefined, 'warning'))).toBe('wazne')
+    const [konflikt] = alertyKonfliktowTerminow([
+      { ...element('pierwsze', '2026-08-28'), godzina: '10:00', czasTrwaniaMinuty: 60 },
+      { ...element('drugie', '2026-08-28'), godzina: '10:30', czasTrwaniaMinuty: 30 },
+      { ...element('pozniejsze', '2026-08-28'), godzina: '11:30', czasTrwaniaMinuty: 30 },
+    ])
+    expect(konflikt).toMatchObject({ typ: 'asap', severity: 'warning', opis: 'Nakłada się z: drugie' })
   })
 })

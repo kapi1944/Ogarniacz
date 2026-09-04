@@ -17,6 +17,33 @@ export interface AlertPulpitu {
   createdAt: string
 }
 
+
+export type PoziomSmartSygnalu = 'pilne' | 'wazne' | 'informacyjne'
+
+export function poziomSmartSygnalu(alert: AlertPulpitu): PoziomSmartSygnalu {
+  if (alert.severity === 'critical' || alert.typ === 'overdue') return 'pilne'
+  if (alert.severity === 'warning' || alert.typ === 'asap') return 'wazne'
+  return 'informacyjne'
+}
+
+export function alertyKonfliktowTerminow(elementy: readonly ElementOgarniacza[]): AlertPulpitu[] {
+  const zaplanowane = elementy
+    .filter((element) => element.status === 'otwarty' && element.data && element.godzina && element.czasTrwaniaMinuty && element.czasTrwaniaMinuty > 0 && element.referencjaZrodla)
+    .sort((a, b) => `${a.data}T${a.godzina}`.localeCompare(`${b.data}T${b.godzina}`) || a.id.localeCompare(b.id))
+  const wyniki: AlertPulpitu[] = []
+  for (let indeks = 0; indeks < zaplanowane.length; indeks += 1) {
+    const pierwszy = zaplanowane[indeks]
+    const poczatek = new Date(`${pierwszy.data}T${pierwszy.godzina}:00`).getTime()
+    const koniec = poczatek + pierwszy.czasTrwaniaMinuty! * 60_000
+    for (const drugi of zaplanowane.slice(indeks + 1)) {
+      if (drugi.data !== pierwszy.data) break
+      const drugiPoczatek = new Date(`${drugi.data}T${drugi.godzina}:00`).getTime()
+      if (drugiPoczatek >= koniec) break
+      wyniki.push({ id: `konflikt:${pierwszy.id}:${drugi.id}`, tytul: pierwszy.tytul, opis: `Nakłada się z: ${drugi.tytul}`, severity: 'warning', termin: `${pierwszy.data}T${pierwszy.godzina}`, typ: 'asap', sourceRef: pierwszy.referencjaZrodla!, createdAt: pierwszy.createdAt })
+    }
+  }
+  return wyniki
+}
 export function rozwiazZakresKafelka(kafelek: KonfiguracjaKafelkaPulpitu, dataReferencyjna: Date) {
   const dni = kafelek.zakresCzasu === 'today' ? 0 : kafelek.zakresCzasu === '3d' ? 2 : kafelek.zakresCzasu === '7d' ? 6 : 29
   return { od: format(dataReferencyjna, 'yyyy-MM-dd'), do: format(addDays(dataReferencyjna, dni), 'yyyy-MM-dd') }
