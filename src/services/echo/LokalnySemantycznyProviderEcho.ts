@@ -35,9 +35,12 @@ interface ZamiarSemantycznyEcho {
 }
 
 type ZamiarZadaniaEcho =
+  | { typ: 'utworz_zadanie'; tytul: string; data?: string; godzina?: string; okreslenie?: string }
   | { typ: 'odczytaj_zadania'; okreslenie: string; data: string }
   | { typ: 'wyszukaj_zadania'; fraza: string }
   | { typ: 'znajdz_do_edycji'; fraza: string; data: string; okreslenie: string }
+  | { typ: 'znajdz_do_wykonania'; fraza: string }
+  | { typ: 'wykonaj_zadanie'; id: string; tytul: string }
   | { typ: 'znajdz_do_usuniecia'; fraza: string }
   | { typ: 'edytuj_zadanie'; id: string; tytul: string; data: string; okreslenie: string }
   | { typ: 'usun_zadanie'; id: string; tytul: string }
@@ -317,6 +320,20 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       if (tresc) return this.wywolajAkcjeZdrowia('create_therapy_entry', { terapiaId: ostatniaTerapia.id, tresc, dataCzas: czasIso(zadanie.kontekstCzasu.dataLokalna, '12:00') }, 'Dodałem wpis do terapii.')
     }
 
+    const czyWykonanieZadania = lista.some(({ uproszczone: slowo }) => slowo.startsWith('wykon') || slowo.startsWith('oznacz'))
+    if (czyWykonanieZadania) {
+      const maReferencje = ['to', 'ten', 'tamto', 'poprzedni'].some((token) => tokeny.has(token))
+      if (maReferencje && ostatnieZadanie) return this.wywolajZadanie({ typ: 'wykonaj_zadanie', id: ostatnieZadanie.id, tytul: ostatnieZadanie.etykieta ?? 'zadanie' })
+      const fraza = frazaZadania(lista, czas.indeksy)
+      if (fraza) return this.wywolajZadanie({ typ: 'znajdz_do_wykonania', fraza })
+      return { typ: 'pytanie', tresc: 'Które zadanie mam oznaczyć jako wykonane?' }
+    }
+
+    const czyDodanieZadania = ['dodaj', 'dopisz'].some((token) => tokeny.has(token)) && (tokeny.has('zadanie') || (tokeny.has('po') && tokeny.has('pracy'))) && ![...tokeny].some((token) => token.startsWith('przypomnij'))
+    if (czyDodanieZadania) {
+      const tytul = zbudujTytul(lista, czas.indeksy)
+      if (tytul) return this.wywolajZadanie({ typ: 'utworz_zadanie', tytul, data: czas.data, godzina: czas.godzina, okreslenie: okreslenieCzasu(czas, czas.godzina ?? DOMYSLNA_GODZINA_PO_PRACY) })
+    }
     const czyUsuniecie = [...tokeny].some((token) => token.startsWith('usun'))
     if (czyUsuniecie && tokeny.has('wszystkie') && (tokeny.has('tygodnia') || tokeny.has('tygodniu'))) {
       const zakres = zakresBiezacegoTygodnia(zadanie.kontekstCzasu.dataLokalna)
@@ -467,18 +484,21 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     this.licznikWywolan += 1
     const id = `lokalne-${this.licznikWywolan}`
     this.zamiaryWywolan.set(id, zamiar)
-    const wywolanie = zamiar.typ === 'odczytaj_zadania'
-      ? { id, nazwa: 'list_tasks', argumenty: { status: 'otwarte', terminOd: zamiar.data, terminDo: zamiar.data } }
-      : zamiar.typ === 'wyszukaj_zadania' || zamiar.typ === 'znajdz_do_edycji' || zamiar.typ === 'znajdz_do_usuniecia'
-        ? { id, nazwa: 'search_tasks', argumenty: { fraza: zamiar.fraza } }
-        : zamiar.typ === 'edytuj_zadanie'
-          ? { id, nazwa: 'update_task', argumenty: { id: zamiar.id, zmiany: { termin: zamiar.data } } }
-          : zamiar.typ === 'usun_zadanie'
-            ? { id, nazwa: 'delete_task', argumenty: { id: zamiar.id } }
-            : { id, nazwa: 'delete_tasks_bulk', argumenty: { terminOd: zamiar.od, terminDo: zamiar.do } }
+    const wywolanie = zamiar.typ === 'utworz_zadanie'
+      ? { id, nazwa: 'create_task', argumenty: { tytul: zamiar.tytul, ...(zamiar.data ? { termin: zamiar.data } : {}), ...(zamiar.godzina ? { godzina: zamiar.godzina } : {}) } }
+      : zamiar.typ === 'odczytaj_zadania'
+        ? { id, nazwa: 'list_tasks', argumenty: { status: 'otwarte', terminOd: zamiar.data, terminDo: zamiar.data } }
+        : zamiar.typ === 'wyszukaj_zadania' || zamiar.typ === 'znajdz_do_edycji' || zamiar.typ === 'znajdz_do_usuniecia' || zamiar.typ === 'znajdz_do_wykonania'
+          ? { id, nazwa: 'search_tasks', argumenty: { fraza: zamiar.fraza } }
+          : zamiar.typ === 'edytuj_zadanie'
+            ? { id, nazwa: 'update_task', argumenty: { id: zamiar.id, zmiany: { termin: zamiar.data } } }
+            : zamiar.typ === 'wykonaj_zadanie'
+              ? { id, nazwa: 'complete_task', argumenty: { id: zamiar.id } }
+              : zamiar.typ === 'usun_zadanie'
+                ? { id, nazwa: 'delete_task', argumenty: { id: zamiar.id } }
+                : { id, nazwa: 'delete_tasks_bulk', argumenty: { terminOd: zamiar.od, terminDo: zamiar.do } }
     return { typ: 'narzedzia', wywolania: [wywolanie], aktualizacjaKontekstu: { temat: 'zadania', ostatniaIntencja: zamiar.typ, oczekujacaAkcja: { intencja: zamiar.typ, dane: wywolanie.argumenty }, oczekujaceDoprecyzowanie: null } }
   }
-
   private wywolajZdrowie(zamiar: ZamiarZdrowiaEcho): DecyzjaModeluEcho {
     if (zamiar.typ === 'akcja_zdrowia') return this.wywolajAkcjeZdrowia(zamiar.nazwa, zamiar.argumenty, zamiar.potwierdzenie)
     this.licznikWywolan += 1
@@ -507,7 +527,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       return { typ: 'odpowiedz', tresc: etykiety.length ? `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)}: ${etykiety.join(', ')}.` : `Nie masz zapisanych danych: ${zamiar.okreslenie}.`, aktualizacjaKontekstu }
     }
     if (zamiar.typ === 'akcja_zdrowia') return { typ: 'odpowiedz', tresc: zamiar.potwierdzenie, aktualizacjaKontekstu }
-    if (zamiar.typ === 'odczytaj_zadania' || zamiar.typ === 'wyszukaj_zadania' || zamiar.typ === 'znajdz_do_edycji' || zamiar.typ === 'znajdz_do_usuniecia') {
+    if (zamiar.typ === 'odczytaj_zadania' || zamiar.typ === 'wyszukaj_zadania' || zamiar.typ === 'znajdz_do_edycji' || zamiar.typ === 'znajdz_do_usuniecia' || zamiar.typ === 'znajdz_do_wykonania') {
       const znalezione = Array.isArray(wynik.dane) ? wynik.dane.filter((element): element is { id: string; tytul: string } => Boolean(element && typeof element === 'object' && typeof (element as { id?: unknown }).id === 'string' && typeof (element as { tytul?: unknown }).tytul === 'string')) : []
       if (zamiar.typ === 'odczytaj_zadania') return { typ: 'odpowiedz', tresc: znalezione.length ? `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)} masz: ${znalezione.map(({ tytul }) => tytul).join(', ')}.` : `${zamiar.okreslenie.charAt(0).toLocaleUpperCase('pl-PL') + zamiar.okreslenie.slice(1)} nie masz zapisanych zadań.`, aktualizacjaKontekstu }
       if (zamiar.typ === 'wyszukaj_zadania') return { typ: 'odpowiedz', tresc: znalezione.length === 0 ? `Nie znalazłem zadania o „${zamiar.fraza}”.` : znalezione.length === 1 ? `Znalazłem „${znalezione[0].tytul}”.` : `Znalazłem ${znalezione.length} podobne zadania: ${znalezione.map(({ tytul }) => tytul).join(', ')}.`, aktualizacjaKontekstu }
@@ -517,10 +537,13 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
         ? this.wywolajZadanie({ typ: 'edytuj_zadanie', id: znalezione[0].id, tytul: znalezione[0].tytul, data: zamiar.data, okreslenie: zamiar.okreslenie })
         : this.wywolajZadanie({ typ: 'usun_zadanie', id: znalezione[0].id, tytul: znalezione[0].tytul })
     }
+    if (zamiar.typ === 'utworz_zadanie') return { typ: 'odpowiedz', tresc: `Gotowe. Dodałem zadanie „${zamiar.tytul}”${zamiar.okreslenie ? ` na ${zamiar.okreslenie}` : ''}.`, aktualizacjaKontekstu }
+    if (zamiar.typ === 'wykonaj_zadanie') return { typ: 'odpowiedz', tresc: `Gotowe. Oznaczyłem „${zamiar.tytul}” jako wykonane.`, aktualizacjaKontekstu }
     if (zamiar.typ === 'edytuj_zadanie') return { typ: 'odpowiedz', tresc: `Gotowe. Przeniosłem „${zamiar.tytul}” na ${zamiar.okreslenie}.`, aktualizacjaKontekstu }
     if (zamiar.typ === 'usun_zadanie') return { typ: 'odpowiedz', tresc: `Gotowe. Usunąłem „${zamiar.tytul}”.`, aktualizacjaKontekstu }
     if (zamiar.typ === 'usun_zadania_masowo') return { typ: 'odpowiedz', tresc: 'Gotowe. Usunąłem zadania z tego tygodnia.', aktualizacjaKontekstu }
     if (zamiar.typ === 'utworz_przypomnienie') return { typ: 'odpowiedz', tresc: `Jasne, dodałem „${zamiar.tytul}” na ${zamiar.okreslenieCzasu}.`, wartosciDomyslne: zamiar.wartosciDomyslne, aktualizacjaKontekstu }
+    if (!('sposob' in zamiar)) return { typ: 'odpowiedz', tresc: 'Gotowe.', aktualizacjaKontekstu }
     if (zamiar.sposob === 'poprzedni_termin') return { typ: 'odpowiedz', tresc: `Jasne, przywróciłem poprzedni termin „${zamiar.tytul}”.`, aktualizacjaKontekstu }
     return { typ: 'odpowiedz', tresc: `Jasne, przełożyłem „${zamiar.tytul}” na ${zamiar.okreslenieCzasu}.`, wartosciDomyslne: zamiar.wartosciDomyslne, aktualizacjaKontekstu }
   }

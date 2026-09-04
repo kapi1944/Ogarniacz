@@ -146,10 +146,10 @@ export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
   rejestr.zarejestruj({
     nazwa: 'create_task',
     opis: 'Tworzy zwykłe zadanie na podstawie zweryfikowanych pól.',
-    schematArgumentow: z.object({ tytul: z.string().trim().min(1).max(160), opis: z.string().max(5000).optional(), priorytet: priorytet.optional(), termin: dataIso.optional() }),
+    schematArgumentow: z.object({ tytul: z.string().trim().min(1).max(160), opis: z.string().max(5000).optional(), priorytet: priorytet.optional(), termin: dataIso.optional(), godzina: godzina.optional() }),
     ryzyko: 'niskie',
     wykonaj: async (argumenty) => {
-      const zadanie = utworzZadanie({ ...argumenty, opis: argumenty.opis ?? '' })
+      const zadanie = { ...utworzZadanie({ ...argumenty, opis: argumenty.opis ?? '' }), ...(argumenty.godzina ? { dataElementu: argumenty.termin, godzinaElementu: argumenty.godzina, trybTerminuElementu: 'o_godzinie' as const } : {}) }
       await pobierzRepozytorium('zadania').zapisz(zadanie)
       return { id: zadanie.id, tytul: zadanie.tytul }
     },
@@ -169,6 +169,21 @@ export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
       const zaktualizowane = typeof zmiany.termin === 'string' ? odroczZadanie(polaczone, zmiany.termin) : polaczone
       await repozytorium.zapisz(zaktualizowane)
       return { id, tytul: zaktualizowane.tytul, status: zaktualizowane.status, termin: zaktualizowane.termin }
+    },
+  })
+
+  rejestr.zarejestruj({
+    nazwa: 'complete_task',
+    opis: 'Oznacza jedno wskazane zadanie jako wykonane.',
+    schematArgumentow: z.object({ id: z.string().min(1) }),
+    ryzyko: 'niskie',
+    wykonaj: async ({ id }) => {
+      const repozytorium = pobierzRepozytorium('zadania')
+      const zadanie = await repozytorium.pobierz(id)
+      if (!zadanie) throw new Error('Nie znaleziono zadania.')
+      const wykonane = { ...zadanie, status: 'wykonane' as const }
+      await repozytorium.zapisz(wykonane)
+      return { id, tytul: wykonane.tytul, status: wykonane.status, termin: wykonane.termin }
     },
   })
 

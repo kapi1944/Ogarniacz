@@ -362,4 +362,20 @@ describe('Agent Echo', () => {
     await agent.obsluz('Zapisz w rehabilitacji kolana, że dzisiaj było lepiej.')
     expect((await pobierzRepozytorium('wpisyTerapii').lista())[0]).toMatchObject({ tresc: 'dzisiaj było lepiej' })
   })
+  it('tworzy zadanie po pracy i oznacza je jako wykonane przez kontekst', async () => {
+    await baza.tabela('zadania').clear()
+    const agent = new AgentEcho({
+      provider: new LokalnySemantycznyProviderEcho(),
+      pobierzCzas: () => ({ teraz: '2026-08-31T10:00:00.000Z', dataLokalna: '2026-08-31', strefaCzasowa: 'Europe/Warsaw' }),
+    })
+
+    const utworzenie = await agent.obsluz('Dodaj mi na jutro po pracy kupić płyn do spryskiwaczy.')
+    const zadanie = (await pobierzRepozytorium('zadania').lista())[0]
+    expect(utworzenie.tekst).toMatch(/^Gotowe\. Dodałem zadanie/)
+    expect(zadanie).toMatchObject({ termin: '2026-09-01', godzinaElementu: '17:00' })
+
+    const wykonanie = await agent.obsluz('Oznacz to jako wykonane.')
+    expect(wykonanie.tekst).toMatch(/^Gotowe\. Oznaczyłem/)
+    expect((await pobierzRepozytorium('zadania').pobierz(zadanie.id))?.status).toBe('wykonane')
+  })
 })
