@@ -12,6 +12,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { fileURLToPath } from 'node:url'
 import {
   obliczKodWersji,
+  czyZgodnyJdk,
   parsujUrzadzeniaAdb,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
@@ -29,7 +30,6 @@ const nazwaAdb = czyWindows ? 'adb.exe' : 'adb'
 const nazwaGradle = czyWindows ? 'gradlew.bat' : './gradlew'
 const wymaganyNode = 22
 const wymaganyJdk = odczytajWymaganyJdk()
-const maksymalnyJdk = 24
 const wymaganySdk = odczytajWymaganySdk()
 
 function odczytajWymaganyJdk() {
@@ -207,7 +207,7 @@ function pobierzUrzadzenia(adb) {
 
 function zbierzDiagnostyke({ urzadzenieWymagane, wskazanySerial } = {}) {
   const znalezioneJdk = kandydaciJdk().map(wersjaJdk).filter(Boolean)
-  const jdk = znalezioneJdk.find((kandydat) => kandydat.wersja >= wymaganyJdk && kandydat.wersja <= maksymalnyJdk)
+  const jdk = znalezioneJdk.find((kandydat) => czyZgodnyJdk(kandydat.wersja, wymaganyJdk))
   const sdk = znajdzSdk()
   const adb = znajdzAdb(sdk)
   const urzadzeniaAdb = pobierzUrzadzenia(adb)
@@ -250,7 +250,7 @@ function drukujRaport(diagnostyka) {
   console.log('OGARNIACZ ANDROID DOCTOR')
   console.log(`NODE: ${diagnostyka.node.poprawny ? 'OK' : 'BŁĄD'} — ${diagnostyka.node.wersja} (wymagany >= ${wymaganyNode})`)
   console.log(`NPM: ${diagnostyka.npm.poprawny ? `OK — ${diagnostyka.npm.wersja}` : 'BŁĄD — nie znaleziono npm'}`)
-  console.log(`JAVA: ${diagnostyka.jdk ? `OK — JDK ${diagnostyka.jdk.wersja} (wymagany ${wymaganyJdk}–${maksymalnyJdk})` : `BŁĄD — brak zgodnego JDK ${wymaganyJdk}–${maksymalnyJdk}`}`)
+  console.log(`JAVA: ${diagnostyka.jdk ? `OK — JDK ${diagnostyka.jdk.wersja}` : `BŁĄD — brak wymaganego JDK ${wymaganyJdk}`}`)
   if (diagnostyka.jdk) {
     const zrodlo = process.env.JAVA_HOME && resolve(process.env.JAVA_HOME) === diagnostyka.jdk.katalog ? 'OK' : 'AUTO'
     console.log(`JAVA_HOME: ${zrodlo} — ${diagnostyka.jdk.katalog}`)
@@ -491,7 +491,7 @@ function wykonajDeploy(opcje) {
 
 function utworzKeystore(opcje) {
   const diagnostyka = zbierzDiagnostyke()
-  if (!diagnostyka.jdk) throw new Error(`Nie znaleziono JDK ${wymaganyJdk}–${maksymalnyJdk}; nie można uruchomić keytool.`)
+  if (!diagnostyka.jdk) throw new Error(`Nie znaleziono JDK ${wymaganyJdk}; nie można uruchomić keytool.`)
   const domyslna = join(homedir(), '.ogarniacz', 'keys', 'ogarniacz-release.jks')
   const sciezkaKlucza = resolve(typeof opcje.path === 'string' ? opcje.path : domyslna)
   const wzgledna = relative(katalogRepozytorium, sciezkaKlucza)

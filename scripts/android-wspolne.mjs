@@ -20,6 +20,10 @@ export function obliczKodWersji(wersja) {
   return kod
 }
 
+export function czyZgodnyJdk(wersja, wymaganaWersja) {
+  return Number.isInteger(wersja) && wersja === wymaganaWersja
+}
+
 export function obliczSha256(sciezkaPliku) {
   return new Promise((rozwiaz, odrzuc) => {
     const skrot = createHash('sha256')

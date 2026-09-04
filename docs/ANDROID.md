@@ -9,7 +9,7 @@ npm run android:doctor
 npm run android:deploy
 ```
 
-Doctor sam wyszukuje zgodne JDK 21–24 (w tym Android Studio JBR), Android SDK oraz `platform-tools/adb`, bez globalnego ustawiania `JAVA_HOME` i `PATH`. Zbyt stare i zbyt nowe JDK pokazuje jako niezgodne. Przy wielu urządzeniach wskaż jedno:
+Doctor sam wyszukuje wymagane przez obecny toolchain JDK 21 (w tym Android Studio JBR), Android SDK oraz `platform-tools/adb`, bez globalnego ustawiania `JAVA_HOME` i `PATH`. Inne wersje JDK pokazuje jako niezgodne. Przy wielu urządzeniach wskaż jedno:
 
 ```bash
 npm run android:deploy -- --device SERIAL

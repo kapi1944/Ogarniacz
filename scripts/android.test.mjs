@@ -6,6 +6,7 @@ import test from 'node:test'
 import {
   obliczKodWersji,
   obliczSha256,
+  czyZgodnyJdk,
   parsujUrzadzeniaAdb,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
@@ -16,6 +17,12 @@ test('oblicza rosnący versionCode z wersji package.json', () => {
   assert.equal(obliczKodWersji('1.0.1'), 1_000_001)
   assert.ok(obliczKodWersji('1.1.0') > obliczKodWersji('1.0.999'))
   assert.throws(() => obliczKodWersji('1.0'), /format X\.Y\.Z/)
+})
+
+test('akceptuje dokładnie JDK wymagane przez toolchain Capacitor', () => {
+  assert.equal(czyZgodnyJdk(21, 21), true)
+  assert.equal(czyZgodnyJdk(17, 21), false)
+  assert.equal(czyZgodnyJdk(25, 21), false)
 })
 
 test('oblicza SHA-256 pliku APK', async () => {
