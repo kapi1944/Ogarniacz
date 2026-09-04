@@ -26,7 +26,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "pwa:smoke": "node scripts/pwa-smoke.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.0",

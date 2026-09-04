@@ -12,13 +12,16 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'ikona-192.png', 'ikona-512.png'],
       manifest: {
         name: 'Ogarniacz',
         short_name: 'Ogarniacz',
         description: 'Prywatne centrum dowodzenia codziennym zyciem.',
         lang: 'pl',
+        id: '/',
+        scope: '/',
         start_url: '/',
         display: 'standalone',
         background_color: '#f4f6f8',
@@ -41,7 +44,7 @@ export default defineConfig({
     }),
   ],
   test: {
-    exclude: [...configDefaults.exclude, '**/.patch-backups/**', 'server/**'],
+    exclude: [...configDefaults.exclude, '**/.patch-backups/**', 'server/**', 'scripts/**/*.test.mjs'],
     environment: 'jsdom',
     setupFiles: ['./src/testy/konfiguracja.ts'],
     coverage: {

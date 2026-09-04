@@ -9,6 +9,7 @@ import {
 import type { NazwaModulu } from '../domain/typy'
 import { useObslugaWstecz } from '../platform/obslugaWstecz'
 import { useAplikacja } from './KontekstAplikacji'
+import { StanKlientaWeb } from './StanKlientaWeb'
 
 interface PozycjaMenu {
   etykieta: string
@@ -172,6 +173,7 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
         {ustawienia.trybUzytkownika === 'edytor' && <div className="pasek-edytora"><span><Sparkles aria-hidden="true" />Lokalny podgląd jako Edytor — to nie jest zdalne, bezpieczne współdzielenie.</span><button type="button" onClick={() => zapiszUstawienia({ trybUzytkownika: 'wlasciciel', aktywnyEdytorId: undefined })}>Wróć do Właściciela</button></div>}
         <header className="pasek-gorny">
           <strong>{nazwaWidoku}</strong>
+          <StanKlientaWeb />
           <div className="pasek-gorny__akcje">
             <button type="button" className="przycisk-szukaj" onClick={otworzWyszukiwanie}><Search aria-hidden="true" /><span>Szukaj</span><kbd>Ctrl K</kbd></button>
             <button type="button" className="przycisk-ikona" onClick={() => zapiszUstawienia({ wyglad: { ...ustawienia.wyglad, motyw: ustawienia.wyglad.motyw === 'ciemny' ? 'jasny' : 'ciemny' } })} title="Przełącz motyw">{ustawienia.wyglad.motyw === 'ciemny' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>

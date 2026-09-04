@@ -84,4 +84,4 @@ Ważne działania zapisują się w `DziennikEcho`.
 
 ## PWA
 
-`vite-plugin-pwa` generuje manifest i service worker Workbox. Cache obejmuje statyczny shell. Główne operacje odczytu i przechwytywania danych korzystają z IndexedDB i nie wymagają internetu.
+`vite-plugin-pwa` generuje manifest i service worker Workbox. Cache obejmuje statyczny shell, a żądania `/api/` zawsze omijają cache. Nowa wersja aplikacji jest wykrywana w tle i instalowana dopiero po potwierdzeniu użytkownika. Główne operacje odczytu i przechwytywania danych korzystają z tej samej domeny oraz IndexedDB na webie i Androidzie, więc nie wymagają internetu. Widoki tras są ładowane na żądanie.

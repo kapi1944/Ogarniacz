@@ -197,8 +197,8 @@ describe('logika kafelków Pulpitu', () => {
 
   it('buduje adres źródłowy rekordu i konkretnego wystąpienia dawki', () => {
     expect(adresReferencjiZrodla(dawka().referencjaZrodla!))
-      .toBe('/leki?element=lek-1&wystapienie=lek-1%3A2026-08-28%3A08%3A00')
-    expect(adresReferencjiZrodla(wizyta().referencjaZrodla!)).toBe('/wizyty?element=wizyta-1')
+      .toBe('/zdrowie/leki?element=lek-1&wystapienie=lek-1%3A2026-08-28%3A08%3A00')
+    expect(adresReferencjiZrodla(wizyta().referencjaZrodla!)).toBe('/zdrowie/wizyty?element=wizyta-1')
     expect(adresReferencjiZrodla({ modul: 'rachunki', encjaId: 'rachunek-1' })).toBe('/rachunki?element=rachunek-1')
     expect(adresReferencjiZrodla({ modul: 'samochod', encjaId: 'auto-1' })).toBe('/samochod?element=auto-1')
     expect(adresReferencjiZrodla({ modul: 'zakupy', encjaId: 'lista-1' })).toBe('/zakupy?element=lista-1')

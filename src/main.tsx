@@ -7,6 +7,7 @@ import { zastosujUstawieniaInterfejsu } from './domain/ustawienia'
 import { inicjalizujPlatforme } from './platform/platforma'
 import { inicjalizujWidgetSnapshotService } from './services/WidgetSnapshotService'
 import { inicjalizujSynchronizacjeAplikacji } from './services/SynchronizacjaAplikacji'
+import { AktualizacjaPwa } from './app/AktualizacjaPwa'
 import './styles/glowny.css'
 
 await inicjalizujBaze()
@@ -17,5 +18,5 @@ zastosujUstawieniaInterfejsu(
   window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 )
 inicjalizujWidgetSnapshotService()
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
+createRoot(document.getElementById('root')!).render(<StrictMode><App /><AktualizacjaPwa /></StrictMode>)
 void inicjalizujSynchronizacjeAplikacji()

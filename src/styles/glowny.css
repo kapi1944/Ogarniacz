@@ -110,6 +110,13 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .pasek-gorny { position: sticky; top: 0; z-index: 20; display: flex; min-height: var(--pasek); align-items: center; padding: 8px clamp(14px, 2.4vw, 32px); gap: 14px; background: color-mix(in srgb, var(--panel) 92%, transparent); border-bottom: 1px solid var(--obramowanie); backdrop-filter: blur(12px); }
 .pasek-gorny > strong { font-size: .94rem; }
 .pasek-gorny__akcje { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.stan-klienta { display: inline-flex; min-width: 0; align-items: center; padding: 5px 8px; gap: 6px; color: var(--tekst-2); background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: 999px; font-size: .72rem; }
+.stan-klienta svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.stan-klienta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stan-klienta--ostrzezenie { color: var(--ostrzezenie-tekst, #8a4b08); border-color: color-mix(in srgb, currentColor 30%, var(--obramowanie)); }
+.komunikat-pwa { position: fixed; right: 18px; bottom: 18px; z-index: 120; display: flex; width: min(460px, calc(100vw - 32px)); align-items: center; justify-content: space-between; padding: 14px; gap: 14px; color: var(--tekst); background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: var(--promien-karty); box-shadow: 0 18px 55px rgb(0 0 0 / 24%); }
+.komunikat-pwa > div { display: grid; min-width: 0; gap: 3px; }
+.komunikat-pwa span { color: var(--tekst-2); font-size: .78rem; }
 .pasek-gorny__menu { display: none !important; }
 .pasek-edytora { display: flex; min-height: 34px; align-items: center; justify-content: center; padding: 5px 20px; gap: 16px; color: #3b2804; background: #f5c768; font-size: .78rem; font-weight: 650; }
 .pasek-edytora span { display: flex; align-items: center; gap: 7px; }
@@ -474,6 +481,8 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
   .zawartosc { padding: 14px; }
   .pasek-gorny { padding: 8px 12px; }
   .pasek-gorny > strong { display: none; }
+  .stan-klienta { max-width: 44vw; margin-right: auto; }
+  .stan-klienta span { font-size: .66rem; }
   .przycisk-szukaj { min-width: 36px; width: 36px; padding: 6px; }
   .przycisk-szukaj span, .przycisk-szukaj kbd, .przycisk-plus span { display: none; }
   .przycisk-plus { width: 38px; padding: 6px; }
@@ -509,6 +518,8 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
   .wybor-daty-pulpitu input { width: 100%; }
   .strefy-pulpitu, .sekcje-elementow-pulpitu { grid-template-columns: 1fr; }
   .naglowek-osi-czasu, .akcje-dostepnosci { align-items: flex-start; flex-direction: column; }
+  .komunikat-pwa { right: 8px; bottom: calc(var(--wysokosc-nawigacji-mobilnej, 68px) + var(--bezpieczny-obszar-dol, 0px) + 8px); left: 8px; width: auto; align-items: stretch; flex-direction: column; }
+  .komunikat-pwa .przycisk { width: 100%; }
 }
 
 
