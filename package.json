@@ -1,7 +1,7 @@
 {
   "name": "ogarniacz-v1",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",

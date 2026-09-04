@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import {
   existsSync,
   mkdirSync,
@@ -425,26 +426,17 @@ function wymagajAdresuHttps(nazwa, wartosc) {
 function znajdzApkSigner(sdk) {
   const katalog = join(sdk, 'build-tools')
   if (!existsSync(katalog)) return undefined
-  const nazwa = czyWindows ? 'apksigner.bat' : 'apksigner'
   return podkatalogi(katalog)
     .sort((a, b) => basename(b).localeCompare(basename(a), undefined, { numeric: true }))
-    .map((wersja) => join(wersja, nazwa))
+    .map((wersja) => join(wersja, 'lib', 'apksigner.jar'))
     .find(existsSync)
 }
 
 function sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko) {
   const apkSigner = znajdzApkSigner(diagnostyka.sdk)
   if (!apkSigner) throw new Error('Nie znaleziono apksigner w Android SDK build-tools.')
-  if (czyWindows) {
-    wykonajEtap('Weryfikacja podpisu release APK', process.env.ComSpec ?? 'cmd.exe', [
-      '/d',
-      '/s',
-      '/c',
-      `""${apkSigner}" verify --verbose "${sciezkaApk}""`,
-    ], { srodowisko })
-    return
-  }
-  wykonajEtap('Weryfikacja podpisu release APK', apkSigner, ['verify', '--verbose', sciezkaApk], { srodowisko })
+  const java = join(diagnostyka.jdk.katalog, 'bin', nazwaJava)
+  wykonajEtap('Weryfikacja podpisu release APK', java, ['-jar', apkSigner, 'verify', '--verbose', sciezkaApk], { srodowisko })
 }
 
 async function wykonajRelease(opcje) {
@@ -538,9 +530,15 @@ function utworzKeystore(opcje) {
     throw new Error('Release keystore musi znajdować się poza repozytorium.')
   }
   if (existsSync(sciezkaKlucza)) throw new Error(`Klucz już istnieje: ${sciezkaKlucza}. Skrypt nie nadpisuje stałego klucza release.`)
+  const sciezkaWlasciwosci = join(katalogAndroida, 'keystore.properties')
+  const czyAutomatycznie = opcje.automatycznie === true
+  if (czyAutomatycznie && existsSync(sciezkaWlasciwosci)) {
+    throw new Error('android/keystore.properties już istnieje. Skrypt nie nadpisuje konfiguracji release signing.')
+  }
   mkdirSync(dirname(sciezkaKlucza), { recursive: true })
   const keytool = join(diagnostyka.jdk.katalog, 'bin', nazwaKeytool)
-  wykonajEtap('Jednorazowe utworzenie release keystore', keytool, [
+  const haslo = czyAutomatycznie ? randomBytes(36).toString('base64url') : undefined
+  const argumenty = [
     '-genkeypair',
     '-v',
     '-keystore', sciezkaKlucza,
@@ -548,9 +546,31 @@ function utworzKeystore(opcje) {
     '-keyalg', 'RSA',
     '-keysize', '4096',
     '-validity', '10000',
-  ], { srodowisko: { ...process.env, JAVA_HOME: diagnostyka.jdk.katalog } })
+  ]
+  const srodowisko = { ...process.env, JAVA_HOME: diagnostyka.jdk.katalog }
+  if (czyAutomatycznie) {
+    srodowisko.OGARNIACZ_HASLO_KEYSTORE = haslo
+    argumenty.push(
+      '-storepass:env', 'OGARNIACZ_HASLO_KEYSTORE',
+      '-keypass:env', 'OGARNIACZ_HASLO_KEYSTORE',
+      '-dname', 'CN=Ogarniacz, OU=Mobile, O=Ogarniacz, L=Warszawa, C=PL',
+    )
+  }
+  wykonajEtap('Jednorazowe utworzenie release keystore', keytool, argumenty, { srodowisko })
+  if (czyAutomatycznie) {
+    const sciezkaDlaGradle = sciezkaKlucza.replaceAll('\\', '/')
+    writeFileSync(sciezkaWlasciwosci, [
+      `storeFile=${sciezkaDlaGradle}`,
+      `storePassword=${haslo}`,
+      'keyAlias=ogarniacz',
+      `keyPassword=${haslo}`,
+      '',
+    ].join('\n'), { mode: 0o600 })
+  }
   console.log(`\nKlucz utworzono poza repozytorium: ${sciezkaKlucza}`)
-  console.log('Utwórz lokalny android/keystore.properties według android/keystore.properties.example i zachowaj ten klucz do wszystkich kolejnych wydań.')
+  console.log(czyAutomatycznie
+    ? 'Lokalną konfigurację zapisano w ignorowanym android/keystore.properties. Zabezpiecz kopię obu plików; hasło nie zostało wypisane.'
+    : 'Utwórz lokalny android/keystore.properties według android/keystore.properties.example i zachowaj ten klucz do wszystkich kolejnych wydań.')
 }
 
 async function main() {

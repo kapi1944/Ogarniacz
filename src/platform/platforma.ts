@@ -2,6 +2,7 @@ import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core'
 import { utworzUslugeAktualizacji } from './AktualizacjeService'
 import { utworzUslugePlikow } from './FileService'
 import { utworzUslugeHaptyki } from './HapticsService'
+import { utworzUslugeGlosuEcho } from './GlosEchoService'
 import { utworzUslugeCykluZycia } from './LifecycleService'
 import { utworzUslugePowiadomien } from './NotificationService'
 import { utworzUslugeUdostepniania } from './ShareService'
@@ -19,6 +20,7 @@ export const platforma: PlatformaOgarniacza = {
   pliki: utworzUslugePlikow(czyAndroid),
   udostepnianie: utworzUslugeUdostepniania(czyAndroid),
   haptyka: utworzUslugeHaptyki(czyAndroid),
+  glosEcho: utworzUslugeGlosuEcho(czyAndroid),
   migawkiWidgetow: utworzMostMigawekWidgetow(czyAndroid),
   aktualizacje: utworzUslugeAktualizacji(czyAndroid),
 }

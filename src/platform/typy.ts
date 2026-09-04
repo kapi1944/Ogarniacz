@@ -1,4 +1,5 @@
 import type { Przypomnienie, PowiazanieEncji } from '../domain/typy'
+import type { UslugaGlosuEcho } from './GlosEchoService'
 
 export type RodzajPlatformy = 'web' | 'android'
 export type StanCykluZycia = 'aktywny' | 'nieaktywny'
@@ -117,6 +118,7 @@ export interface PlatformaOgarniacza {
     sukces: () => Promise<boolean>
     ostrzezenie: () => Promise<boolean>
   }
+  glosEcho: UslugaGlosuEcho
   migawkiWidgetow: {
     dostepne: () => boolean
     zapisz: (dane: unknown) => Promise<boolean>

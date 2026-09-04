@@ -379,6 +379,11 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .wiadomosc .przycisk-ikona { width: 26px; min-height: 26px; margin-left: 5px; padding: 3px; vertical-align: middle; }
 .formularz-echo { display: grid; grid-template-columns: 38px 1fr auto; padding: 12px; gap: 7px; background: var(--panel-2); border-top: 1px solid var(--obramowanie); }
 .formularz-echo input { min-width: 0; padding: 8px 10px; color: var(--tekst); background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: 8px; }
+.stan-glosu { padding: 10px 18px; color: var(--tekst-wyciszony); background: var(--panel-2); border-bottom: 1px solid var(--obramowanie); }
+.stan-glosu--sluchanie, .stan-glosu--oczekiwanie { color: var(--akcent-mocny); }
+.stan-glosu--mowienie { color: var(--sukces); }
+.stan-glosu--blad { color: var(--blad); }
+.akcje-glosu { display: flex; gap: 8px; padding: 0 12px 12px; background: var(--panel-2); }
 .kolumna-echo { display: grid; gap: 12px; }
 .sugestie-echo { display: flex; flex-wrap: wrap; gap: 6px; }
 .sugestie-echo button { padding: 5px 8px; color: var(--akcent); background: var(--akcent-jasny); border: 1px solid color-mix(in srgb, var(--akcent) 32%, transparent); border-radius: 7px; cursor: pointer; font-size: .72rem; text-align: left; }
