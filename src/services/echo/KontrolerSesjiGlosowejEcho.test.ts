@@ -111,4 +111,27 @@ describe('KontrolerSesjiGlosowejEcho', () => {
     expect(glos.zatrzymajMowienie).toHaveBeenCalledTimes(1)
     await kontroler.anuluj()
   })
+
+  it('przerywa TTS i od razu rozpoczyna nowe nasłuchiwanie', async () => {
+    const glos = przygotujGlos(['Pierwsze polecenie', 'Korekta'])
+    const rozpoznaj = glos.rozpoznaj as ReturnType<typeof vi.fn>
+    let zakonczMowienie: (() => void) | undefined
+    glos.mow = vi.fn(() => new Promise<void>((rozwiaz) => { zakonczMowienie = rozwiaz }))
+    glos.zatrzymajMowienie = vi.fn(async () => { zakonczMowienie?.() })
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo: { obsluz: vi.fn(async () => odpowiedz) },
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.rozpocznij()
+    await czekajNa(() => kontroler.pobierzStan() === 'mowienie')
+    await kontroler.przerwijIMow()
+    await czekajNa(() => rozpoznaj.mock.calls.length === 2)
+
+    expect(glos.zatrzymajMowienie).toHaveBeenCalledTimes(1)
+    expect(rozpoznaj).toHaveBeenNthCalledWith(2, 20_000)
+    await kontroler.anuluj()
+  })
 })

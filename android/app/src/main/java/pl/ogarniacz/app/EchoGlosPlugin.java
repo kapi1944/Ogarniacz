@@ -51,6 +51,10 @@ public class EchoGlosPlugin extends Plugin {
                     zakonczMowienie(null);
                 }
 
+                @Override public void onStop(String identyfikator, boolean przerwane) {
+                    zakonczMowienie("Wypowiedź została przerwana.");
+                }
+
                 @Override public void onError(String identyfikator) {
                     zakonczMowienie("Syntezator mowy nie odczytał odpowiedzi.");
                 }
