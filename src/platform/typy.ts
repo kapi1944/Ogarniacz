@@ -57,11 +57,13 @@ export interface InformacjeOWersjiAplikacji {
 }
 
 export interface ManifestAktualizacji {
-  version: string
+  versionName: string
   versionCode: number
   apkUrl: string
   sha256: string
-  publishedAt: string
+  size?: number
+  releaseNotes?: string
+  publishedAt?: string
 }
 
 export interface WynikSprawdzeniaAktualizacji {

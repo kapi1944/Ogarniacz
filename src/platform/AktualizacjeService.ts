@@ -22,11 +22,13 @@ const wtyczkaAktualizacji = registerPlugin<WtyczkaAktualizacji>('Aktualizacje')
 const adresManifestu = (import.meta.env.VITE_ANDROID_UPDATE_MANIFEST_URL ?? '').trim()
 
 const schematManifestu = z.object({
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  versionName: z.string().regex(/^\d+\.\d+\.\d+$/),
   versionCode: z.number().int().positive().max(2_100_000_000),
   apkUrl: z.string().min(1),
   sha256: z.string().regex(/^[a-f0-9]{64}$/i),
-  publishedAt: z.string().refine((wartosc) => !Number.isNaN(Date.parse(wartosc))),
+  size: z.number().int().positive().optional(),
+  releaseNotes: z.string().max(20_000).optional(),
+  publishedAt: z.string().refine((wartosc) => !Number.isNaN(Date.parse(wartosc))).optional(),
 })
 
 export function obliczKodWersji(wersja: string) {
@@ -42,7 +44,7 @@ export function obliczKodWersji(wersja: string) {
 export function parsujManifestAktualizacji(wartosc: unknown): ManifestAktualizacji {
   const wynik = schematManifestu.safeParse(wartosc)
   if (!wynik.success) throw new Error('Serwer zwrócił nieprawidłowy manifest aktualizacji.')
-  if (wynik.data.versionCode !== obliczKodWersji(wynik.data.version)) {
+  if (wynik.data.versionCode !== obliczKodWersji(wynik.data.versionName)) {
     throw new Error('Manifest aktualizacji zawiera niespójny numer wersji.')
   }
   return wynik.data
@@ -64,7 +66,7 @@ function sprawdzAdresHttps(adres: string, etykieta: string) {
 }
 
 function nazwaApk(manifest: ManifestAktualizacji) {
-  return `Ogarniacz-${manifest.version}-release.apk`
+  return `Ogarniacz-${manifest.versionName}-release.apk`
 }
 
 export function utworzUslugeAktualizacji(czyAndroid: boolean) {
@@ -85,6 +87,7 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
     pobierzInformacje,
     sprawdz: async (): Promise<WynikSprawdzeniaAktualizacji> => {
       if (!czyAndroid) throw new Error('Aktualizacje APK są dostępne tylko w aplikacji Android.')
+      if (!adresManifestu) throw new Error('Źródło aktualizacji nie jest skonfigurowane w tym buildzie.')
       const bezpiecznyAdresManifestu = sprawdzAdresHttps(adresManifestu, 'Adres manifestu aktualizacji')
       const odpowiedz = await CapacitorHttp.get({
         url: bezpiecznyAdresManifestu,

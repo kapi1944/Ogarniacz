@@ -43,10 +43,10 @@ export function PanelAktualizacji() {
       ustawDostepna(wynik)
       if (wynik.czyNowsza) {
         ustawEtap('dostepna')
-        ustawKomunikat(`Dostępna jest wersja ${wynik.manifest.version} (${wynik.manifest.versionCode}).`)
+        ustawKomunikat(`Dostępna wersja ${wynik.manifest.versionName}.`)
       } else {
         ustawEtap('brak')
-        ustawKomunikat('Masz najnowszą wersję Ogarniacza.')
+        ustawKomunikat('Brak aktualizacji. Masz najnowszą wersję Ogarniacza.')
       }
     } catch (blad) {
       ustawEtap('blad')
@@ -101,7 +101,11 @@ export function PanelAktualizacji() {
 
   return <Karta>
     <div className="naglowek-karty"><div><h2>Informacje o aplikacji</h2><p>Ogarniacz · local-first PWA i Android</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
-    <p><strong>Wersja {wersja}</strong></p>
+    <div className="lista-kompaktowa">
+      <div><span>Aktualnie zainstalowana wersja</span><strong>{wersja}</strong></div>
+      <div><span>Dostępna wersja</span><strong>{dostepna?.manifest.versionName ?? '—'}</strong></div>
+    </div>
+    {dostepna?.manifest.releaseNotes && <div><h3>Informacje o wydaniu</h3><p className="tekst-pomocniczy" style={{ whiteSpace: 'pre-wrap' }}>{dostepna.manifest.releaseNotes}</p></div>}
     {komunikat && <p className="tekst-pomocniczy" role={etap === 'blad' ? 'alert' : 'status'}>{komunikat}</p>}
     {postep !== undefined && (etap === 'pobieranie' || etap === 'weryfikacja') && <progress value={postep} max="100" aria-label="Postęp pobierania aktualizacji" />}
     {!platforma.natywna && <p className="tekst-pomocniczy">Aktualizacje APK są dostępne w aplikacji Android.</p>}

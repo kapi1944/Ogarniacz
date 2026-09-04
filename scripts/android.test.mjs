@@ -45,13 +45,17 @@ test('tworzy i waliduje latest.json z względnym adresem APK', async () => {
     const manifest = await utworzManifestAktualizacji({
       wersja: '1.0.1',
       sciezkaApk: plikApk,
+      notatkiWydania: 'Poprawki OTA.',
       opublikowano: new Date('2026-09-04T10:00:00.000Z'),
     })
     await writeFile(plikManifestu, `${JSON.stringify(manifest, null, 2)}\n`)
 
     const zapisany = JSON.parse(await readFile(plikManifestu, 'utf8'))
     assert.equal(walidujManifestAktualizacji(zapisany).apkUrl, 'Ogarniacz-1.0.1-release.apk')
+    assert.equal(zapisany.versionName, '1.0.1')
     assert.equal(zapisany.versionCode, 1_000_001)
+    assert.equal(zapisany.size, 3)
+    assert.equal(zapisany.releaseNotes, 'Poprawki OTA.')
   } finally {
     await rm(katalog, { recursive: true, force: true })
   }

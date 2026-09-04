@@ -93,7 +93,7 @@ function podkatalogi(katalog) {
 function sciezkiPolecenia(nazwa) {
   const polecenie = czyWindows ? 'where.exe' : 'which'
   const wynik = wykonajPrzechwytywanie(polecenie, [nazwa])
-  if (wynik.status !== 0) return []
+  if (wynik.status !== 0 || typeof wynik.stdout !== 'string') return []
   return wynik.stdout.split(/\r?\n/).map((wartosc) => wartosc.trim()).filter(Boolean)
 }
 
@@ -211,8 +211,8 @@ function znajdzAdb(sdk) {
 function pobierzUrzadzenia(adb) {
   if (!adb) return { urzadzenia: [], blad: 'Brak adb.' }
   const wynik = wykonajPrzechwytywanie(adb, ['devices', '-l'])
-  if (wynik.status !== 0) return { urzadzenia: [], blad: (wynik.stderr || wynik.stdout).trim() || 'Nie udało się uruchomić adb.' }
-  return { urzadzenia: parsujUrzadzeniaAdb(wynik.stdout) }
+  if (wynik.status !== 0) return { urzadzenia: [], blad: (wynik.stderr || wynik.stdout || wynik.error?.message || '').trim() || 'Nie udało się uruchomić adb.' }
+  return { urzadzenia: parsujUrzadzeniaAdb(wynik.stdout ?? '') }
 }
 
 function zbierzDiagnostyke({ urzadzenieWymagane, wskazanySerial } = {}) {
@@ -241,7 +241,7 @@ function zbierzDiagnostyke({ urzadzenieWymagane, wskazanySerial } = {}) {
 
   return {
     node: { poprawny: wersjaNode >= wymaganyNode, wersja: process.version },
-    npm: { poprawny: npm.status === 0, wersja: npm.stdout.trim() },
+    npm: { poprawny: npm.status === 0, wersja: npm.stdout?.trim() ?? '' },
     javaPath: javaZPath(),
     jdk,
     znalezioneJdk,
@@ -457,10 +457,16 @@ async function wykonajRelease(opcje) {
   if (bazowyAdres && new URL(bazowyAdres).protocol !== 'https:') {
     throw new Error('Bazowy adres aktualizacji musi używać HTTPS.')
   }
+  const plikNotatek = typeof opcje['release-notes-file'] === 'string' ? resolve(opcje['release-notes-file']) : undefined
+  if (plikNotatek && !existsSync(plikNotatek)) throw new Error(`Nie znaleziono pliku informacji o wydaniu: ${plikNotatek}`)
+  const notatkiWydania = plikNotatek
+    ? readFileSync(plikNotatek, 'utf8')
+    : typeof opcje['release-notes'] === 'string' ? opcje['release-notes'] : undefined
   const manifest = walidujManifestAktualizacji(await utworzManifestAktualizacji({
     wersja: pakiet.version,
     sciezkaApk,
     bazowyAdres,
+    notatkiWydania,
   }))
   const katalogWyjscia = dirname(sciezkaApk)
   const sciezkaManifestu = join(katalogWyjscia, 'latest.json')
@@ -471,7 +477,7 @@ async function wykonajRelease(opcje) {
   console.log('\n=====================================')
   console.log('OGARNIACZ ANDROID RELEASE — SUCCESS')
   console.log('=====================================')
-  console.log(`Version: ${manifest.version} (${manifest.versionCode})`)
+  console.log(`Version: ${manifest.versionName} (${manifest.versionCode})`)
   console.log(`APK: ${sciezkaApk}`)
   console.log(`SHA-256: ${manifest.sha256}`)
   console.log(`Manifest: ${sciezkaManifestu}`)

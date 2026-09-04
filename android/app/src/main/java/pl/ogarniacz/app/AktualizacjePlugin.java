@@ -55,8 +55,7 @@ public class AktualizacjePlugin extends Plugin {
                 powiadomOStanie("pobieranie", 0);
                 String obliczonySkrot = pobierz(adres, plikTymczasowy);
                 powiadomOStanie("weryfikacja", 100);
-                if (!obliczonySkrot.equalsIgnoreCase(oczekiwanySkrot)) {
-                    usunJesliIstnieje(plikTymczasowy);
+                if (!zweryfikujSkrotLubUsunPlik(plikTymczasowy, obliczonySkrot, oczekiwanySkrot)) {
                     wywolanie.reject("SHA-256 pobranego APK nie zgadza się z manifestem. Plik został usunięty.");
                     return;
                 }
@@ -206,6 +205,12 @@ public class AktualizacjePlugin extends Plugin {
 
     private void usunJesliIstnieje(File plik) throws Exception {
         if (plik.exists() && !plik.delete()) throw new Exception("Nie udało się usunąć poprzedniego pliku aktualizacji.");
+    }
+
+    static boolean zweryfikujSkrotLubUsunPlik(File plik, String obliczonySkrot, String oczekiwanySkrot) throws Exception {
+        if (obliczonySkrot.equalsIgnoreCase(oczekiwanySkrot)) return true;
+        if (plik.exists() && !plik.delete()) throw new Exception("Nie udało się usunąć błędnego pliku aktualizacji.");
+        return false;
     }
 
     private String zapisSzesnastkowy(byte[] bajty) {

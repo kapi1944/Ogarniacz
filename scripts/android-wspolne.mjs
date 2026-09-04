@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
+import { createReadStream, statSync } from 'node:fs'
 import { basename } from 'node:path'
 
 export function rozlozWersje(wersja) {
@@ -34,7 +34,7 @@ export function obliczSha256(sciezkaPliku) {
   })
 }
 
-export async function utworzManifestAktualizacji({ wersja, sciezkaApk, bazowyAdres, opublikowano = new Date() }) {
+export async function utworzManifestAktualizacji({ wersja, sciezkaApk, bazowyAdres, notatkiWydania, opublikowano = new Date() }) {
   const nazwaApk = basename(sciezkaApk)
   const baza = bazowyAdres?.trim()
   const apkUrl = baza
@@ -42,19 +42,21 @@ export async function utworzManifestAktualizacji({ wersja, sciezkaApk, bazowyAdr
     : nazwaApk
 
   return {
-    version: wersja,
+    versionName: wersja,
     versionCode: obliczKodWersji(wersja),
     apkUrl,
     sha256: await obliczSha256(sciezkaApk),
+    size: statSync(sciezkaApk).size,
+    ...(notatkiWydania?.trim() ? { releaseNotes: notatkiWydania.trim() } : {}),
     publishedAt: opublikowano.toISOString(),
   }
 }
 
 export function walidujManifestAktualizacji(manifest) {
   if (!manifest || typeof manifest !== 'object') throw new Error('Manifest aktualizacji musi być obiektem JSON.')
-  if (typeof manifest.version !== 'string') throw new Error('Manifest nie zawiera prawidłowej wersji.')
-  if (manifest.versionCode !== obliczKodWersji(manifest.version)) {
-    throw new Error('versionCode nie odpowiada polu version.')
+  if (typeof manifest.versionName !== 'string') throw new Error('Manifest nie zawiera prawidłowego versionName.')
+  if (manifest.versionCode !== obliczKodWersji(manifest.versionName)) {
+    throw new Error('versionCode nie odpowiada polu versionName.')
   }
   if (typeof manifest.apkUrl !== 'string' || manifest.apkUrl.trim() === '') {
     throw new Error('Manifest nie zawiera adresu APK.')
@@ -62,7 +64,13 @@ export function walidujManifestAktualizacji(manifest) {
   if (typeof manifest.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(manifest.sha256)) {
     throw new Error('Manifest nie zawiera prawidłowego SHA-256.')
   }
-  if (typeof manifest.publishedAt !== 'string' || Number.isNaN(Date.parse(manifest.publishedAt))) {
+  if (manifest.size !== undefined && (!Number.isInteger(manifest.size) || manifest.size <= 0)) {
+    throw new Error('Manifest zawiera nieprawidłowy rozmiar APK.')
+  }
+  if (manifest.releaseNotes !== undefined && typeof manifest.releaseNotes !== 'string') {
+    throw new Error('Manifest zawiera nieprawidłowe informacje o wydaniu.')
+  }
+  if (manifest.publishedAt !== undefined && (typeof manifest.publishedAt !== 'string' || Number.isNaN(Date.parse(manifest.publishedAt)))) {
     throw new Error('Manifest nie zawiera prawidłowej daty publikacji.')
   }
   return manifest

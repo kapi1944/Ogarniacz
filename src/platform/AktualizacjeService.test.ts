@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { czyNowszaWersja, obliczKodWersji, parsujManifestAktualizacji } from './AktualizacjeService'
 
 const poprawnyManifest = {
-  version: '1.0.1',
+  versionName: '1.0.1',
   versionCode: 1_000_001,
   apkUrl: 'Ogarniacz-1.0.1-release.apk',
   sha256: 'a'.repeat(64),
   publishedAt: '2026-09-04T10:00:00.000Z',
+  size: 123,
+  releaseNotes: 'Poprawki stabilności.',
 }
 
 describe('AktualizacjeService', () => {
