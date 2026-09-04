@@ -26,9 +26,9 @@ describe('dolna nawigacja mobilna', () => {
 
     const nawigacja = screen.getByRole('navigation', { name: 'Dolna nawigacja' })
     expect(nawigacja).toHaveTextContent('Pulpit')
-    expect(nawigacja).toHaveTextContent('Zadania')
+    expect(nawigacja).toHaveTextContent('Dzisiaj')
     expect(nawigacja).toHaveTextContent('Dodaj')
-    expect(nawigacja).toHaveTextContent('Planer')
+    expect(nawigacja).toHaveTextContent('Echo')
     expect(nawigacja).toHaveTextContent('Więcej')
   })
 
@@ -47,6 +47,8 @@ describe('dolna nawigacja mobilna', () => {
 
     expect(screen.getByRole('dialog', { name: 'Więcej modułów' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Skrzynka' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Planer dnia' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Samochód' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Wydatki i budżet' })).not.toBeInTheDocument()
   })
 })

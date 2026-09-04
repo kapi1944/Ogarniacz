@@ -34,6 +34,7 @@ const WidokDokumentow = lazy(() => WidokiWiedzy().then((modul) => ({ default: mo
 const WidokTerminow = lazy(() => WidokiWiedzy().then((modul) => ({ default: modul.WidokTerminow })))
 const WidokFinansow = lazy(() => import('./modules/finanse/WidokFinansow').then((modul) => ({ default: modul.WidokFinansow })))
 const WidokSamochodu = lazy(() => import('./modules/samochod/WidokSamochodu').then((modul) => ({ default: modul.WidokSamochodu })))
+const WidokDzisiaj = lazy(() => import('./modules/dzisiaj/WidokDzisiaj').then((modul) => ({ default: modul.WidokPulpitu })))
 const WidokEcho = lazy(() => import('./modules/echo/WidokEcho').then((modul) => ({ default: modul.WidokEcho })))
 const WidokUstawien = lazy(() => import('./modules/ustawienia/WidokUstawien').then((modul) => ({ default: modul.WidokUstawien })))
 const EdytorPersonalizacji = lazy(() => import('./modules/ustawienia/EdytorPersonalizacji').then((modul) => ({ default: modul.EdytorPersonalizacji })))
@@ -79,6 +80,7 @@ export default function App() {
     <Route path="/terminy" element={chron('terminy', <WidokTerminow />)} />
     <Route path="/finanse" element={chron('finanse', <WidokFinansow />)} />
     <Route path="/samochod" element={chron('samochod', <WidokSamochodu />)} />
+    <Route path="/dzisiaj" element={<WidokDzisiaj />} />
     <Route path="/echo" element={chron('echo', <WidokEcho />)} />
     <Route path="/ustawienia" element={chron('ustawienia', <WidokUstawien />)} />
     <Route path="/ustawienia/personalizacja" element={chron('ustawienia', <EdytorPersonalizacji />)} />

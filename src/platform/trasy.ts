@@ -36,6 +36,7 @@ const SCIEZKI_MODULOW: Record<NazwaModulu, string> = {
 
 const SCIEZKI_DEEP_LINKOW = new Set([
   '/',
+  '/dzisiaj',
   ...Object.values(SCIEZKI_MODULOW),
   '/ustawienia/personalizacja',
   '/dodaj',

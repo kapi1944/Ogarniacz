@@ -21,11 +21,15 @@ interface PozycjaMenu {
 const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
   { etykieta: 'Główne', pozycje: [
     { etykieta: 'Pulpit', adres: '/', ikona: LayoutDashboard },
-    { etykieta: 'Skrzynka', adres: '/skrzynka', modul: 'skrzynka', ikona: Inbox },
+    { etykieta: 'Dzisiaj', adres: '/dzisiaj', ikona: CalendarDays },
+    { etykieta: 'Echo', adres: '/echo', modul: 'echo', ikona: MessageCircle },
   ] },
-  { etykieta: 'Praca i czas', pozycje: [
+  { etykieta: 'Praca', pozycje: [
+    { etykieta: 'Skrzynka', adres: '/skrzynka', modul: 'skrzynka', ikona: Inbox },
     { etykieta: 'Zadania', adres: '/zadania', modul: 'zadania', ikona: CheckSquare },
     { etykieta: 'Projekty', adres: '/projekty', modul: 'projekty', ikona: PackageCheck },
+  ] },
+  { etykieta: 'Czas', pozycje: [
     { etykieta: 'Planer dnia', adres: '/planer', modul: 'planer', ikona: CalendarClock },
     { etykieta: 'Grafik pracy', adres: '/grafik', modul: 'grafik', ikona: Clock3 },
   ] },
@@ -39,7 +43,7 @@ const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
     { etykieta: 'Rachunki', adres: '/rachunki', modul: 'rachunki', ikona: WalletCards },
     { etykieta: 'Na mieście', adres: '/miasto', modul: 'miasto', ikona: CalendarDays },
   ] },
-  { etykieta: 'Wiedza i życie', pozycje: [
+  { etykieta: 'Wiedza', pozycje: [
     { etykieta: 'Cele', adres: '/cele', modul: 'cele', ikona: Target },
     { etykieta: 'Notatki', adres: '/notatki', modul: 'notatki', ikona: NotebookPen },
     { etykieta: 'Pomysły', adres: '/pomysly', modul: 'pomysly', ikona: Lightbulb },
@@ -48,16 +52,19 @@ const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
     { etykieta: 'Dokumenty', adres: '/dokumenty', modul: 'dokumenty', ikona: Files },
     { etykieta: 'Terminy ważności', adres: '/terminy', modul: 'terminy', ikona: FileClock },
   ] },
-  { etykieta: 'Pozostałe', pozycje: [
+  { etykieta: 'Finanse', pozycje: [
     { etykieta: 'Wydatki i budżet', adres: '/finanse', modul: 'finanse', ikona: CircleDollarSign },
+  ] },
+  { etykieta: 'Samochód', pozycje: [
     { etykieta: 'Samochód', adres: '/samochod', modul: 'samochod', ikona: Car },
-    { etykieta: 'Echo', adres: '/echo', modul: 'echo', ikona: MessageCircle },
+  ] },
+  { etykieta: 'Ustawienia', pozycje: [
     { etykieta: 'Ustawienia', adres: '/ustawienia', modul: 'ustawienia', ikona: Settings },
   ] },
 ]
 
 const wszystkiePozycje = grupy.flatMap((grupa) => grupa.pozycje)
-const glowneAdresyMobilne = new Set(['/', '/zadania', '/planer'])
+const glowneAdresyMobilne = new Set(['/', '/dzisiaj', '/echo'])
 
 export function DolnaNawigacjaMobilna({
   otworzSzybkieDodawanie,
@@ -105,9 +112,9 @@ export function DolnaNawigacjaMobilna({
     </>}
     <nav className="dolna-nawigacja" aria-label="Dolna nawigacja">
       <NavLink end to="/" className="dolna-nawigacja__element"><LayoutDashboard aria-hidden="true" /><span>Pulpit</span></NavLink>
-      <NavLink to="/zadania" className="dolna-nawigacja__element"><CheckSquare aria-hidden="true" /><span>Zadania</span></NavLink>
+      <NavLink to="/dzisiaj" className="dolna-nawigacja__element"><CalendarDays aria-hidden="true" /><span>Dzisiaj</span></NavLink>
       <button type="button" className="dolna-nawigacja__dodaj" onClick={otworzSzybkieDodawanie} aria-label="Szybko dodaj"><span><Plus aria-hidden="true" /></span><small>Dodaj</small></button>
-      <NavLink to="/planer" className="dolna-nawigacja__element"><CalendarClock aria-hidden="true" /><span>Planer</span></NavLink>
+      <NavLink to="/echo" className="dolna-nawigacja__element"><MessageCircle aria-hidden="true" /><span>Echo</span></NavLink>
       <button type="button" className={`dolna-nawigacja__element ${wiecejAktywne || wiecejOtwarte ? 'active' : ''}`} onClick={() => ustawWiecejOtwarte(true)} aria-haspopup="dialog" aria-expanded={wiecejOtwarte}><Ellipsis aria-hidden="true" /><span>Więcej</span></button>
     </nav>
   </>

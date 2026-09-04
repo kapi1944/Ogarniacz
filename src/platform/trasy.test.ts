@@ -6,6 +6,10 @@ describe('parser deep linków Ogarniacza', () => {
     expect(parsujDeepLink('ogarniacz://zadania')).toBe('/zadania')
   })
 
+  it('obsługuje trasę Dzisiaj', () => {
+    expect(parsujDeepLink('ogarniacz://dzisiaj')).toBe('/dzisiaj')
+  })
+
   it('odrzuca nieobsługiwany schemat', () => {
     expect(parsujDeepLink('https://zadania')).toBeNull()
   })
