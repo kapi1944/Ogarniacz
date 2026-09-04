@@ -142,6 +142,15 @@ function wersjaJdk(katalog) {
   return { katalog: resolve(katalog), wersja: Number(dopasowanie[1]), opis: tekst.split(/\r?\n/).find(Boolean)?.trim() ?? '' }
 }
 
+function javaZPath() {
+  const sciezka = sciezkiPolecenia(nazwaJava)[0]
+  if (!sciezka) return undefined
+  const wynik = wykonajPrzechwytywanie(sciezka, ['-version'])
+  const tekst = `${wynik.stdout}\n${wynik.stderr}`
+  const dopasowanie = /version\s+"(?:1\.)?(\d+)/i.exec(tekst)
+  return wynik.status === 0 && dopasowanie ? { sciezka, wersja: Number(dopasowanie[1]) } : undefined
+}
+
 function odkodujWartoscProperties(wartosc) {
   return wartosc
     .replace(/\\\\/g, '\\')
@@ -232,6 +241,7 @@ function zbierzDiagnostyke({ urzadzenieWymagane, wskazanySerial } = {}) {
   return {
     node: { poprawny: wersjaNode >= wymaganyNode, wersja: process.version },
     npm: { poprawny: npm.status === 0, wersja: npm.stdout.trim() },
+    javaPath: javaZPath(),
     jdk,
     znalezioneJdk,
     sdk,
@@ -250,7 +260,8 @@ function drukujRaport(diagnostyka) {
   console.log('OGARNIACZ ANDROID DOCTOR')
   console.log(`NODE: ${diagnostyka.node.poprawny ? 'OK' : 'BŁĄD'} — ${diagnostyka.node.wersja} (wymagany >= ${wymaganyNode})`)
   console.log(`NPM: ${diagnostyka.npm.poprawny ? `OK — ${diagnostyka.npm.wersja}` : 'BŁĄD — nie znaleziono npm'}`)
-  console.log(`JAVA: ${diagnostyka.jdk ? `OK — JDK ${diagnostyka.jdk.wersja}` : `BŁĄD — brak wymaganego JDK ${wymaganyJdk}`}`)
+  console.log(`JAVA PATH: ${diagnostyka.javaPath ? `OK — Java ${diagnostyka.javaPath.wersja} — ${diagnostyka.javaPath.sciezka}` : 'BRAK'}`)
+  console.log(`JDK: ${diagnostyka.jdk ? `OK — JDK ${diagnostyka.jdk.wersja}` : `BŁĄD — brak wymaganego JDK ${wymaganyJdk}`}`)
   if (diagnostyka.jdk) {
     const zrodlo = process.env.JAVA_HOME && resolve(process.env.JAVA_HOME) === diagnostyka.jdk.katalog ? 'OK' : 'AUTO'
     console.log(`JAVA_HOME: ${zrodlo} — ${diagnostyka.jdk.katalog}`)
@@ -384,6 +395,33 @@ function sprawdzKonfiguracjePodpisu() {
   return { plikKlucza, alias: wartosci.keyAlias }
 }
 
+function odczytajZmiennaBudowania(nazwa) {
+  if (process.env[nazwa]?.trim()) return process.env[nazwa].trim()
+  let wartosc
+  for (const nazwaPliku of ['.env', '.env.local', '.env.production', '.env.production.local']) {
+    const sciezka = join(katalogRepozytorium, nazwaPliku)
+    if (!existsSync(sciezka)) continue
+    for (const linia of readFileSync(sciezka, 'utf8').split(/\r?\n/)) {
+      const dopasowanie = new RegExp(`^\\s*${nazwa}\\s*=\\s*(.*)$`).exec(linia)
+      if (!dopasowanie) continue
+      const surowa = dopasowanie[1].trim()
+      wartosc = surowa.replace(/^(['"])(.*)\1$/, '$2').trim()
+    }
+  }
+  return wartosc
+}
+
+function wymagajAdresuHttps(nazwa, wartosc) {
+  if (!wartosc) throw new Error(`Brak ${nazwa}. Ustaw adres HTTPS przed budowaniem release.`)
+  try {
+    const adres = new URL(wartosc)
+    if (adres.protocol !== 'https:') throw new Error()
+    return adres.toString()
+  } catch {
+    throw new Error(`${nazwa} musi być prawidłowym adresem HTTPS.`)
+  }
+}
+
 function znajdzApkSigner(sdk) {
   const katalog = join(sdk, 'build-tools')
   if (!existsSync(katalog)) return undefined
@@ -411,6 +449,7 @@ function sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko) {
 
 async function wykonajRelease(opcje) {
   const podpisWstepny = sprawdzKonfiguracjePodpisu()
+  wymagajAdresuHttps('VITE_ANDROID_UPDATE_MANIFEST_URL', odczytajZmiennaBudowania('VITE_ANDROID_UPDATE_MANIFEST_URL'))
   const { diagnostyka, srodowisko } = wymagajSrodowiska()
   zbudujFrontend(srodowisko)
   synchronizujCapacitor(srodowisko)

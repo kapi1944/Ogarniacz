@@ -88,6 +88,10 @@ public class AktualizacjePlugin extends Plugin {
             return;
         }
 
+        getBridge().executeOnMainThread(() -> uruchomInstalatorNaWatkuGlownym(wywolanie, nazwaPliku));
+    }
+
+    private void uruchomInstalatorNaWatkuGlownym(PluginCall wywolanie, String nazwaPliku) {
         try {
             File katalog = new File(getContext().getCacheDir(), KATALOG_AKTUALIZACJI);
             File plikApk = bezpiecznyPlik(katalog, nazwaPliku);

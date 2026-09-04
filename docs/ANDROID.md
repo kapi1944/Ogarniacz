@@ -4,6 +4,8 @@
 
 Włącz na telefonie **Opcje programistyczne → Debugowanie USB**, podłącz go pierwszy raz i zaakceptuj klucz RSA. Dla Wireless Debugging sparuj/połącz telefon narzędziem Android Studio albo standardowymi poleceniami `adb pair` i `adb connect`. Ogarniacz nie tworzy własnego mechanizmu parowania — gdy `adb devices` widzi urządzenie, ten sam pipeline działa przez USB i Wi-Fi.
 
+Androidowy toolchain wymaga Node.js 22 lub nowszego oraz JDK 21.
+
 ```bash
 npm run android:doctor
 npm run android:deploy
@@ -43,6 +45,8 @@ Build aplikacji przeznaczonej do aktualizacji musi znać pełny adres HTTPS mani
 $env:VITE_ANDROID_UPDATE_MANIFEST_URL='https://ogarniacz.local/updates/latest.json'
 npm run android:release
 ```
+
+Zamiast zmiennej procesu możesz zapisać adres w lokalnym, ignorowanym pliku `.env.local`.
 
 Opcjonalny absolutny `apkUrl`:
 
