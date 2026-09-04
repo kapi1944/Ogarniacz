@@ -14,6 +14,11 @@ def wlasciwosciPodpisu = new Properties()
 if (plikWlasciwosciPodpisu.exists()) {
     plikWlasciwosciPodpisu.withInputStream { wlasciwosciPodpisu.load(it) }
 }
+def wymaganePolaPodpisu = ['storeFile', 'storePassword', 'keyAlias', 'keyPassword']
+def brakujacePolaPodpisu = wymaganePolaPodpisu.findAll { pole ->
+    !wlasciwosciPodpisu.getProperty(pole)?.trim() || wlasciwosciPodpisu.getProperty(pole).contains('UZUPELNIJ')
+}
+def czyKonfiguracjaPodpisuPelna = plikWlasciwosciPodpisu.exists() && brakujacePolaPodpisu.isEmpty()
 
 android {
     namespace = "pl.ogarniacz.app"
@@ -33,7 +38,7 @@ android {
     }
     signingConfigs {
         release {
-            if (plikWlasciwosciPodpisu.exists()) {
+            if (czyKonfiguracjaPodpisuPelna) {
                 storeFile rootProject.file(wlasciwosciPodpisu.getProperty('storeFile'))
                 storePassword wlasciwosciPodpisu.getProperty('storePassword')
                 keyAlias wlasciwosciPodpisu.getProperty('keyAlias')
@@ -43,7 +48,7 @@ android {
     }
     buildTypes {
         release {
-            if (plikWlasciwosciPodpisu.exists()) {
+            if (czyKonfiguracjaPodpisuPelna) {
                 signingConfig signingConfigs.release
             }
             minifyEnabled false
@@ -56,8 +61,14 @@ gradle.taskGraph.whenReady { grafZadan ->
     def czyPowstajeArtefaktRelease = grafZadan.allTasks.any { zadanie ->
         zadanie.path == ':app:packageRelease' || zadanie.path == ':app:packageReleaseBundle'
     }
-    if (czyPowstajeArtefaktRelease && !plikWlasciwosciPodpisu.exists()) {
-        throw new GradleException('Brak android/keystore.properties z danymi istniejącego klucza release.')
+    if (czyPowstajeArtefaktRelease && !czyKonfiguracjaPodpisuPelna) {
+        def szczegoly = plikWlasciwosciPodpisu.exists()
+            ? " Brakujące pola: ${brakujacePolaPodpisu.join(', ')}."
+            : ''
+        throw new GradleException("Brak kompletnego android/keystore.properties z danymi istniejącego klucza release.${szczegoly}")
+    }
+    if (czyPowstajeArtefaktRelease && !rootProject.file(wlasciwosciPodpisu.getProperty('storeFile')).exists()) {
+        throw new GradleException('Nie znaleziono pliku stałego release keystore wskazanego w android/keystore.properties.')
     }
 }
 

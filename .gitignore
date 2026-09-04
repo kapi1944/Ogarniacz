@@ -13,8 +13,10 @@ dist-server
 dist-ssr
 *.local
 android/keystore.properties
-android/*.jks
-android/*.keystore
+*.jks
+*.keystore
+*.p12
+*.pfx
 
 # Editor directories and files
 .vscode/*
