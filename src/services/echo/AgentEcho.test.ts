@@ -271,6 +271,16 @@ describe('Agent Echo', () => {
     expect(zmiana.wartosciDomyslne).toEqual([])
   })
 
+  it('przyjmuje potoczną korektę ostatniego przypomnienia bez ponownego wskazywania go', async () => {
+    const { agent, przeloz } = utworzAgentaRozmowy()
+    await agent.obsluz('Przypomnij mi jutro po pracy kupić karmę.')
+
+    const odpowiedz = await agent.obsluz('A właściwie zrób to o 18.')
+
+    expect(new Date(przeloz.mock.calls[0][0].czas).getHours()).toBe(18)
+    expect(odpowiedz.tekst).toMatch(/^Jasne, przełożyłem/)
+  })
+
   it('czyta, wyszukuje, przekłada i usuwa pojedyncze zadanie przez domain tools', async () => {
     await baza.tabela('zadania').clear()
     await baza.tabela('dziennikEcho').clear()

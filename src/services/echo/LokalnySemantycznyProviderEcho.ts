@@ -366,8 +366,12 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       }
     }
 
-    const zmianaGodziny = lista.some(({ uproszczone: slowo }) => ['zmien', 'ustaw'].includes(slowo)) && lista.some(({ uproszczone: slowo }) => slowo.startsWith('godzin')) && czas.godzina
-    if (zmianaGodziny && ostatnie) {
+    const zmianaGodziny = (
+      lista.some(({ uproszczone: slowo }) => ['zmien', 'ustaw'].includes(slowo)) && lista.some(({ uproszczone: slowo }) => slowo.startsWith('godzin'))
+    ) || (
+      tokeny.has('wlasciwie') && lista.some(({ uproszczone: slowo }) => slowo.startsWith('zrob')) && lista.some(({ uproszczone: slowo }) => ['to', 'tamto'].includes(slowo))
+    )
+    if (zmianaGodziny && czas.godzina && ostatnie) {
       const obecnyCzas = czasyPrzypomnienia(zadanie.kontekstRozmowy, ostatnie.id).at(-1)
       if (obecnyCzas) {
         const obecny = rozlozCzasIso(obecnyCzas)

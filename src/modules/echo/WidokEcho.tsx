@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Bot, Mic, RotateCcw, Send, ShieldCheck, Square, Volume2 } from 'lucide-react'
 import { Karta, ModalPotwierdzenia, NaglowekWidoku, Znacznik } from '../../components/Interfejs'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
@@ -23,7 +23,13 @@ export function WidokEcho() {
   const [wiadomosci, ustawWiadomosci] = useState<Wiadomosc[]>([{ id: 'powitanie', autor: 'echo', tresc: 'Napisz albo powiedz, co masz na głowie. Z Echo możesz rozmawiać normalnie.' }])
   const [oczekujacaAkcja, ustawOczekujacaAkcje] = useState<AkcjaDoPotwierdzeniaEcho>()
   const [bladGlosu, ustawBladGlosu] = useState('')
+  const [wysylanie, ustawWysylanie] = useState(false)
+  const koniecRozmowy = useRef<HTMLDivElement>(null)
   const { dane: dziennik } = useRepozytorium('dziennikEcho')
+
+  useEffect(() => {
+    koniecRozmowy.current?.scrollIntoView({ block: 'end', behavior: 'smooth' })
+  }, [wiadomosci])
 
   const dodajOdpowiedz = (odpowiedz: Awaited<ReturnType<EchoService['obsluz']>>) => {
     ustawTryb(odpowiedz.tryb)
@@ -52,10 +58,15 @@ export function WidokEcho() {
   }, [kontrolerGlosu])
 
   const wyslij = async (wypowiedz: string, zrodlo: ZrodloWejsciaEcho = 'tekst') => {
-    if (!wypowiedz.trim()) return
+    if (!wypowiedz.trim() || wysylanie) return
     ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'uzytkownik', tresc: wypowiedz }])
     ustawTekst('')
-    dodajOdpowiedz(await echo.obsluz(wypowiedz, zrodlo))
+    ustawWysylanie(true)
+    try {
+      dodajOdpowiedz(await echo.obsluz(wypowiedz, zrodlo))
+    } finally {
+      ustawWysylanie(false)
+    }
   }
 
   const rozpocznijGlos = () => {
@@ -111,20 +122,23 @@ export function WidokEcho() {
     <NaglowekWidoku tytul="Echo" opis="Napisz albo powiedz, co masz na głowie. Z Echo możesz rozmawiać normalnie." />
     <section className="siatka-echo">
       <Karta klasa="panel-rozmowy">
-        <div className={`stan-glosu stan-glosu--${stan}`} aria-live="polite">{etykietyStanu[stan]}</div>
-        <div className="wiadomosci">
+        <div className={`stan-glosu stan-glosu--${stan}`} aria-live="polite">{wysylanie ? 'Układam odpowiedź…' : etykietyStanu[stan]}</div>
+        <div className="wiadomosci" role="log" aria-live="polite" aria-label="Rozmowa z Echo">
           {wiadomosci.map((wiadomosc) => <article className={`wiadomosc wiadomosc--${wiadomosc.autor}`} key={wiadomosc.id}>
             {wiadomosc.autor === 'echo' && <Bot aria-hidden="true" />}
-            <div><p>{wiadomosc.tresc}</p>{wiadomosc.wartosciDomyslne?.map((wartosc) => <div className="tekst-pomocniczy" key={`${wartosc.pole}-${wartosc.wartosc}`}><Znacznik wariant="informacja">przyjęto automatycznie</Znacznik> {wartosc.opis}: <strong>{wartosc.wartosc}</strong> <button type="button" className="przycisk przycisk--maly" onClick={() => ustawTekst('Zmień godzinę na ')}>Zmień</button></div>)}{wiadomosc.ryzyko && wiadomosc.ryzyko !== 'niskie' && <Znacznik wariant={wiadomosc.ryzyko === 'wysokie' ? 'blad' : 'ostrzezenie'}>wymaga uwagi</Znacznik>}{wiadomosc.autor === 'echo' && <button type="button" className="przycisk-ikona" title="Odczytaj odpowiedź" onClick={() => void przeczytaj(wiadomosc.tresc)}><Volume2 aria-hidden="true" /></button>}</div>
+            <div><small className="wiadomosc__autor">{wiadomosc.autor === 'echo' ? 'Echo' : 'Ty'}</small><p>{wiadomosc.tresc}</p>{wiadomosc.wartosciDomyslne?.map((wartosc) => <div className="wartosc-domyslna" key={`${wartosc.pole}-${wartosc.wartosc}`}><Znacznik wariant="informacja">przyjęto automatycznie</Znacznik> {wartosc.opis}: <strong>{wartosc.wartosc}</strong> <button type="button" className="przycisk przycisk--maly" onClick={() => ustawTekst('A właściwie ustaw godzinę na ')}>Popraw</button></div>)}{wiadomosc.ryzyko && wiadomosc.ryzyko !== 'niskie' && <Znacznik wariant={wiadomosc.ryzyko === 'wysokie' ? 'blad' : 'ostrzezenie'}>wymaga uwagi</Znacznik>}{wiadomosc.autor === 'echo' && <button type="button" className="przycisk-ikona" title="Odczytaj odpowiedź" onClick={() => void przeczytaj(wiadomosc.tresc)}><Volume2 aria-hidden="true" /></button>}</div>
           </article>)}
+          {wysylanie && <article className="wiadomosc wiadomosc--echo wiadomosc--oczekiwanie"><Bot aria-hidden="true" /><div><small className="wiadomosc__autor">Echo</small><p>Chwila, sprawdzam kontekst rozmowy…</p></div></article>}
+          <div ref={koniecRozmowy} />
         </div>
         {bladGlosu && <p className="tekst-bledu">{bladGlosu}</p>}
         <form className="formularz-echo" onSubmit={(zdarzenie: FormEvent) => { zdarzenie.preventDefault(); void wyslij(tekst) }}>
           <button type="button" className="przycisk-ikona" title={stan === 'mowienie' ? 'Przerwij Echo i mów' : 'Powiedz do Echo'} onClick={rozpocznijGlos}><Mic aria-hidden="true" /></button>
-          <input value={tekst} onChange={(zdarzenie) => ustawTekst(zdarzenie.target.value)} placeholder="Co masz na głowie?" />
-          <button type="submit" className="przycisk przycisk--glowny"><Send aria-hidden="true" />Wyślij</button>
+          <input value={tekst} onChange={(zdarzenie) => ustawTekst(zdarzenie.target.value)} placeholder="Co masz na głowie? Możesz też poprawić poprzednią odpowiedź." disabled={wysylanie} />
+          <button type="submit" className="przycisk przycisk--glowny" disabled={wysylanie}><Send aria-hidden="true" />Wyślij</button>
         </form>
         <div className="akcje-glosu">
+          {!wysylanie && wiadomosci.length > 1 && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawTekst('A właściwie ')}>Popraw poprzednią interpretację</button>}
           {sesjaAktywna && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void kontrolerGlosu.anuluj()}><Square aria-hidden="true" />Anuluj rozmowę</button>}
           {stan === 'blad' && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void kontrolerGlosu.ponow()}><RotateCcw aria-hidden="true" />Spróbuj ponownie</button>}
         </div>

@@ -398,9 +398,13 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .wiadomosc { display: flex; max-width: 82%; align-items: flex-start; gap: 8px; }
 .wiadomosc > svg { margin-top: 8px; color: var(--akcent); }
 .wiadomosc > div { padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: 4px 12px 12px; }
+.wiadomosc__autor { display: block; margin-bottom: 4px; color: var(--tekst-2); font-size: .67rem; font-weight: 760; letter-spacing: .04em; text-transform: uppercase; }
 .wiadomosc p { margin: 0 0 6px; font-size: .86rem; }
 .wiadomosc--uzytkownik { align-self: flex-end; }
 .wiadomosc--uzytkownik > div { color: var(--ui-text-on-accent); background: var(--akcent); border-color: var(--akcent); border-radius: 12px 4px 12px 12px; }
+.wiadomosc--uzytkownik .wiadomosc__autor { color: color-mix(in srgb, var(--ui-text-on-accent) 78%, transparent); }
+.wiadomosc--oczekiwanie { opacity: .78; }
+.wartosc-domyslna { display: flex; align-items: center; flex-wrap: wrap; margin-top: 6px; gap: 5px; color: var(--tekst-2); font-size: .74rem; }
 .wiadomosc .przycisk-ikona { width: 26px; min-height: 26px; margin-left: 5px; padding: 3px; vertical-align: middle; }
 .formularz-echo { display: grid; grid-template-columns: 38px 1fr auto; padding: 12px; gap: 7px; background: var(--panel-2); border-top: 1px solid var(--obramowanie); }
 .formularz-echo input { min-width: 0; padding: 8px 10px; color: var(--tekst); background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: 8px; }
