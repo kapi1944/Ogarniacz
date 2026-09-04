@@ -60,7 +60,7 @@ export function SilnikPrzypomnien() {
     return () => {
       anulowano = true
     }
-  }, [dane, repozytorium, teraz, ustawienia.powiadomienia, wznowienie])
+  }, [dane, repozytorium, teraz, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach, wznowienie])
 
   return null
 }

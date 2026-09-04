@@ -52,6 +52,7 @@ function kanalDlaPrzypomnienia(przypomnienie: Przypomnienie): KanalPowiadomienia
 }
 
 export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, ukrywajSzczegolyZdrowotne = false): PowiadomieniePlatformowe | undefined {
+  if (przypomnienie.usunietoAt) return undefined
   if (!STANY_DO_DOSTARCZENIA.has(przypomnienie.stan)) return undefined
   const termin = czasUruchomienia(przypomnienie)
   if (!termin || Number.isNaN(termin.getTime())) return undefined

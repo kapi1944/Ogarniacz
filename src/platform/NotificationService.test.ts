@@ -93,6 +93,10 @@ describe('mapowanie przypomnienia na kanał platformowy', () => {
   it('nie mapuje zakończonego przypomnienia', () => {
     expect(mapujPrzypomnienieNaPowiadomienie(przypomnienie({ stan: 'wykonane' }))).toBeUndefined()
   })
+
+  it('nie mapuje usuniętego przypomnienia', () => {
+    expect(mapujPrzypomnienieNaPowiadomienie(przypomnienie({ usunietoAt: '2026-09-01T09:00:00.000Z' }))).toBeUndefined()
+  })
 })
 
 describe('routing sourceRef', () => {

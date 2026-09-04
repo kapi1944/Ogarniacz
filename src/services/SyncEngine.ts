@@ -102,6 +102,17 @@ export async function oznaczOczekujacaSynchronizacje(online = typeof navigator =
   })
 }
 
+export async function oznaczSynchronizacjeOffline(): Promise<void> {
+  const obecny = await pobierzStanSynchronizacji()
+  if (obecny.stan === 'konflikt') return
+  await baza.tabela('stanSynchronizacji').put({
+    ...obecny,
+    stan: 'offline',
+    ostatniBlad: undefined,
+    updatedAt: new Date().toISOString(),
+  })
+}
+
 export async function odtworzOczekujacaSynchronizacje(online = typeof navigator === 'undefined' || navigator.onLine): Promise<boolean> {
   const obecny = await pobierzStanSynchronizacji()
   if (obecny.stan === 'synchronizacja' || obecny.stan === 'konflikt') return false

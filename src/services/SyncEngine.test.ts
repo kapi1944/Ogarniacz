@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { RepozytoriumZdalneInMemory } from '../data/RepozytoriumZdalneInMemory'
 import { utworzZadanie } from './ZadaniaService'
-import { nazwyTabelSynchronizowanych, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
+import { nazwyTabelSynchronizowanych, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
 
 const CZAS_SYNCHRONIZACJI = '2026-09-01T12:00:00.000Z'
 
@@ -221,5 +221,11 @@ describe.sequential('SyncEngine', () => {
     zdalne.ustawOnline(true)
     await expect(zBledem.synchronizuj(zdalne)).resolves.toMatchObject({ wyslane: 1, stan: 'zsynchronizowano' })
     expect((await pobierzStanSynchronizacji()).stan).toBe('zsynchronizowano')
+  })
+
+  it('ustawia status offline natychmiast po utracie sieci', async () => {
+    await oznaczSynchronizacjeOffline()
+
+    expect((await pobierzStanSynchronizacji()).stan).toBe('offline')
   })
 })

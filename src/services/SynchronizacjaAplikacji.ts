@@ -2,10 +2,9 @@ import { nasluchujZmianDanych } from '../data/ZdarzeniaDanych'
 import { RepozytoriumZdalneHttp } from '../data/RepozytoriumZdalneHttp'
 import type { RepozytoriumZdalne } from '../data/DostawcaSynchronizacji'
 import { platforma } from '../platform/platforma'
-import { nazwyTabelSynchronizowanych, oznaczOczekujacaSynchronizacje, odtworzOczekujacaSynchronizacje, SyncEngine } from './SyncEngine'
+import { nazwyTabelSynchronizowanych, oznaczOczekujacaSynchronizacje, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, SyncEngine } from './SyncEngine'
 
 const syncEngine = new SyncEngine()
-const INTERWAL_SYNCHRONIZACJI_MS = 5 * 60 * 1000
 const OPOZNIENIE_PO_ZMIANIE_MS = 3_000
 let repozytoriumZdalne: RepozytoriumZdalne | undefined
 let inicjalizacja: Promise<() => void> | undefined
@@ -45,18 +44,19 @@ export function inicjalizujSynchronizacjeAplikacji(): Promise<() => void> {
       opoznienie = setTimeout(uruchomBezBlokowania, OPOZNIENIE_PO_ZMIANIE_MS)
     })
     const poOdzyskaniuSieci = () => uruchomBezBlokowania()
+    const poUtracieSieci = () => { void oznaczSynchronizacjeOffline() }
     window.addEventListener('online', poOdzyskaniuSieci)
+    window.addEventListener('offline', poUtracieSieci)
     const zatrzymajCyklZycia = await platforma.cyklZycia.nasluchuj((stan) => {
       if (stan === 'aktywny') uruchomBezBlokowania()
     })
-    const interwal = setInterval(uruchomBezBlokowania, INTERWAL_SYNCHRONIZACJI_MS)
     uruchomBezBlokowania()
 
     return () => {
       poZmianie()
       zatrzymajCyklZycia()
       window.removeEventListener('online', poOdzyskaniuSieci)
-      clearInterval(interwal)
+      window.removeEventListener('offline', poUtracieSieci)
       if (opoznienie) clearTimeout(opoznienie)
     }
   })()
