@@ -83,7 +83,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
       />
       {wlasciwosci.filtr}
       {wlasciwosci.dane.length === 0 ? (
-        <PustyStan tytul="Na razie jest tu pusto" opis="Dodaj pierwszy element, aby zacząć korzystać z modułu." akcja={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}>Dodaj</button>} />
+        <PustyStan tytul="Na razie jest tu pusto" opis={`Wybierz „${wlasciwosci.etykietaDodawania}”, aby zacząć korzystać z tej części.`} akcja={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}>{wlasciwosci.etykietaDodawania}</button>} />
       ) : (
         <div className="lista-rekordow">
           {wlasciwosci.dane.map((element) => (

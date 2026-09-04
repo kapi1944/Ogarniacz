@@ -128,7 +128,7 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .pasek-edytora svg { width: 16px; }
 .zawartosc { width: 100%; max-width: 1760px; margin: 0 auto; padding: clamp(16px, 2.4vw, 30px); }
 .widok { display: grid; gap: 16px; min-width: 0; }
-.naglowek-widoku { display: flex; align-items: flex-start; justify-content: space-between; min-height: 50px; gap: 20px; }
+.naglowek-widoku { display: flex; align-items: flex-start; justify-content: space-between; min-height: 50px; padding-bottom: 4px; gap: 20px; border-bottom: 1px solid color-mix(in srgb, var(--obramowanie) 72%, transparent); }
 .naglowek-widoku p { margin: 0; color: var(--tekst-2); font-size: .9rem; }
 .naglowek-widoku__akcje { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
@@ -163,7 +163,7 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .naglowek-karty p { margin: 0; color: var(--tekst-2); font-size: .82rem; }
 .naglowek-karty > div:last-child { display: flex; gap: 6px; }
 
-.pusty-stan { display: grid; justify-items: center; padding: 32px 18px; gap: 6px; color: var(--tekst-2); text-align: center; border: 1px dashed var(--obramowanie-mocne); border-radius: 10px; }
+.pusty-stan { display: grid; justify-items: center; min-height: 166px; padding: 32px 18px; gap: 6px; color: var(--tekst-2); background: linear-gradient(145deg, color-mix(in srgb, var(--akcent-jasny) 28%, var(--panel)), var(--panel) 62%); text-align: center; border: 1px dashed var(--obramowanie-mocne); border-radius: var(--promien-karty); }
 .pusty-stan svg { width: 30px; height: 30px; margin-bottom: 4px; opacity: .65; }
 .pusty-stan strong { color: var(--tekst); }
 .pusty-stan span { max-width: 440px; font-size: .86rem; }
@@ -212,20 +212,20 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .wyniki-wyszukiwania > button:hover { background: var(--panel-2); border-color: var(--obramowanie); }
 .wyniki-wyszukiwania > button span { color: var(--tekst-2); font-size: .76rem; text-transform: capitalize; }
 
-.pasek-filtrow { display: flex; align-items: center; justify-content: space-between; padding: 10px; gap: 12px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: 10px; }
+.pasek-filtrow { display: flex; align-items: center; justify-content: space-between; padding: 10px; gap: 12px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: 10px; box-shadow: 0 1px 2px rgb(25 45 22 / 4%); }
 .segmenty { display: flex; gap: 4px; overflow-x: auto; }
 .segmenty button, .zakladki-list button { min-height: 32px; padding: 5px 10px; color: var(--tekst-2); background: transparent; border: 1px solid transparent; border-radius: 7px; cursor: pointer; font-size: .76rem; white-space: nowrap; }
 .segmenty button:hover, .segmenty button.aktywny, .zakladki-list button.aktywna { color: var(--akcent); background: var(--akcent-jasny); border-color: color-mix(in srgb, var(--akcent) 35%, transparent); }
 .lista-rekordow { display: grid; gap: 8px; }
 .lista-rekordow--wewnetrzna { margin-top: 10px; }
-.rekord { display: flex; min-width: 0; align-items: center; padding: 12px 13px; gap: 14px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: 10px; transition: border-color .2s ease, box-shadow .2s ease; }
-.rekord:hover { border-color: var(--obramowanie-mocne); }
+.rekord { display: flex; min-width: 0; min-height: 64px; align-items: center; padding: 12px 13px; gap: 14px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: 10px; transition: background .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.rekord:hover, .rekord:focus-within { background: color-mix(in srgb, var(--akcent-jasny) 16%, var(--panel)); border-color: color-mix(in srgb, var(--akcent) 34%, var(--obramowanie)); box-shadow: 0 3px 12px rgb(25 45 22 / 7%); }
 .rekord--podswietlony { border-color: var(--akcent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--akcent) 18%, transparent); }
 .rekord__tresc { flex: 1; min-width: 0; }
 .rekord__tresc h3 { overflow-wrap: anywhere; }
 .rekord__szczegoly { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; color: var(--tekst-2); font-size: .76rem; }
 .rekord__szczegoly p { flex-basis: 100%; margin: 4px 0 0; color: var(--tekst-2); }
-.rekord__akcje { display: flex; align-items: center; justify-content: flex-end; gap: 5px; flex-wrap: wrap; }
+.rekord__akcje { display: flex; align-items: center; justify-content: flex-end; min-height: 36px; gap: 5px; flex-wrap: wrap; }
 .rekord__akcje select { width: auto; min-height: 32px; padding: 4px 7px; font-size: .74rem; }
 .menu-konwersji { display: flex; gap: 3px; padding: 3px; background: var(--panel-2); border-radius: 7px; }
 .menu-konwersji button { display: grid; width: 29px; height: 29px; place-items: center; color: var(--tekst-2); background: transparent; border: 0; border-radius: 5px; cursor: pointer; }
