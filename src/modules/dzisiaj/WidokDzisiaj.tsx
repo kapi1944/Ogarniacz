@@ -1,108 +1,116 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertCircle, CalendarClock, Check, Clock3, MessageCircle, Pill, Plus, Sparkles } from 'lucide-react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { addDays, format } from 'date-fns'
+import { CalendarDays, Check, ChevronRight, Clock3, MessageCircle, Plus, Undo2 } from 'lucide-react'
 import { Karta, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
-import { dzisiajIso } from '../../domain/fabryki'
-import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { aktywnePrzypomnienia, zakonczPrzypomnienie } from '../../services/PrzypomnieniaService'
-import { czyZadanieNaDzis, czyZadanieZalegle, ukonczZadanie } from '../../services/ZadaniaService'
-import { generujDawkiDnia, zapiszStatusDawki } from '../../services/LekiService'
 import { useAplikacja } from '../../app/KontekstAplikacji'
+import { dzisiajIso } from '../../domain/fabryki'
+import { poprawnaGodzinaTerminu } from '../../domain/logikaTerminuZadania'
+import type { ElementOgarniacza } from '../../domain/elementyOgarniacza'
+import { useRepozytorium } from '../../hooks/useRepozytorium'
+import { DostawcaFinansowPulpitu } from '../../providers/DostawcaFinansowPulpitu'
+import { DostawcaLekowPulpitu } from '../../providers/DostawcaLekowPulpitu'
+import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
+import { DostawcaSamochoduPulpitu } from '../../providers/DostawcaSamochoduPulpitu'
+import { DostawcaWizytPulpitu } from '../../providers/DostawcaWizytPulpitu'
+import { DostawcaZadanPulpitu } from '../../providers/DostawcaZadanPulpitu'
+import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
+import { repozytoriumElementowZadan } from '../../data/RepozytoriumElementowZadan'
+import { adresReferencjiZrodla } from '../pulpit/logikaKafelkow'
+import { utworzHarmonogramDnia } from '../pulpit/logikaOsiCzasu'
+import { sortujElementyDzisiaj, wybierzElementTeraz } from '../pulpit/logikaDniaPulpitu'
+
+const dostawcaZadan = new DostawcaZadanPulpitu()
+const dostawcaLekow = new DostawcaLekowPulpitu()
+const dostawcaWizyt = new DostawcaWizytPulpitu()
+const dostawcaFinansow = new DostawcaFinansowPulpitu()
+const dostawcaSamochodu = new DostawcaSamochoduPulpitu()
+const dostawcaZakupow = new DostawcaZakupowPulpitu()
+const dostawcaNotatek = new DostawcaNotatekPulpitu()
+
+function etykietaTypu(element: ElementOgarniacza): string {
+  const etykiety = { zadanie: 'Zadanie', lek: 'Lek', wizyta: 'Wizyta', platnosc: 'Płatność', samochod: 'Samochód', zakupy: 'Zakupy', notatka: 'Notatka', wydarzenie: 'Wydarzenie' }
+  return etykiety[element.typ as keyof typeof etykiety] ?? 'Element dnia'
+}
+
+function stanCzasu(element: ElementOgarniacza, teraz: Date): 'przeszly' | 'teraz' | 'najblizszy' | 'pozniej' {
+  if (!element.godzina) return 'pozniej'
+  const [godzina, minuta] = element.godzina.split(':').map(Number)
+  const minutyElementu = godzina * 60 + minuta
+  const minutyTeraz = teraz.getHours() * 60 + teraz.getMinutes()
+  if (element.czasTrwaniaMinuty && minutyElementu <= minutyTeraz && minutyTeraz < minutyElementu + element.czasTrwaniaMinuty) return 'teraz'
+  return minutyElementu < minutyTeraz ? 'przeszly' : 'pozniej'
+}
 
 export function WidokPulpitu() {
   const data = dzisiajIso()
-  const teraz = new Date()
-  const { moze, otworzSzybkieDodawanie } = useAplikacja()
-  const { dane: zadania, repozytorium: repoZadan } = useRepozytorium('zadania')
-  const { dane: leki } = useRepozytorium('leki')
-  const { dane: wpisyLekow, repozytorium: repoWpisow } = useRepozytorium('dziennikLekow')
-  const { dane: przypomnienia, repozytorium: repoPrzypomnien } = useRepozytorium('przypomnienia')
-  const { dane: bloki } = useRepozytorium('blokiCzasu')
-  const { dane: wizyty } = useRepozytorium('wizyty')
-  const { dane: rachunki } = useRepozytorium('rachunki')
-  const { dane: terminy } = useRepozytorium('terminyWaznosci')
-  const { dane: nawyki } = useRepozytorium('nawyki')
-  const dawki = moze('leki') ? generujDawkiDnia(leki, wpisyLekow, data) : []
-  const zalegle = moze('zadania') ? zadania.filter((zadanie) => czyZadanieZalegle(zadanie, data)) : []
-  const dzisiejsze = moze('zadania') ? zadania.filter((zadanie) => czyZadanieNaDzis(zadanie, data)) : []
-  const aktywne = moze('przypomnienia') ? aktywnePrzypomnienia(przypomnienia, teraz) : []
-  const rachunkiDoReakcji = moze('rachunki') ? rachunki.filter((rachunek) => rachunek.status === 'niezaplacony' && rachunek.termin <= data) : []
-  const terminyBlisko = moze('terminy') ? terminy.filter((termin) => termin.status !== 'odnowione' && termin.dataWaznosci <= new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)) : []
-  const wizytyDzis = moze('wizyty') ? wizyty.filter((wizyta) => wizyta.status === 'umowiona' && wizyta.data === data) : []
-  const blokiDzis = moze('planer') ? bloki.filter((blok) => blok.poczatek.startsWith(data) && ['zaakceptowany', 'propozycja'].includes(blok.status)) : []
-  const biezacyBlok = blokiDzis.find((blok) => Date.parse(blok.poczatek) <= teraz.getTime() && Date.parse(blok.koniec) > teraz.getTime())
-  const nastepnyBlok = blokiDzis.filter((blok) => Date.parse(blok.poczatek) > teraz.getTime()).sort((a, b) => a.poczatek.localeCompare(b.poczatek))[0]
-  const wagaPriorytetu = { niski: 0, normalny: 1, wysoki: 2, krytyczny: 3 }
-  const najwazniejsze = [...zalegle, ...dzisiejsze].sort((a, b) => wagaPriorytetu[b.priorytet] - wagaPriorytetu[a.priorytet])[0]
-  const liczbaReakcji = zalegle.length + dzisiejsze.length + aktywne.length + rachunkiDoReakcji.length + terminyBlisko.length + dawki.filter((dawka) => dawka.status === 'oczekuje').length
+  const [teraz, ustawTeraz] = useState(() => new Date())
+  const { moze, otworzSzybkieDodawanie, ustawienia } = useAplikacja()
+  const { dane: wyjatki } = useRepozytorium('wyjatkiGrafiku')
 
-  const osDnia = [
-    ...blokiDzis.map((blok) => ({ id: blok.id, czas: new Date(blok.poczatek).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }), tytul: blok.tytul, typ: blok.typ })),
-    ...wizytyDzis.map((wizyta) => ({ id: `wizyta-${wizyta.id}`, czas: wizyta.godzina ?? '—', tytul: wizyta.nazwa, typ: 'wizyta' })),
-    ...dawki.map((dawka) => ({ id: dawka.idWystapienia, czas: dawka.planowanaGodzina, tytul: `${dawka.lek.nazwa} — ${dawka.lek.dawkaInstrukcja}`, typ: 'lek' })),
-  ].sort((a, b) => a.czas.localeCompare(b.czas))
+  useEffect(() => {
+    const identyfikator = window.setInterval(() => ustawTeraz(new Date()), 60_000)
+    return () => window.clearInterval(identyfikator)
+  }, [])
 
-  const wykonaj = async (zadanie: (typeof zadania)[number]) => {
-    const wynik = ukonczZadanie(zadanie)
-    await repoZadan.zapisz(wynik.wykonane)
-    if (wynik.nastepne) await repoZadan.zapisz(wynik.nastepne)
+  const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
+  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia), [data, ustawienia.harmonogram, wyjatekDnia])
+  const elementyDnia = useLiveQuery(async () => {
+    const zakres = { od: data, do: data }
+    const [zadania, leki, wizyty, finanse, samochod, zakupy, notatki] = await Promise.all([
+      dostawcaZadan.pobierzElementy(zakres), dostawcaLekow.pobierzElementy(zakres), dostawcaWizyt.pobierzElementy(zakres),
+      dostawcaFinansow.pobierzElementy(zakres), dostawcaSamochodu.pobierzElementy(zakres), dostawcaZakupow.pobierzElementy(zakres), dostawcaNotatek.pobierzElementy(zakres),
+    ])
+    return [...zadania, ...leki, ...wizyty, ...finanse.filter((element) => element.typ === 'platnosc'), ...samochod, ...zakupy, ...notatki]
+  }, [data], [])
+  const wszystkieZadania = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: '1900-01-01', do: '9999-12-31' }), [], [])
+
+  const zaplanowane = useMemo(() => elementyDnia
+    .filter((element) => element.trybTerminu === 'o_godzinie' && poprawnaGodzinaTerminu(element.godzina))
+    .filter((element) => element.typ === 'lek' || (element.status !== 'wykonany' && element.status !== 'anulowany'))
+    .sort((a, b) => (a.godzina ?? '').localeCompare(b.godzina ?? '') || a.tytul.localeCompare(b.tytul, 'pl')), [elementyDnia])
+  const bezGodziny = useMemo(() => sortujElementyDzisiaj(elementyDnia, data).filter((element) => !element.godzina), [data, elementyDnia])
+  const elementTeraz = useMemo(() => wybierzElementTeraz(elementyDnia, data, teraz), [data, elementyDnia, teraz])
+  const zalegle = useMemo(() => wszystkieZadania
+    .filter((element) => element.status === 'otwarty' && Boolean(element.data && element.data < data))
+    .sort((a, b) => (b.priorytet === 'asap' ? 2 : b.priorytet === 'pilny' ? 1 : 0) - (a.priorytet === 'asap' ? 2 : a.priorytet === 'pilny' ? 1 : 0) || (a.data ?? '').localeCompare(b.data ?? ''))
+    .slice(0, 3), [data, wszystkieZadania])
+  const maElementy = zaplanowane.length > 0 || bezGodziny.length > 0
+  const najblizszyId = elementTeraz?.stan === 'najblizszy' ? elementTeraz.element.id : undefined
+  const charakterDnia = harmonogram.pracuje ? `Praca ${harmonogram.odPracy}–${harmonogram.doPracy}` : 'Dzień bez pracy'
+
+  const wykonaj = async (element: ElementOgarniacza) => {
+    if (element.typ !== 'zadanie') return
+    await repozytoriumElementowZadan.aktualizuj(element.id, { status: 'wykonany' })
   }
-  const zamknijReminder = async (element: (typeof przypomnienia)[number]) => {
-    const wynik = zakonczPrzypomnienie(element)
-    await repoPrzypomnien.zapisz(wynik.wykonane)
-    if (wynik.nastepne) await repoPrzypomnien.zapisz(wynik.nastepne)
+  const przeloz = async (element: ElementOgarniacza) => {
+    if (element.typ !== 'zadanie') return
+    await repozytoriumElementowZadan.aktualizuj(element.id, { data: format(addDays(new Date(`${data}T12:00:00`), 1), 'yyyy-MM-dd'), trybTerminu: 'koniec_dnia', godzina: undefined })
   }
 
   return <div className="widok widok-dzisiaj">
-        <NaglowekWidoku
-      tytul="Pulpit"
-      opis={new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(teraz)}
-      akcje={<button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Szybko dodaj</button>}
-    />
+    <NaglowekWidoku tytul="Dzisiaj" opis="Plan dnia krok po kroku." akcje={<button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj</button>} />
 
-    <section className="siatka-teraz">
-      <Karta klasa="karta--akcent">
-        <div className="tytul-karty"><Clock3 aria-hidden="true" /><span>Teraz</span></div>
-        <h2>{biezacyBlok?.tytul ?? najwazniejsze?.tytul ?? 'Brak pilnego działania'}</h2>
-        <p>{biezacyBlok ? `Do ${new Date(biezacyBlok.koniec).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}` : najwazniejsze ? `Priorytet: ${najwazniejsze.priorytet}` : 'Możesz spokojnie zaplanować następny krok.'}</p>
-      </Karta>
-      <Karta>
-        <div className="tytul-karty"><CalendarClock aria-hidden="true" /><span>Następne działanie</span></div>
-        <h2>{nastepnyBlok?.tytul ?? najwazniejsze?.tytul ?? 'Zaplanuj dzień'}</h2>
-        <p>{nastepnyBlok ? `Start ${new Date(nastepnyBlok.poczatek).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}` : 'Planer przygotuje realistyczną propozycję z buforem.'}</p>
-      </Karta>
-      <Karta klasa={liczbaReakcji ? 'karta--ostrzezenie' : ''}>
-        <div className="tytul-karty"><AlertCircle aria-hidden="true" /><span>Wymaga reakcji</span></div>
-        <h2>{liczbaReakcji}</h2>
-        <p>{liczbaReakcji ? 'elementów czeka na świadomą decyzję' : 'Wszystko jest pod kontrolą.'}</p>
-      </Karta>
+    <section className="plan-dnia__wprowadzenie">
+      <div><span className="plan-dnia__etykieta"><CalendarDays aria-hidden="true" />{new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(teraz)}</span><strong>{charakterDnia}{harmonogram.jestWyjatkiem ? ' · wyjątek grafiku' : ''}</strong></div>
+      <div className="plan-dnia__najblizszy"><small>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższy krok'}</small><strong>{elementTeraz ? `${elementTeraz.element.godzina ? `${elementTeraz.element.godzina} · ` : ''}${elementTeraz.element.tytul}` : 'Dzień jest spokojny'}</strong></div>
+      {zalegle[0] && <Link className="plan-dnia__zalegle" to={adresReferencjiZrodla(zalegle[0].referencjaZrodla!)}><small>Najważniejsze zaległe</small><strong>{zalegle[0].tytul}</strong><ChevronRight aria-hidden="true" /></Link>}
     </section>
 
-    <section className="siatka-dashboardu">
-      <Karta klasa="karta--os-dnia">
-        <div className="naglowek-karty"><div><h2>Oś dnia</h2><p>Plan, wizyty i dawki w jednej kolejności.</p></div>{moze('planer') && <Link className="przycisk przycisk--drugorzedny" to="/planer?tryb=dzien">Zaplanuj mi dzień / wieczór</Link>}</div>
-        {osDnia.length === 0 ? <PustyStan tytul="Brak wpisów na osi" opis="Dodaj blok, wizytę lub lek. Nie oznacza to, że cały dzień trzeba zapełnić." /> : <div className="os-dnia">{osDnia.map((element) => <div className="os-dnia__element" key={element.id}><time>{element.czas}</time><span className="os-dnia__punkt" /><div><strong>{element.tytul}</strong><small>{element.typ}</small></div></div>)}</div>}
-      </Karta>
-
-      <div className="kolumna-dashboardu">
-        <Karta>
-          <div className="naglowek-karty"><div><h2>Zadania wymagające reakcji</h2><p>Zaległe i dzisiejsze.</p></div>{moze('zadania') && <Link to="/zadania">Wszystkie</Link>}</div>
-          {[...zalegle, ...dzisiejsze].length === 0 ? <PustyStan tytul="Brak pilnych zadań" opis="Nie ma zaległych ani dzisiejszych zadań." /> : <div className="lista-kompaktowa">{[...zalegle, ...dzisiejsze].slice(0, 6).map((zadanie) => <div key={zadanie.id}><button type="button" className="przycisk-check" disabled={!moze('zadania', 'edycja')} onClick={() => wykonaj(zadanie)} title="Wykonaj"><Check aria-hidden="true" /></button><div><strong>{zadanie.tytul}</strong><small>{czyZadanieZalegle(zadanie) ? `Zaległe od ${zadanie.termin}` : 'Na dzisiaj'}</small></div><Znacznik wariant={zadanie.priorytet === 'krytyczny' ? 'blad' : zadanie.priorytet === 'wysoki' ? 'ostrzezenie' : 'neutralny'}>{zadanie.priorytet}</Znacznik></div>)}</div>}
-        </Karta>
-
-        {moze('leki') && <Karta>
-          <div className="naglowek-karty"><div><h2><Pill aria-hidden="true" /> Leki</h2><p>Wyłącznie harmonogram wpisany przez użytkownika.</p></div><Link to="/leki">Zarządzaj</Link></div>
-          {dawki.length === 0 ? <PustyStan tytul="Brak dawek na dziś" opis="Nie ma aktywnego harmonogramu." /> : <div className="lista-dawek">{dawki.map((dawka) => <div key={dawka.idWystapienia}><time>{dawka.planowanaGodzina}</time><div><strong>{dawka.lek.nazwa}</strong><small>{dawka.lek.dawkaInstrukcja}</small></div><select disabled={!moze('leki', 'edycja')} aria-label={`Status dawki ${dawka.lek.nazwa}`} value={dawka.status} onChange={(e) => repoWpisow.zapisz(zapiszStatusDawki(dawka, e.target.value as typeof dawka.status))}><option value="oczekuje">Oczekuje</option><option value="zazyte">Zażyte</option><option value="odroczone">Odroczone</option><option value="pominiete">Pominięte</option></select></div>)}</div>}
-        </Karta>}
-      </div>
+    <section className="plan-dnia__agenda" aria-labelledby="agenda-dnia">
+      <div className="naglowek-karty"><div><h2 id="agenda-dnia"><Clock3 aria-hidden="true" /> Plan dnia</h2><p>Godziny prowadzą przez dzień, a harmonogram pozostaje w tle.</p></div></div>
+      <div className="plan-dnia__harmonogram" aria-label="Kontekst harmonogramu">{harmonogram.przedzialy.length === 0 ? <span>Wolny rytm dnia · sen {ustawienia.harmonogram.poczatekSnu}–{ustawienia.harmonogram.koniecSnu}</span> : harmonogram.przedzialy.map((przedzial) => <span key={przedzial.id}>{przedzial.etykieta} {przedzial.od}–{przedzial.do}</span>)}</div>
+      {zaplanowane.length === 0 ? <PustyStan tytul="Brak elementów z godziną" opis="Zostaw przestrzeń w planie albo dodaj pierwszy konkretny krok." /> : <div className="plan-dnia__os">{zaplanowane.map((element) => {
+        const stan = element.id === najblizszyId ? 'najblizszy' : stanCzasu(element, teraz)
+        return <div className={`plan-dnia__element plan-dnia__element--${stan}`} key={element.id}><time>{element.godzina}</time><span className="plan-dnia__punkt" /><div><div className="plan-dnia__tytul">{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla)}><strong>{element.tytul}</strong></Link> : <strong>{element.tytul}</strong>}{stan === 'teraz' && <Znacznik wariant="sukces">teraz</Znacznik>}{stan === 'najblizszy' && <Znacznik wariant="informacja">najbliższe</Znacznik>}</div><small>{etykietaTypu(element)}{element.czasTrwaniaMinuty ? ` · ${element.czasTrwaniaMinuty} min` : ''}</small>{element.typ === 'zadanie' && <div className="plan-dnia__akcje"><button type="button" className="przycisk przycisk--maly" disabled={!moze('zadania', 'edycja')} onClick={() => void wykonaj(element)}><Check aria-hidden="true" />Wykonaj</button><Link className="przycisk przycisk--tekstowy" to={adresReferencjiZrodla(element.referencjaZrodla!)}>Otwórz</Link></div>}</div></div>
+      })}</div>}
     </section>
 
-    <section className="siatka-reakcji">
-      {moze('przypomnienia') && <Karta><h2>Przypomnienia</h2>{aktywne.length === 0 ? <p className="tekst-pomocniczy">Brak aktywnych przypomnień.</p> : aktywne.slice(0, 4).map((element) => <div className="wiersz-reakcji" key={element.id}><span>{element.tytul}</span><button type="button" disabled={!moze('przypomnienia', 'edycja')} className="przycisk przycisk--maly" onClick={() => zamknijReminder(element)}>Zrobione</button></div>)}</Karta>}
-      {moze('rachunki') && <Karta><h2>Płatności</h2>{rachunkiDoReakcji.length === 0 ? <p className="tekst-pomocniczy">Brak zaległych płatności.</p> : rachunkiDoReakcji.map((element) => <div className="wiersz-reakcji" key={element.id}><span>{element.nazwa}</span><strong>{element.kwota.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}</strong></div>)}</Karta>}
-      {moze('terminy') && <Karta><h2>Terminy ważności</h2>{terminyBlisko.length === 0 ? <p className="tekst-pomocniczy">Nic nie wygasa w ciągu 30 dni.</p> : terminyBlisko.map((element) => <div className="wiersz-reakcji" key={element.id}><span>{element.nazwa}</span><strong>{element.dataWaznosci}</strong></div>)}</Karta>}
-      {moze('nawyki') && <Karta><h2>Nawyki</h2><p className="tekst-pomocniczy">Aktywne dziś: {nawyki.filter((nawyk) => nawyk.aktywny).length}. Zapisuj także minimalną wersję — pojedyncza przerwa nie zeruje postępu.</p><Link to="/nawyki">Otwórz nawyki</Link></Karta>}
-    </section>
+    <section className="plan-dnia__sekcja"><Karta><div className="naglowek-karty"><div><h2>Do zrobienia dzisiaj</h2><p>Elementy bez konkretnej godziny.</p></div></div>{bezGodziny.length === 0 ? <p className="tekst-pomocniczy">Nie masz dziś spraw bez godziny.</p> : <div className="lista-kompaktowa">{bezGodziny.map((element) => <div key={element.id}>{element.typ === 'zadanie' && <button type="button" className="przycisk-check" disabled={!moze('zadania', 'edycja')} onClick={() => void wykonaj(element)} title={`Wykonaj ${element.tytul}`}><Check aria-hidden="true" /></button>}<div>{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla)}><strong>{element.tytul}</strong></Link> : <strong>{element.tytul}</strong>}<small>{etykietaTypu(element)}</small></div></div>)}</div>}</Karta></section>
 
-    {moze('echo') && <Karta klasa="karta-echo"><Sparkles aria-hidden="true" /><div><h2>Echo</h2><p>{liczbaReakcji > 4 ? 'Masz kilka elementów wymagających reakcji. Zacznij od jednego zadania o najwyższym priorytecie.' : 'Dzień wygląda spokojnie. Mogę podsumować zadania albo szybko zapisać nową rzecz.'}</p></div><Link className="przycisk przycisk--drugorzedny" to="/echo"><MessageCircle aria-hidden="true" />Porozmawiaj</Link></Karta>}
+    {zalegle.length > 0 && <section className="plan-dnia__sekcja"><Karta klasa="plan-dnia__decyzje"><div className="naglowek-karty"><div><h2>Zaległe wymagające decyzji</h2><p>Pokazujemy tylko najważniejsze trzy.</p></div><Link to="/zadania">Wszystkie</Link></div><div className="lista-kompaktowa">{zalegle.map((element) => <div key={element.id}><div><strong>{element.tytul}</strong><small>Zaległe od {element.data}</small></div><div className="plan-dnia__akcje"><button type="button" className="przycisk przycisk--maly" disabled={!moze('zadania', 'edycja')} onClick={() => void wykonaj(element)}><Check aria-hidden="true" />Wykonaj</button><button type="button" className="przycisk przycisk--tekstowy" disabled={!moze('zadania', 'edycja')} onClick={() => void przeloz(element)}><Undo2 aria-hidden="true" />Przełóż</button><Link className="przycisk przycisk--tekstowy" to={adresReferencjiZrodla(element.referencjaZrodla!)}>Otwórz</Link></div></div>)}</div></Karta></section>}
+
+    {!maElementy && <Karta klasa="plan-dnia__pusty"><PustyStan tytul="Dzień ma jeszcze dużo przestrzeni" opis="Dodaj jedną rzecz, od której chcesz zacząć, albo poproś Echo o pomoc w ułożeniu dnia." akcja={<div className="plan-dnia__akcje"><button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj coś</button>{moze('echo') && <Link className="przycisk przycisk--drugorzedny" to="/echo"><MessageCircle aria-hidden="true" />Porozmawiaj z Echo</Link>}</div>} /></Karta>}
   </div>
 }

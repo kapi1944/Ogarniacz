@@ -2061,3 +2061,42 @@ input[type="radio"] {
 
   .przelacznik { display: flex; min-width: 44px; min-height: 44px; align-items: center; justify-content: center; }
 }
+
+.plan-dnia__wprowadzenie { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 9px; padding: 12px; background: linear-gradient(135deg, color-mix(in srgb, var(--akcent) 13%, var(--panel)), var(--panel) 74%); border: 1px solid color-mix(in srgb, var(--akcent) 30%, var(--obramowanie)); border-radius: var(--promien-karty); }
+.plan-dnia__wprowadzenie > div, .plan-dnia__zalegle { display: grid; min-width: 0; align-content: center; gap: 4px; padding: 5px 7px; }
+.plan-dnia__wprowadzenie strong { overflow-wrap: anywhere; font-size: .9rem; }
+.plan-dnia__etykieta { display: inline-flex; align-items: center; gap: 6px; color: var(--tekst-2); font-size: .75rem; font-weight: 700; text-transform: capitalize; }
+.plan-dnia__etykieta svg { width: 16px; color: var(--akcent); }
+.plan-dnia__najblizszy { border-inline: 1px solid var(--obramowanie); }
+.plan-dnia__wprowadzenie small { color: var(--tekst-2); font-size: .7rem; }
+.plan-dnia__zalegle { grid-template-columns: 1fr auto; color: var(--tekst); background: var(--ostrzezenie-tlo); border-radius: var(--promien-pola); }
+.plan-dnia__zalegle strong, .plan-dnia__zalegle small { grid-column: 1; }
+.plan-dnia__zalegle svg { grid-column: 2; grid-row: 1 / span 2; width: 17px; align-self: center; color: var(--tekst-2); }
+.plan-dnia__agenda, .plan-dnia__sekcja { display: grid; gap: 10px; }
+.plan-dnia__agenda { padding: 15px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); box-shadow: var(--cien); }
+.plan-dnia__harmonogram { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 0 11px; color: var(--tekst-2); border-bottom: 1px solid var(--obramowanie); font-size: .72rem; }
+.plan-dnia__harmonogram span { padding: 4px 7px; background: var(--panel-2); border-radius: 999px; }
+.plan-dnia__os { display: grid; }
+.plan-dnia__element { display: grid; grid-template-columns: 48px 18px minmax(0, 1fr); min-height: 70px; gap: 8px; }
+.plan-dnia__element time { padding-top: 4px; color: var(--tekst-2); font-size: .76rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.plan-dnia__punkt { position: relative; width: 10px; height: 10px; margin-top: 6px; background: var(--akcent); border: 2px solid var(--panel); border-radius: 50%; box-shadow: 0 0 0 1px var(--akcent); }
+.plan-dnia__punkt::after { position: absolute; top: 9px; left: 3px; width: 2px; height: 60px; background: var(--obramowanie); content: ''; }
+.plan-dnia__element:last-child .plan-dnia__punkt::after { display: none; }
+.plan-dnia__element--przeszly { opacity: .58; }
+.plan-dnia__element--teraz .plan-dnia__punkt, .plan-dnia__element--najblizszy .plan-dnia__punkt { background: var(--sukces); box-shadow: 0 0 0 4px color-mix(in srgb, var(--sukces) 18%, transparent); }
+.plan-dnia__element--najblizszy { padding: 5px 7px; margin: -5px -7px; background: color-mix(in srgb, var(--akcent) 8%, var(--panel)); border-radius: var(--promien-pola); }
+.plan-dnia__element--najblizszy .plan-dnia__punkt::after { top: 14px; }
+.plan-dnia__tytul { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.plan-dnia__element small { color: var(--tekst-2); font-size: .72rem; }
+.plan-dnia__akcje { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.plan-dnia__akcje .przycisk { min-height: 34px; }
+.plan-dnia__decyzje { border-color: color-mix(in srgb, var(--ostrzezenie) 30%, var(--obramowanie)); }
+.plan-dnia__decyzje .lista-kompaktowa > div { align-items: center; }
+.plan-dnia__pusty { background: linear-gradient(135deg, var(--akcent-jasny), var(--panel) 68%); }
+
+@media (max-width: 720px) {
+  .plan-dnia__wprowadzenie { grid-template-columns: 1fr; }
+  .plan-dnia__najblizszy { border-block: 1px solid var(--obramowanie); border-inline: 0; }
+  .plan-dnia__agenda { padding: 13px; }
+  .plan-dnia__decyzje .lista-kompaktowa > div { align-items: flex-start; }
+}
