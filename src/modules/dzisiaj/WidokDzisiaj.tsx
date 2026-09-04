@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { addDays, format } from 'date-fns'
 import { CalendarDays, Check, ChevronRight, Clock3, MessageCircle, Plus, Undo2 } from 'lucide-react'
-import { Karta, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
+import { Karta, Komunikat, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { dzisiajIso } from '../../domain/fabryki'
 import { poprawnaGodzinaTerminu } from '../../domain/logikaTerminuZadania'
@@ -46,6 +46,8 @@ function stanCzasu(element: ElementOgarniacza, teraz: Date): 'przeszly' | 'teraz
 export function WidokPulpitu() {
   const data = dzisiajIso()
   const [teraz, ustawTeraz] = useState(() => new Date())
+  const [komunikat, ustawKomunikat] = useState('')
+  const [ostatniaZmiana, ustawOstatniaZmiane] = useState<{ tytul: string; cofnij: () => Promise<void> }>()
   const { moze, otworzSzybkieDodawanie, ustawienia } = useAplikacja()
   const { dane: wyjatki } = useRepozytorium('wyjatkiGrafiku')
 
@@ -83,14 +85,26 @@ export function WidokPulpitu() {
   const wykonaj = async (element: ElementOgarniacza) => {
     if (element.typ !== 'zadanie') return
     await repozytoriumElementowZadan.aktualizuj(element.id, { status: 'wykonany' })
+    ustawKomunikat(`Oznaczono „${element.tytul}” jako wykonane.`)
+    ustawOstatniaZmiane({ tytul: element.tytul, cofnij: async () => { await repozytoriumElementowZadan.aktualizuj(element.id, { status: 'otwarty' }) } })
   }
   const przeloz = async (element: ElementOgarniacza) => {
     if (element.typ !== 'zadanie') return
-    await repozytoriumElementowZadan.aktualizuj(element.id, { data: format(addDays(new Date(`${data}T12:00:00`), 1), 'yyyy-MM-dd'), trybTerminu: 'koniec_dnia', godzina: undefined })
+    const jutro = format(addDays(new Date(`${data}T12:00:00`), 1), 'yyyy-MM-dd')
+    await repozytoriumElementowZadan.aktualizuj(element.id, { data: jutro, trybTerminu: 'koniec_dnia', godzina: undefined })
+    ustawKomunikat(`Przełożono „${element.tytul}” na jutro.`)
+    ustawOstatniaZmiane({ tytul: element.tytul, cofnij: async () => { await repozytoriumElementowZadan.aktualizuj(element.id, { data: element.data, trybTerminu: element.trybTerminu, godzina: element.godzina }) } })
+  }
+  const cofnijOstatniaZmiane = async () => {
+    if (!ostatniaZmiana) return
+    await ostatniaZmiana.cofnij()
+    ustawKomunikat(`Cofnięto zmianę: „${ostatniaZmiana.tytul}”.`)
+    ustawOstatniaZmiane(undefined)
   }
 
   return <div className="widok widok-dzisiaj">
-    <NaglowekWidoku tytul="Dzisiaj" opis="Plan dnia krok po kroku." akcje={<button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj</button>} />
+    <NaglowekWidoku tytul="Dzisiaj" opis="Plan dnia krok po kroku." akcje={<><Link className="przycisk przycisk--drugorzedny" to="/echo"><MessageCircle aria-hidden="true" />Zapytaj Echo</Link><button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj</button></>} />
+    {komunikat && <Komunikat typ="sukces">{komunikat}{ostatniaZmiana && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijOstatniaZmiane()}><Undo2 aria-hidden="true" />Cofnij</button>}</Komunikat>}
 
     <section className="plan-dnia__wprowadzenie">
       <div><span className="plan-dnia__etykieta"><CalendarDays aria-hidden="true" />{new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(teraz)}</span><strong>{charakterDnia}{harmonogram.jestWyjatkiem ? ' · wyjątek grafiku' : ''}</strong></div>

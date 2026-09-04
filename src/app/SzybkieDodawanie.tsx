@@ -109,7 +109,7 @@ export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamkn
     ustawUtworzony(null)
   }
 
-  if (utworzony) return <Modal tytul="Dodano do Ogarniacza" opis="Element jest zapisany lokalnie i gotowy do synchronizacji." zamknij={zamknij}>
+  if (utworzony) return <Modal tytul="Dodano do Ogarniacza" opis="Sprawa jest zapisana. Możesz od razu przejść do jej szczegółów." zamknij={zamknij}>
     <Komunikat typ="sukces"><Check aria-hidden="true" /> Utworzono: <strong>{utworzony.nazwa}</strong> · {typy.find((element) => element.typ === utworzony.typ)?.etykieta} · {utworzony.termin}</Komunikat>
     <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void cofnij()}><Undo2 aria-hidden="true" />Cofnij</button><button type="button" className="przycisk przycisk--glowny" onClick={() => { nawiguj(`${sciezkiTypow[utworzony.typ]}?element=${encodeURIComponent(utworzony.id)}`); zamknij() }}><ArrowRight aria-hidden="true" />Przejdź do elementu</button></div>
   </Modal>
