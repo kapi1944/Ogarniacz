@@ -6,11 +6,14 @@ import type { Pojazd, Przypomnienie } from '../../domain/typy'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
 import { statystykaPaliwa } from '../../services/MotoryzacjaService'
+import { przygotujWydatekZeZrodla } from '../../services/FinanseService'
 
 export function WidokSamochodu() {
   const [parametry] = useSearchParams()
   const { dane: pojazdy, repozytorium } = useRepozytorium('pojazdy')
   const { dane: przypomnienia, repozytorium: repozytoriumPrzypomnien } = useRepozytorium('przypomnienia')
+  const { dane: wydatki, repozytorium: repoWydatkow } = useRepozytorium('wydatki')
+  const { dane: notatki } = useRepozytorium('notatki')
   const dodajPrzypomnienie = async (pojazd: Pojazd) => {
     const data = [pojazd.ocDo, pojazd.przegladDo, pojazd.planowanySerwisData, pojazd.wymianaOlejuDo].filter((wartosc): wartosc is string => Boolean(wartosc)).sort()[0]
     if (!data) return
@@ -33,6 +36,8 @@ export function WidokSamochodu() {
       { klucz: 'vin', etykieta: 'VIN' },
       { klucz: 'przebieg', etykieta: 'Przebieg (km)', typ: 'number', min: 0 },
       { klucz: 'ocDo', etykieta: 'OC / polisa do', typ: 'date' },
+      { klucz: 'kosztOc', etykieta: 'Koszt OC (opcjonalnie)', typ: 'number', min: 0 },
+      { klucz: 'dataOplatyOc', etykieta: 'Data opłacenia OC', typ: 'date' },
       { klucz: 'ubezpieczyciel', etykieta: 'Ubezpieczyciel' },
       { klucz: 'numerPolisy', etykieta: 'Numer polisy' },
       { klucz: 'przegladDo', etykieta: 'Przegląd do', typ: 'date' },
@@ -52,9 +57,12 @@ export function WidokSamochodu() {
       { klucz: 'pelnyBak', etykieta: 'Tankowanie do pełna', typ: 'select', opcje: [{ wartosc: 'true', etykieta: 'Tak' }, { wartosc: 'false', etykieta: 'Nie' }] },
       { klucz: 'nazwaOpon', etykieta: 'Dodaj komplet opon', podpowiedz: 'np. Michelin CrossClimate' },
       { klucz: 'typOpon', etykieta: 'Typ opon', typ: 'select', opcje: [{ wartosc: 'letnie', etykieta: 'Letnie' }, { wartosc: 'zimowe', etykieta: 'Zimowe' }, { wartosc: 'caloroczne', etykieta: 'Całoroczne' }] },
+      { klucz: 'dataZmianyOpon', etykieta: 'Data zmiany opon', typ: 'date' },
+      { klucz: 'przebiegOpon', etykieta: 'Przebieg przy zmianie opon', typ: 'number', min: 0 },
+      { klucz: 'sezonOpon', etykieta: 'Sezon', podpowiedz: 'np. zima 2026/2027' },
       { klucz: 'notatka', etykieta: 'Notatka / opis', typ: 'textarea' },
     ]}
-    uzupelnijFormularz={() => ({ typSerwisu: '', dataSerwisu: '', przebiegSerwisu: '', opisSerwisu: '', kosztSerwisu: '', dataTankowania: '', przebiegTankowania: '', litryTankowania: '', cenaTankowania: '', pelnyBak: 'false', nazwaOpon: '', typOpon: '' })}
+    uzupelnijFormularz={() => ({ typSerwisu: '', dataSerwisu: '', przebiegSerwisu: '', opisSerwisu: '', kosztSerwisu: '', dataTankowania: '', przebiegTankowania: '', litryTankowania: '', cenaTankowania: '', pelnyBak: 'false', nazwaOpon: '', typOpon: '', dataZmianyOpon: '', przebiegOpon: '', sezonOpon: '' })}
     zbuduj={(formularz, istniejacy) => {
       const przebieg = formularz.przebieg ? Number(formularz.przebieg) : undefined
       const historiaPrzebiegu = przebieg !== undefined && przebieg !== istniejacy?.przebieg
@@ -67,7 +75,7 @@ export function WidokSamochodu() {
         ? [...(istniejacy?.tankowania ?? []), { id: noweId(), data: formularz.dataTankowania, przebieg: Number(formularz.przebiegTankowania), litry: Number(formularz.litryTankowania), cena: Number(formularz.cenaTankowania), pelnyBak: formularz.pelnyBak === 'true' }]
         : istniejacy?.tankowania
       const opony = formularz.nazwaOpon.trim()
-        ? [...(istniejacy?.opony ?? []), { id: noweId(), nazwa: formularz.nazwaOpon.trim(), typ: formularz.typOpon as NonNullable<Pojazd['opony']>[number]['typ'] || undefined, dataZmiany: new Date().toISOString().slice(0, 10), przebieg }]
+        ? [...(istniejacy?.opony ?? []), { id: noweId(), nazwa: formularz.nazwaOpon.trim(), typ: formularz.typOpon as NonNullable<Pojazd['opony']>[number]['typ'] || undefined, dataZmiany: formularz.dataZmianyOpon || new Date().toISOString().slice(0, 10), przebieg: formularz.przebiegOpon ? Number(formularz.przebiegOpon) : przebieg, sezon: formularz.sezonOpon || undefined }]
         : istniejacy?.opony
       return {
       ...(istniejacy ?? utworzMetadane()),
@@ -83,6 +91,8 @@ export function WidokSamochodu() {
       tankowania,
       opony,
       ocDo: formularz.ocDo || undefined,
+      kosztOc: formularz.kosztOc ? Number(formularz.kosztOc) : undefined,
+      dataOplatyOc: formularz.dataOplatyOc || undefined,
       ubezpieczyciel: formularz.ubezpieczyciel.trim() || undefined,
       numerPolisy: formularz.numerPolisy.trim() || undefined,
       przegladDo: formularz.przegladDo || undefined,
@@ -93,8 +103,20 @@ export function WidokSamochodu() {
       notatka: formularz.notatka.trim() || undefined,
       updatedAt: terazIso(),
     } satisfies Pojazd }}
+    poZapisie={async (pojazd, poprzedni) => {
+      const noweTankowanie = pojazd.tankowania?.find((x) => !poprzedni?.tankowania?.some((p) => p.id === x.id))
+      const nowySerwis = pojazd.historiaSerwisowa?.find((x) => !poprzedni?.historiaSerwisowa?.some((p) => p.id === x.id))
+      const noweOc = pojazd.kosztOc && pojazd.dataOplatyOc && (pojazd.kosztOc !== poprzedni?.kosztOc || pojazd.dataOplatyOc !== poprzedni?.dataOplatyOc)
+        ? { id: `${pojazd.id}:oc:${pojazd.dataOplatyOc}`, kwota: pojazd.kosztOc, data: pojazd.dataOplatyOc, opis: `OC: ${pojazd.nazwa}`, kategoria: 'Ubezpieczenie' }
+        : undefined
+      for (const zrodlo of [noweTankowanie ? { id: noweTankowanie.id, kwota: noweTankowanie.cena, data: noweTankowanie.data, opis: `Tankowanie: ${pojazd.nazwa}`, kategoria: 'Paliwo' } : undefined, nowySerwis?.koszt ? { id: nowySerwis.id, kwota: nowySerwis.koszt, data: nowySerwis.data, opis: `Serwis: ${pojazd.nazwa}`, kategoria: 'Samochód' } : undefined, noweOc].filter(Boolean) as { id: string; kwota: number; data: string; opis: string; kategoria: string }[]) {
+        if (!window.confirm(`Czy zaksięgować w Finansach: ${zrodlo.opis} (${zrodlo.kwota.toFixed(2)} zł)?`)) continue
+        const wydatek = przygotujWydatekZeZrodla(wydatki, { kwota: zrodlo.kwota, data: zrodlo.data, kategoria: zrodlo.kategoria, opis: zrodlo.opis, powiazanie: { typ: 'samochod', id: zrodlo.id } })
+        if (wydatek) await repoWydatkow.zapisz(wydatek)
+      }
+    }}
     etykieta={(pojazd) => pojazd.nazwa}
-    szczegoly={(pojazd) => <SzczegolyPojazdu pojazd={pojazd} />}
+    szczegoly={(pojazd) => <><SzczegolyPojazdu pojazd={pojazd} /><span>Powiązane notatki: {notatki.filter((x) => x.powiazania.some((p) => p.typ === 'samochod' && p.id === pojazd.id)).map((x) => x.tytul).join(', ') || 'brak'}</span></>}
     akcje={(pojazd) => <button type="button" className="przycisk-ikona" title="Przypomnij 30 dni przed najbliższym terminem" onClick={() => void dodajPrzypomnienie(pojazd)}><BellPlus aria-hidden="true" /></button>}
   />
 }
@@ -106,12 +128,14 @@ function SzczegolyPojazdu({ pojazd }: { pojazd: Pojazd }) {
     {(pojazd.marka || pojazd.model || pojazd.rok) && <span>{[pojazd.marka, pojazd.model, pojazd.rok].filter(Boolean).join(' ')}</span>}
     {pojazd.numerRejestracyjny && <span>Rejestracja: {pojazd.numerRejestracyjny}</span>}
     {pojazd.ocDo && <span>OC: {pojazd.ocDo}</span>}
+    {pojazd.kosztOc && <span>Ostatnie OC: {pojazd.kosztOc.toFixed(2)} zł{pojazd.dataOplatyOc ? ` · ${pojazd.dataOplatyOc}` : ''}</span>}
     {pojazd.ubezpieczyciel && <span>Ubezpieczyciel: {pojazd.ubezpieczyciel}</span>}
     {pojazd.przegladDo && <span>Przegląd: {pojazd.przegladDo}</span>}
     {pojazd.wymianaOlejuDo && <span>Olej: {pojazd.wymianaOlejuDo}</span>}
     {pojazd.planowanySerwisData && <span>Serwis: {pojazd.planowanySerwisData}{pojazd.planowanySerwisGodzina ? ` ${pojazd.planowanySerwisGodzina}` : ''}</span>}
     {paliwo.srednieSpalanie !== undefined && <span>Paliwo: {paliwo.srednieSpalanie.toFixed(1)} l/100 km · {paliwo.kosztNaKm?.toFixed(2)} zł/km</span>}
-    {pojazd.opony?.at(-1) && <span>Opony: {pojazd.opony.at(-1)!.nazwa}</span>}
+    {(pojazd.tankowania?.length ?? 0) > 0 && <span>Koszt paliwa: {paliwo.kosztPaliwa.toFixed(2)} zł · ostatnio: {pojazd.tankowania!.at(-1)!.litry} l za {pojazd.tankowania!.at(-1)!.cena.toFixed(2)} zł ({(pojazd.tankowania!.at(-1)!.cena / pojazd.tankowania!.at(-1)!.litry).toFixed(2)} zł/l)</span>}
+    {pojazd.opony?.at(-1) && <span>Opony: {pojazd.opony.at(-1)!.nazwa} · {pojazd.opony.at(-1)!.typ ?? 'typ niepodany'} · {pojazd.opony.at(-1)!.dataZmiany ?? 'bez daty'} · {pojazd.opony.at(-1)!.przebieg ?? '—'} km · {pojazd.opony.at(-1)!.sezon ?? 'bez sezonu'}</span>}
     {pojazd.historiaSerwisowa?.slice(-2).reverse().map((wpis) => <span key={wpis.id}>Serwis {wpis.data}: {wpis.opis}{wpis.przebieg !== undefined ? ` · ${wpis.przebieg.toLocaleString('pl-PL')} km` : ''}</span>)}
   </>
 }

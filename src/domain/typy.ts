@@ -34,6 +34,7 @@ export interface Zadanie extends EncjaBazowa {
   szacowanyCzasMin?: number
   projektId?: Id
   kontekst?: string
+  miejsceId?: Id
   tagi: string[]
   podzadania: { id: Id; tytul: string; wykonane: boolean }[]
   powtarzanie?: RegulaPowtarzania
@@ -178,6 +179,9 @@ export interface Wizyta extends EncjaBazowa {
   lekarzPlacowka?: string
   kontaktId?: Id
   notatka: string
+  notatkaPrzed?: string
+  notatkaPo?: string
+  skierowanieId?: Id
   pytania: string[]
   dokumentyIds: Id[]
   checklista: string[]
@@ -253,6 +257,7 @@ export interface Przypomnienie extends EncjaBazowa {
   stan: 'nowe' | 'dostarczone' | 'odroczone' | 'wykonane' | 'pominiete' | 'eskalowane'
   eskalacja: boolean
   odroczoneDo?: string
+  kluczDeduplikacji?: string
 }
 
 export interface ListaZakupow extends EncjaBazowa {
@@ -295,6 +300,7 @@ export interface PlatnoscRachunku extends EncjaBazowa {
   rachunekId: Id
   kwota: number
   zaplaconoAt: string
+  transakcjaId?: Id
 }
 
 export interface Notatka extends EncjaBazowa {
@@ -337,7 +343,9 @@ export interface Cel extends EncjaBazowa {
   projektyIds: Id[]
   nawykiIds: Id[]
   postep: number
+  trybPostepu?: 'reczny' | 'miernik' | 'projekty' | 'nawyki'
   wartoscStartowa?: number
+  wartoscBiezaca?: number
   wartoscDocelowa?: number
   jednostka?: string
   ostatniReviewAt?: string
@@ -349,6 +357,7 @@ export interface Kontakt extends EncjaBazowa {
   telefon?: string
   email?: string
   adres?: string
+  miejsceId?: Id
   strona?: string
   notatki?: string
 }
@@ -375,6 +384,23 @@ export interface Wydatek extends EncjaBazowa {
   rodzaj?: 'wydatek' | 'przychod' | 'transfer'
   zrodloTransferu?: string
   celTransferu?: string
+  kontoId?: Id
+  kontoDoceloweId?: Id
+}
+
+export interface KontoFinansowe extends EncjaBazowa {
+  nazwa: string
+  typ: 'gotowka' | 'konto' | 'karta_portfel'
+  aktywne: boolean
+}
+
+export interface Miejsce extends EncjaBazowa {
+  nazwa: string
+  adres: string
+  typ?: string
+  szerokosc?: number
+  dlugosc?: number
+  notatka?: string
 }
 
 export interface PlatnoscStala extends EncjaBazowa {
@@ -426,6 +452,8 @@ export interface Pojazd extends EncjaBazowa {
   tankowania?: { id: Id; data: string; przebieg: number; litry: number; cena: number; pelnyBak?: boolean }[]
   opony?: { id: Id; nazwa: string; typ?: 'letnie' | 'zimowe' | 'caloroczne'; dataZmiany?: string; przebieg?: number; sezon?: string }[]
   ocDo?: string
+  kosztOc?: number
+  dataOplatyOc?: string
   ubezpieczyciel?: string
   numerPolisy?: string
   przegladDo?: string
@@ -624,6 +652,11 @@ export interface Ustawienia extends EncjaBazowa {
   ukrywajSzczegolyZdrowotneWPowiadomieniach: boolean
   proaktywnoscEcho: boolean
   echoWyciszone: boolean
+  glosEcho: boolean
+  automatycznyOdczytEcho: boolean
+  pamiecPreferencjiEcho: boolean
+  internetEcho: boolean
+  modulyEcho: NazwaModulu[]
   trybUzytkownika: 'wlasciciel' | 'edytor'
   aktywnyEdytorId?: Id
 }
@@ -643,6 +676,7 @@ export type NazwaModulu =
   | 'zakupy'
   | 'rachunki'
   | 'miasto'
+  | 'miejsca'
   | 'cele'
   | 'notatki'
   | 'pomysly'
@@ -688,6 +722,8 @@ export interface MapaTabel {
   planyRat: PlanRat
   raty: Rata
   budzety: Budzet
+  kontaFinansowe: KontoFinansowe
+  miejsca: Miejsce
   pojazdy: Pojazd
   terminyWaznosci: TerminWaznosci
   pamiecEcho: PamiecEcho

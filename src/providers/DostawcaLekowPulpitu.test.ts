@@ -42,6 +42,15 @@ describe('Dostawca Leków Pulpitu', () => {
     expect(po[0]).toMatchObject({ id: przed[0]?.id, status: 'wykonany', dane: { statusDawki: 'zazyte' } })
   })
 
+  it('wystawia jeden sygnał źródłowy, gdy zapas kończy się w ciągu tygodnia', async () => {
+    const niskiZapas = { ...lek, zapasJednostek: 4, zuzycieNaDawke: 1 }
+    const dostawca = new DostawcaLekowPulpitu(zrodlo(() => [niskiZapas]), zrodlo<DziennikLeku>(() => []), zrodlo<Przypomnienie>(() => []))
+
+    const elementy = await dostawca.pobierzElementy({ od: '2026-08-28', do: '2026-08-28' })
+
+    expect(elementy.filter((x) => x.dane?.rodzaj === 'zapas')).toMatchObject([{ id: 'lek-zapas:lek-1', data: '2026-08-29', referencjaZrodla: { modul: 'leki', encjaId: 'lek-1' } }])
+  })
+
   it('wyznacza deterministycznie najbliższą przyszłą oczekującą dawkę', () => {
     const dawki = [
       ...generujDawkiDnia([lek], [], '2026-08-28'),

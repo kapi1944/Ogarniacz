@@ -16,7 +16,7 @@ export class DostawcaSamochoduPulpitu {
       const terminy: { rodzaj: RodzajTerminu; etykieta: string; data?: string; godzina?: string }[] = [
         { rodzaj: 'oc', etykieta: 'OC / polisa', data: pojazd.ocDo },
         { rodzaj: 'przeglad', etykieta: 'Przegląd', data: pojazd.przegladDo },
-        { rodzaj: 'olej', etykieta: 'Wymiana oleju', data: pojazd.wymianaOlejuDo },
+        { rodzaj: 'olej', etykieta: pojazd.przebieg !== undefined && pojazd.wymianaOlejuPrzebieg !== undefined && pojazd.przebieg >= pojazd.wymianaOlejuPrzebieg ? `Wymiana oleju — osiągnięto ${pojazd.wymianaOlejuPrzebieg.toLocaleString('pl-PL')} km` : 'Wymiana oleju', data: pojazd.przebieg !== undefined && pojazd.wymianaOlejuPrzebieg !== undefined && pojazd.przebieg >= pojazd.wymianaOlejuPrzebieg ? zakres.od : pojazd.wymianaOlejuDo },
         { rodzaj: 'serwis', etykieta: 'Planowany serwis', data: pojazd.planowanySerwisData, godzina: pojazd.planowanySerwisGodzina },
       ]
       return terminy

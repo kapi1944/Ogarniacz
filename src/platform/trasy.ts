@@ -21,6 +21,7 @@ const SCIEZKI_MODULOW: Record<NazwaModulu, string> = {
   zakupy: '/zakupy',
   rachunki: '/rachunki',
   miasto: '/miasto',
+  miejsca: '/miasto',
   cele: '/cele',
   notatki: '/notatki',
   pomysly: '/pomysly',

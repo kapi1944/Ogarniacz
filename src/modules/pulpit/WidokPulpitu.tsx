@@ -31,6 +31,9 @@ import {
   alertyZakupow,
   alertyNotatek,
   alertyPoczekalni,
+  alertyStarychCelow,
+  alertyTerminow,
+  alertyWzrostuCenSubskrypcji,
   alertyZadan,
   deduplikujAlerty,
   klasaRozmiaruKafelka,
@@ -165,6 +168,9 @@ export function WidokPulpitu() {
   const nawiguj = useNavigate()
   const { ustawienia, zapiszUstawienia, otworzSzybkieDodawanie, otworzSzybkieDodawanieZDanymi, moze } = useAplikacja()
   const { dane: wyjatki, repozytorium: repozytoriumWyjatkow } = useRepozytorium('wyjatkiGrafiku')
+  const { dane: cele } = useRepozytorium('cele')
+  const { dane: terminyWaznosci } = useRepozytorium('terminyWaznosci')
+  const { dane: platnosciStale } = useRepozytorium('platnosciStale')
   const dzisiaj = dzisiajIso()
   const [teraz, ustawTeraz] = useState(() => new Date())
   useEffect(() => {
@@ -254,8 +260,11 @@ export function WidokPulpitu() {
       ...alertyZakupow(modulyAlertow?.zakupy.elementy ?? [], teraz),
       ...alertyNotatek(modulyAlertow?.notatki.elementy ?? [], teraz),
       ...alertyPoczekalni(modulyAlertow?.poczekalnia.elementy ?? [], teraz),
+      ...alertyStarychCelow(cele, teraz),
+      ...alertyTerminow(terminyWaznosci, teraz),
+      ...alertyWzrostuCenSubskrypcji(platnosciStale),
     ]))
-  }, [modulyAlertow, zadaniaKafelkow, zdrowieDoAlertow])
+  }, [cele, modulyAlertow, platnosciStale, terminyWaznosci, zadaniaKafelkow, zdrowieDoAlertow])
   const widoczneAlerty = ograniczAlerty(alerty, ustawienia.pulpit.limitAlertow, pokazWiecejAlertow).widoczne
   const alertyWCentrum = pokazWiecejAlertow ? widoczneAlerty : widoczneAlerty.slice(0, 2)
   const kafelki = useMemo(() => sortujKafelki(ustawienia.pulpit.kafelki).filter((kafelek) => filtrKafelkow === 'wszystkie' || kafelek.typ === filtrKafelkow), [ustawienia.pulpit.kafelki, filtrKafelkow])

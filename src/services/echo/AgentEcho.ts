@@ -42,6 +42,7 @@ export class AgentEcho {
   private readonly pobierzCzas: () => KontekstCzasuEcho
   private readonly onZmianaStanu?: (stan: StanPracyEcho) => void
   private oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
+  private wynikiBiezacejTury: import('./typyEcho').WynikNarzedziaEcho[] = []
 
   constructor(opcje: OpcjeAgentaEcho = {}) {
     this.provider = opcje.provider ?? new LokalnySemantycznyProviderEcho()
@@ -57,6 +58,7 @@ export class AgentEcho {
   async obsluz(tresc: string, zrodlo: ZrodloWejsciaEcho = 'tekst', sygnalZewnetrzny?: AbortSignal): Promise<OdpowiedzEcho> {
     const oczyszczona = tresc.trim()
     if (!oczyszczona) return this.odpowiedz('Powiedz albo napisz, czym mam się zająć.')
+    this.wynikiBiezacejTury = []
     this.onZmianaStanu?.('rozumiem')
     this.kontekst.dodajTure('uzytkownik', oczyszczona)
     this.kontekst.ustawTemat(this.kontekst.migawka().temat ?? (zrodlo === 'stt' ? 'rozmowa głosowa' : 'rozmowa tekstowa'))
@@ -72,6 +74,7 @@ export class AgentEcho {
     this.oczekujacaAkcja = undefined
     this.onZmianaStanu?.('wykonuje')
     const wynik = await this.wykonawca.wykonaj(akcja.wywolanie, true)
+    this.wynikiBiezacejTury = [wynik]
     this.kontekst.dodajWynikNarzedzia(wynik)
     if (wynik.status !== 'wykonane') return this.odpowiedz('Nie udało się bezpiecznie wykonać tej zmiany.', akcja.ryzyko)
     this.kontekst.ustawOstatniaAkcje(akcja.wywolanie.nazwa, akcja.wywolanie.argumenty)
@@ -118,6 +121,7 @@ export class AgentEcho {
     for (const wywolanie of decyzja.wywolania) {
       this.onZmianaStanu?.('wykonuje')
       const wynik = await this.wykonawca.wykonaj(wywolanie)
+      this.wynikiBiezacejTury.push(wynik)
       this.kontekst.dodajWynikNarzedzia(wynik)
       if (wynik.status === 'wymaga_potwierdzenia') {
         const narzedzie = this.rejestr.pobierz(wywolanie.nazwa)
@@ -154,7 +158,7 @@ export class AgentEcho {
   }
 
   private odpowiedz(tekst: string, ryzyko: OdpowiedzEcho['ryzyko'] = 'niskie', wartosciDomyslne?: OdpowiedzEcho['wartosciDomyslne']): OdpowiedzEcho {
-    return { tekst, ryzyko, tryb: this.provider.tryb, wartosciDomyslne }
+    return { tekst, ryzyko, tryb: this.provider.tryb, wartosciDomyslne, wyniki: this.wynikiBiezacejTury.length ? [...this.wynikiBiezacejTury] : undefined }
   }
 
   private zapamietajEncjeWyniku(narzedzie: string, dane: unknown): void {

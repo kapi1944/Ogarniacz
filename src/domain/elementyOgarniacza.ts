@@ -58,7 +58,7 @@ export interface MapaDanychElementu {
   notatka: { tresc?: string; przypieta?: boolean; przypomnienieAt?: string }
   poczekalnia: { liczbaNieprzetworzonych?: number; zrodlo?: 'tekst' | 'glos' }
   wizyta: { miejsce?: string; lekarzPlacowka?: string; statusWizyty?: string; liczbaElementowChecklisty?: number }
-  lek: { lekId?: Id; idWystapienia?: Id; statusDawki?: DziennikLeku['status']; odroczoneDo?: string }
+  lek: { lekId?: Id; idWystapienia?: Id; statusDawki?: DziennikLeku['status']; odroczoneDo?: string; rodzaj?: 'dawka' | 'zapas'; zapasJednostek?: number }
   wydatek: { kwota?: number; waluta?: string; rodzaj?: 'budzet'; okres?: string; limit?: number; wydano?: number }
   platnosc: { kwota?: number; waluta?: string; rodzaj?: 'rachunek' | 'subskrypcja'; oplacona?: boolean }
   samochod: { pojazdId?: Id; rodzajTerminu?: 'oc' | 'przeglad' | 'olej' | 'serwis'; pozostaloKm?: number }

@@ -5,6 +5,9 @@ import {
   adresReferencjiZrodla,
   alertyKonfliktowTerminow,
   alertyLekow,
+  alertyStarychCelow,
+  alertyTerminow,
+  alertyWzrostuCenSubskrypcji,
   alertyWizyt,
   deduplikujAlerty,
   elementyDlaKafelka,
@@ -212,6 +215,13 @@ describe('logika kafelków Pulpitu', () => {
     expect(klasaRozmiaruKafelka('small')).toBe('strefa-pulpitu--small')
     expect(klasaRozmiaruKafelka('medium')).toBe('strefa-pulpitu--medium')
     expect(klasaRozmiaruKafelka('large')).toBe('strefa-pulpitu--large')
+  })
+
+  it('tworzy po jednym sygnale dla terminu, starego celu i podwyżki subskrypcji', () => {
+    const metadane = { createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }
+    expect(alertyTerminow([{ id: 'termin-1', ...metadane, nazwa: 'Dowód', typ: 'dokument', dataWaznosci: '2026-09-04', status: 'aktualne' }], dataReferencyjna)).toHaveLength(1)
+    expect(alertyStarychCelow([{ id: 'cel-1', ...metadane, nazwa: 'Forma', opis: '', status: 'aktywne', projektyIds: [], nawykiIds: [], postep: 10 }], dataReferencyjna)).toHaveLength(1)
+    expect(alertyWzrostuCenSubskrypcji([{ id: 'sub-1', ...metadane, nazwa: 'Muzyka', kwota: 30, dzienMiesiaca: 1, dataStartu: '2026-01-01', kategoria: 'Rozrywka', aktywna: true, rodzaj: 'subskrypcja', historiaKwot: [{ data: '2026-08-01', kwota: 25 }] }])).toHaveLength(1)
   })
   it('klasyfikuje poziom Smart Signals i wykrywa tylko nakładające się bloki z czasem trwania', () => {
     expect(poziomSmartSygnalu(alert('zalegle', 'overdue', undefined, 'critical'))).toBe('pilne')

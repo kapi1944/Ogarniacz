@@ -4,7 +4,7 @@ import type { ElementOgarniacza, ReferencjaZrodla } from '../../domain/elementyO
 import type { KonfiguracjaKafelkaPulpitu, RozmiarKafelkaPulpitu } from '../../domain/typy'
 import { czasDawkiDoUwagi } from '../../services/LekiService'
 import { PROG_STARZENIA_POCZEKALNI_DNI } from '../../providers/DostawcaPoczekalniPulpitu'
-import type { Recepta, Skierowanie } from '../../domain/typy'
+import type { Cel, PlatnoscStala, Recepta, Skierowanie, TerminWaznosci } from '../../domain/typy'
 
 export interface AlertPulpitu {
   id: string
@@ -119,7 +119,7 @@ export function klasaRozmiaruKafelka(rozmiar: RozmiarKafelkaPulpitu) {
 }
 
 export function adresReferencjiZrodla(sourceRef: ReferencjaZrodla): string {
-  const adresy = { zadania: '/zadania', leki: '/zdrowie/leki', wizyty: '/zdrowie/wizyty', skierowania: '/zdrowie/skierowania', zdrowie: '/zdrowie/recepty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy', notatki: '/notatki', skrzynka: '/skrzynka' } as const
+  const adresy = { zadania: '/zadania', projekty: '/projekty', cele: '/cele', terminy: '/terminy', leki: '/zdrowie/leki', wizyty: '/zdrowie/wizyty', skierowania: '/zdrowie/skierowania', zdrowie: '/zdrowie/recepty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy', notatki: '/notatki', skrzynka: '/skrzynka', miasto: '/miasto' } as const
   const adres = adresy[sourceRef.modul as keyof typeof adresy] ?? '/'
   const parametry = new URLSearchParams({ element: sourceRef.encjaId })
   if (sourceRef.wystapienieId) parametry.set('wystapienie', sourceRef.wystapienieId)
@@ -152,8 +152,15 @@ function przypomnienieWymagaUwagi(element: ElementOgarniacza, dataReferencyjna: 
 
 export function alertyLekow(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date): AlertPulpitu[] {
   return elementy
-    .filter((element) => element.typ === 'lek' && element.status === 'otwarty' && element.referencjaZrodla && element.data && element.godzina)
-    .flatMap((element) => {
+    .filter((element) => element.typ === 'lek' && element.status === 'otwarty' && element.referencjaZrodla && element.data)
+    .flatMap((element): AlertPulpitu[] => {
+      if (element.typ === 'lek' && element.dane?.rodzaj === 'zapas' && element.referencjaZrodla && element.data) return [{
+        id: `${element.id}-stock`, tytul: element.tytul, opis: element.opis,
+        severity: element.data <= format(dataReferencyjna, 'yyyy-MM-dd') ? 'critical' as const : 'warning' as const,
+        termin: element.data, typ: element.data <= format(dataReferencyjna, 'yyyy-MM-dd') ? 'asap' as const : 'near' as const,
+        sourceRef: element.referencjaZrodla, createdAt: element.createdAt,
+      }]
+      if (!element.godzina) return []
       const odroczoneDo = element.typ === 'lek' ? element.dane?.odroczoneDo : undefined
       const czasDawki = new Date(odroczoneDo ?? `${element.data}T${element.godzina}:00`).getTime()
       const minelaGodzina = Number.isFinite(czasDawki) && czasDawki <= dataReferencyjna.getTime()
@@ -170,6 +177,25 @@ export function alertyLekow(elementy: readonly ElementOgarniacza[], dataReferenc
         createdAt: element.createdAt,
       }]
     })
+}
+
+export function alertyTerminow(terminy: readonly TerminWaznosci[], dataReferencyjna: Date): AlertPulpitu[] {
+  const dzisiaj = format(dataReferencyjna, 'yyyy-MM-dd')
+  return terminy.filter((termin) => termin.status !== 'odnowione').flatMap((termin) => {
+    const pozostalo = Math.ceil((new Date(`${termin.dataWaznosci}T12:00:00`).getTime() - new Date(`${dzisiaj}T12:00:00`).getTime()) / 86_400_000)
+    const prog = [1, 7, 30, 90].find((dni) => pozostalo <= dni)
+    if (prog === undefined) return []
+    return [{ id: `termin:${termin.id}`, tytul: termin.nazwa, opis: pozostalo < 0 ? 'Termin ważności minął' : `Termin ważności za ${Math.max(0, pozostalo)} dni (próg ${prog} dni)`, severity: pozostalo < 0 ? 'critical' as const : prog <= 7 ? 'warning' as const : 'info' as const, termin: termin.dataWaznosci, typ: pozostalo < 0 ? 'overdue' as const : 'near' as const, sourceRef: { modul: 'terminy' as const, encjaId: termin.id }, createdAt: termin.createdAt }]
+  })
+}
+
+export function alertyStarychCelow(cele: readonly Cel[], dataReferencyjna: Date, progDni = 30): AlertPulpitu[] {
+  const granica = dataReferencyjna.getTime() - progDni * 86_400_000
+  return cele.filter((cel) => cel.status === 'aktywne' && new Date(cel.updatedAt).getTime() < granica).map((cel) => ({ id: `cel-bez-aktywnosci:${cel.id}`, tytul: cel.nazwa, opis: `Cel bez aktywności od ponad ${progDni} dni`, severity: 'info' as const, typ: 'near' as const, sourceRef: { modul: 'cele' as const, encjaId: cel.id }, createdAt: cel.createdAt }))
+}
+
+export function alertyWzrostuCenSubskrypcji(platnosci: readonly PlatnoscStala[]): AlertPulpitu[] {
+  return platnosci.filter((x) => x.aktywna && x.rodzaj === 'subskrypcja' && x.historiaKwot?.length && x.kwota > x.historiaKwot.at(-1)!.kwota).map((x) => ({ id: `subskrypcja-wzrost:${x.id}:${x.kwota}`, tytul: x.nazwa, opis: `Cena wzrosła z ${x.historiaKwot!.at(-1)!.kwota.toFixed(2)} zł do ${x.kwota.toFixed(2)} zł`, severity: 'warning' as const, typ: 'near' as const, sourceRef: { modul: 'finanse' as const, encjaId: x.id }, createdAt: x.createdAt }))
 }
 
 export function alertyWizyt(elementy: readonly ElementOgarniacza[], dataReferencyjna: Date, horyzontMinuty = 24 * 60): AlertPulpitu[] {

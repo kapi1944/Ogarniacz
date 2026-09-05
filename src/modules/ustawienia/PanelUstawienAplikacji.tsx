@@ -4,7 +4,7 @@ import { Palette, Save, Undo2 } from 'lucide-react'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { Karta, Komunikat } from '../../components/Interfejs'
 import { DOMYSLNE_USTAWIENIA, normalizujUstawienia } from '../../domain/ustawienia'
-import type { TypSzybkiegoDodawania, Ustawienia } from '../../domain/typy'
+import type { NazwaModulu, TypSzybkiegoDodawania, Ustawienia } from '../../domain/typy'
 
 type NazwaSekcji = 'wyglad' | 'nawigacja' | 'pulpit' | 'harmonogram' | 'zadania' | 'szybkieDodawanie' | 'dostepnosc'
 
@@ -25,6 +25,18 @@ const typySzybkiegoDodawania: { wartosc: TypSzybkiegoDodawania; etykieta: string
   { wartosc: 'lek', etykieta: 'Lek' },
   { wartosc: 'wydatek', etykieta: 'Wydatek' },
   { wartosc: 'samochod', etykieta: 'Samochód' },
+]
+
+const modulyEcho: { wartosc: NazwaModulu; etykieta: string }[] = [
+  { wartosc: 'zadania', etykieta: 'Zadania' }, { wartosc: 'projekty', etykieta: 'Projekty' },
+  { wartosc: 'skrzynka', etykieta: 'Poczekalnia' }, { wartosc: 'planer', etykieta: 'Planer' },
+  { wartosc: 'nawyki', etykieta: 'Nawyki' }, { wartosc: 'zdrowie', etykieta: 'Zdrowie' },
+  { wartosc: 'leki', etykieta: 'Leki' }, { wartosc: 'wizyty', etykieta: 'Wizyty' },
+  { wartosc: 'przypomnienia', etykieta: 'Przypomnienia' }, { wartosc: 'zakupy', etykieta: 'Zakupy' },
+  { wartosc: 'finanse', etykieta: 'Finanse' }, { wartosc: 'samochod', etykieta: 'Samochód' },
+  { wartosc: 'cele', etykieta: 'Cele' }, { wartosc: 'notatki', etykieta: 'Notatki' },
+  { wartosc: 'dokumenty', etykieta: 'Dokumenty' }, { wartosc: 'terminy', etykieta: 'Terminy' },
+  { wartosc: 'miasto', etykieta: 'Miejsca' },
 ]
 
 export function PanelUstawienAplikacji() {
@@ -63,6 +75,22 @@ export function PanelUstawienAplikacji() {
     })
     ustawKomunikat('Przywrócono domyślne wartości w szkicu. Użyj „Zapisz ustawienia”, aby je utrwalić.')
   }
+
+  const resetujEcho = () => aktualizujSzkic({
+    ...szkic,
+    proaktywnoscEcho: DOMYSLNE_USTAWIENIA.proaktywnoscEcho,
+    echoWyciszone: DOMYSLNE_USTAWIENIA.echoWyciszone,
+    glosEcho: DOMYSLNE_USTAWIENIA.glosEcho,
+    automatycznyOdczytEcho: DOMYSLNE_USTAWIENIA.automatycznyOdczytEcho,
+    pamiecPreferencjiEcho: DOMYSLNE_USTAWIENIA.pamiecPreferencjiEcho,
+    internetEcho: DOMYSLNE_USTAWIENIA.internetEcho,
+    modulyEcho: DOMYSLNE_USTAWIENIA.modulyEcho,
+  })
+
+  const zmienDostepEcho = (modul: NazwaModulu, dostepny: boolean) => aktualizujSzkic({
+    ...szkic,
+    modulyEcho: dostepny ? [...new Set([...szkic.modulyEcho, modul])] : szkic.modulyEcho.filter((x) => x !== modul),
+  })
 
   const zapisz = async () => {
     await zapiszUstawienia(szkic)
@@ -146,6 +174,15 @@ export function PanelUstawienAplikacji() {
         <div className="pole pole--pelne"><span>Widoczne typy</span><div className="lista-typow-szybkich">{typySzybkiegoDodawania.map((typ) => <label key={typ.wartosc}><input type="checkbox" checked={szkic.szybkieDodawanie.widoczneTypy.includes(typ.wartosc)} onChange={(e) => zmienWidocznoscTypu(typ.wartosc, e.target.checked)} />{typ.etykieta}</label>)}</div></div>
         <div className="pole pole--pelne"><span>Ręczna kolejność</span><div className="lista-typow-szybkich">{szkic.szybkieDodawanie.kolejnoscTypow.map((typ, indeks) => <div key={typ}><span>{typySzybkiegoDodawania.find((element) => element.wartosc === typ)?.etykieta}</span><button type="button" className="przycisk przycisk--maly" disabled={indeks === 0} onClick={() => przesunTyp(typ, -1)}>↑</button><button type="button" className="przycisk przycisk--maly" disabled={indeks === szkic.szybkieDodawanie.kolejnoscTypow.length - 1} onClick={() => przesunTyp(typ, 1)}>↓</button></div>)}</div><small>Obowiązuje po wyłączeniu uczenia kolejności.</small></div><Przelacznik etykieta="Ucz kolejności" opis="Najczęściej używane typy mogą przesuwać się wyżej." zaznaczony={szkic.szybkieDodawanie.uczKolejnosci} zmien={(uczKolejnosci) => aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, uczKolejnosci } })} />
         <Przelacznik etykieta="Parser lokalny" opis="Włącza deterministyczne rozpoznawanie typu, daty i godziny." zaznaczony={szkic.szybkieDodawanie.parserWlaczony} zmien={(parserWlaczony) => aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, parserWlaczony } })} />
+      </SekcjaUstawien>
+
+      <SekcjaUstawien tytul="Echo" resetuj={resetujEcho}>
+        <Przelacznik etykieta="Głos" opis="Pozwala korzystać z wejścia głosowego, gdy urządzenie je udostępnia." zaznaczony={szkic.glosEcho} zmien={(glosEcho) => aktualizujSzkic({ ...szkic, glosEcho })} />
+        <Przelacznik etykieta="Automatyczny odczyt" opis="Odczytuje odpowiedzi Echo na obsługiwanym urządzeniu." zaznaczony={szkic.automatycznyOdczytEcho} zmien={(automatycznyOdczytEcho) => aktualizujSzkic({ ...szkic, automatycznyOdczytEcho })} />
+        <Przelacznik etykieta="Proaktywność" opis="Pozwala Echo pokazywać lokalne sugestie." zaznaczony={szkic.proaktywnoscEcho && !szkic.echoWyciszone} zmien={(wartosc) => aktualizujSzkic({ ...szkic, proaktywnoscEcho: wartosc, echoWyciszone: !wartosc })} />
+        <Przelacznik etykieta="Pamięć preferencji" opis="Przechowuje osobno jawne preferencje rozmowy, bez kopiowania danych domenowych." zaznaczony={szkic.pamiecPreferencjiEcho} zmien={(pamiecPreferencjiEcho) => aktualizujSzkic({ ...szkic, pamiecPreferencjiEcho })} />
+        <Przelacznik etykieta="Dostęp do internetu" opis="Pozwala użyć skonfigurowanego providera danych bieżących; sam przełącznik nie wykonuje requestów." zaznaczony={szkic.internetEcho} zmien={(internetEcho) => aktualizujSzkic({ ...szkic, internetEcho })} />
+        <div className="pole pole--pelne"><span>Uprawnienia do modułów</span><div className="lista-typow-szybkich">{modulyEcho.map((modul) => <label key={modul.wartosc}><input type="checkbox" checked={szkic.modulyEcho.includes(modul.wartosc)} onChange={(e) => zmienDostepEcho(modul.wartosc, e.target.checked)} />{modul.etykieta}</label>)}</div></div>
       </SekcjaUstawien>
 
       <SekcjaUstawien tytul="Dostępność" resetuj={() => resetujSekcje('dostepnosc')}>

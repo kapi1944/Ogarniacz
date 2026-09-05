@@ -9,6 +9,7 @@ import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { generujDawkiDnia, przewidywanaDataWyczerpania, zapiszStatusDawki } from '../../services/LekiService'
 import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
+import { utworzZadanie } from '../../services/ZadaniaService'
 
 const formatowanieDaty = new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium' })
 
@@ -143,8 +144,9 @@ export function WidokLekow() {
         { klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true },
         { klucz: 'dawkaInstrukcja', etykieta: 'Dawka / instrukcja użytkownika', wymagane: true },
         { klucz: 'godziny', etykieta: 'Godziny', wymagane: true, podpowiedz: 'np. 08:00, 14:00, 21:00' },
-        { klucz: 'dniTygodnia', etykieta: 'Dni tygodnia (0–6)', podpowiedz: 'opcjonalnie, np. 1, 3, 5; 0 oznacza niedzielę' },
-        { klucz: 'coIleDni', etykieta: 'Co ile dni', typ: 'number', min: 1, podpowiedz: 'opcjonalnie; wymaga daty rozpoczęcia' },
+        { klucz: 'trybHarmonogramu', etykieta: 'Harmonogram', typ: 'select', wymagane: true, domyslnaWartosc: 'codziennie', opcje: [{ wartosc: 'codziennie', etykieta: 'Codziennie' }, { wartosc: 'wybrane_dni', etykieta: 'Wybrane dni' }, { wartosc: 'co_x_dni', etykieta: 'Co X dni' }] },
+        { klucz: 'dniTygodnia', etykieta: 'Dni tygodnia (0–6)', podpowiedz: 'np. 1, 3, 5; 0 oznacza niedzielę', widoczne: (f) => f.trybHarmonogramu === 'wybrane_dni' },
+        { klucz: 'coIleDni', etykieta: 'Co ile dni', typ: 'number', min: 1, widoczne: (f) => f.trybHarmonogramu === 'co_x_dni' },
         { klucz: 'dataOd', etykieta: 'Okres od', typ: 'date' },
         { klucz: 'dataDo', etykieta: 'Okres do', typ: 'date' },
         { klucz: 'zapasJednostek', etykieta: 'Zapas (tabletki / jednostki)', typ: 'number', min: 0 },
@@ -153,7 +155,8 @@ export function WidokLekow() {
         { klucz: 'dodatkoweInstrukcje', etykieta: 'Dodatkowe instrukcje', typ: 'textarea' },
         { klucz: 'aktywny', etykieta: 'Stan', typ: 'select', wymagane: true, opcje: [{ wartosc: 'true', etykieta: 'Aktywny' }, { wartosc: 'false', etykieta: 'Nieaktywny' }] },
       ]}
-      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), dawkaInstrukcja: formularz.dawkaInstrukcja.trim(), godziny: formularz.godziny.split(',').map((x) => x.trim()).filter((x) => /^\d{2}:\d{2}$/.test(x)).sort(), dniTygodnia: formularz.dniTygodnia.split(',').map((x) => Number(x.trim())).filter((dzien) => Number.isInteger(dzien) && dzien >= 0 && dzien <= 6), coIleDni: formularz.coIleDni ? Math.max(1, Number(formularz.coIleDni)) : undefined, dataOd: formularz.dataOd || undefined, dataDo: formularz.dataDo || undefined, zapasJednostek: formularz.zapasJednostek ? Number(formularz.zapasJednostek) : undefined, zuzycieNaDawke: formularz.zuzycieNaDawke ? Number(formularz.zuzycieNaDawke) : undefined, dataOtwarcia: formularz.dataOtwarcia || undefined, dodatkoweInstrukcje: formularz.dodatkoweInstrukcje || undefined, aktywny: formularz.aktywny !== 'false', updatedAt: terazIso() } as Lek)}
+      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), dawkaInstrukcja: formularz.dawkaInstrukcja.trim(), godziny: formularz.godziny.split(',').map((x) => x.trim()).filter((x) => /^\d{2}:\d{2}$/.test(x)).sort(), dniTygodnia: formularz.trybHarmonogramu === 'wybrane_dni' ? formularz.dniTygodnia.split(',').map((x) => Number(x.trim())).filter((dzien) => Number.isInteger(dzien) && dzien >= 0 && dzien <= 6) : undefined, coIleDni: formularz.trybHarmonogramu === 'co_x_dni' && formularz.coIleDni ? Math.max(1, Number(formularz.coIleDni)) : undefined, dataOd: formularz.dataOd || undefined, dataDo: formularz.dataDo || undefined, zapasJednostek: formularz.zapasJednostek ? Number(formularz.zapasJednostek) : undefined, zuzycieNaDawke: formularz.zuzycieNaDawke ? Number(formularz.zuzycieNaDawke) : undefined, dataOtwarcia: formularz.dataOtwarcia || undefined, dodatkoweInstrukcje: formularz.dodatkoweInstrukcje || undefined, aktywny: formularz.aktywny !== 'false', updatedAt: terazIso() } as Lek)}
+      uzupelnijFormularz={(lek) => ({ trybHarmonogramu: lek.coIleDni ? 'co_x_dni' : lek.dniTygodnia?.length ? 'wybrane_dni' : 'codziennie' })}
       etykieta={(lek) => lek.nazwa}
       wybranyElementId={parametryAdresu.get('element') ?? undefined}
       szczegoly={(lek) => <><Znacznik wariant={lek.aktywny ? 'sukces' : 'neutralny'}>{lek.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{lek.dawkaInstrukcja}</span><span>Godziny: {lek.godziny.join(', ') || 'brak — uzupełnij'}</span>{lek.dataOd && <span>Okres: {lek.dataOd}{lek.dataDo ? ` – ${lek.dataDo}` : ''}</span>}{lek.zapasJednostek !== undefined && <span>Zapas: {lek.zapasJednostek}; przewidywane wyczerpanie: {przewidywanaDataWyczerpania(lek, data) ?? 'uzupełnij zużycie'}</span>}{lek.dodatkoweInstrukcje && <p>{lek.dodatkoweInstrukcje}</p>}</>}
@@ -165,6 +168,10 @@ export function WidokWizyt() {
   const [parametryAdresu] = useSearchParams()
   const { dane: wizyty, repozytorium } = useRepozytorium('wizyty')
   const { dane: kontakty } = useRepozytorium('kontakty')
+  const { dane: dokumenty } = useRepozytorium('dokumenty')
+  const { dane: skierowania } = useRepozytorium('skierowania')
+  const { dane: notatki } = useRepozytorium('notatki')
+  const { repozytorium: repoZadan } = useRepozytorium('zadania')
   const { dane: przypomnienia, repozytorium: repoPrzypomnien } = useRepozytorium('przypomnienia')
   const [komunikat, ustawKomunikat] = useState('')
   usePodswietlenie(wizyty.length)
@@ -194,15 +201,19 @@ export function WidokWizyt() {
         { klucz: 'miejsce', etykieta: 'Miejsce' },
         { klucz: 'lekarzPlacowka', etykieta: 'Lekarz / placówka' },
         { klucz: 'kontaktId', etykieta: 'Kontakt', typ: 'select', opcje: kontakty.map((kontakt) => ({ wartosc: kontakt.id, etykieta: kontakt.nazwa })) },
-        { klucz: 'notatka', etykieta: 'Notatka', typ: 'textarea' },
+        { klucz: 'skierowanieId', etykieta: 'Skierowanie', typ: 'select', opcje: skierowania.map((x) => ({ wartosc: x.id, etykieta: x.nazwa })) },
+        { klucz: 'dokumentyNazwy', etykieta: 'Dokumenty', podpowiedz: dokumenty.map((x) => x.nazwa).join(', ') || 'brak dokumentów' },
+        { klucz: 'notatkaPrzed', etykieta: 'Notatki przed wizytą', typ: 'textarea' },
+        { klucz: 'notatkaPo', etykieta: 'Notatka po wizycie', typ: 'textarea' },
         { klucz: 'pytania', etykieta: 'Pytania', podpowiedz: 'oddzielone przecinkami' },
         { klucz: 'checklista', etykieta: 'Rzeczy do zabrania', podpowiedz: 'oddzielone przecinkami' },
       ]}
-      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), status: (formularz.status || 'do_umowienia') as Wizyta['status'], terminGraniczny: formularz.terminGraniczny || undefined, data: formularz.data || undefined, godzina: formularz.godzina || undefined, miejsce: formularz.miejsce || undefined, lekarzPlacowka: formularz.lekarzPlacowka || undefined, kontaktId: formularz.kontaktId || undefined, notatka: formularz.notatka ?? '', pytania: formularz.pytania.split(',').map((x) => x.trim()).filter(Boolean), checklista: formularz.checklista.split(',').map((x) => x.trim()).filter(Boolean), dokumentyIds: istniejacy?.dokumentyIds ?? [], updatedAt: terazIso() })}
+      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), status: (formularz.status || 'do_umowienia') as Wizyta['status'], terminGraniczny: formularz.terminGraniczny || undefined, data: formularz.data || undefined, godzina: formularz.godzina || undefined, miejsce: formularz.miejsce || undefined, lekarzPlacowka: formularz.lekarzPlacowka || undefined, kontaktId: formularz.kontaktId || undefined, skierowanieId: formularz.skierowanieId || undefined, notatka: formularz.notatkaPrzed ?? '', notatkaPrzed: formularz.notatkaPrzed || undefined, notatkaPo: formularz.notatkaPo || undefined, pytania: formularz.pytania.split(',').map((x) => x.trim()).filter(Boolean), checklista: formularz.checklista.split(',').map((x) => x.trim()).filter(Boolean), dokumentyIds: formularz.dokumentyNazwy.split(',').map((n) => dokumenty.find((d) => d.nazwa.toLocaleLowerCase('pl') === n.trim().toLocaleLowerCase('pl'))?.id).filter((id): id is string => Boolean(id)), updatedAt: terazIso() })}
+      uzupelnijFormularz={(wizyta) => ({ dokumentyNazwy: wizyta.dokumentyIds.map((id) => dokumenty.find((x) => x.id === id)?.nazwa).filter(Boolean).join(', '), notatkaPrzed: wizyta.notatkaPrzed ?? wizyta.notatka, notatkaPo: wizyta.notatkaPo ?? '' })}
       etykieta={(wizyta) => wizyta.nazwa}
       wybranyElementId={parametryAdresu.get('element') ?? undefined}
-      szczegoly={(wizyta) => <><Znacznik wariant={wizyta.status === 'odbyta' ? 'sukces' : wizyta.status === 'do_umowienia' ? 'ostrzezenie' : 'informacja'}>{wizyta.status.replaceAll('_', ' ')}</Znacznik>{wizyta.data && <span>{wizyta.data} {wizyta.godzina}</span>}{wizyta.terminGraniczny && <span>Umów do: {wizyta.terminGraniczny}</span>}{wizyta.miejsce && <span>{wizyta.miejsce}</span>}{wizyta.pytania.length > 0 && <span>Pytania: {wizyta.pytania.join(', ')}</span>}{wizyta.checklista.length > 0 && <span>Zabrać: {wizyta.checklista.join(', ')}</span>}{wizyta.notatka && <p>{wizyta.notatka}</p>}</>}
-      akcje={(wizyta) => <button type="button" className="przycisk-ikona" title="Dodaj przypomnienie dzień wcześniej" onClick={() => dodajPrzypomnienie(wizyta)}><BellPlus aria-hidden="true" /></button>}
+      szczegoly={(wizyta) => <><Znacznik wariant={wizyta.status === 'odbyta' ? 'sukces' : wizyta.status === 'do_umowienia' ? 'ostrzezenie' : 'informacja'}>{wizyta.status.replaceAll('_', ' ')}</Znacznik>{wizyta.data && <span>{wizyta.data} {wizyta.godzina}</span>}{wizyta.terminGraniczny && <span>Umów do: {wizyta.terminGraniczny}</span>}{wizyta.miejsce && <span>{wizyta.miejsce}</span>}{wizyta.kontaktId && <span>Lekarz/kontakt: {kontakty.find((x) => x.id === wizyta.kontaktId)?.nazwa}</span>}{wizyta.skierowanieId && <span>Skierowanie: {skierowania.find((x) => x.id === wizyta.skierowanieId)?.nazwa}</span>}{wizyta.dokumentyIds.length > 0 && <span>Dokumenty: {wizyta.dokumentyIds.map((id) => dokumenty.find((x) => x.id === id)?.nazwa).filter(Boolean).join(', ')}</span>}{wizyta.pytania.length > 0 && <span>Pytania: {wizyta.pytania.join(', ')}</span>}{wizyta.checklista.length > 0 && <span>Przygotowanie: {wizyta.checklista.join(', ')}</span>}{wizyta.notatkaPrzed && <p>Przed wizytą: {wizyta.notatkaPrzed}</p>}{wizyta.notatkaPo && <p>Po wizycie: {wizyta.notatkaPo}</p>}<span>Powiązane notatki: {notatki.filter((x) => x.powiazania.some((p) => p.typ === 'wizyty' && p.id === wizyta.id)).map((x) => x.tytul).join(', ') || 'brak'}</span></>}
+      akcje={(wizyta) => <><button type="button" className="przycisk-ikona" title="Dodaj przypomnienie dzień wcześniej" onClick={() => dodajPrzypomnienie(wizyta)}><BellPlus aria-hidden="true" /></button>{wizyta.status === 'odbyta' && <button type="button" className="przycisk przycisk--maly" onClick={() => repoZadan.zapisz(utworzZadanie({ tytul: `Follow-up po wizycie: ${wizyta.nazwa}`, opis: wizyta.notatkaPo ?? '', priorytet: 'normalny' }))}>Utwórz follow-up</button>}</>}
     />
   </div>
 }

@@ -2,7 +2,7 @@ import { eachDayOfInterval, format, parseISO } from 'date-fns'
 import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
 import type { DostawcaElementowPulpitu, ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { DziennikLeku, Lek, Przypomnienie } from '../domain/typy'
-import { generujDawkiDnia } from '../services/LekiService'
+import { generujDawkiDnia, przewidywanaDataWyczerpania } from '../services/LekiService'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
 
 type ZrodloListy<Encja extends { id: string; createdAt: string; updatedAt: string }> = Pick<Repozytorium<Encja>, 'lista'>
@@ -42,7 +42,7 @@ export class DostawcaLekowPulpitu implements DostawcaElementowPulpitu {
     ])
     const dni = eachDayOfInterval({ start: parseISO(zakres.od), end: parseISO(zakres.do) })
 
-    return dni.flatMap((dzien) => generujDawkiDnia(leki, wpisy, format(dzien, 'yyyy-MM-dd')).map((dawka) => ({
+    const dawki = dni.flatMap((dzien) => generujDawkiDnia(leki, wpisy, format(dzien, 'yyyy-MM-dd')).map((dawka) => ({
       id: `lek:${dawka.idWystapienia}`,
       typ: 'lek' as const,
       tytul: dawka.lek.nazwa,
@@ -62,9 +62,30 @@ export class DostawcaLekowPulpitu implements DostawcaElementowPulpitu {
         idWystapienia: dawka.idWystapienia,
         statusDawki: dawka.status,
         odroczoneDo: dawka.wpis?.odroczoneDo,
+        rodzaj: 'dawka' as const,
       },
       createdAt: dawka.lek.createdAt,
       updatedAt: dawka.wpis?.updatedAt ?? dawka.lek.updatedAt,
     })))
+    const granicaZapasu = format(new Date(parseISO(zakres.od).getTime() + 7 * 24 * 60 * 60_000), 'yyyy-MM-dd')
+    const zapasy: ElementOgarniacza<'lek'>[] = leki.flatMap((lek) => {
+      const dataWyczerpania = lek.aktywny ? przewidywanaDataWyczerpania(lek, zakres.od) : undefined
+      if (!dataWyczerpania || dataWyczerpania > granicaZapasu) return []
+      return [{
+        id: `lek-zapas:${lek.id}`,
+        typ: 'lek',
+        tytul: `Kończy się: ${lek.nazwa}`,
+        opis: `Zapas ${lek.zapasJednostek} jednostek wystarczy do ${dataWyczerpania}.`,
+        referencjaZrodla: { modul: 'leki', encjaId: lek.id },
+        data: dataWyczerpania,
+        trybTerminu: 'bez_godziny',
+        priorytet: dataWyczerpania <= zakres.od ? 'asap' : 'pilny',
+        status: 'otwarty',
+        dane: { lekId: lek.id, rodzaj: 'zapas', zapasJednostek: lek.zapasJednostek },
+        createdAt: lek.createdAt,
+        updatedAt: lek.updatedAt,
+      }]
+    })
+    return [...dawki, ...zapasy]
   }
 }

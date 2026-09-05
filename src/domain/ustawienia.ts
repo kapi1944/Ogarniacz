@@ -3,6 +3,7 @@ import { DOMYSLNA_PERSONALIZACJA, normalizujPersonalizacje, zastosujPersonalizac
 import type {
   DostepnoscPlanistyczna,
   GestoscInterfejsu,
+  NazwaModulu,
   MotywAplikacji,
   Priorytet,
   TypSzybkiegoDodawania,
@@ -83,6 +84,11 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
   ukrywajSzczegolyZdrowotneWPowiadomieniach: false,
   proaktywnoscEcho: true,
   echoWyciszone: false,
+  glosEcho: true,
+  automatycznyOdczytEcho: false,
+  pamiecPreferencjiEcho: true,
+  internetEcho: false,
+  modulyEcho: ['zadania', 'projekty', 'skrzynka', 'planer', 'nawyki', 'leki', 'wizyty', 'zdrowie', 'skierowania', 'przypomnienia', 'zakupy', 'rachunki', 'finanse', 'samochod', 'cele', 'notatki', 'pomysly', 'na_pozniej', 'kontakty', 'dokumenty', 'terminy', 'miasto', 'miejsca'],
   trybUzytkownika: 'wlasciciel',
 }
 
@@ -140,6 +146,12 @@ function typySzybkiegoDodawania(wartosc: unknown, domyslne: TypSzybkiegoDodawani
   if (!Array.isArray(wartosc)) return [...domyslne]
   const typy = [...new Set(wartosc.filter((typ): typ is TypSzybkiegoDodawania => typeof typ === 'string' && dozwolone.includes(typ as TypSzybkiegoDodawania)))]
   return typy.length > 0 ? typy : [...domyslne]
+}
+
+function modulyEcho(wartosc: unknown, domyslne: NazwaModulu[]): NazwaModulu[] {
+  if (!Array.isArray(wartosc)) return [...domyslne]
+  const dozwolone = new Set<NazwaModulu>(domyslne)
+  return [...new Set(wartosc.filter((modul): modul is NazwaModulu => typeof modul === 'string' && dozwolone.has(modul as NazwaModulu)))]
 }
 
 function licznikiSzybkiegoDodawania(wartosc: unknown): Record<TypSzybkiegoDodawania, number> {
@@ -261,6 +273,11 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
     ukrywajSzczegolyZdrowotneWPowiadomieniach: logiczna(zrodlo.ukrywajSzczegolyZdrowotneWPowiadomieniach, domyslne.ukrywajSzczegolyZdrowotneWPowiadomieniach),
     proaktywnoscEcho: logiczna(zrodlo.proaktywnoscEcho, domyslne.proaktywnoscEcho),
     echoWyciszone: logiczna(zrodlo.echoWyciszone, domyslne.echoWyciszone),
+    glosEcho: logiczna(zrodlo.glosEcho, domyslne.glosEcho),
+    automatycznyOdczytEcho: logiczna(zrodlo.automatycznyOdczytEcho, domyslne.automatycznyOdczytEcho),
+    pamiecPreferencjiEcho: logiczna(zrodlo.pamiecPreferencjiEcho, domyslne.pamiecPreferencjiEcho),
+    internetEcho: logiczna(zrodlo.internetEcho, domyslne.internetEcho),
+    modulyEcho: modulyEcho(zrodlo.modulyEcho, domyslne.modulyEcho),
     trybUzytkownika: enumWartosci(zrodlo.trybUzytkownika, ['wlasciciel', 'edytor'], domyslne.trybUzytkownika),
     ...(opcjonalnyTekst(zrodlo.aktywnyEdytorId) ? { aktywnyEdytorId: opcjonalnyTekst(zrodlo.aktywnyEdytorId) } : {}),
   }

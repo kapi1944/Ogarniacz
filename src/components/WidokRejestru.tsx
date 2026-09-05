@@ -7,7 +7,7 @@ import { Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan } from 
 export interface DefinicjaPola {
   klucz: string
   etykieta: string
-  typ?: 'text' | 'textarea' | 'date' | 'time' | 'number' | 'email' | 'url' | 'select'
+  typ?: 'text' | 'textarea' | 'date' | 'time' | 'number' | 'email' | 'url' | 'select' | 'multiselect'
   wymagane?: boolean
   podpowiedz?: string
   min?: number
@@ -31,6 +31,7 @@ interface Wlasciwosci<T extends EncjaBazowa> {
   filtr?: ReactNode
   uzupelnijFormularz?: (element: T) => Record<string, string>
   wybranyElementId?: string
+  poZapisie?: (element: T, poprzedni?: T) => Promise<void>
 }
 
 function wartoscTekstowa(wartosc: unknown): string {
@@ -68,6 +69,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
     try {
       const encja = wlasciwosci.zbuduj(formularz, edytowany)
       await wlasciwosci.repozytorium.zapisz(encja)
+      await wlasciwosci.poZapisie?.(encja, edytowany)
       ustawFormularzOtwarty(false)
     } catch (przyczyna) {
       ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udalo sie zapisac elementu.')
@@ -113,6 +115,10 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
                 ) : pole.typ === 'select' ? (
                   <select required={pole.wymagane} value={formularz[pole.klucz] ?? ''} onChange={(e) => ustawFormularz({ ...formularz, [pole.klucz]: e.target.value })}>
                     {!pole.wymagane && <option value="">—</option>}
+                    {pole.opcje?.map((opcja) => <option key={opcja.wartosc} value={opcja.wartosc}>{opcja.etykieta}</option>)}
+                  </select>
+                ) : pole.typ === 'multiselect' ? (
+                  <select multiple value={(formularz[pole.klucz] ?? '').split(',').filter(Boolean)} onChange={(e) => ustawFormularz({ ...formularz, [pole.klucz]: Array.from(e.target.selectedOptions, (opcja) => opcja.value).join(',') })}>
                     {pole.opcje?.map((opcja) => <option key={opcja.wartosc} value={opcja.wartosc}>{opcja.etykieta}</option>)}
                   </select>
                 ) : (

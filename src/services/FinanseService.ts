@@ -9,6 +9,10 @@ export interface WykorzystanieBudzetu {
   procent: number
 }
 
+export function czyTransakcjaJestWydatkiem(transakcja: Wydatek): boolean {
+  return transakcja.rodzaj === undefined || transakcja.rodzaj === 'wydatek'
+}
+
 export function obliczWykorzystanieBudzetow(
   budzety: readonly Budzet[],
   wydatki: readonly Wydatek[],
@@ -18,7 +22,7 @@ export function obliczWykorzystanieBudzetow(
     .filter((budzet) => budzet.okres === okres)
     .map((budzet) => {
       const wydano = wydatki
-        .filter((wydatek) => wydatek.data.startsWith(okres) && (!budzet.kategoria || wydatek.kategoria === budzet.kategoria))
+        .filter((wydatek) => czyTransakcjaJestWydatkiem(wydatek) && wydatek.data.startsWith(okres) && (!budzet.kategoria || wydatek.kategoria === budzet.kategoria))
         .reduce((suma, wydatek) => suma + wydatek.kwota, 0)
       return { budzet, wydano, przekroczony: wydano >= budzet.limit, pozostalo: budzet.limit - wydano, procent: budzet.limit ? Math.round(wydano / budzet.limit * 100) : 0 }
     })
@@ -53,6 +57,14 @@ export function podsumujCashFlow(
 
 export function czyZaksiegowanoZrodlo(transakcje: readonly Wydatek[], powiazanie: NonNullable<Wydatek['powiazanie']>): boolean {
   return transakcje.some((transakcja) => transakcja.powiazanie?.typ === powiazanie.typ && transakcja.powiazanie.id === powiazanie.id)
+}
+
+export function przygotujWydatekZeZrodla(
+  transakcje: readonly Wydatek[],
+  dane: Omit<Wydatek, keyof ReturnType<typeof utworzMetadane>>,
+): Wydatek | undefined {
+  if (dane.powiazanie && czyZaksiegowanoZrodlo(transakcje, dane.powiazanie)) return undefined
+  return { ...utworzMetadane(), ...dane, rodzaj: 'wydatek' }
 }
 
 function zaokraglijKwote(kwota: number): number {

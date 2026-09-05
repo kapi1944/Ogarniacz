@@ -4,12 +4,19 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { Karta, Modal, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
-import type { DziennikNawyku, ListaZakupow, Nawyk, PlatnoscRachunku, PozycjaZakupow, Przypomnienie, Rachunek, Zadanie, Wydatek } from '../../domain/typy'
+import type { DziennikNawyku, ListaZakupow, Miejsce, Nawyk, PlatnoscRachunku, PozycjaZakupow, Przypomnienie, Rachunek, Zadanie } from '../../domain/typy'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { podsumowanieRegularnosciNawyku, statystykaNawyku } from '../../services/NawykiService'
 import { nastepnaData } from '../../services/PowtarzanieService'
-import { aktywnePrzypomnienia, nadchodzacePrzypomnienia, odroczPrzypomnienie, zakonczPrzypomnienie } from '../../services/PrzypomnieniaService'
+import { aktywnePrzypomnienia, nadchodzacePrzypomnienia, odroczPrzypomnienie, zakonczPrzypomnienie, zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
 import { ukonczZadanie, utworzZadanie } from '../../services/ZadaniaService'
+import { przygotujWydatekZeZrodla } from '../../services/FinanseService'
+import { pobierzSprawyWedlugMiejsca } from '../../services/MiejscaService'
+
+function mnoznikIlosci(ilosc: string): number {
+  const wartosc = ilosc.trim().replace(',', '.')
+  return /^\d+(?:\.\d+)?$/.test(wartosc) ? Number(wartosc) : 1
+}
 
 export function WidokPrzypomnien() {
   const [parametryAdresu] = useSearchParams()
@@ -55,10 +62,12 @@ export function WidokPrzypomnien() {
 export function WidokNawykow() {
   const { dane: nawyki, repozytorium } = useRepozytorium('nawyki')
   const { dane: wpisy, repozytorium: repoWpisow } = useRepozytorium('dziennikNawykow')
+  const { dane: cele } = useRepozytorium('cele')
   const dzisiaj = dzisiajIso()
   const zapiszWpis = async (nawyk: Nawyk, status: DziennikNawyku['status']) => {
     const istniejacy = wpisy.find((wpis) => wpis.nawykId === nawyk.id && wpis.data === dzisiaj)
-    await repoWpisow.zapisz({ ...(istniejacy ?? utworzMetadane(`${nawyk.id}:${dzisiaj}`)), nawykId: nawyk.id, data: dzisiaj, status, updatedAt: terazIso() })
+    const powodPominiecia = status === 'pominieta' ? window.prompt('Powód pominięcia (opcjonalnie)') || undefined : undefined
+    await repoWpisow.zapisz({ ...(istniejacy ?? utworzMetadane(`${nawyk.id}:${dzisiaj}`)), nawykId: nawyk.id, data: dzisiaj, status, powodPominiecia, updatedAt: terazIso() })
   }
   return <div className="widok">
     <NaglowekWidoku tytul="Nawyki" opis="Regularność bez karania za pojedynczą przerwę. Możesz zapisać pełną albo minimalną wersję." />
@@ -67,7 +76,7 @@ export function WidokNawykow() {
       const tydzien = statystykaNawyku(nawyk, wpisy, dzisiaj, 7)
       const miesiac = statystykaNawyku(nawyk, wpisy, dzisiaj, 30)
       const regularnosc = podsumowanieRegularnosciNawyku(nawyk, wpisy, dzisiaj)
-      return <Karta key={nawyk.id}><div className="naglowek-karty"><div><h3>{nawyk.nazwa}</h3><p>{nawyk.oknoOd && nawyk.oknoDo ? `Okno ${nawyk.oknoOd}–${nawyk.oknoDo}` : 'Elastyczne okno'}</p></div><Znacznik wariant={wpis ? 'sukces' : 'neutralny'}>{wpis?.status ?? 'czeka'}</Znacznik></div><div className="statystyki-mini"><span><strong>{tydzien.regularnosc}%</strong>7 dni</span><span><strong>{miesiac.regularnosc}%</strong>30 dni</span><span><strong>{regularnosc.aktualnaSeria}/{regularnosc.najlepszaSeria}</strong>seria</span></div><div aria-label="Heatmapa ostatnich 30 dni" className="heatmapa-nawyku">{regularnosc.daty.slice(-30).map((data) => <span key={data} title={data} className={regularnosc.wykonane.has(data) ? 'heatmapa-nawyku__dzien heatmapa-nawyku__dzien--wykonany' : 'heatmapa-nawyku__dzien'} />)}</div><p className="tekst-pomocniczy">Trend: {regularnosc.trend.replace('_', ' ')}</p>{nawyk.minimalnaWersja && <p>Minimum: {nawyk.minimalnaWersja}</p>}<div className="akcje-karty"><button type="button" className="przycisk przycisk--maly" onClick={() => zapiszWpis(nawyk, 'pelna')}>Pełna</button><button type="button" className="przycisk przycisk--maly" onClick={() => zapiszWpis(nawyk, 'minimalna')}>Minimalna</button><button type="button" className="przycisk przycisk--tekstowy" onClick={() => zapiszWpis(nawyk, 'pominieta')}>Pomiń</button></div></Karta>
+      return <Karta key={nawyk.id}><div className="naglowek-karty"><div><h3>{nawyk.nazwa}</h3><p>{nawyk.oknoOd && nawyk.oknoDo ? `Okno ${nawyk.oknoOd}–${nawyk.oknoDo}` : 'Elastyczne okno'}</p></div><Znacznik wariant={wpis ? 'sukces' : 'neutralny'}>{wpis?.status ?? 'czeka'}</Znacznik></div>{nawyk.celId && <p>Cel: {cele.find((x) => x.id === nawyk.celId)?.nazwa ?? 'nieznany'}</p>}<div className="statystyki-mini"><span><strong>{tydzien.regularnosc}%</strong>7 dni</span><span><strong>{miesiac.regularnosc}%</strong>30 dni</span><span><strong>{regularnosc.aktualnaSeria}/{regularnosc.najlepszaSeria}</strong>seria</span></div><div aria-label="Heatmapa ostatnich 30 dni" className="heatmapa-nawyku">{regularnosc.daty.slice(-30).map((data) => <span key={data} title={data} className={regularnosc.wykonane.has(data) ? 'heatmapa-nawyku__dzien heatmapa-nawyku__dzien--wykonany' : 'heatmapa-nawyku__dzien'} />)}</div><p className="tekst-pomocniczy">Trend: {regularnosc.trend.replace('_', ' ')}</p>{wpis?.powodPominiecia && <p>Powód pominięcia: {wpis.powodPominiecia}</p>}{nawyk.minimalnaWersja && <p>Minimum: {nawyk.minimalnaWersja}</p>}<div className="akcje-karty"><button type="button" className="przycisk przycisk--maly" onClick={() => zapiszWpis(nawyk, 'pelna')}>Pełna</button><button type="button" className="przycisk przycisk--maly" onClick={() => zapiszWpis(nawyk, 'minimalna')}>Minimalna</button><button type="button" className="przycisk przycisk--tekstowy" onClick={() => zapiszWpis(nawyk, 'pominieta')}>Pomiń</button></div></Karta>
     })}</div>
     <WidokRejestru
       tytul="Definicje nawyków"
@@ -85,11 +94,12 @@ export function WidokNawykow() {
         { klucz: 'oknoDo', etykieta: 'Okno do', typ: 'time' },
         { klucz: 'preferowanyCzas', etykieta: 'Preferowana godzina', typ: 'time' },
         { klucz: 'minimalnaWersja', etykieta: 'Minimalna wersja' },
+        { klucz: 'celId', etykieta: 'Powiązany cel', typ: 'select', opcje: cele.map((x) => ({ wartosc: x.id, etykieta: x.nazwa })) },
         { klucz: 'aktywny', etykieta: 'Stan', typ: 'select', wymagane: true, opcje: [{ wartosc: 'true', etykieta: 'Aktywny' }, { wartosc: 'false', etykieta: 'Nieaktywny' }] },
       ]}
-      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), czestotliwosc: (formularz.czestotliwosc || 'codziennie') as Nawyk['czestotliwosc'], dniTygodnia: formularz.dniTygodnia.split(',').map(Number).filter((x) => x >= 0 && x <= 6), razyWTygodniu: formularz.razyWTygodniu ? Number(formularz.razyWTygodniu) : undefined, interwalDni: formularz.interwalDni ? Number(formularz.interwalDni) : undefined, oknoOd: formularz.oknoOd || undefined, oknoDo: formularz.oknoDo || undefined, preferowanyCzas: formularz.preferowanyCzas || undefined, minimalnaWersja: formularz.minimalnaWersja || undefined, aktywny: formularz.aktywny !== 'false', updatedAt: terazIso() })}
+      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), czestotliwosc: (formularz.czestotliwosc || 'codziennie') as Nawyk['czestotliwosc'], dniTygodnia: formularz.dniTygodnia.split(',').map(Number).filter((x) => x >= 0 && x <= 6), razyWTygodniu: formularz.razyWTygodniu ? Number(formularz.razyWTygodniu) : undefined, interwalDni: formularz.interwalDni ? Number(formularz.interwalDni) : undefined, oknoOd: formularz.oknoOd || undefined, oknoDo: formularz.oknoDo || undefined, preferowanyCzas: formularz.preferowanyCzas || undefined, minimalnaWersja: formularz.minimalnaWersja || undefined, celId: formularz.celId || undefined, aktywny: formularz.aktywny !== 'false', updatedAt: terazIso() })}
       etykieta={(nawyk) => nawyk.nazwa}
-      szczegoly={(nawyk) => <><Znacznik wariant={nawyk.aktywny ? 'sukces' : 'neutralny'}>{nawyk.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{nawyk.czestotliwosc.replaceAll('_', ' ')}</span>{nawyk.oknoOd && <span>{nawyk.oknoOd}–{nawyk.oknoDo}</span>}{nawyk.minimalnaWersja && <span>Minimum: {nawyk.minimalnaWersja}</span>}</>}
+      szczegoly={(nawyk) => <><Znacznik wariant={nawyk.aktywny ? 'sukces' : 'neutralny'}>{nawyk.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{nawyk.czestotliwosc.replaceAll('_', ' ')}</span>{nawyk.razyWTygodniu && <span>Cel tygodniowy: {nawyk.razyWTygodniu} razy</span>}{nawyk.celId && <span>Cel: {cele.find((x) => x.id === nawyk.celId)?.nazwa ?? 'nieznany'}</span>}{nawyk.oknoOd && <span>{nawyk.oknoOd}–{nawyk.oknoDo}</span>}{nawyk.minimalnaWersja && <span>Minimum: {nawyk.minimalnaWersja}</span>}</>}
     />
   </div>
 }
@@ -101,25 +111,37 @@ export function WidokZakupow() {
   const { dane: wydatki, repozytorium: repoWydatkow } = useRepozytorium('wydatki')
   const [aktywnaId, ustawAktywnaId] = useState<string>()
   const [listaModal, ustawListaModal] = useState<ListaZakupow | null>()
+  const [komunikatZakupow, ustawKomunikatZakupow] = useState('')
   const aktywna = listy.find((lista) => lista.id === aktywnaId)
     ?? listy.find((lista) => lista.id === parametry.get('element'))
     ?? listy.find((lista) => lista.aktywna)
     ?? listy[0]
   const elementy = pozycje.filter((pozycja) => pozycja.listaId === aktywna?.id).sort((a, b) => Number(a.kupione) - Number(b.kupione))
-  const sumaPlanowana = elementy.reduce((suma, pozycja) => suma + (pozycja.cenaPlanowana ?? 0), 0)
-  const sumaRzeczywista = elementy.reduce((suma, pozycja) => suma + (pozycja.cenaRzeczywista ?? 0), 0)
+  const sumaPlanowana = elementy.reduce((suma, pozycja) => suma + (pozycja.cenaPlanowana ?? 0) * mnoznikIlosci(pozycja.ilosc), 0)
+  const sumaRzeczywista = elementy.reduce((suma, pozycja) => suma + (pozycja.cenaRzeczywista ?? 0) * mnoznikIlosci(pozycja.ilosc), 0)
   const zapiszJakoWydatek = async () => {
-    if (!aktywna || sumaRzeczywista <= 0 || wydatki.some((wydatek) => wydatek.powiazanie?.typ === 'zakupy' && wydatek.powiazanie.id === aktywna.id)) return
-    const wydatek: Wydatek = { ...utworzMetadane(), kwota: sumaRzeczywista, data: dzisiajIso(), kategoria: 'Zakupy', opis: aktywna.nazwa, powiazanie: { typ: 'zakupy', id: aktywna.id } }
+    if (!aktywna || sumaRzeczywista <= 0) return
+    const wydatek = przygotujWydatekZeZrodla(wydatki, { kwota: sumaRzeczywista, data: dzisiajIso(), kategoria: 'Zakupy', opis: aktywna.nazwa, powiazanie: { typ: 'zakupy', id: aktywna.id } })
+    if (!wydatek) return ustawKomunikatZakupow('Ta lista została już zaksięgowana.')
     await repoWydatkow.zapisz(wydatek)
+    ustawKomunikatZakupow('Lista została zaksięgowana w Finansach. Powiązanie ze źródłem zapisano.')
+  }
+
+  const skopiujListe = async () => {
+    if (!aktywna) return
+    const nowa: ListaZakupow = { ...aktywna, ...utworzMetadane(), nazwa: `${aktywna.nazwa} — kopia`, aktywna: true }
+    await repoList.zapisz(nowa)
+    await repoPozycji.zapiszWiele(elementy.map((x) => ({ ...x, ...utworzMetadane(), listaId: nowa.id, kupione: false, cenaRzeczywista: undefined })))
+    ustawAktywnaId(nowa.id)
   }
 
   return <div className="widok">
+    {komunikatZakupow && <p className="tekst-pomocniczy">{komunikatZakupow}</p>}
     <NaglowekWidoku tytul="Zakupy" opis="Wiele list, ilości, kategorie, sklep i opcjonalny budżet." akcje={<button type="button" className="przycisk przycisk--glowny" onClick={() => ustawListaModal({ ...utworzMetadane(), nazwa: '', aktywna: true })}><Plus aria-hidden="true" />Nowa lista</button>} />
     {listy.length === 0 ? <PustyStan tytul="Brak list zakupów" opis="Utwórz pierwszą listę, aby szybko dodawać pozycje." akcja={<button type="button" className="przycisk przycisk--glowny" onClick={() => ustawListaModal({ ...utworzMetadane(), nazwa: '', aktywna: true })}>Utwórz listę</button>} /> : <>
       <div className="zakladki-list">{listy.map((lista) => <button type="button" className={lista.id === aktywna?.id ? 'aktywna' : ''} onClick={() => ustawAktywnaId(lista.id)} key={lista.id}>{lista.nazwa}<small>{pozycje.filter((x) => x.listaId === lista.id && !x.kupione).length}</small></button>)}</div>
       {aktywna && <Karta>
-        <div className="naglowek-karty"><div><h2>{aktywna.nazwa}</h2><p>{[aktywna.sklep, aktywna.lokalizacja, aktywna.budzet ? `budżet ${aktywna.budzet.toFixed(2)} zł` : ''].filter(Boolean).join(' · ') || 'Bez dodatkowych ustawień'}</p><p>Plan: {sumaPlanowana.toFixed(2)} zł · rzeczywiście: {sumaRzeczywista.toFixed(2)} zł{aktywna.budzet ? ` · wykorzystano ${Math.round((sumaRzeczywista / aktywna.budzet) * 100)}%` : ''}</p></div><div><button type="button" className="przycisk przycisk--tekstowy" disabled={sumaRzeczywista <= 0 || wydatki.some((wydatek) => wydatek.powiazanie?.typ === 'zakupy' && wydatek.powiazanie.id === aktywna.id)} onClick={() => void zapiszJakoWydatek()}>Zapisz jako wydatek</button><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawListaModal(aktywna)}>Edytuj</button><button type="button" className="przycisk-ikona przycisk-ikona--niebezpieczny" title="Usuń listę" onClick={() => repoList.usun(aktywna.id)}><Trash2 aria-hidden="true" /></button></div></div>
+        <div className="naglowek-karty"><div><h2>{aktywna.nazwa}</h2><p>{[aktywna.sklep, aktywna.lokalizacja, aktywna.budzet ? `budżet ${aktywna.budzet.toFixed(2)} zł` : ''].filter(Boolean).join(' · ') || 'Bez dodatkowych ustawień'}</p><p>Plan: {sumaPlanowana.toFixed(2)} zł · rzeczywiście: {sumaRzeczywista.toFixed(2)} zł{aktywna.budzet ? ` · pozostało ${(aktywna.budzet - sumaRzeczywista).toFixed(2)} zł · wykorzystano ${Math.round((sumaRzeczywista / aktywna.budzet) * 100)}%` : ''}</p></div><div><button type="button" className="przycisk przycisk--tekstowy" disabled={sumaRzeczywista <= 0 || wydatki.some((wydatek) => wydatek.powiazanie?.typ === 'zakupy' && wydatek.powiazanie.id === aktywna.id)} onClick={() => void zapiszJakoWydatek()}>Zapisz jako wydatek</button><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void skopiujListe()}>Utwórz na podstawie tej listy</button><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawListaModal(aktywna)}>Edytuj</button><button type="button" className="przycisk-ikona przycisk-ikona--niebezpieczny" title="Usuń listę" onClick={() => repoList.usun(aktywna.id)}><Trash2 aria-hidden="true" /></button></div></div>
         <form className="szybki-wpis" onSubmit={async (e) => { e.preventDefault(); const daneForm = new FormData(e.currentTarget); const nazwa = String(daneForm.get('nazwa')).trim(); if (!nazwa) return; const pozycja: PozycjaZakupow = { ...utworzMetadane(), listaId: aktywna.id, nazwa, ilosc: String(daneForm.get('ilosc') || '1'), jednostka: String(daneForm.get('jednostka') || '') || undefined, cenaPlanowana: daneForm.get('cenaPlanowana') ? Number(daneForm.get('cenaPlanowana')) : undefined, kategoria: String(daneForm.get('kategoria') || '') || undefined, kupione: false }; await repoPozycji.zapisz(pozycja); e.currentTarget.reset() }}><input name="nazwa" placeholder="Dodaj pozycję…" aria-label="Nazwa pozycji" /><input name="ilosc" placeholder="Ilość" defaultValue="1" aria-label="Ilość" /><input name="jednostka" placeholder="Jednostka" aria-label="Jednostka" /><input name="cenaPlanowana" type="number" step="0.01" min="0" placeholder="Plan zł" aria-label="Cena planowana" /><input name="kategoria" placeholder="Kategoria" aria-label="Kategoria" /><button type="submit" className="przycisk przycisk--glowny">Dodaj</button></form>
         {elementy.length === 0 ? <PustyStan tytul="Lista jest pusta" opis="Dodaj pierwszą pozycję." /> : <div className="lista-zakupow">{elementy.map((pozycja) => <div className={pozycja.kupione ? 'kupione' : ''} key={pozycja.id}><button type="button" className="przycisk-check" onClick={() => repoPozycji.zapisz({ ...pozycja, kupione: !pozycja.kupione })}><Check aria-hidden="true" /></button><div><strong>{pozycja.nazwa}</strong><small>{[pozycja.kategoria, pozycja.jednostka].filter(Boolean).join(' · ')}</small></div><input aria-label={`Ilość ${pozycja.nazwa}`} value={pozycja.ilosc} onChange={(e) => repoPozycji.zapisz({ ...pozycja, ilosc: e.target.value })} /><input aria-label={`Cena rzeczywista ${pozycja.nazwa}`} type="number" step="0.01" min="0" placeholder="zł" value={pozycja.cenaRzeczywista ?? ''} onChange={(e) => repoPozycji.zapisz({ ...pozycja, cenaRzeczywista: e.target.value ? Number(e.target.value) : undefined })} /><button type="button" className="przycisk-ikona przycisk-ikona--niebezpieczny" onClick={() => repoPozycji.usun(pozycja.id)}><Trash2 aria-hidden="true" /></button></div>)}</div>}
       </Karta>}
@@ -159,9 +181,15 @@ export function WidokRachunkow() {
   const { dane: platnosci, repozytorium: repoPlatnosci } = useRepozytorium('platnosciRachunkow')
   const { dane: kontakty } = useRepozytorium('kontakty')
   const { dane: dokumenty } = useRepozytorium('dokumenty')
+  const { dane: wydatki, repozytorium: repoWydatkow } = useRepozytorium('wydatki')
+  const { dane: przypomnienia, repozytorium: repoPrzypomnien } = useRepozytorium('przypomnienia')
   const [pokazHistorie, ustawPokazHistorie] = useState(false)
   const oplac = async (rachunek: Rachunek) => {
     const platnosc: PlatnoscRachunku = { ...utworzMetadane(), rachunekId: rachunek.id, kwota: rachunek.kwota, zaplaconoAt: terazIso() }
+    if (window.confirm('Czy zapisać tę płatność także jako wydatek w Finansach?')) {
+      const transakcja = przygotujWydatekZeZrodla(wydatki, { opis: rachunek.nazwa, kwota: rachunek.kwota, data: dzisiajIso(), kategoria: rachunek.kategoria ?? 'Rachunki', powiazanie: { typ: 'rachunki', id: rachunek.id } })
+      if (transakcja) { await repoWydatkow.zapisz(transakcja); platnosc.transakcjaId = transakcja.id }
+    }
     await repoPlatnosci.zapisz(platnosc)
     const kolejnyTermin = nastepnaData(rachunek.termin, rachunek.powtarzanie)
     await repozytorium.zapisz({ ...rachunek, status: 'zaplacony' })
@@ -182,6 +210,11 @@ export function WidokRachunkow() {
         { klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true }, { klucz: 'kwota', etykieta: 'Kwota', typ: 'number', wymagane: true, min: 0.01, krok: 0.01 }, { klucz: 'termin', etykieta: 'Termin', typ: 'date', wymagane: true }, { klucz: 'kategoria', etykieta: 'Kategoria' }, { klucz: 'metodaPlatnosci', etykieta: 'Metoda płatności', typ: 'select', opcje: [{ wartosc: 'przelew', etykieta: 'Przelew' }, { wartosc: 'karta', etykieta: 'Karta' }, { wartosc: 'gotowka', etykieta: 'Gotówka' }, { wartosc: 'automatyczna', etykieta: 'Automatyczna' }] }, { klucz: 'automatycznaPlatnosc', etykieta: 'Płatność automatyczna', typ: 'select', opcje: [{ wartosc: 'tak', etykieta: 'Tak' }, { wartosc: 'nie', etykieta: 'Nie' }] }, { klucz: 'kontaktId', etykieta: 'Dostawca / kontakt', typ: 'select', opcje: kontakty.map((kontakt) => ({ wartosc: kontakt.id, etykieta: kontakt.nazwa })) }, { klucz: 'dokumentId', etykieta: 'Dokument / faktura', typ: 'select', opcje: dokumenty.map((dokument) => ({ wartosc: dokument.id, etykieta: dokument.nazwa })) }, { klucz: 'progiPrzypomnienia', etykieta: 'Progi przypomnienia w dniach', podpowiedz: 'np. 30, 7, 1' }, { klucz: 'status', etykieta: 'Status', typ: 'select', wymagane: true, opcje: [{ wartosc: 'niezaplacony', etykieta: 'Niezapłacony' }, { wartosc: 'zaplacony', etykieta: 'Zapłacony' }] }, { klucz: 'powtarzanieTyp', etykieta: 'Cykliczność', typ: 'select', opcje: [{ wartosc: 'brak', etykieta: 'Brak' }, { wartosc: 'miesiecznie', etykieta: 'Miesięcznie' }, { wartosc: 'rocznie', etykieta: 'Rocznie' }, { wartosc: 'tygodniowo', etykieta: 'Tygodniowo' }] },
       ]}
       zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), kwota: Number(formularz.kwota), termin: formularz.termin, kategoria: formularz.kategoria || undefined, metodaPlatnosci: formularz.metodaPlatnosci as Rachunek['metodaPlatnosci'] || undefined, automatycznaPlatnosc: formularz.automatycznaPlatnosc === 'tak', kontaktId: formularz.kontaktId || undefined, dokumentId: formularz.dokumentId || undefined, progiPrzypomnieniaMin: formularz.progiPrzypomnienia.split(',').map((dzien) => Number(dzien.trim())).filter((dzien) => Number.isFinite(dzien) && dzien >= 0).map((dzien) => dzien * 24 * 60), status: (formularz.status || 'niezaplacony') as Rachunek['status'], powtarzanie: formularz.powtarzanieTyp && formularz.powtarzanieTyp !== 'brak' ? { typ: formularz.powtarzanieTyp as NonNullable<Rachunek['powtarzanie']>['typ'], coIle: 1, dataStartu: formularz.termin } : undefined, updatedAt: terazIso() })}
+      poZapisie={async (rachunek) => {
+        const klucze = new Set((rachunek.progiPrzypomnieniaMin ?? []).map((minuty) => `rachunek:${rachunek.id}:${minuty}`))
+        await Promise.all(przypomnienia.filter((x) => x.zrodlo?.typ === 'rachunki' && x.zrodlo.id === rachunek.id && x.kluczDeduplikacji?.startsWith(`rachunek:${rachunek.id}:`) && !klucze.has(x.kluczDeduplikacji)).map((x) => repoPrzypomnien.zapisz({ ...x, stan: 'wykonane', updatedAt: terazIso() })))
+        await Promise.all((rachunek.progiPrzypomnieniaMin ?? []).map((minuty) => { const nowe: Przypomnienie = { ...utworzMetadane(), tytul: `Rachunek: ${rachunek.nazwa}`, zrodlo: { typ: 'rachunki', id: rachunek.id }, kluczDeduplikacji: `rachunek:${rachunek.id}:${minuty}`, typ: 'wzgledne', czas: `${rachunek.termin}T09:00:00`, przesuniecieMin: minuty, priorytet: 'wysoki', stan: 'nowe', eskalacja: true }; return repoPrzypomnien.zapisz(zapiszPowiazanePrzypomnienie(przypomnienia, nowe)) }))
+      }}
       etykieta={(rachunek) => rachunek.nazwa}
       szczegoly={(rachunek) => <><Znacznik wariant={rachunek.status === 'zaplacony' ? 'sukces' : rachunek.termin < dzisiajIso() ? 'blad' : 'ostrzezenie'}>{rachunek.status === 'zaplacony' ? 'zapłacony' : rachunek.termin < dzisiajIso() ? 'zaległy' : 'niezapłacony'}</Znacznik><strong>{rachunek.kwota.toLocaleString('pl-PL', { style: 'currency', currency: 'PLN' })}</strong><span>Termin: {rachunek.termin}</span>{rachunek.kategoria && <Znacznik>{rachunek.kategoria}</Znacznik>}{rachunek.automatycznaPlatnosc && <span>Płatność automatyczna</span>}{rachunek.powtarzanie && <span>Cykliczność: {rachunek.powtarzanie.typ}</span>}</>}
       akcje={(rachunek) => rachunek.status === 'niezaplacony' ? <button type="button" className="przycisk przycisk--maly" onClick={() => oplac(rachunek)}><CreditCard aria-hidden="true" />Opłać</button> : <button type="button" className="przycisk-ikona" title="Przywróć jako niezapłacony" onClick={() => repozytorium.zapisz({ ...rachunek, status: 'niezaplacony' })}><RotateCcw aria-hidden="true" /></button>}
@@ -191,11 +224,13 @@ export function WidokRachunkow() {
 
 export function WidokMiasta() {
   const { dane: zadania, repozytorium } = useRepozytorium('zadania')
-  const kontekstowe = zadania.filter((zadanie) => zadanie.status !== 'wykonane' && zadanie.kontekst)
+  const { dane: miejsca, repozytorium: repoMiejsc } = useRepozytorium('miejsca')
+  const kontekstowe = pobierzSprawyWedlugMiejsca(zadania, miejsca, {}).filter((zadanie) => zadanie.miejsceId || zadanie.kontekst)
   const grupy = kontekstowe.reduce((mapa, zadanie) => {
-    const klucz = zadanie.kontekst ?? 'Inne'
+    const miejsce = miejsca.find((x) => x.id === zadanie.miejsceId)
+    const klucz = miejsce?.id ?? `legacy:${zadanie.kontekst ?? 'Inne'}`
     mapa.set(klucz, [...(mapa.get(klucz) ?? []), zadanie])
     return mapa
   }, new Map<string, Zadanie[]>())
-  return <div className="widok"><NaglowekWidoku tytul="Sprawy na mieście" opis="Widok istniejących zadań pogrupowanych według miejsca — bez duplikowania danych." /><Karta><form className="szybki-wpis" onSubmit={async (e) => { e.preventDefault(); const form = new FormData(e.currentTarget); const tytul = String(form.get('tytul')).trim(); const kontekst = String(form.get('kontekst')).trim(); if (!tytul || !kontekst) return; await repozytorium.zapisz(utworzZadanie({ tytul, opis: '', priorytet: 'normalny', kontekst })); e.currentTarget.reset() }}><input name="tytul" placeholder="Co trzeba załatwić?" /><input name="kontekst" placeholder="Gdzie? np. apteka" /><button className="przycisk przycisk--glowny" type="submit"><Plus aria-hidden="true" />Dodaj zadanie</button></form></Karta>{kontekstowe.length === 0 ? <PustyStan tytul="Brak spraw terenowych" opis="Dodaj zadaniu kontekst miejsca, a pojawi się tutaj." /> : <div className="siatka-kart-modulow">{Array.from(grupy.entries()).map(([kontekst, elementy]) => <Karta key={kontekst}><div className="naglowek-karty"><h2>{kontekst}</h2><Znacznik>{elementy.length}</Znacznik></div><div className="lista-kompaktowa">{elementy.map((zadanie) => <div key={zadanie.id}><button type="button" className="przycisk-check" onClick={async () => { const wynik = ukonczZadanie(zadanie); await repozytorium.zapisz(wynik.wykonane) }}><Check aria-hidden="true" /></button><div><Link to={`/zadania?element=${zadanie.id}`}><strong>{zadanie.tytul}</strong></Link><small>{zadanie.termin ?? 'bez terminu'}</small></div></div>)}</div></Karta>)}</div>}</div>
+  return <div className="widok"><NaglowekWidoku tytul="Sprawy na mieście" opis="Zadania grupowane według zapisanych miejsc, z zachowaniem starszych kontekstów tekstowych." /><WidokRejestru tytul="Miejsca" opis="Lokalny rejestr miejsc używany przez zadania, kontakty i Echo." etykietaDodawania="Dodaj miejsce" dane={miejsca} repozytorium={repoMiejsc} pola={[{ klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true }, { klucz: 'adres', etykieta: 'Adres', wymagane: true }, { klucz: 'typ', etykieta: 'Typ', podpowiedz: 'np. apteka, sklep, urząd' }, { klucz: 'szerokosc', etykieta: 'Szerokość geograficzna', typ: 'number' }, { klucz: 'dlugosc', etykieta: 'Długość geograficzna', typ: 'number' }, { klucz: 'notatka', etykieta: 'Notatka', typ: 'textarea' }]} zbuduj={(f, e) => ({ ...(e ?? utworzMetadane()), nazwa: f.nazwa.trim(), adres: f.adres.trim(), typ: f.typ || undefined, szerokosc: f.szerokosc ? Number(f.szerokosc) : undefined, dlugosc: f.dlugosc ? Number(f.dlugosc) : undefined, notatka: f.notatka || undefined, updatedAt: terazIso() } as Miejsce)} etykieta={(x) => x.nazwa} szczegoly={(x) => <><span>{x.adres}</span>{x.typ && <Znacznik>{x.typ}</Znacznik>}<a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(x.szerokosc !== undefined && x.dlugosc !== undefined ? `${x.szerokosc},${x.dlugosc}` : x.adres)}`} target="_blank" rel="noreferrer">Nawiguj</a>{x.notatka && <p>{x.notatka}</p>}</>} /><Karta><form className="szybki-wpis" onSubmit={async (e) => { e.preventDefault(); const form = new FormData(e.currentTarget); const tytul = String(form.get('tytul')).trim(); const miejsceId = String(form.get('miejsceId')); const kontekst = String(form.get('kontekst')).trim(); if (!tytul || (!miejsceId && !kontekst)) return; await repozytorium.zapisz({ ...utworzZadanie({ tytul, opis: '', priorytet: 'normalny', kontekst: kontekst || miejsca.find((x) => x.id === miejsceId)?.nazwa }), miejsceId: miejsceId || undefined }); e.currentTarget.reset() }}><input name="tytul" placeholder="Co trzeba załatwić?" /><select name="miejsceId" aria-label="Zapisane miejsce"><option value="">Miejsce zapisane…</option>{miejsca.map((x) => <option value={x.id} key={x.id}>{x.nazwa}</option>)}</select><input name="kontekst" placeholder="albo stary kontekst tekstowy" /><button className="przycisk przycisk--glowny" type="submit"><Plus aria-hidden="true" />Dodaj zadanie</button></form></Karta>{kontekstowe.length === 0 ? <PustyStan tytul="Brak spraw terenowych" opis="Dodaj zadaniu miejsce lub kontekst, a pojawi się tutaj." /> : <div className="siatka-kart-modulow">{Array.from(grupy.entries()).map(([klucz, elementy]) => { const miejsce = miejsca.find((x) => x.id === klucz); const nazwa = miejsce?.nazwa ?? klucz.replace('legacy:', ''); return <Karta key={klucz}><div className="naglowek-karty"><div><h2>{nazwa}</h2>{miejsce?.adres && <p>{miejsce.adres}</p>}</div><Znacznik>{elementy.length}</Znacznik></div>{miejsce && <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(miejsce.adres)}`} target="_blank" rel="noreferrer">Nawiguj</a>}<div className="lista-kompaktowa">{elementy.map((zadanie) => <div key={zadanie.id}><button type="button" className="przycisk-check" onClick={async () => { const wynik = ukonczZadanie(zadanie); await repozytorium.zapisz(wynik.wykonane) }}><Check aria-hidden="true" /></button><div><Link to={`/zadania?element=${zadanie.id}`}><strong>{zadanie.tytul}</strong></Link><small>{zadanie.termin ?? 'bez terminu'}</small></div></div>)}</div></Karta> })}</div>}</div>
 }

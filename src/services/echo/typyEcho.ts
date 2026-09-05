@@ -115,6 +115,7 @@ export interface OdpowiedzEcho {
   wymagaPotwierdzenia?: boolean
   akcjaDoPotwierdzenia?: AkcjaDoPotwierdzeniaEcho
   wartosciDomyslne?: WartoscDomyslnaEcho[]
+  wyniki?: WynikNarzedziaEcho[]
 }
 
 export interface KandydatPamieciEcho {

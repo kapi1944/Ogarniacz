@@ -37,6 +37,13 @@ describe('reminder engine', () => {
     expect(wynik.zrodlo).toEqual({ typ: 'samochod', id: 'auto-1' })
   })
 
+  it('utrzymuje osobne progi przypomnień jednego terminu i deduplikuje każdy próg', () => {
+    const prog30 = baza({ id: 'r-30', zrodlo: { typ: 'terminy', id: 'termin-1' }, kluczDeduplikacji: 'termin:termin-1:30' })
+    const prog7 = baza({ id: 'r-7', zrodlo: { typ: 'terminy', id: 'termin-1' }, kluczDeduplikacji: 'termin:termin-1:7' })
+    expect(zapiszPowiazanePrzypomnienie([prog30], prog7).id).toBe('r-7')
+    expect(zapiszPowiazanePrzypomnienie([prog30, prog7], baza({ id: 'nowe', zrodlo: { typ: 'terminy', id: 'termin-1' }, kluczDeduplikacji: 'termin:termin-1:30' })).id).toBe('r-30')
+  })
+
   it('pokazuje przyszłe przypomnienie wraz z prawidłowym czasem uruchomienia', () => {
     expect(nadchodzacePrzypomnienia([baza({ czas: '2026-08-14T11:00:00.000Z' })], new Date('2026-08-14T10:00:00.000Z'))).toHaveLength(1)
   })

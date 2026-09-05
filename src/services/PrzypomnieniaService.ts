@@ -39,6 +39,7 @@ export function nadchodzacePrzypomnienia(przypomnienia: Przypomnienie[], teraz =
 export function zapiszPowiazanePrzypomnienie(przypomnienia: Przypomnienie[], nowe: Przypomnienie): Przypomnienie {
   const istniejace = przypomnienia.find((element) => element.zrodlo?.typ === nowe.zrodlo?.typ
     && element.zrodlo?.id === nowe.zrodlo?.id
+    && (nowe.kluczDeduplikacji ? element.kluczDeduplikacji === nowe.kluczDeduplikacji : !element.kluczDeduplikacji)
     && ['nowe', 'dostarczone', 'odroczone', 'eskalowane'].includes(element.stan))
   if (!istniejace) return nowe
   return {

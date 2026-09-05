@@ -178,6 +178,16 @@ describe('Planer draftu', () => {
     expect(generujPlan(wejscie)).toEqual(generujPlan(wejscie))
   })
 
+  it('nie planuje zadania zablokowanego przez niewykonane zadanie', () => {
+    const blokujace = zadanie({ id: 'blokujace', tytul: 'Najpierw to' })
+    const zablokowane = zadanie({ id: 'zablokowane', tytul: 'Potem to', blokowanePrzezIds: [blokujace.id] })
+
+    const wynik = generujPlan(dane({ zadania: [blokujace, zablokowane] }))
+
+    expect(wynik.pozycje.some((x) => x.zadanieId === zablokowane.id)).toBe(false)
+    expect(wynik.pozycje.some((x) => x.zadanieId === blokujace.id)).toBe(true)
+  })
+
   it('generowanie i anulowanie draftu niczego nie zapisują', async () => {
     const repozytorium = pobierzRepozytorium('zadania')
     const rekord = zadanie({ id: 'zadanie-repo' })
