@@ -11,6 +11,7 @@ import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { czyZadanieZalegle, odroczZadanie, przywrocZadanie, ukonczZadanie, utworzZadanie } from '../../services/ZadaniaService'
 import { platforma } from '../../platform/platforma'
+import { zaproponujPodzialPoczekalni } from '../../services/PoczekalniaService'
 
 const opcjePriorytetu = [
   { wartosc: 'niski', etykieta: 'Niski' },
@@ -170,11 +171,12 @@ type TypKonwersji = 'zadanie' | 'notatka' | 'pomysl' | 'zakup' | 'na_pozniej' | 
 export function WidokSkrzynki() {
   const { dane, repozytorium } = useRepozytorium('skrzynka')
   const [typyKonwersji, ustawTypyKonwersji] = useState<Record<string, TypKonwersji>>({})
+  const [podgladPodzialu, ustawPodgladPodzialu] = useState<string>()
   const [komunikat, ustawKomunikat] = useState('')
   usePodswietlenie(dane.length)
 
-  const przetworz = async (element: ElementSkrzynki) => {
-    const typ = typyKonwersji[element.id] ?? 'zadanie'
+  const przetworz = async (element: ElementSkrzynki, typWymuszony?: TypKonwersji) => {
+    const typ = typWymuszony ?? typyKonwersji[element.id] ?? 'zadanie'
     let celId = ''
     if (typ === 'zadanie') { const cel = utworzZadanie({ tytul: element.tresc, opis: '', priorytet: 'normalny' }); await (await import('../../data/Repozytorium')).pobierzRepozytorium('zadania').zapisz(cel); celId = cel.id }
     if (typ === 'notatka') { const cel: Notatka = { ...utworzMetadane(), tytul: element.tresc.slice(0, 70), tresc: element.tresc, tagi: [], powiazania: [] }; await (await import('../../data/Repozytorium')).pobierzRepozytorium('notatki').zapisz(cel); celId = cel.id }
@@ -190,12 +192,22 @@ export function WidokSkrzynki() {
       await pobierzRepozytorium('pozycjeZakupow').zapisz(cel); celId = cel.id
     }
     const modulDocelowy: Record<TypKonwersji, NazwaModulu> = { zadanie: 'zadania', notatka: 'notatki', pomysl: 'pomysly', zakup: 'zakupy', na_pozniej: 'na_pozniej', wizyta: 'wizyty' }
-    await repozytorium.zapisz({ ...element, status: 'przetworzone', sugerowanyTyp: modulDocelowy[typ], przeksztalconoNa: { typ: modulDocelowy[typ], id: celId }, updatedAt: terazIso() })
+    if (!typWymuszony) await repozytorium.zapisz({ ...element, status: 'przetworzone', sugerowanyTyp: modulDocelowy[typ], przeksztalconoNa: { typ: modulDocelowy[typ], id: celId }, updatedAt: terazIso() })
     ustawKomunikat('Element został przetworzony i zachowany w skrzynce jako historia.')
   }
 
+  const przetworzPodzial = async (element: ElementSkrzynki) => {
+    const propozycje = zaproponujPodzialPoczekalni(element.tresc)
+    for (const propozycja of propozycje) {
+      const typ = propozycja.typ === 'zakupy' ? 'zakup' : propozycja.typ === 'wizyty' ? 'wizyta' : propozycja.typ === 'na_pozniej' ? 'na_pozniej' : propozycja.typ === 'pomysly' ? 'pomysl' : 'zadanie'
+      await przetworz({ ...element, id: `${element.id}:${propozycja.tresc}`, tresc: propozycja.tresc }, typ)
+    }
+    await repozytorium.zapisz({ ...element, status: 'przetworzone', updatedAt: terazIso() })
+    ustawKomunikat(`Podzielono wpis na ${propozycje.length} elementy. Oryginał pozostał w historii.`)
+  }
+
   return <div className="widok">
-    <NaglowekWidoku tytul="Skrzynka" opis="Zapisz wszystko od razu. Klasyfikacja może poczekać." />
+    <NaglowekWidoku tytul="Poczekalnia" opis="Zapisz wszystko od razu. Klasyfikacja może poczekać." />
     {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}
     <Karta>
       <form className="szybki-wpis" onSubmit={async (e) => { e.preventDefault(); const pole = e.currentTarget.elements.namedItem('tresc') as HTMLInputElement; if (!pole.value.trim()) return; await repozytorium.zapisz({ ...utworzMetadane(), tresc: pole.value.trim(), zrodlo: 'tekst', status: 'nowe' }); pole.value = '' }}>
@@ -203,12 +215,13 @@ export function WidokSkrzynki() {
         <button className="przycisk przycisk--glowny" type="submit">Zapisz do skrzynki</button>
       </form>
     </Karta>
-    {dane.length === 0 ? <PustyStan tytul="Skrzynka jest pusta" opis="To dobrze — nic nie czeka na uporządkowanie." /> : <div className="lista-rekordow">{dane.map((element) => <article className="rekord" data-element-id={element.id} key={element.id}>
+    {dane.length === 0 ? <PustyStan tytul="Poczekalnia jest pusta" opis="To dobrze — nic nie czeka na uporządkowanie." /> : <div className="lista-rekordow">{dane.map((element) => <article className="rekord" data-element-id={element.id} key={element.id}>
       <div className="rekord__tresc"><h3>{element.tresc}</h3><div className="rekord__szczegoly"><Znacznik wariant={element.status === 'przetworzone' ? 'sukces' : 'ostrzezenie'}>{element.status}</Znacznik><span>{new Date(element.createdAt).toLocaleString('pl-PL')}</span>{element.sugerowanyTyp && <span>Sugerowany typ: {element.sugerowanyTyp}</span>}</div></div>
       <div className="rekord__akcje">
-        {element.status === 'nowe' && <><select aria-label="Typ konwersji" value={typyKonwersji[element.id] ?? 'zadanie'} onChange={(e) => ustawTypyKonwersji({ ...typyKonwersji, [element.id]: e.target.value as TypKonwersji })}><option value="zadanie">Zadanie</option><option value="notatka">Notatka</option><option value="pomysl">Pomysł</option><option value="zakup">Zakup</option><option value="wizyta">Do umówienia</option><option value="na_pozniej">Na później</option></select><button type="button" className="przycisk przycisk--maly" onClick={() => przetworz(element)}>Przetwórz</button></>}
+        {element.status === 'nowe' && <><select aria-label="Typ konwersji" value={typyKonwersji[element.id] ?? 'zadanie'} onChange={(e) => ustawTypyKonwersji({ ...typyKonwersji, [element.id]: e.target.value as TypKonwersji })}><option value="zadanie">Zadanie</option><option value="notatka">Notatka</option><option value="pomysl">Pomysł</option><option value="zakup">Zakup</option><option value="wizyta">Do umówienia</option><option value="na_pozniej">Na później</option></select><button type="button" className="przycisk przycisk--maly" onClick={() => przetworz(element)}>Przetwórz</button>{zaproponujPodzialPoczekalni(element.tresc).length > 1 && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPodgladPodzialu(element.id)}>Podgląd podziału</button>}</>}
         <button type="button" className="przycisk przycisk--tekstowy" onClick={() => repozytorium.usun(element.id)}>Usuń</button>
       </div>
+      {podgladPodzialu === element.id && <div className="rekord__szczegoly"><span>{zaproponujPodzialPoczekalni(element.tresc).map((propozycja) => `${propozycja.typ}: ${propozycja.tresc}`).join(' · ')}</span><button type="button" className="przycisk przycisk--maly" onClick={() => { void przetworzPodzial(element); ustawPodgladPodzialu(undefined) }}>Przetwórz propozycje</button><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPodgladPodzialu(undefined)}>Anuluj</button></div>}
     </article>)}</div>}
   </div>
 }

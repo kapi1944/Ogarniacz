@@ -24,6 +24,9 @@ const zrodla: ZrodloWyszukiwania[] = [
   { tabela: 'wydatki', modul: 'finanse', etykieta: 'Finanse', url: '/finanse', pola: ['opis', 'kategoria'] },
   { tabela: 'pojazdy', modul: 'samochod', etykieta: 'Samochód', url: '/samochod', pola: ['marka', 'model', 'rejestracja', 'vin'] },
   { tabela: 'pomysly', modul: 'pomysly', etykieta: 'Pomysł', url: '/pomysly', pola: ['tytul', 'opis'] },
+  { tabela: 'skrzynka', modul: 'skrzynka', etykieta: 'Poczekalnia', url: '/skrzynka', pola: ['tresc', 'sugerowanyTyp'] },
+  { tabela: 'naPozniej', modul: 'na_pozniej', etykieta: 'Na później', url: '/na-pozniej', pola: ['tytul', 'opis', 'adres', 'tagi'] },
+  { tabela: 'listyZakupow', modul: 'zakupy', etykieta: 'Zakupy', url: '/zakupy', pola: ['nazwa', 'sklep', 'tagi'] },
   { tabela: 'cele', modul: 'cele', etykieta: 'Cel', url: '/cele', pola: ['nazwa', 'opis'] },
   { tabela: 'przypomnienia', modul: 'przypomnienia', etykieta: 'Przypomnienie', url: '/przypomnienia', pola: ['tytul', 'opis'] },
 ]

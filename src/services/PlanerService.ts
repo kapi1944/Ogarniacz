@@ -1,6 +1,7 @@
 import type { RepozytoriumElementow, ElementOgarniacza } from '../domain/elementyOgarniacza'
 import { zadanieLegacyNaElement } from '../domain/adapterZadania'
 import type { Zadanie } from '../domain/typy'
+import { czyZadanieZablokowane } from './ZadaniaService'
 import type { HarmonogramDnia } from '../modules/pulpit/logikaOsiCzasu'
 import { minutyDnia } from '../modules/pulpit/logikaOsiCzasu'
 
@@ -121,6 +122,7 @@ function kandydaci(dane: DanePlanera): ElementOgarniacza<'zadanie'>[] {
   return dane.zadania
     .map(zadanieLegacyNaElement)
     .filter((zadanie) => zadanie.status === 'otwarty')
+    .filter((zadanie) => !czyZadanieZablokowane(dane.zadania.find((zrodlo) => zrodlo.id === zadanie.id)!, dane.zadania))
     .filter((zadanie) => !(zadanie.data && zadanie.godzina && zadanie.trybTerminu === 'o_godzinie'))
     .filter((zadanie) => !dane.zadania.find((zrodlo) => zrodlo.id === zadanie.id)?.dataStartu
       || dane.zadania.find((zrodlo) => zrodlo.id === zadanie.id)!.dataStartu! <= dane.data)

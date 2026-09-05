@@ -38,6 +38,8 @@ export interface Zadanie extends EncjaBazowa {
   podzadania: { id: Id; tytul: string; wykonane: boolean }[]
   powtarzanie?: RegulaPowtarzania
   powiazania: PowiazanieEncji[]
+  blokowanePrzezIds?: Id[]
+  faktycznyCzasMin?: number
   wykonanoAt?: string
   dataElementu?: string
   godzinaElementu?: string
@@ -61,6 +63,8 @@ export interface Projekt extends EncjaBazowa {
   blokady: string
   dataStartu?: string
   termin?: string
+  celId?: Id
+  kamienieMilowe?: { id: Id; nazwa: string; wykonany: boolean; termin?: string }[]
 }
 
 export interface ElementSkrzynki extends EncjaBazowa {
@@ -290,6 +294,9 @@ export interface Pomysl extends EncjaBazowa {
   tytul: string
   opis: string
   status: 'nowy' | 'rozwiniety' | 'zrealizowany'
+  tagi?: string[]
+  wartosc?: number
+  wysilek?: number
 }
 
 export interface NaPozniej extends EncjaBazowa {
@@ -298,6 +305,10 @@ export interface NaPozniej extends EncjaBazowa {
   adres?: string
   opis?: string
   status: 'oczekuje' | 'wykonane'
+  tagi?: string[]
+  priorytet?: Priorytet
+  przewidywanyCzasMin?: number
+  pokazPonownie?: string
 }
 
 export interface Cel extends EncjaBazowa {
@@ -308,6 +319,10 @@ export interface Cel extends EncjaBazowa {
   projektyIds: Id[]
   nawykiIds: Id[]
   postep: number
+  wartoscStartowa?: number
+  wartoscDocelowa?: number
+  jednostka?: string
+  ostatniReviewAt?: string
 }
 
 export interface Kontakt extends EncjaBazowa {

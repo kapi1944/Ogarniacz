@@ -57,3 +57,7 @@ export function przywrocZadanie(zadanie: Zadanie): Zadanie {
 export function odroczZadanie(zadanie: Zadanie, nowyTermin: string): Zadanie {
   return { ...zadanie, termin: nowyTermin, updatedAt: terazIso() }
 }
+
+export function czyZadanieZablokowane(zadanie: Zadanie, zadania: readonly Zadanie[]): boolean {
+  return (zadanie.blokowanePrzezIds ?? []).some((id) => zadania.find((inne) => inne.id === id)?.status !== 'wykonane')
+}
