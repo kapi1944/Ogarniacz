@@ -64,16 +64,16 @@ export class DostawcaFinansowPulpitu {
       })
     const wykorzystanie: ElementOgarniacza<'wydatek'>[] = okresyZakresu(zakres)
       .flatMap((okres) => obliczWykorzystanieBudzetow(budzety, wydatki, okres))
-      .filter((wynik) => wynik.przekroczony)
+      .filter(({ budzet, wydano }) => wydano >= budzet.limit * 0.8)
       .map(({ budzet, wydano }) => ({
         id: `budzet:${budzet.id}:${budzet.okres}`,
         typ: 'wydatek',
         tytul: budzet.nazwa,
-        opis: `Wydano ${wydano.toFixed(2)} zł z limitu ${budzet.limit.toFixed(2)} zł`,
+        opis: `Wydano ${wydano.toFixed(2)} zł z limitu ${budzet.limit.toFixed(2)} zł (${Math.round(wydano / budzet.limit * 100)}%).`,
         referencjaZrodla: { modul: 'finanse', encjaId: budzet.id },
         data: format(endOfMonth(parseISO(`${budzet.okres}-01`)), 'yyyy-MM-dd'),
         trybTerminu: 'bez_godziny',
-        priorytet: 'pilny',
+        priorytet: wydano > budzet.limit ? 'asap' : wydano >= budzet.limit * 0.9 ? 'pilny' : 'normalny',
         status: 'otwarty',
         dane: { rodzaj: 'budzet', okres: budzet.okres, limit: budzet.limit, wydano, waluta: 'PLN' },
         createdAt: budzet.createdAt,

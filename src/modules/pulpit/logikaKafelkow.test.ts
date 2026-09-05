@@ -143,13 +143,13 @@ describe('logika kafelków Pulpitu', () => {
     expect(new Set(pierwszy.map((pozycja) => pozycja.sourceRef.modul))).toEqual(new Set(['zadania', 'leki', 'wizyty', 'rachunki', 'samochod', 'zakupy']))
   })
 
-  it('deduplikuje ten sam problem źródła, ale zachowuje różne typy problemów', () => {
+  it('deduplikuje sygnały jednego problemu źródłowego', () => {
     const pierwszy = alert('pierwszy', 'overdue')
     const duplikat = { ...alert('duplikat', 'overdue'), sourceRef: pierwszy.sourceRef }
     const innyProblem = { ...alert('asap', 'asap'), sourceRef: pierwszy.sourceRef }
 
     expect(deduplikujAlerty([pierwszy, duplikat])).toHaveLength(1)
-    expect(deduplikujAlerty([pierwszy, innyProblem]).map((pozycja) => pozycja.typ)).toEqual(['overdue', 'asap'])
+    expect(deduplikujAlerty([pierwszy, innyProblem]).map((pozycja) => pozycja.typ)).toEqual(['asap'])
   })
 
   it('ogranicza alerty bez utraty pełnej listy i udostępnia wszystkie po rozwinięciu', () => {

@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, getDay, isSameMonth, parseISO, startOfMonth, startOfWeek, subMonths } from 'date-fns'
 import { pl } from 'date-fns/locale'
@@ -17,7 +18,7 @@ import { DostawcaFinansowPulpitu } from '../../providers/DostawcaFinansowPulpitu
 import { DostawcaSamochoduPulpitu } from '../../providers/DostawcaSamochoduPulpitu'
 import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
 import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
-import { anulujPlan, generujPlan, walidujPozycjeDraftu, zatwierdzPlan, type WynikPlanera } from '../../services/PlanerService'
+import { anulujPlan, DOMYSLNE_PREFERENCJE_PLANOWANIA, generujPlan, walidujPozycjeDraftu, zatwierdzPlan, type PreferencjePlanowania, type WynikPlanera } from '../../services/PlanerService'
 import { utworzHarmonogramDnia } from '../pulpit/logikaOsiCzasu'
 import { pobierzPolskieSwieto } from '../../services/PolskieSwietaService'
 import { czyZakresySieNakladaja, ETYKIETY_STATUSOW_URLOPU, ETYKIETY_TYPOW_URLOPU, urlopyDnia } from '../../services/UrlopyService'
@@ -50,8 +51,11 @@ function zmienCzas(iso: string, godzina: string): string {
 }
 
 export function WidokPlanera() {
-  const [data, ustawDate] = useState(dzisiajIso())
+  const [parametry] = useSearchParams()
+  const [data, ustawDate] = useState(() => parametry.get('data') ?? dzisiajIso())
   const [wynik, ustawWynik] = useState<WynikPlanera>()
+  const [wybranePozycje, ustawWybranePozycje] = useState<string[]>([])
+  const [preferencje, ustawPreferencje] = useState<PreferencjePlanowania>(DOMYSLNE_PREFERENCJE_PLANOWANIA)
   const [komunikat, ustawKomunikat] = useState('')
   const [reczneDodawanie, ustawReczneDodawanie] = useState(false)
   const { ustawienia } = useAplikacja()
@@ -77,16 +81,18 @@ export function WidokPlanera() {
       updatedAt: blok.updatedAt,
     })),
   ], [blokiDnia, data, wydarzeniaZrodlowe])
-  const danePlanera = useMemo(() => ({ data, zadania, wydarzenia, harmonogram }), [data, harmonogram, wydarzenia, zadania])
+  const danePlanera = useMemo(() => ({ data, zadania, wydarzenia, harmonogram, odGodziny: parametry.get('od') ?? undefined, preferencje }), [data, harmonogram, parametry, preferencje, wydarzenia, zadania])
 
   const generuj = () => {
-    ustawWynik(generujPlan(danePlanera))
+    const draft = generujPlan(danePlanera)
+    ustawWynik(draft)
+    ustawWybranePozycje(draft.pozycje.filter((pozycja) => pozycja.status === 'zaplanowana').map((pozycja) => pozycja.id))
     ustawKomunikat('Przygotowano deterministyczny draft. Repozytoria nie zostały zmienione.')
   }
 
   const zaakceptujWszystko = async () => {
     if (!wynik) return
-    const liczba = await zatwierdzPlan(wynik, repozytoriumElementowZadan)
+    const liczba = await zatwierdzPlan(wynik, repozytoriumElementowZadan, wybranePozycje)
     ustawWynik(undefined)
     ustawKomunikat(`Zatwierdzono ${liczba} pozycji przez aktualizację źródłowych Zadań.`)
   }
@@ -112,16 +118,25 @@ export function WidokPlanera() {
     <Karta>
       <div className="pasek-planera">
         <label><span>Dzień</span><input type="date" value={data} onChange={(e) => { ustawDate(e.target.value); ustawWynik(undefined) }} /></label>
+        <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawDate(format(new Date(Date.now() + 86_400_000), 'yyyy-MM-dd')); ustawWynik(undefined) }}>Jutro</button>
+        <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawDate(format(new Date(Date.now() + 3 * 86_400_000), 'yyyy-MM-dd')); ustawWynik(undefined) }}>Za 3 dni</button>
         <button type="button" className="przycisk przycisk--glowny" onClick={generuj}><RefreshCw aria-hidden="true" />Generuj propozycję</button>
       </div>
     </Karta>
+    <section className="pasek-planera" aria-label="Preferencje planowania">
+      <label><span>Preferowany blok</span><input type="number" min="15" step="5" value={preferencje.preferowanaDlugoscBlokuMinuty} onChange={(e) => ustawPreferencje({ ...preferencje, preferowanaDlugoscBlokuMinuty: Number(e.target.value) })} /></label>
+      <label><span>Przerwa</span><input type="number" min="0" step="5" value={preferencje.minimalnaPrzerwaMinuty} onChange={(e) => ustawPreferencje({ ...preferencje, minimalnaPrzerwaMinuty: Number(e.target.value) })} /></label>
+      <label><span>Intensywne pod rząd</span><input type="number" min="1" max="5" value={preferencje.maksymalnieIntensywnychPodRzad} onChange={(e) => ustawPreferencje({ ...preferencje, maksymalnieIntensywnychPodRzad: Number(e.target.value) })} /></label>
+      <label><span>Skupienie od</span><input type="time" value={preferencje.godzinySkupieniaOd} onChange={(e) => ustawPreferencje({ ...preferencje, godzinySkupieniaOd: e.target.value })} /></label>
+      <label><span>do</span><input type="time" value={preferencje.godzinySkupieniaDo} onChange={(e) => ustawPreferencje({ ...preferencje, godzinySkupieniaDo: e.target.value })} /></label>
+    </section>
     {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}
 
     {wynik && <Karta klasa="propozycja-planu">
-      <div className="naglowek-karty"><div><h2>Draft propozycji</h2><p>{wynik.minutyZaplanowane} min zaplanowanych z {wynik.minutyDostepne} min dostępnych. Konflikty pozostają niezaplanowane.</p></div><div className="naglowek-widoku__akcje"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawWynik(anulujPlan(wynik)); ustawKomunikat('Draft anulowano bez zapisu.') }}><X aria-hidden="true" />Anuluj</button><button type="button" className="przycisk przycisk--glowny" onClick={zaakceptujWszystko}><Check aria-hidden="true" />Zatwierdź plan</button></div></div>
+      <div className="naglowek-karty"><div><h2>Draft propozycji</h2><p>{wynik.minutyZaplanowane} min zaplanowanych z {wynik.minutyDostepne} min dostępnych. Konflikty pozostają niezaplanowane.</p></div><div className="naglowek-widoku__akcje"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawWynik(anulujPlan(wynik)); ustawKomunikat('Draft anulowano bez zapisu.') }}><X aria-hidden="true" />Anuluj</button><button type="button" className="przycisk przycisk--glowny" disabled={wybranePozycje.length === 0} onClick={zaakceptujWszystko}><Check aria-hidden="true" />Zatwierdź wybrane ({wybranePozycje.length})</button></div></div>
       <div className="lista-blokow">{wynik.pozycje.map((pozycja) => {
         const godzina = pozycja.poczatek?.slice(11, 16) ?? harmonogram.zakresAktywny.od
-        return <article className="blok-planu blok-planu--zadanie" key={pozycja.id}><div className="blok-planu__czas"><input aria-label={`Początek: ${pozycja.tytul}`} type="time" value={godzina} onChange={(e) => aktualizujPozycje(pozycja.id, e.target.value, pozycja.czasTrwaniaMinuty ?? 0)} /><input aria-label={`Czas trwania: ${pozycja.tytul}`} type="number" min="1" step="5" placeholder="min" value={pozycja.czasTrwaniaMinuty ?? ''} onChange={(e) => aktualizujPozycje(pozycja.id, godzina, Number(e.target.value))} /></div><div><strong>{pozycja.tytul}</strong><small>{pozycja.status === 'zaplanowana' ? `${godzina}–${pozycja.koniec?.slice(11, 16)}` : pozycja.powod}</small></div><Znacznik wariant={pozycja.status === 'zaplanowana' ? 'sukces' : 'ostrzezenie'}>{pozycja.status.replace('_', ' ')}</Znacznik><button type="button" className="przycisk-ikona" title="Usuń z draftu" onClick={() => ustawWynik({ ...wynik, pozycje: wynik.pozycje.filter((element) => element.id !== pozycja.id) })}><Trash2 aria-hidden="true" /></button></article>
+        return <article className="blok-planu blok-planu--zadanie" key={pozycja.id}><input aria-label={`Zatwierdź ${pozycja.tytul}`} type="checkbox" checked={wybranePozycje.includes(pozycja.id)} disabled={pozycja.status !== 'zaplanowana'} onChange={(e) => ustawWybranePozycje((wybrane) => e.target.checked ? [...wybrane, pozycja.id] : wybrane.filter((id) => id !== pozycja.id))} /><div className="blok-planu__czas"><input aria-label={`Początek: ${pozycja.tytul}`} type="time" value={godzina} onChange={(e) => aktualizujPozycje(pozycja.id, e.target.value, pozycja.czasTrwaniaMinuty ?? 0)} /><input aria-label={`Czas trwania: ${pozycja.tytul}`} type="number" min="1" step="5" placeholder="min" value={pozycja.czasTrwaniaMinuty ?? ''} onChange={(e) => aktualizujPozycje(pozycja.id, godzina, Number(e.target.value))} /></div><div><strong>{pozycja.tytul}</strong><small>{pozycja.status === 'zaplanowana' ? `${godzina}–${pozycja.koniec?.slice(11, 16)}` : pozycja.powod}</small></div><Znacznik wariant={pozycja.status === 'zaplanowana' ? 'sukces' : 'ostrzezenie'}>{pozycja.status.replace('_', ' ')}</Znacznik><button type="button" className="przycisk-ikona" title="Usuń z draftu" onClick={() => ustawWynik({ ...wynik, pozycje: wynik.pozycje.filter((element) => element.id !== pozycja.id) })}><Trash2 aria-hidden="true" /></button></article>
       })}</div>
     </Karta>}
 

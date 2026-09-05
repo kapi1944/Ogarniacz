@@ -15,6 +15,15 @@ export interface DanePlanera {
   wydarzenia: ElementOgarniacza[]
   harmonogram: HarmonogramDnia
   odGodziny?: string
+  preferencje?: PreferencjePlanowania
+}
+
+export interface PreferencjePlanowania {
+  preferowanaDlugoscBlokuMinuty: number
+  minimalnaPrzerwaMinuty: number
+  maksymalnieIntensywnychPodRzad: number
+  godzinySkupieniaOd?: string
+  godzinySkupieniaDo?: string
 }
 
 export type StatusPozycjiDraftu = 'zaplanowana' | 'wymaga_czasu' | 'konflikt'
@@ -35,6 +44,14 @@ export interface WynikPlanera {
   pozycje: PozycjaDraftu[]
   minutyDostepne: number
   minutyZaplanowane: number
+}
+
+export const DOMYSLNE_PREFERENCJE_PLANOWANIA: PreferencjePlanowania = {
+  preferowanaDlugoscBlokuMinuty: 60,
+  minimalnaPrzerwaMinuty: 10,
+  maksymalnieIntensywnychPodRzad: 2,
+  godzinySkupieniaOd: '08:00',
+  godzinySkupieniaDo: '12:00',
 }
 
 export interface WynikWalidacjiPozycji {
@@ -120,8 +137,11 @@ function kandydaci(dane: DanePlanera): ElementOgarniacza<'zadanie'>[] {
     })
 }
 
-function znajdzSlot(przedzialy: readonly Przedzial[], czas: number, deadline?: number): Przedzial | undefined {
-  return przedzialy.find((przedzial) => {
+function znajdzSlot(przedzialy: readonly Przedzial[], czas: number, deadline?: number, preferujSkupienie?: Przedzial): Przedzial | undefined {
+  const dostepne = preferujSkupienie
+    ? [...przedzialy.filter((przedzial) => przedzial.od >= preferujSkupienie.od && przedzial.do <= preferujSkupienie.do), ...przedzialy]
+    : przedzialy
+  return dostepne.find((przedzial) => {
     const koniec = przedzial.od + czas
     return koniec <= przedzial.do && (deadline === undefined || koniec <= deadline)
   })
@@ -131,6 +151,11 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
   let wolne = przedzialyDostepne(dane)
   const minutyDostepne = wolne.reduce((suma, przedzial) => suma + przedzial.do - przedzial.od, 0)
   const pozycje: PozycjaDraftu[] = []
+  const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }
+  const skupienie = preferencje.godzinySkupieniaOd && preferencje.godzinySkupieniaDo
+    ? { od: minutyDnia(preferencje.godzinySkupieniaOd), do: minutyDnia(preferencje.godzinySkupieniaDo) }
+    : undefined
+  let intensywnePodRzad = 0
 
   for (const zadanie of kandydaci(dane)) {
     const czas = zadanie.czasTrwaniaMinuty
@@ -145,7 +170,8 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
       continue
     }
     const deadline = terminMinuty(zadanie, dane.data)
-    const slot = deadline === -1 ? undefined : znajdzSlot(wolne, czas, deadline)
+    const intensywne = zadanie.priorytet === 'asap' || zadanie.priorytet === 'pilny'
+    const slot = deadline === -1 ? undefined : znajdzSlot(wolne, czas, deadline, intensywne ? skupienie : undefined)
     if (!slot) {
       pozycje.push({
         id: `draft:${zadanie.id}`,
@@ -167,7 +193,10 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
       koniec: isoDnia(dane.data, koniec),
       status: 'zaplanowana',
     })
-    wolne = odejmijPrzedzial(wolne, { od: slot.od, do: koniec })
+    const potrzebnaPrzerwa = intensywne && intensywnePodRzad + 1 >= preferencje.maksymalnieIntensywnychPodRzad
+    const doZajecia = Math.min(slot.do, koniec + (potrzebnaPrzerwa ? preferencje.minimalnaPrzerwaMinuty : 0))
+    wolne = odejmijPrzedzial(wolne, { od: slot.od, do: doZajecia })
+    intensywnePodRzad = intensywne ? (potrzebnaPrzerwa ? 0 : intensywnePodRzad + 1) : 0
   }
 
   return {
@@ -210,8 +239,9 @@ export function anulujPlan(_wynik: WynikPlanera): undefined {
   return undefined
 }
 
-export async function zatwierdzPlan(wynik: WynikPlanera, repozytorium: RepozytoriumElementow<'zadanie'>): Promise<number> {
-  const zaplanowane = wynik.pozycje.filter((pozycja) => pozycja.status === 'zaplanowana' && pozycja.poczatek && pozycja.czasTrwaniaMinuty)
+export async function zatwierdzPlan(wynik: WynikPlanera, repozytorium: RepozytoriumElementow<'zadanie'>, wybraneId?: readonly string[]): Promise<number> {
+  const wybrane = wybraneId ? new Set(wybraneId) : undefined
+  const zaplanowane = wynik.pozycje.filter((pozycja) => pozycja.status === 'zaplanowana' && pozycja.poczatek && pozycja.czasTrwaniaMinuty && (!wybrane || wybrane.has(pozycja.id)))
   for (const pozycja of zaplanowane) {
     await repozytorium.aktualizuj(pozycja.zadanieId, {
       data: wynik.data,

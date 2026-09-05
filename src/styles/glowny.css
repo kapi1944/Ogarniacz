@@ -2108,3 +2108,7 @@ input[type="radio"] {
 .paleta-polecen span { display: grid; min-width: 0; gap: 2px; }
 .paleta-polecen small { color: var(--tekst-2); font-size: .7rem; }
 @media (max-width: 520px) { .paleta-polecen { grid-template-columns: 1fr; } }
+
+.strefa-pulpitu--wymaga-uwagi { border-color: color-mix(in srgb, var(--ostrzezenie) 55%, var(--obramowanie)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ostrzezenie) 18%, transparent), var(--cien); }
+.centrum-dowodzenia__podsumowanie { display: block; margin-top: 8px; color: var(--tekst-2); }
+.pulpit-sekcja--horyzont { display: grid; }

@@ -213,14 +213,18 @@ export function alertyFinansow(elementy: readonly ElementOgarniacza[], dataRefer
   return elementy.flatMap((element): AlertPulpitu[] => {
     if (!element.referencjaZrodla || element.status !== 'otwarty') return []
     if (element.typ === 'wydatek' && element.dane?.rodzaj === 'budzet') {
-      if (element.dane.okres !== dzisiaj.slice(0, 7)) return []
+      if (element.dane.okres !== dzisiaj.slice(0, 7) || !element.dane.limit || element.dane.wydano === undefined) return []
+      const wykorzystanie = element.dane.wydano / element.dane.limit
+      if (wykorzystanie < 0.8) return []
+      const severity = wykorzystanie > 1 ? 'critical' as const : wykorzystanie >= 0.9 ? 'warning' as const : 'info' as const
+      const opis = wykorzystanie > 1 ? 'Budżet został przekroczony' : wykorzystanie >= 0.9 ? 'Budżet jest blisko limitu' : 'Wykorzystano 80% budżetu'
       return [{
         id: `${element.id}-budget`,
         tytul: element.tytul,
-        opis: element.opis ?? 'Przekroczony budżet',
-        severity: 'warning' as const,
+        opis,
+        severity,
         termin: element.data,
-        typ: 'asap' as const,
+        typ: wykorzystanie > 1 ? 'asap' as const : 'near' as const,
         sourceRef: element.referencjaZrodla,
         createdAt: element.createdAt,
       }]
@@ -329,7 +333,7 @@ export function alertyPoczekalni(elementy: readonly ElementOgarniacza[], dataRef
 }
 
 export function deduplikujAlerty(alerty: readonly AlertPulpitu[]) {
-  return [...new Map(alerty.map((alert) => [`${alert.sourceRef.modul}:${alert.sourceRef.encjaId}:${alert.sourceRef.wystapienieId ?? ''}:${alert.typ}`, alert])).values()]
+  return [...new Map(alerty.map((alert) => [`${alert.sourceRef.modul}:${alert.sourceRef.encjaId}:${alert.sourceRef.wystapienieId ?? ''}`, alert])).values()]
 }
 
 export function rangujAlerty(alerty: readonly AlertPulpitu[]) {

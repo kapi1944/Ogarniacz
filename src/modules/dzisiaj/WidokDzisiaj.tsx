@@ -82,6 +82,19 @@ export function WidokPulpitu() {
   const najblizszyId = elementTeraz?.stan === 'najblizszy' ? elementTeraz.element.id : undefined
   const charakterDnia = harmonogram.pracuje ? `Praca ${harmonogram.odPracy}–${harmonogram.doPracy}` : 'Dzień bez pracy'
 
+  const minutyTeraz = teraz.getHours() * 60 + teraz.getMinutes()
+  const opoznienieMinuty = zaplanowane
+    .filter((element) => element.status !== 'wykonany' && element.godzina)
+    .reduce((suma, element) => {
+      const [godzina, minuta] = element.godzina!.split(':').map(Number)
+      const koniec = godzina * 60 + minuta + (element.czasTrwaniaMinuty ?? 0)
+      return suma + Math.max(0, minutyTeraz - koniec)
+    }, 0)
+  const rytmDnia = teraz.getHours() < 12
+    ? (opoznienieMinuty > 0 ? `Poranek: plan wymaga korekty o ${opoznienieMinuty} min.` : 'Poranek: wybierz najważniejszy pierwszy krok.')
+    : teraz.getHours() >= 18
+      ? `Wieczór: zostało ${bezGodziny.length + zaplanowane.filter((element) => element.status !== 'wykonany').length} otwartych spraw.`
+      : (opoznienieMinuty > 0 ? `Jesteś około ${opoznienieMinuty} min po planie.` : 'Plan biegnie zgodnie z rytmem dnia.')
   const wykonaj = async (element: ElementOgarniacza) => {
     if (element.typ !== 'zadanie') return
     await repozytoriumElementowZadan.aktualizuj(element.id, { status: 'wykonany' })
@@ -103,11 +116,11 @@ export function WidokPulpitu() {
   }
 
   return <div className="widok widok-dzisiaj">
-    <NaglowekWidoku tytul="Dzisiaj" opis="Plan dnia krok po kroku." akcje={<><Link className="przycisk przycisk--drugorzedny" to="/echo"><MessageCircle aria-hidden="true" />Zapytaj Echo</Link><button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj</button></>} />
+    <NaglowekWidoku tytul="Dzisiaj" opis="Plan dnia krok po kroku." akcje={<><Link className="przycisk przycisk--drugorzedny" to={`/planer?data=${data}&od=${format(teraz, 'HH:mm')}`}>Przeplanuj resztę dnia</Link><Link className="przycisk przycisk--drugorzedny" to="/echo"><MessageCircle aria-hidden="true" />Zapytaj Echo</Link><button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj</button></>} />
     {komunikat && <Komunikat typ="sukces">{komunikat}{ostatniaZmiana && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijOstatniaZmiane()}><Undo2 aria-hidden="true" />Cofnij</button>}</Komunikat>}
 
     <section className="plan-dnia__wprowadzenie">
-      <div><span className="plan-dnia__etykieta"><CalendarDays aria-hidden="true" />{new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(teraz)}</span><strong>{charakterDnia}{harmonogram.jestWyjatkiem ? ' · wyjątek grafiku' : ''}</strong></div>
+      <div><small className="tekst-pomocniczy">{rytmDnia}</small><span className="plan-dnia__etykieta"><CalendarDays aria-hidden="true" />{new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(teraz)}</span><strong>{charakterDnia}{harmonogram.jestWyjatkiem ? ' · wyjątek grafiku' : ''}</strong></div>
       <div className="plan-dnia__najblizszy"><small>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższy krok'}</small><strong>{elementTeraz ? `${elementTeraz.element.godzina ? `${elementTeraz.element.godzina} · ` : ''}${elementTeraz.element.tytul}` : 'Dzień jest spokojny'}</strong></div>
       {zalegle[0] && <Link className="plan-dnia__zalegle" to={adresReferencjiZrodla(zalegle[0].referencjaZrodla!)}><small>Najważniejsze zaległe</small><strong>{zalegle[0].tytul}</strong><ChevronRight aria-hidden="true" /></Link>}
     </section>
