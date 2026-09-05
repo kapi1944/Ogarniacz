@@ -103,6 +103,33 @@ test('sync przenosi rekord z instalacji A do instalacji B', async () => {
   baza.close()
 })
 
+test('sync obsługuje preflight CORS wyłącznie dla aplikacji Capacitor', async () => {
+  const baza = new DatabaseSync(':memory:')
+  const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:' }), baza)
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const url = `http://127.0.0.1:${adres.port}/api/sync/changes`
+  const preflight = await fetch(url, {
+    method: 'OPTIONS',
+    headers: {
+      origin: 'https://localhost',
+      'access-control-request-method': 'POST',
+      'access-control-request-headers': 'authorization,content-type,x-ogarniacz-installation-id',
+    },
+  })
+  assert.equal(preflight.status, 204)
+  assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://localhost')
+  assert.equal(preflight.headers.get('access-control-allow-methods'), 'GET, POST, OPTIONS')
+  assert.equal(preflight.headers.get('access-control-allow-headers'), 'Authorization, Content-Type, X-Ogarniacz-Installation-Id')
+
+  const obcePochodzenie = await fetch(url, { method: 'OPTIONS', headers: { origin: 'https://obca-strona.example' } })
+  assert.equal(obcePochodzenie.status, 403)
+  assert.equal(obcePochodzenie.headers.get('access-control-allow-origin'), null)
+  await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+  baza.close()
+})
+
 test('sync odrzuca ciche nadpisanie nowszej wersji z innej instalacji', async () => {
   const baza = new DatabaseSync(':memory:')
   uruchomMigracje(baza)

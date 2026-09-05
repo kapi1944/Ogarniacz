@@ -4,6 +4,19 @@ import type { KonfiguracjaSerwera } from './config.ts'
 import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } from './echo.ts'
 import { czyDostepDoSynchronizacji, odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
 
+const POCHODZENIE_APLIKACJI_ANDROID = 'https://localhost'
+const METODY_SYNCHRONIZACJI = 'GET, POST, OPTIONS'
+const NAGLOWKI_SYNCHRONIZACJI = 'Authorization, Content-Type, X-Ogarniacz-Installation-Id'
+
+function ustawCorsSynchronizacji(zadanie: IncomingMessage, odpowiedz: ServerResponse): boolean {
+  if (zadanie.headers.origin !== POCHODZENIE_APLIKACJI_ANDROID) return false
+  odpowiedz.setHeader('access-control-allow-origin', POCHODZENIE_APLIKACJI_ANDROID)
+  odpowiedz.setHeader('access-control-allow-methods', METODY_SYNCHRONIZACJI)
+  odpowiedz.setHeader('access-control-allow-headers', NAGLOWKI_SYNCHRONIZACJI)
+  odpowiedz.setHeader('vary', 'Origin')
+  return true
+}
+
 function odpowiedzJson(odpowiedz: ServerResponse, status: number, dane: unknown): void {
   const tresc = JSON.stringify(dane)
   odpowiedz.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
@@ -17,6 +30,16 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
       return
     }
     if (zadanie.url?.startsWith('/api/sync/')) {
+      const czyDozwolonePochodzenie = ustawCorsSynchronizacji(zadanie, odpowiedz)
+      if (zadanie.method === 'OPTIONS') {
+        if (!czyDozwolonePochodzenie) {
+          odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
+          return
+        }
+        odpowiedz.writeHead(204)
+        odpowiedz.end()
+        return
+      }
       if (!konfiguracja.syncUserId || !konfiguracja.syncAccessKey) {
         odpowiedzJson(odpowiedz, 503, { error: 'Synchronizacja nie jest skonfigurowana na serwerze.' })
         return

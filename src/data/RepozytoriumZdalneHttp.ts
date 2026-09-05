@@ -1,3 +1,4 @@
+import { CapacitorHttp, type HttpResponse } from '@capacitor/core'
 import type { RepozytoriumZdalne, ZmianaSynchronizacji } from './DostawcaSynchronizacji'
 import { odtworzWartoscZTransportu, przygotujWartoscDoTransportu } from '../services/BackupService'
 import { pobierzInstallationId } from '../services/InstallationService'
@@ -22,7 +23,8 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   ) {}
 
   async pobierzZmiany(od: string): Promise<ZmianaSynchronizacji[]> {
-    const odpowiedz = await fetch(polaczAdres(this.adresApi, `/api/sync/changes?od=${encodeURIComponent(od)}`), {
+    const odpowiedz = await CapacitorHttp.get({
+      url: polaczAdres(this.adresApi, `/api/sync/changes?od=${encodeURIComponent(od)}`),
       headers: this.naglowki(),
     })
     const dane = await this.odczytajOdpowiedz(odpowiedz) as OdpowiedzZmian
@@ -35,10 +37,10 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   }
 
   async wyslijZmiany(zmiany: ZmianaSynchronizacji[], od = '1970-01-01T00:00:00.000Z'): Promise<void> {
-    const odpowiedz = await fetch(polaczAdres(this.adresApi, '/api/sync/changes'), {
-      method: 'POST',
+    const odpowiedz = await CapacitorHttp.post({
+      url: polaczAdres(this.adresApi, '/api/sync/changes'),
       headers: { ...this.naglowki(), 'content-type': 'application/json' },
-      body: JSON.stringify(await przygotujWartoscDoTransportu({ od, installationId: this.installationId(), zmiany })),
+      data: await przygotujWartoscDoTransportu({ od, installationId: this.installationId(), zmiany }),
     })
     await this.odczytajOdpowiedz(odpowiedz)
   }
@@ -50,9 +52,9 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
     }
   }
 
-  private async odczytajOdpowiedz(odpowiedz: Response): Promise<unknown> {
-    const dane = await odpowiedz.json().catch(() => ({})) as { error?: string }
-    if (!odpowiedz.ok) throw new Error(dane.error || `Serwer synchronizacji zwrócił ${odpowiedz.status}.`)
+  private async odczytajOdpowiedz(odpowiedz: HttpResponse): Promise<unknown> {
+    const dane = odpowiedz.data && typeof odpowiedz.data === 'object' ? odpowiedz.data as { error?: string } : {}
+    if (odpowiedz.status < 200 || odpowiedz.status >= 300) throw new Error(dane.error || `Serwer synchronizacji zwrócił ${odpowiedz.status}.`)
     return dane
   }
 }
