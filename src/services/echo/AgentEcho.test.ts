@@ -44,6 +44,11 @@ function utworzAgentaRozmowy() {
 }
 
 describe('Agent Echo', () => {
+  it('udostępnia narzędzia przekrojowe bez omijania istniejących repozytoriów', () => {
+    const nazwy = utworzDomyslnyRejestrNarzedziEcho().definicje().map((narzedzie) => narzedzie.nazwa)
+    expect(nazwy).toEqual(expect.arrayContaining(['list_shopping', 'add_shopping_item', 'finance_period_summary', 'create_transaction', 'vehicle_status', 'add_refuel', 'list_medication_doses', 'mark_medication_dose', 'list_habits', 'search_knowledge']))
+  })
+
   it('realizuje model request -> tool call -> wynik -> odpowiedź', async () => {
     const wykonaj = vi.fn(async ({ dzien }: { dzien: string }) => [{ id: '1', tytul: 'Raport', termin: dzien }])
     const rejestr = new RejestrNarzedziEcho().zarejestruj({ nazwa: 'list_tasks', opis: 'Lista zadań', schematArgumentow: z.object({ dzien: z.string() }), ryzyko: 'niskie', wykonaj })
