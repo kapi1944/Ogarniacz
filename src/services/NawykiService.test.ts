@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { utworzMetadane } from '../domain/fabryki'
 import type { DziennikNawyku, Nawyk } from '../domain/typy'
-import { czyNawykNaDzien, statystykaNawyku } from './NawykiService'
+import { czyNawykNaDzien, podsumowanieRegularnosciNawyku, statystykaNawyku } from './NawykiService'
 
 const nawyk = (zmiany: Partial<Nawyk> = {}): Nawyk => ({ ...utworzMetadane(), nazwa: 'Spacer', czestotliwosc: 'codziennie', dniTygodnia: [], minimalnaWersja: '5 minut', aktywny: true, ...zmiany })
 
@@ -21,5 +21,11 @@ describe('nawyki', () => {
     const element = nawyk()
     const wpisy: DziennikNawyku[] = [{ ...utworzMetadane(), nawykId: element.id, data: '2026-08-14', status: 'pelna' }]
     expect(statystykaNawyku(element, wpisy, '2026-08-14', 2)).toEqual({ planowane: 2, zrealizowane: 1, regularnosc: 50 })
+  })
+
+  it('zwraca aktualną i najlepszą serię oraz trend', () => {
+    const element = nawyk()
+    const wpisy: DziennikNawyku[] = ['2026-08-12', '2026-08-13', '2026-08-14'].map((data) => ({ ...utworzMetadane(), nawykId: element.id, data, status: 'pelna' }))
+    expect(podsumowanieRegularnosciNawyku(element, wpisy, '2026-08-14')).toMatchObject({ aktualnaSeria: 3, najlepszaSeria: 3, trend: 'poprawia_sie' })
   })
 })

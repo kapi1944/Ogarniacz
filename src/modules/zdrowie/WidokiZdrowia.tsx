@@ -7,7 +7,7 @@ import { dzisiajIso, noweId, terazIso, utworzMetadane } from '../../domain/fabry
 import type { Lek, PozycjaRecepty, Przypomnienie, Recepta, Skierowanie, Terapia, Wizyta } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { generujDawkiDnia, zapiszStatusDawki } from '../../services/LekiService'
+import { generujDawkiDnia, przewidywanaDataWyczerpania, zapiszStatusDawki } from '../../services/LekiService'
 import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
 
 const formatowanieDaty = new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium' })
@@ -143,13 +143,20 @@ export function WidokLekow() {
         { klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true },
         { klucz: 'dawkaInstrukcja', etykieta: 'Dawka / instrukcja użytkownika', wymagane: true },
         { klucz: 'godziny', etykieta: 'Godziny', wymagane: true, podpowiedz: 'np. 08:00, 14:00, 21:00' },
+        { klucz: 'dniTygodnia', etykieta: 'Dni tygodnia (0–6)', podpowiedz: 'opcjonalnie, np. 1, 3, 5; 0 oznacza niedzielę' },
+        { klucz: 'coIleDni', etykieta: 'Co ile dni', typ: 'number', min: 1, podpowiedz: 'opcjonalnie; wymaga daty rozpoczęcia' },
+        { klucz: 'dataOd', etykieta: 'Okres od', typ: 'date' },
+        { klucz: 'dataDo', etykieta: 'Okres do', typ: 'date' },
+        { klucz: 'zapasJednostek', etykieta: 'Zapas (tabletki / jednostki)', typ: 'number', min: 0 },
+        { klucz: 'zuzycieNaDawke', etykieta: 'Zużycie na dawkę', typ: 'number', min: 0 },
+        { klucz: 'dataOtwarcia', etykieta: 'Data otwarcia', typ: 'date' },
         { klucz: 'dodatkoweInstrukcje', etykieta: 'Dodatkowe instrukcje', typ: 'textarea' },
         { klucz: 'aktywny', etykieta: 'Stan', typ: 'select', wymagane: true, opcje: [{ wartosc: 'true', etykieta: 'Aktywny' }, { wartosc: 'false', etykieta: 'Nieaktywny' }] },
       ]}
-      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), dawkaInstrukcja: formularz.dawkaInstrukcja.trim(), godziny: formularz.godziny.split(',').map((x) => x.trim()).filter((x) => /^\d{2}:\d{2}$/.test(x)).sort(), dodatkoweInstrukcje: formularz.dodatkoweInstrukcje || undefined, aktywny: formularz.aktywny !== 'false', updatedAt: terazIso() } as Lek)}
+      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), dawkaInstrukcja: formularz.dawkaInstrukcja.trim(), godziny: formularz.godziny.split(',').map((x) => x.trim()).filter((x) => /^\d{2}:\d{2}$/.test(x)).sort(), dniTygodnia: formularz.dniTygodnia.split(',').map((x) => Number(x.trim())).filter((dzien) => Number.isInteger(dzien) && dzien >= 0 && dzien <= 6), coIleDni: formularz.coIleDni ? Math.max(1, Number(formularz.coIleDni)) : undefined, dataOd: formularz.dataOd || undefined, dataDo: formularz.dataDo || undefined, zapasJednostek: formularz.zapasJednostek ? Number(formularz.zapasJednostek) : undefined, zuzycieNaDawke: formularz.zuzycieNaDawke ? Number(formularz.zuzycieNaDawke) : undefined, dataOtwarcia: formularz.dataOtwarcia || undefined, dodatkoweInstrukcje: formularz.dodatkoweInstrukcje || undefined, aktywny: formularz.aktywny !== 'false', updatedAt: terazIso() } as Lek)}
       etykieta={(lek) => lek.nazwa}
       wybranyElementId={parametryAdresu.get('element') ?? undefined}
-      szczegoly={(lek) => <><Znacznik wariant={lek.aktywny ? 'sukces' : 'neutralny'}>{lek.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{lek.dawkaInstrukcja}</span><span>Godziny: {lek.godziny.join(', ') || 'brak — uzupełnij'}</span>{lek.dodatkoweInstrukcje && <p>{lek.dodatkoweInstrukcje}</p>}</>}
+      szczegoly={(lek) => <><Znacznik wariant={lek.aktywny ? 'sukces' : 'neutralny'}>{lek.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{lek.dawkaInstrukcja}</span><span>Godziny: {lek.godziny.join(', ') || 'brak — uzupełnij'}</span>{lek.dataOd && <span>Okres: {lek.dataOd}{lek.dataDo ? ` – ${lek.dataDo}` : ''}</span>}{lek.zapasJednostek !== undefined && <span>Zapas: {lek.zapasJednostek}; przewidywane wyczerpanie: {przewidywanaDataWyczerpania(lek, data) ?? 'uzupełnij zużycie'}</span>}{lek.dodatkoweInstrukcje && <p>{lek.dodatkoweInstrukcje}</p>}</>}
     />
   </div>
 }

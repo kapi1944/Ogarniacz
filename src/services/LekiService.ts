@@ -1,4 +1,5 @@
 import { terazIso, utworzMetadane } from '../domain/fabryki'
+import { addDays, differenceInCalendarDays, format, getDay, parseISO } from 'date-fns'
 import type { DziennikLeku, Lek } from '../domain/typy'
 
 export interface DawkaDnia {
@@ -14,10 +15,30 @@ export function idWystapieniaDawki(lekId: string, data: string, godzina: string)
   return `${lekId}:${data}:${godzina}`
 }
 
+export function czyLekZaplanowanyNaDzien(lek: Lek, data: string): boolean {
+  if (lek.dataOd && data < lek.dataOd) return false
+  if (lek.dataDo && data > lek.dataDo) return false
+  const dzien = parseISO(data)
+  if (Number.isNaN(dzien.getTime())) return false
+  if (lek.dniTygodnia?.length && !lek.dniTygodnia.includes(getDay(dzien))) return false
+  if (lek.coIleDni && lek.coIleDni > 1 && lek.dataOd) {
+    return differenceInCalendarDays(dzien, parseISO(lek.dataOd)) % lek.coIleDni === 0
+  }
+  return true
+}
+
+export function przewidywanaDataWyczerpania(lek: Lek, odDnia: string): string | undefined {
+  if (!lek.zapasJednostek || !lek.zuzycieNaDawke || lek.zapasJednostek <= 0 || lek.zuzycieNaDawke <= 0) return undefined
+  const data = parseISO(odDnia)
+  if (Number.isNaN(data.getTime()) || lek.godziny.length === 0) return undefined
+  const liczbaDawek = Math.floor(lek.zapasJednostek / lek.zuzycieNaDawke)
+  return format(addDays(data, Math.max(0, Math.ceil(liczbaDawek / lek.godziny.length) - 1)), 'yyyy-MM-dd')
+}
+
 export function generujDawkiDnia(leki: Lek[], wpisy: DziennikLeku[], data: string): DawkaDnia[] {
   const mapa = new Map(wpisy.filter((wpis) => wpis.data === data).map((wpis) => [idWystapieniaDawki(wpis.lekId, wpis.data, wpis.planowanaGodzina), wpis]))
   return leki
-    .filter((lek) => lek.aktywny && !lek.usunietoAt)
+    .filter((lek) => lek.aktywny && !lek.usunietoAt && czyLekZaplanowanyNaDzien(lek, data))
     .flatMap((lek) => lek.godziny.map((godzina) => {
       const idWystapienia = idWystapieniaDawki(lek.id, data, godzina)
       const wpis = mapa.get(idWystapienia)

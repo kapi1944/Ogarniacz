@@ -133,6 +133,7 @@ export interface Nawyk extends EncjaBazowa {
   oknoDo?: string
   preferowanyCzas?: string
   minimalnaWersja?: string
+  celId?: Id
   aktywny: boolean
 }
 
@@ -140,12 +141,20 @@ export interface DziennikNawyku extends EncjaBazowa {
   nawykId: Id
   data: string
   status: 'pelna' | 'minimalna' | 'pominieta'
+  powodPominiecia?: string
 }
 
 export interface Lek extends EncjaBazowa {
   nazwa: string
   dawkaInstrukcja: string
   godziny: string[]
+  dniTygodnia?: number[]
+  coIleDni?: number
+  dataOd?: string
+  dataDo?: string
+  zapasJednostek?: number
+  zuzycieNaDawke?: number
+  dataOtwarcia?: string
   dodatkoweInstrukcje?: string
   aktywny: boolean
 }
@@ -261,6 +270,9 @@ export interface PozycjaZakupow extends EncjaBazowa {
   listaId: Id
   nazwa: string
   ilosc: string
+  jednostka?: string
+  cenaPlanowana?: number
+  cenaRzeczywista?: number
   kategoria?: string
   kupione: boolean
 }
@@ -400,6 +412,8 @@ export interface Pojazd extends EncjaBazowa {
   przebieg?: number
   historiaPrzebiegu?: { data: string; przebieg: number }[]
   historiaSerwisowa?: { id: Id; typ: 'olej' | 'serwis' | 'opony' | 'naprawa' | 'inne'; data: string; przebieg?: number; opis: string; koszt?: number }[]
+  tankowania?: { id: Id; data: string; przebieg: number; litry: number; cena: number; pelnyBak?: boolean }[]
+  opony?: { id: Id; nazwa: string; typ?: 'letnie' | 'zimowe' | 'caloroczne'; dataZmiany?: string; przebieg?: number; sezon?: string }[]
   ocDo?: string
   ubezpieczyciel?: string
   numerPolisy?: string
