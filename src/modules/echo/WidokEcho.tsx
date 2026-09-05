@@ -35,6 +35,10 @@ import {
   WykonawcaNarzedziEcho,
 } from "../../services/echo/NarzedziaEcho";
 import type { NazwaModulu } from "../../domain/typy";
+import {
+  MagazynPreferencjiEcho,
+  preferencjePlanowaniaZPamieci,
+} from "../../services/echo/PamiecPreferencjiEcho";
 
 interface Wiadomosc {
   id: string;
@@ -45,7 +49,19 @@ interface Wiadomosc {
   wyniki?: WynikNarzedziaEcho[];
 }
 
-function elementyWyniku(
+function typWynikuNarzedzia(nazwa: string): string | undefined {
+  if (nazwa.includes("task")) return "zadanie";
+  if (nazwa.includes("project")) return "projekt";
+  if (nazwa.includes("shopping")) return "zakupy";
+  if (nazwa.includes("bill")) return "rachunek";
+  if (/vehicle|refuel/.test(nazwa)) return "samochod";
+  if (nazwa.includes("medication")) return "lek";
+  if (nazwa.includes("appointment")) return "wizyta";
+  if (nazwa.includes("document")) return "dokument";
+  return undefined;
+}
+
+export function elementyWyniku(
   wynik: WynikNarzedziaEcho,
 ): {
   id?: string;
@@ -71,7 +87,8 @@ function elementyWyniku(
     .map((x) => ({
       id: typeof x.id === "string" ? x.id : undefined,
       tytul: String(x.tytul ?? x.nazwa ?? wynik.nazwa),
-      typ: typeof x.typ === "string" ? x.typ : undefined,
+      typ:
+        typeof x.typ === "string" ? x.typ : typWynikuNarzedzia(wynik.nazwa),
       termin:
         typeof x.termin === "string"
           ? x.termin
@@ -82,7 +99,7 @@ function elementyWyniku(
     }));
 }
 
-function adresWyniku(element: {
+export function adresWyniku(element: {
   id?: string;
   typ?: string;
 }): string | undefined {
@@ -103,7 +120,10 @@ function adresWyniku(element: {
   return sciezka ? `${sciezka}?element=${element.id}` : undefined;
 }
 
-function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
+export function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
+  if (nazwa === "assess_purchase_affordability") return "finanse";
+  if (nazwa === "assess_mechanic_trip") return "samochod";
+  if (nazwa === "pharmacy_overview") return "zdrowie";
   if (nazwa.includes("project")) return "projekty";
   if (nazwa.includes("inbox") || nazwa.includes("waiting")) return "skrzynka";
   if (nazwa.includes("plan")) return "planer";
@@ -124,23 +144,82 @@ function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
   return undefined;
 }
 
+const etykietyModulowEcho: Partial<Record<NazwaModulu, string>> = {
+  finanse: "Finanse",
+  samochod: "Samochód",
+  zdrowie: "Zdrowie",
+  zadania: "Zadania",
+  projekty: "Projekty",
+  zakupy: "Zakupy",
+  dokumenty: "Dokumenty",
+};
+
+export function uruchomAutomatycznyOdczytEcho(
+  glosWlaczony: boolean,
+  odczytWlaczony: boolean,
+  wiadomosc: Pick<Wiadomosc, "id" | "autor" | "tresc"> | undefined,
+  ostatnioOdczytana: string | undefined,
+  odczytaj: (tresc: string) => void,
+): string | undefined {
+  if (
+    !glosWlaczony ||
+    !odczytWlaczony ||
+    wiadomosc?.autor !== "echo" ||
+    wiadomosc.id === "powitanie" ||
+    wiadomosc.id === ostatnioOdczytana
+  ) {
+    return ostatnioOdczytana;
+  }
+  odczytaj(wiadomosc.tresc);
+  return wiadomosc.id;
+}
+
+export function czyPokazacSugestieEcho(
+  proaktywnoscWlaczona: boolean,
+  echoWyciszone: boolean,
+): boolean {
+  return proaktywnoscWlaczona && !echoWyciszone;
+}
+
 export function WidokEcho() {
   const [stan, ustawStan] = useState<StanSesjiGlosowejEcho>("bezczynny");
   const { ustawienia } = useAplikacja();
+  const magazynPamieci = useMemo(() => new MagazynPreferencjiEcho(), []);
   const echo = useMemo(() => {
-    const rejestr = utworzDomyslnyRejestrNarzedziEcho();
+    const rejestr = utworzDomyslnyRejestrNarzedziEcho({
+      pobierzPreferencjePlanowania: async () =>
+        ustawienia.pamiecPreferencjiEcho
+          ? preferencjePlanowaniaZPamieci(
+              await magazynPamieci.wyszukaj("", 20),
+            )
+          : {},
+    });
     const wykonawca = new WykonawcaNarzedziEcho(
       rejestr,
       undefined,
       undefined,
       (nazwa) => {
-        if (nazwa === "current_external_data") return ustawienia.internetEcho;
+        if (nazwa === "current_external_data")
+          return ustawienia.internetEcho
+            ? true
+            : "Dostęp Echo do internetu jest wyłączony. Możesz włączyć go w Ustawieniach Echo.";
         const modul = modulNarzedzia(nazwa);
-        return !modul || ustawienia.modulyEcho.includes(modul);
+        if (!modul || ustawienia.modulyEcho.includes(modul)) return true;
+        return `Nie mam obecnie dostępu do modułu ${etykietyModulowEcho[modul] ?? modul}. Możesz włączyć go w Ustawieniach Echo.`;
       },
     );
-    return new EchoService({ rejestr, wykonawca });
-  }, [ustawienia.internetEcho, ustawienia.modulyEcho]);
+    return new EchoService({
+      rejestr,
+      wykonawca,
+      magazynPamieci,
+      pamiecPreferencjiWlaczona: ustawienia.pamiecPreferencjiEcho,
+    });
+  }, [
+    magazynPamieci,
+    ustawienia.internetEcho,
+    ustawienia.modulyEcho,
+    ustawienia.pamiecPreferencjiEcho,
+  ]);
   const [tekst, ustawTekst] = useState("");
   const [tryb, ustawTryb] = useState<TrybEcho>(echo.agent.provider.tryb);
   const [wiadomosci, ustawWiadomosci] = useState<Wiadomosc[]>([
@@ -206,11 +285,15 @@ export function WidokEcho() {
   );
 
   useEffect(() => {
+    if (!ustawienia.glosEcho) {
+      void kontrolerGlosu.anuluj();
+      return;
+    }
     void kontrolerGlosu.inicjalizuj();
     return () => {
       void kontrolerGlosu.zniszcz();
     };
-  }, [kontrolerGlosu]);
+  }, [kontrolerGlosu, ustawienia.glosEcho]);
 
   const wyslij = async (
     wypowiedz: string,
@@ -255,16 +338,18 @@ export function WidokEcho() {
 
   useEffect(() => {
     const ostatnia = wiadomosci.at(-1);
-    if (
-      ustawienia.automatycznyOdczytEcho &&
-      ostatnia?.autor === "echo" &&
-      ostatnia.id !== "powitanie" &&
-      ostatnioOdczytana.current !== ostatnia.id
-    ) {
-      ostatnioOdczytana.current = ostatnia.id;
-      void przeczytaj(ostatnia.tresc);
-    }
-  }, [ustawienia.automatycznyOdczytEcho, wiadomosci]);
+    ostatnioOdczytana.current = uruchomAutomatycznyOdczytEcho(
+      ustawienia.glosEcho,
+      ustawienia.automatycznyOdczytEcho,
+      ostatnia,
+      ostatnioOdczytana.current,
+      (tresc) => void przeczytaj(tresc),
+    );
+  }, [
+    ustawienia.automatycznyOdczytEcho,
+    ustawienia.glosEcho,
+    wiadomosci,
+  ]);
 
   const potwierdz = async () => {
     if (!oczekujacaAkcja) return;
@@ -495,7 +580,7 @@ export function WidokEcho() {
               </p>
             )}
           </Karta>
-          <Karta>
+          {czyPokazacSugestieEcho(ustawienia.proaktywnoscEcho, ustawienia.echoWyciszone) && <Karta>
             <h2>Możesz powiedzieć na przykład</h2>
             <div className="sugestie-echo">
               {sugestie.map((sugestia) => (
@@ -508,7 +593,7 @@ export function WidokEcho() {
                 </button>
               ))}
             </div>
-          </Karta>
+          </Karta>}
           <Karta>
             <h2>
               <ShieldCheck aria-hidden="true" /> Kontrola działań

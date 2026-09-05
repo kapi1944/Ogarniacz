@@ -6,6 +6,7 @@ import { utworzMetadane } from "../../domain/fabryki";
 import { utworzZadanie } from "../ZadaniaService";
 import { AgentEcho } from "./AgentEcho";
 import { LokalnySemantycznyProviderEcho } from "./LokalnySemantycznyProviderEcho";
+import { MagazynPreferencjiEcho } from "./PamiecPreferencjiEcho";
 import {
   RejestrNarzedziEcho,
   utworzDomyslnyRejestrNarzedziEcho,
@@ -222,7 +223,13 @@ describe("Agent Echo", () => {
       zrodlo: "tekst" as const,
     };
     await pobierzRepozytorium("skrzynka").zapisz(element);
-    const wykonawca = utworzWykonawce(utworzDomyslnyRejestrNarzedziEcho());
+    const pobierzPreferencjePlanowania = vi.fn(async () => ({
+      godzinySkupieniaOd: "12:00",
+      godzinySkupieniaDo: "18:00",
+    }));
+    const wykonawca = utworzWykonawce(
+      utworzDomyslnyRejestrNarzedziEcho({ pobierzPreferencjePlanowania }),
+    );
     const zadaniaPrzed = await pobierzRepozytorium("zadania").lista();
 
     const podgladPoczekalni = await wykonawca.wykonaj({
@@ -240,6 +247,142 @@ describe("Agent Echo", () => {
     expect(podgladPlanera.status).toBe("wykonane");
     expect(await pobierzRepozytorium("zadania").lista()).toEqual(zadaniaPrzed);
     expect(await pobierzRepozytorium("blokiCzasu").lista()).toEqual([]);
+    expect(pobierzPreferencjePlanowania).toHaveBeenCalledOnce();
+  });
+
+  it("po wyłączeniu pamięci zachowuje kontekst sesji i nie przekazuje trwałych preferencji", async () => {
+    await baza.tabela("pamiecEcho").clear();
+    const magazynPamieci = new MagazynPreferencjiEcho();
+    await magazynPamieci.zapisz({
+      tresc: "Wolę załatwiać sprawy po pracy.",
+      typ: "preferencja",
+      zrodlo: "jawna_prosba",
+      utworzonoAt: "2026-08-31T10:00:00.000Z",
+      pewnosc: 1,
+    });
+    const provider = new ProviderSkryptowy([
+      { typ: "odpowiedz", tresc: "Pierwsza odpowiedź." },
+      { typ: "odpowiedz", tresc: "Druga odpowiedź." },
+    ]);
+    const agent = new AgentEcho({
+      provider,
+      magazynPamieci,
+      pamiecPreferencjiWlaczona: false,
+    });
+
+    await agent.obsluz("Co mam jutro?");
+    await agent.obsluz("A pojutrze?");
+
+    expect(provider.zadania[1]?.kontekstRozmowy.tury.map((tura) => tura.tresc)).toEqual(
+      expect.arrayContaining(["Co mam jutro?", "Pierwsza odpowiedź.", "A pojutrze?"]),
+    );
+    expect(provider.zadania[1]?.pamiecPreferencji).toEqual([]);
+  });
+
+  it("po włączeniu przekazuje zapisane preferencje providerowi", async () => {
+    await baza.tabela("pamiecEcho").clear();
+    const magazynPamieci = new MagazynPreferencjiEcho();
+    await magazynPamieci.zapisz({
+      tresc: "Wolę trudne rzeczy przed południem.",
+      typ: "preferencja",
+      zrodlo: "jawna_prosba",
+      utworzonoAt: "2026-08-31T10:00:00.000Z",
+      pewnosc: 1,
+    });
+    const provider = new ProviderSkryptowy([
+      { typ: "odpowiedz", tresc: "Uwzględniłem zapisane preferencje." },
+    ]);
+    const agent = new AgentEcho({
+      provider,
+      magazynPamieci,
+      pamiecPreferencjiWlaczona: true,
+    });
+
+    await agent.obsluz("Zaplanuj mi jutro.");
+
+    expect(provider.zadania[0]?.pamiecPreferencji).toMatchObject([
+      { tresc: "Wolę trudne rzeczy przed południem.", typ: "preferencja" },
+    ]);
+  });
+
+  it("zwraca czytelny komunikat, gdy internet jest wyłączony", async () => {
+    const rejestr = utworzDomyslnyRejestrNarzedziEcho();
+    const wykonawca = new WykonawcaNarzedziEcho(
+      rejestr,
+      undefined,
+      async () => undefined,
+      (nazwa) =>
+        nazwa === "current_external_data"
+          ? "Dostęp Echo do internetu jest wyłączony. Możesz włączyć go w Ustawieniach Echo."
+          : true,
+    );
+    const provider = new ProviderSkryptowy([
+      {
+        typ: "narzedzia",
+        wywolania: [
+          {
+            id: "internet-1",
+            nazwa: "current_external_data",
+            argumenty: { zapytanie: "pogoda" },
+          },
+        ],
+      },
+    ]);
+    const odpowiedz = await new AgentEcho({ provider, rejestr, wykonawca }).obsluz(
+      "Jaka jest pogoda?",
+    );
+    expect(odpowiedz.tekst).toContain("Dostęp Echo do internetu jest wyłączony");
+  });
+
+  it("zwraca czytelny komunikat, gdy moduł finansowy jest wyłączony", async () => {
+    const rejestr = utworzDomyslnyRejestrNarzedziEcho();
+    const wykonawca = new WykonawcaNarzedziEcho(
+      rejestr,
+      undefined,
+      async () => undefined,
+      (nazwa) =>
+        nazwa === "finance_period_summary"
+          ? "Nie mam obecnie dostępu do modułu Finanse. Możesz włączyć go w Ustawieniach Echo."
+          : true,
+    );
+    const provider = new ProviderSkryptowy([
+      {
+        typ: "narzedzia",
+        wywolania: [
+          {
+            id: "finanse-1",
+            nazwa: "finance_period_summary",
+            argumenty: { miesiac: "2026-09" },
+          },
+        ],
+      },
+    ]);
+    const odpowiedz = await new AgentEcho({ provider, rejestr, wykonawca }).obsluz(
+      "Ile wydałem w tym miesiącu?",
+    );
+    expect(odpowiedz.tekst).toContain("Nie mam obecnie dostępu do modułu Finanse");
+  });
+
+  it("jasno zgłasza brak providera po włączeniu dostępu do internetu", async () => {
+    const rejestr = utworzDomyslnyRejestrNarzedziEcho();
+    const provider = new ProviderSkryptowy([
+      {
+        typ: "narzedzia",
+        wywolania: [
+          {
+            id: "internet-2",
+            nazwa: "current_external_data",
+            argumenty: { zapytanie: "pogoda" },
+          },
+        ],
+      },
+    ]);
+    const odpowiedz = await new AgentEcho({ provider, rejestr }).obsluz(
+      "Jaka jest pogoda?",
+    );
+    expect(odpowiedz.tekst).toBe(
+      "Dostęp do internetu jest włączony, ale provider danych zewnętrznych nie jest skonfigurowany.",
+    );
   });
 
   it("realizuje model request -> tool call -> wynik -> odpowiedź", async () => {

@@ -36,6 +36,7 @@ import {
   DOMYSLNE_PREFERENCJE_PLANOWANIA,
   generujPlan,
   zatwierdzPlan,
+  type PreferencjePlanowania,
 } from "../PlanerService";
 import { DOMYSLNE_USTAWIENIA } from "../../domain/ustawienia";
 import { utworzHarmonogramDnia } from "../../modules/pulpit/logikaOsiCzasu";
@@ -120,7 +121,7 @@ export class WykonawcaNarzedziEcho {
     private readonly rejestr: RejestrNarzedziEcho,
     private readonly polityka = new PolitykaDzialanEcho(),
     private readonly zapiszDziennik: ZapisDziennikaEcho = zapiszDziennikEcho,
-    private readonly czyDozwolone: (nazwa: string) => boolean = () => true,
+    private readonly sprawdzDostep: (nazwa: string) => boolean | string = () => true,
   ) {}
 
   async wykonaj(
@@ -135,12 +136,16 @@ export class WykonawcaNarzedziEcho {
         status: "zablokowane",
         komunikat: "Narzędzie nie istnieje lub nie jest dostępne.",
       };
-    if (!this.czyDozwolone(narzedzie.nazwa))
+    const dostep = this.sprawdzDostep(narzedzie.nazwa);
+    if (dostep !== true)
       return {
         wywolanieId: wywolanie.id,
         nazwa: wywolanie.nazwa,
         status: "zablokowane",
-        komunikat: "Echo nie ma uprawnienia do tego modułu.",
+        komunikat:
+          typeof dostep === "string"
+            ? dostep
+            : "Echo nie ma uprawnienia do tego modułu.",
       };
 
     const walidacja = narzedzie.schematArgumentow.safeParse(
@@ -217,7 +222,13 @@ function pasujaOdmiany(lewe: string, prawe: string): boolean {
   );
 }
 
-export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
+export interface OpcjeRejestruNarzedziEcho {
+  pobierzPreferencjePlanowania?: () => Promise<Partial<PreferencjePlanowania>>;
+}
+
+export function utworzDomyslnyRejestrNarzedziEcho(
+  opcje: OpcjeRejestruNarzedziEcho = {},
+): RejestrNarzedziEcho {
   const rejestr = new RejestrNarzedziEcho();
 
   rejestr.zarejestruj({
@@ -1371,13 +1382,17 @@ export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
           updatedAt: x.updatedAt,
         })),
     ];
+    const preferencjeZPamieci = await opcje.pobierzPreferencjePlanowania?.();
     return {
       data,
       zadania,
       wydarzenia,
       harmonogram: utworzHarmonogramDnia(data, ustawienie.harmonogram, wyjatek),
       odGodziny,
-      preferencje: DOMYSLNE_PREFERENCJE_PLANOWANIA,
+      preferencje: {
+        ...DOMYSLNE_PREFERENCJE_PLANOWANIA,
+        ...preferencjeZPamieci,
+      },
     };
   };
   const podgladPlanu = async (data: string, odGodziny?: string) => ({
@@ -1761,7 +1776,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
     ryzyko: "niskie",
     wykonaj: async () =>
       (await pobierzRepozytorium("dokumenty").lista()).map(
-        ({ plik: _plik, ...x }) => x,
+        ({ plik: _plik, ...x }) => ({ ...x, tytul: x.nazwa, typ: "dokument" }),
       ),
   });
   rejestr.zarejestruj({
@@ -1943,7 +1958,8 @@ export function utworzDomyslnyRejestrNarzedziEcho(): RejestrNarzedziEcho {
     ryzyko: "niskie",
     wykonaj: async () => ({
       skonfigurowano: false,
-      komunikat: "Aktualne dane internetowe nie są skonfigurowane.",
+      komunikat:
+        "Dostęp do internetu jest włączony, ale provider danych zewnętrznych nie jest skonfigurowany.",
     }),
   });
 

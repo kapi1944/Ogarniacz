@@ -92,6 +92,7 @@ export interface ZadanieModeluEcho {
   instrukcjeSystemowe: string[]
   kontekstCzasu: KontekstCzasuEcho
   kontekstRozmowy: MigawkaKontekstuEcho
+  pamiecPreferencji: KandydatPamieciEcho[]
   narzedzia: DefinicjaNarzedziaEcho[]
 }
 

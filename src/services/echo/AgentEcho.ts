@@ -1,8 +1,10 @@
 import { dzisiajIso } from '../../domain/fabryki'
 import { KontekstRozmowyEcho } from './KontekstRozmowyEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
+import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
+import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho } from './NarzedziaEcho'
-import type { AkcjaDoPotwierdzeniaEcho, DecyzjaModeluEcho, KontekstCzasuEcho, OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, ZadanieModeluEcho, ZrodloWejsciaEcho } from './typyEcho'
+import type { AkcjaDoPotwierdzeniaEcho, DecyzjaModeluEcho, KontekstCzasuEcho, MagazynPamieciEcho, OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, ZadanieModeluEcho, ZrodloWejsciaEcho } from './typyEcho'
 
 const INSTRUKCJE_SYSTEMOWE = [
   'Jesteś Echo, centralnym osobistym asystentem Ogarniacza. Rozmawiaj po polsku, naturalnie, spokojnie i zwięźle.',
@@ -21,6 +23,8 @@ export interface OpcjeAgentaEcho {
   limitCzasuMs?: number
   pobierzCzas?: () => KontekstCzasuEcho
   onZmianaStanu?: (stan: StanPracyEcho) => void
+  magazynPamieci?: MagazynPamieciEcho
+  pamiecPreferencjiWlaczona?: boolean
 }
 
 function pobierzBiezacyCzas(): KontekstCzasuEcho {
@@ -41,6 +45,9 @@ export class AgentEcho {
   private readonly limitCzasuMs: number
   private readonly pobierzCzas: () => KontekstCzasuEcho
   private readonly onZmianaStanu?: (stan: StanPracyEcho) => void
+  private readonly magazynPamieci?: MagazynPamieciEcho
+  private readonly pamiecPreferencjiWlaczona: boolean
+  private readonly politykaPamieci = new PolitykaPamieciEcho()
   private oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
   private wynikiBiezacejTury: import('./typyEcho').WynikNarzedziaEcho[] = []
 
@@ -53,6 +60,8 @@ export class AgentEcho {
     this.limitCzasuMs = opcje.limitCzasuMs ?? 15_000
     this.pobierzCzas = opcje.pobierzCzas ?? pobierzBiezacyCzas
     this.onZmianaStanu = opcje.onZmianaStanu
+    this.magazynPamieci = opcje.magazynPamieci
+    this.pamiecPreferencjiWlaczona = opcje.pamiecPreferencjiWlaczona ?? true
   }
 
   async obsluz(tresc: string, zrodlo: ZrodloWejsciaEcho = 'tekst', sygnalZewnetrzny?: AbortSignal): Promise<OdpowiedzEcho> {
@@ -62,6 +71,18 @@ export class AgentEcho {
     this.onZmianaStanu?.('rozumiem')
     this.kontekst.dodajTure('uzytkownik', oczyszczona)
     this.kontekst.ustawTemat(this.kontekst.migawka().temat ?? (zrodlo === 'stt' ? 'rozmowa głosowa' : 'rozmowa tekstowa'))
+    const preferencja = rozpoznajTrwalaPreferencjeEcho(oczyszczona)
+    if (
+      preferencja
+      && this.magazynPamieci
+      && this.politykaPamieci.czyMoznaZapisac(preferencja.zrodlo, false)
+    ) {
+      if (!this.pamiecPreferencjiWlaczona) {
+        return this.odpowiedzNaPreferencje('Pamięć preferencji jest wyłączona, więc nie zapiszę tej preferencji.')
+      }
+      await this.magazynPamieci.zapisz(preferencja)
+      return this.odpowiedzNaPreferencje(`Zapamiętam tę preferencję: „${preferencja.tresc}”.`)
+    }
     const odpowiedz = await this.uruchomPetle(sygnalZewnetrzny)
     this.onZmianaStanu?.('gotowe')
     return odpowiedz
@@ -85,11 +106,15 @@ export class AgentEcho {
     this.oczekujacaAkcja = undefined
   }
 
-  private zbudujZadanieModelu(): ZadanieModeluEcho {
+  private async zbudujZadanieModelu(): Promise<ZadanieModeluEcho> {
+    const pamiecPreferencji = this.pamiecPreferencjiWlaczona && this.magazynPamieci
+      ? await this.magazynPamieci.wyszukaj('', 20)
+      : []
     return {
       instrukcjeSystemowe: INSTRUKCJE_SYSTEMOWE,
       kontekstCzasu: this.pobierzCzas(),
       kontekstRozmowy: this.kontekst.migawka(),
+      pamiecPreferencji,
       narzedzia: this.rejestr.definicje(),
     }
   }
@@ -97,7 +122,7 @@ export class AgentEcho {
   private async uruchomPetle(sygnalZewnetrzny?: AbortSignal): Promise<OdpowiedzEcho> {
     try {
       for (let krok = 0; krok < this.limitKrokow; krok += 1) {
-        const decyzja = await this.pobierzDecyzje(this.zbudujZadanieModelu(), sygnalZewnetrzny)
+        const decyzja = await this.pobierzDecyzje(await this.zbudujZadanieModelu(), sygnalZewnetrzny)
         const gotowa = await this.obsluzDecyzje(decyzja)
         if (gotowa) return gotowa
       }
@@ -129,6 +154,18 @@ export class AgentEcho {
         this.oczekujacaAkcja = akcja
         return { tekst: `Mogę to zrobić, ale najpierw potrzebuję potwierdzenia: ${akcja.opis}`, ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
       }
+      if (wynik.status === 'zablokowane') {
+        return this.odpowiedz(wynik.komunikat ?? 'Echo nie może wykonać tego działania.')
+      }
+      if (
+        wynik.status === 'wykonane'
+        && wywolanie.nazwa === 'current_external_data'
+        && wynik.dane
+        && typeof wynik.dane === 'object'
+      ) {
+        const komunikat = (wynik.dane as { komunikat?: unknown }).komunikat
+        if (typeof komunikat === 'string') return this.odpowiedz(komunikat)
+      }
       if (wynik.status === 'wykonane') {
         this.kontekst.ustawOstatniaAkcje(wywolanie.nazwa, wywolanie.argumenty)
         this.zapamietajEncjeWyniku(wywolanie.nazwa, wynik.dane)
@@ -159,6 +196,12 @@ export class AgentEcho {
 
   private odpowiedz(tekst: string, ryzyko: OdpowiedzEcho['ryzyko'] = 'niskie', wartosciDomyslne?: OdpowiedzEcho['wartosciDomyslne']): OdpowiedzEcho {
     return { tekst, ryzyko, tryb: this.provider.tryb, wartosciDomyslne, wyniki: this.wynikiBiezacejTury.length ? [...this.wynikiBiezacejTury] : undefined }
+  }
+
+  private odpowiedzNaPreferencje(tekst: string): OdpowiedzEcho {
+    this.kontekst.dodajTure('echo', tekst)
+    this.onZmianaStanu?.('gotowe')
+    return this.odpowiedz(tekst)
   }
 
   private zapamietajEncjeWyniku(narzedzie: string, dane: unknown): void {
