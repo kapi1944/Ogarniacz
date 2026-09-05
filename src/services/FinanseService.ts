@@ -1,10 +1,12 @@
 import { dzisiajIso, utworzMetadane } from '../domain/fabryki'
-import type { Budzet, PlanRat, PlatnoscStala, Rata, Wydatek } from '../domain/typy'
+import type { Budzet, PlanRat, PlatnoscStala, Rachunek, Rata, Wydatek } from '../domain/typy'
 
 export interface WykorzystanieBudzetu {
   budzet: Budzet
   wydano: number
   przekroczony: boolean
+  pozostalo: number
+  procent: number
 }
 
 export function obliczWykorzystanieBudzetow(
@@ -18,8 +20,39 @@ export function obliczWykorzystanieBudzetow(
       const wydano = wydatki
         .filter((wydatek) => wydatek.data.startsWith(okres) && (!budzet.kategoria || wydatek.kategoria === budzet.kategoria))
         .reduce((suma, wydatek) => suma + wydatek.kwota, 0)
-      return { budzet, wydano, przekroczony: wydano > budzet.limit }
+      return { budzet, wydano, przekroczony: wydano >= budzet.limit, pozostalo: budzet.limit - wydano, procent: budzet.limit ? Math.round(wydano / budzet.limit * 100) : 0 }
     })
+}
+
+export interface PodsumowanieCashFlow {
+  przychody: number
+  wydatki: number
+  zobowiazania: number
+  bilansBiezacy: number
+  prognozowanyBilans: number
+}
+
+export function podsumujCashFlow(
+  miesiac: string,
+  transakcje: readonly Wydatek[],
+  rachunki: readonly Rachunek[],
+  platnosciStale: readonly PlatnoscStala[],
+  raty: readonly Rata[],
+): PodsumowanieCashFlow {
+  const transakcjeMiesiaca = transakcje.filter((transakcja) => transakcja.data.startsWith(miesiac))
+  const przychody = transakcjeMiesiaca.filter((transakcja) => transakcja.rodzaj === 'przychod').reduce((suma, transakcja) => suma + transakcja.kwota, 0)
+  const wydatki = transakcjeMiesiaca.filter((transakcja) => transakcja.rodzaj !== 'przychod' && transakcja.rodzaj !== 'transfer').reduce((suma, transakcja) => suma + transakcja.kwota, 0)
+  const rachunkiDoOplacenia = rachunki.filter((rachunek) => rachunek.status === 'niezaplacony' && rachunek.termin.slice(0, 7) === miesiac).reduce((suma, rachunek) => suma + rachunek.kwota, 0)
+  const staleDoZaksiegowania = zaplanowanePlatnosciStale(platnosciStale, miesiac)
+    .filter((platnosc) => !transakcjeMiesiaca.some((transakcja) => transakcja.platnoscStalaId === platnosc.id))
+    .reduce((suma, platnosc) => suma + platnosc.kwota, 0)
+  const ratyDoOplacenia = raty.filter((rata) => rata.status === 'planowana' && rata.data.startsWith(miesiac)).reduce((suma, rata) => suma + rata.kwota + rata.nadplata, 0)
+  const zobowiazania = rachunkiDoOplacenia + staleDoZaksiegowania + ratyDoOplacenia
+  return { przychody, wydatki, zobowiazania, bilansBiezacy: przychody - wydatki, prognozowanyBilans: przychody - wydatki - zobowiazania }
+}
+
+export function czyZaksiegowanoZrodlo(transakcje: readonly Wydatek[], powiazanie: NonNullable<Wydatek['powiazanie']>): boolean {
+  return transakcje.some((transakcja) => transakcja.powiazanie?.typ === powiazanie.typ && transakcja.powiazanie.id === powiazanie.id)
 }
 
 function zaokraglijKwote(kwota: number): number {

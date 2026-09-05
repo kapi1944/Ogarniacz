@@ -283,6 +283,12 @@ export interface Rachunek extends EncjaBazowa {
   termin: string
   status: 'niezaplacony' | 'zaplacony'
   powtarzanie?: RegulaPowtarzania
+  kategoria?: string
+  metodaPlatnosci?: 'przelew' | 'karta' | 'gotowka' | 'automatyczna'
+  automatycznaPlatnosc?: boolean
+  kontaktId?: Id
+  dokumentId?: Id
+  progiPrzypomnieniaMin?: number[]
 }
 
 export interface PlatnoscRachunku extends EncjaBazowa {
@@ -366,6 +372,9 @@ export interface Wydatek extends EncjaBazowa {
   powiazanie?: PowiazanieEncji
   platnoscStalaId?: Id
   rataId?: Id
+  rodzaj?: 'wydatek' | 'przychod' | 'transfer'
+  zrodloTransferu?: string
+  celTransferu?: string
 }
 
 export interface PlatnoscStala extends EncjaBazowa {
@@ -375,6 +384,8 @@ export interface PlatnoscStala extends EncjaBazowa {
   dataStartu: string
   kategoria: string
   aktywna: boolean
+  rodzaj?: 'subskrypcja' | 'inna'
+  historiaKwot?: { data: string; kwota: number }[]
 }
 
 export interface PlanRat extends EncjaBazowa {
