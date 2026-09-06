@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -26,10 +27,21 @@ test('akceptuje dokładnie JDK wymagane przez toolchain Capacitor', () => {
   assert.equal(czyZgodnyJdk(25, 21), false)
 })
 
-test('generuje wąskie zezwolenie HTTP tylko dla skonfigurowanego prywatnego endpointu', () => {
+test('zachowuje globalną blokadę HTTP i wyjątek wyłącznie dla endpointu LAN synchronizacji', () => {
   assert.equal(sprawdzAdresSynchronizacji('http://192.168.0.116:8787').hostname, '192.168.0.116')
-  assert.ok(utworzKonfiguracjeBezpieczenstwaSieci('http://192.168.0.116:8787').includes('<domain includeSubdomains="false">192.168.0.116</domain>'))
+  const konfiguracja = utworzKonfiguracjeBezpieczenstwaSieci('http://192.168.0.116:8787')
+  assert.match(konfiguracja, /<base-config cleartextTrafficPermitted="false"\s*\/>/)
+  assert.match(konfiguracja, /<domain-config cleartextTrafficPermitted="true">\s*<domain includeSubdomains="false">192\.168\.0\.116<\/domain>/)
+  assert.doesNotMatch(konfiguracja, /<base-config cleartextTrafficPermitted="true"/)
+  assert.doesNotMatch(konfiguracja, /<domain-config cleartextTrafficPermitted="true">\s*<domain[^>]*>\s*<\/domain>/)
   assert.throws(() => sprawdzAdresSynchronizacji('http://example.com'), /wyłącznie/)
+})
+
+test('źródłowy network security config zachowuje wyjątek dla Raspberry Pi bez globalnego HTTP', () => {
+  const konfiguracja = readFileSync(new URL('../android/app/src/main/res/xml/network_security_config.xml', import.meta.url), 'utf8')
+  assert.match(konfiguracja, /<base-config cleartextTrafficPermitted="false"\s*\/>/)
+  assert.match(konfiguracja, /<domain-config cleartextTrafficPermitted="true">\s*<domain includeSubdomains="false">192\.168\.0\.116<\/domain>/)
+  assert.doesNotMatch(konfiguracja, /<base-config cleartextTrafficPermitted="true"/)
 })
 
 test('oblicza SHA-256 pliku APK', async () => {
