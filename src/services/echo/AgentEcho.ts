@@ -2,7 +2,7 @@ import { dzisiajIso } from '../../domain/fabryki'
 import { KontekstRozmowyEcho } from './KontekstRozmowyEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import { LokalnyModelProviderEcho } from './LokalnyModelProviderEcho'
-import { KonfiguracjaRozmowyEcho, rozpoznajZmianeTempaEcho } from './KonfiguracjaRozmowyEcho'
+import { KonfiguracjaRozmowyEcho, rozpoznajZmianeAutomatycznegoOdczytuEcho, rozpoznajZmianeTempaEcho } from './KonfiguracjaRozmowyEcho'
 import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
 import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho } from './NarzedziaEcho'
@@ -28,6 +28,7 @@ export interface OpcjeAgentaEcho {
   magazynPamieci?: MagazynPamieciEcho
   pamiecPreferencjiWlaczona?: boolean
   konfiguracjaRozmowy?: KonfiguracjaRozmowyEcho
+  ustawAutomatycznyOdczyt?: (wlaczony: boolean) => Promise<void>
 }
 
 function pobierzBiezacyCzas(): KontekstCzasuEcho {
@@ -83,6 +84,7 @@ export class AgentEcho {
   private readonly pamiecPreferencjiWlaczona: boolean
   private readonly politykaPamieci = new PolitykaPamieciEcho()
   readonly konfiguracjaRozmowy: KonfiguracjaRozmowyEcho
+  private readonly ustawAutomatycznyOdczyt?: (wlaczony: boolean) => Promise<void>
   private oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
   private wynikiBiezacejTury: import('./typyEcho').WynikNarzedziaEcho[] = []
 
@@ -100,6 +102,7 @@ export class AgentEcho {
     this.magazynPamieci = opcje.magazynPamieci
     this.pamiecPreferencjiWlaczona = opcje.pamiecPreferencjiWlaczona ?? true
     this.konfiguracjaRozmowy = opcje.konfiguracjaRozmowy ?? new KonfiguracjaRozmowyEcho()
+    this.ustawAutomatycznyOdczyt = opcje.ustawAutomatycznyOdczyt
   }
 
   async obsluz(tresc: string, zrodlo: ZrodloWejsciaEcho = 'tekst', sygnalZewnetrzny?: AbortSignal): Promise<OdpowiedzEcho> {
@@ -113,6 +116,12 @@ export class AgentEcho {
     if (tempo) {
       this.konfiguracjaRozmowy.ustawTempo(tempo)
       return this.odpowiedzNaPreferencje(`Ustawiłem tryb ${tempo === 'szybki' ? 'szybki' : 'spokojny'}.`)
+    }
+    const automatycznyOdczyt = rozpoznajZmianeAutomatycznegoOdczytuEcho(oczyszczona)
+    if (automatycznyOdczyt !== undefined) {
+      if (!this.ustawAutomatycznyOdczyt) return this.odpowiedzNaPreferencje('Nie mogę teraz zmienić ustawienia odczytu odpowiedzi.')
+      await this.ustawAutomatycznyOdczyt(automatycznyOdczyt)
+      return this.odpowiedzNaPreferencje(automatycznyOdczyt ? 'Będę czytał odpowiedzi na głos.' : 'Będę odpowiadał tylko tekstem.')
     }
     if (this.oczekujacaAkcja && /^(tak|jasne|potwierdzam|zapisz|zgoda)[.!]?$/i.test(oczyszczona)) return this.potwierdz(this.oczekujacaAkcja, sygnalZewnetrzny)
     if (this.oczekujacaAkcja) {

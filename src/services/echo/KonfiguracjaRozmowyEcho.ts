@@ -24,3 +24,17 @@ export function rozpoznajZmianeTempaEcho(tekst: string): TempoRozmowyEcho | unde
   if (!/\btryb\s+szybki\b/.test(uproszczony)) return /\btryb\s+spokojny\b/.test(uproszczony) ? 'spokojny' : undefined
   return 'szybki'
 }
+
+export function rozpoznajZmianeAutomatycznegoOdczytuEcho(tekst: string): boolean | undefined {
+  const uproszczony = tekst
+    .toLocaleLowerCase('pl-PL')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ł/g, 'l')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+  if (/^(nie czytaj( mi)? odpowiedzi( na glos)?|wylacz czytanie odpowiedzi|odpowiadaj tylko tekstem)$/.test(uproszczony)) return false
+  if (/^(czytaj( mi)? odpowiedzi( na glos)?|mow mi odpowiedzi|wlacz czytanie odpowiedzi)$/.test(uproszczony)) return true
+  return undefined
+}

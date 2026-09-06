@@ -89,6 +89,21 @@ function utworzAgentaRozmowy() {
 }
 
 describe("Agent Echo", () => {
+  it.each([
+    ['Czytaj mi odpowiedzi', 'tekst', true, 'Będę czytał odpowiedzi na głos.'],
+    ['Nie czytaj odpowiedzi na głos', 'stt', false, 'Będę odpowiadał tylko tekstem.'],
+  ])("trwale zmienia automatyczny odczyt dla komendy %s z %s", async (komenda, zrodlo, oczekiwanyStan, oczekiwanaOdpowiedz) => {
+    const ustawAutomatycznyOdczyt = vi.fn(async () => undefined)
+    const provider = new ProviderSkryptowy([])
+    const agent = new AgentEcho({ provider, ustawAutomatycznyOdczyt })
+
+    const odpowiedz = await agent.obsluz(komenda, zrodlo as 'tekst' | 'stt')
+
+    expect(ustawAutomatycznyOdczyt).toHaveBeenCalledWith(oczekiwanyStan)
+    expect(odpowiedz.tekst).toBe(oczekiwanaOdpowiedz)
+    expect(provider.zadania).toHaveLength(0)
+  })
+
   it("udostępnia narzędzia przekrojowe bez omijania istniejących repozytoriów", () => {
     const nazwy = utworzDomyslnyRejestrNarzedziEcho()
       .definicje()

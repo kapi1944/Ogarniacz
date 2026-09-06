@@ -186,7 +186,7 @@ export function czyPokazacSugestieEcho(
 
 export function WidokEcho() {
   const [stan, ustawStan] = useState<StanSesjiGlosowejEcho>("bezczynny");
-  const { ustawienia } = useAplikacja();
+  const { ustawienia, zapiszUstawienia } = useAplikacja();
   const magazynPamieci = useMemo(() => new MagazynPreferencjiEcho(), []);
   const echo = useMemo(() => {
     const rejestr = utworzDomyslnyRejestrNarzedziEcho({
@@ -216,12 +216,16 @@ export function WidokEcho() {
       wykonawca,
       magazynPamieci,
       pamiecPreferencjiWlaczona: ustawienia.pamiecPreferencjiEcho,
+      ustawAutomatycznyOdczyt: async (automatycznyOdczytEcho) => {
+        await zapiszUstawienia({ automatycznyOdczytEcho });
+      },
     });
   }, [
     magazynPamieci,
     ustawienia.internetEcho,
     ustawienia.modulyEcho,
     ustawienia.pamiecPreferencjiEcho,
+    zapiszUstawienia,
   ]);
   const [tekst, ustawTekst] = useState("");
   const [tryb, ustawTryb] = useState<TrybEcho>(echo.agent.provider.tryb);
