@@ -55,11 +55,18 @@ export class KontrolerSesjiGlosowejEcho {
   private aplikacjaAktywna = true
   private nasluchujeWywolania = false
   private petlaWywolaniaTrwa = false
+  private przerwanoMowieniePrzezWtracenie = false
 
   constructor(private readonly zaleznosci: ZaleznosciKontrolera) {}
 
   async inicjalizuj() {
     this.usunStanGlosu = await this.zaleznosci.glos.nasluchujStanu((stan, tekst) => {
+      if (stan === 'bargeIn' && this.stan === 'mowienie') {
+        this.przerwanoMowieniePrzezWtracenie = true
+        this.ustawStan('sluchanie')
+        void this.zaleznosci.glos.zatrzymajMowienie()
+        return
+      }
       if (stan === 'mowiUzytkownik') this.ustawStan('mowiUzytkownik')
       if (stan === 'transkrypcja') this.ustawStan('transkrypcja')
       if (stan === 'mowienie') this.ustawStan('mowienie')
@@ -177,10 +184,16 @@ export class KontrolerSesjiGlosowejEcho {
             ? 'oczekujeDoprecyzowania'
             : 'oczekiwanie'
         this.ustawStan('mowienie')
+        this.przerwanoMowieniePrzezWtracenie = false
         await this.zaleznosci.glos.mow(odpowiedz.tekst)
         kontynuacja = true
       } catch (blad) {
         if (!this.czyAktualna(numer)) return
+        if (this.przerwanoMowieniePrzezWtracenie) {
+          this.przerwanoMowieniePrzezWtracenie = false
+          kontynuacja = true
+          continue
+        }
         if (kontynuacja && czyCicheZakonczenie(blad)) break
         this.ustawStan('blad')
         this.zaleznosci.obsluga.zglosBlad(komunikatBledu(blad))

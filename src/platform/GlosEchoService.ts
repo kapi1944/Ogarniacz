@@ -1,6 +1,6 @@
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 
-export type StanNatywnegoGlosu = 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie'
+export type StanNatywnegoGlosu = 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie' | 'bargeIn'
 
 interface EchoGlosPlugin {
   sprawdzDostepnosc: () => Promise<{ rozpoznawanie: boolean; mowienie: boolean; zgoda: string }>

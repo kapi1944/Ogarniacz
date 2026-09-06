@@ -30,11 +30,15 @@ public class EchoGlosPlugin extends Plugin {
     private static final int DOMYSLNY_LIMIT_NASLUCHIWANIA_MS = 15000;
     private final Handler obslugaCzasu = new Handler(Looper.getMainLooper());
     private SpeechRecognizer rozpoznawanie;
+    private SpeechRecognizer rozpoznawanieBargeIn;
     private PluginCall aktywneRozpoznawanie;
     private TextToSpeech syntezator;
     private boolean syntezatorGotowy;
     private PluginCall aktywneMowienie;
     private Runnable przekroczenieCzasu;
+    private boolean wykrytoBargeIn;
+    private String tekstBargeIn;
+    private String tekstMowienia = "";
 
     @Override
     public void load() {
@@ -48,14 +52,17 @@ public class EchoGlosPlugin extends Plugin {
                 }
 
                 @Override public void onDone(String identyfikator) {
+                    zakonczWykrywanieBargeIn();
                     zakonczMowienie(null);
                 }
 
                 @Override public void onStop(String identyfikator, boolean przerwane) {
+                    if (!wykrytoBargeIn) zakonczWykrywanieBargeIn();
                     zakonczMowienie("Wypowiedź została przerwana.");
                 }
 
                 @Override public void onError(String identyfikator) {
+                    zakonczWykrywanieBargeIn();
                     zakonczMowienie("Syntezator mowy nie odczytał odpowiedzi.");
                 }
             });
@@ -99,6 +106,19 @@ public class EchoGlosPlugin extends Plugin {
                 wywolanie.reject("Sesja rozpoznawania mowy już trwa.", "SESJA_AKTYWNA");
                 return;
             }
+            if (wykrytoBargeIn) {
+                if (tekstBargeIn != null) {
+                    String tekst = tekstBargeIn;
+                    tekstBargeIn = null;
+                    wykrytoBargeIn = false;
+                    wywolanie.resolve(wynikRozpoznawania(tekst));
+                } else if (rozpoznawanieBargeIn != null) {
+                    aktywneRozpoznawanie = wywolanie;
+                } else {
+                    wywolanie.reject("Nie usłyszałem wypowiedzi.", "BRAK_MOWY");
+                }
+                return;
+            }
             aktywneRozpoznawanie = wywolanie;
             rozpoznawanie = SpeechRecognizer.createSpeechRecognizer(getContext());
             rozpoznawanie.setRecognitionListener(new SluchaczRozpoznawania());
@@ -125,6 +145,9 @@ public class EchoGlosPlugin extends Plugin {
     public void anulujNasluchiwanie(PluginCall wywolanie) {
         getActivity().runOnUiThread(() -> {
             zakonczRozpoznawanie("Nasłuchiwanie anulowano.", "ANULOWANO");
+            wykrytoBargeIn = false;
+            tekstBargeIn = null;
+            zakonczWykrywanieBargeIn();
             wywolanie.resolve();
         });
     }
@@ -143,10 +166,15 @@ public class EchoGlosPlugin extends Plugin {
         getActivity().runOnUiThread(() -> {
             if (aktywneMowienie != null) zakonczMowienie("Wypowiedź została przerwana.");
             aktywneMowienie = wywolanie;
+            tekstMowienia = tekst;
+            wykrytoBargeIn = false;
+            tekstBargeIn = null;
             String identyfikator = "echo-" + System.nanoTime();
             if (syntezator.speak(tekst, TextToSpeech.QUEUE_FLUSH, null, identyfikator) == TextToSpeech.ERROR) {
                 zakonczMowienie("Nie udało się uruchomić syntezatora mowy.");
+                return;
             }
+            uruchomWykrywanieBargeIn();
         });
     }
 
@@ -165,6 +193,12 @@ public class EchoGlosPlugin extends Plugin {
         if (wywolanie == null) return;
         if (blad == null) wywolanie.resolve();
         else wywolanie.reject(blad, "ANULOWANO");
+    }
+
+    private JSObject wynikRozpoznawania(String tekst) {
+        JSObject wynik = new JSObject();
+        wynik.put("tekst", tekst);
+        return wynik;
     }
 
     private void zakonczRozpoznawanie(String komunikat, String kod) {
@@ -190,9 +224,87 @@ public class EchoGlosPlugin extends Plugin {
         PluginCall wywolanie = aktywneRozpoznawanie;
         aktywneRozpoznawanie = null;
         if (wywolanie == null) return;
-        JSObject wynik = new JSObject();
-        wynik.put("tekst", tekst);
-        wywolanie.resolve(wynik);
+        wywolanie.resolve(wynikRozpoznawania(tekst));
+    }
+
+    private void uruchomWykrywanieBargeIn() {
+        if (rozpoznawanieBargeIn != null || !SpeechRecognizer.isRecognitionAvailable(getContext())) return;
+        rozpoznawanieBargeIn = SpeechRecognizer.createSpeechRecognizer(getContext());
+        rozpoznawanieBargeIn.setRecognitionListener(new SluchaczBargeIn());
+        Intent zamiar = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pl-PL");
+        zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pl-PL");
+        zamiar.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        zamiar.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
+        zamiar.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1200);
+        rozpoznawanieBargeIn.startListening(zamiar);
+    }
+
+    private void zakonczWykrywanieBargeIn() {
+        if (rozpoznawanieBargeIn != null) {
+            rozpoznawanieBargeIn.cancel();
+            rozpoznawanieBargeIn.destroy();
+            rozpoznawanieBargeIn = null;
+        }
+        if (!wykrytoBargeIn) tekstMowienia = "";
+    }
+
+    private String normalizujTekst(String tekst) {
+        return tekst.toLowerCase(new Locale("pl", "PL"))
+            .replace('ł', 'l')
+            .replaceAll("[^a-z0-9\\s]", " ")
+            .trim()
+            .replaceAll("\\s+", " ");
+    }
+
+    private boolean czyPotwierdzonyBargeIn(String tekst) {
+        String uproszczony = normalizujTekst(tekst);
+        String odczytywany = normalizujTekst(tekstMowienia);
+        return uproszczony.split(" ").length >= 2
+            && !odczytywany.contains(uproszczony)
+            && !uproszczony.contains(odczytywany);
+    }
+
+    private class SluchaczBargeIn implements RecognitionListener {
+        @Override public void onReadyForSpeech(Bundle parametry) {}
+        @Override public void onBeginningOfSpeech() {}
+        @Override public void onRmsChanged(float poziom) {}
+        @Override public void onBufferReceived(byte[] bufor) {}
+        @Override public void onEndOfSpeech() {}
+        @Override public void onEvent(int typ, Bundle parametry) {}
+
+        @Override public void onPartialResults(Bundle wyniki) {
+            String tekst = tekstRozpoznania(wyniki);
+            if (wykrytoBargeIn || !czyPotwierdzonyBargeIn(tekst)) return;
+            wykrytoBargeIn = true;
+            powiadomStan("bargeIn");
+            if (syntezator != null) syntezator.stop();
+        }
+
+        @Override public void onResults(Bundle wyniki) {
+            String tekst = tekstRozpoznania(wyniki);
+            if (!wykrytoBargeIn || tekst.isEmpty()) {
+                zakonczWykrywanieBargeIn();
+                return;
+            }
+            rozpoznawanieBargeIn.destroy();
+            rozpoznawanieBargeIn = null;
+            tekstMowienia = "";
+            PluginCall wywolanie = aktywneRozpoznawanie;
+            aktywneRozpoznawanie = null;
+            if (wywolanie != null) wywolanie.resolve(wynikRozpoznawania(tekst));
+            else tekstBargeIn = tekst;
+        }
+
+        @Override public void onError(int blad) {
+            if (wykrytoBargeIn && aktywneRozpoznawanie != null) {
+                PluginCall wywolanie = aktywneRozpoznawanie;
+                aktywneRozpoznawanie = null;
+                wywolanie.reject("Nie usłyszałem wypowiedzi.", "BRAK_MOWY");
+            }
+            zakonczWykrywanieBargeIn();
+        }
     }
 
     private void powiadomStan(String stan) {
@@ -250,6 +362,7 @@ public class EchoGlosPlugin extends Plugin {
     protected void handleOnDestroy() {
         getActivity().runOnUiThread(() -> {
             zakonczRozpoznawanie("Sesja głosowa została zakończona.", "ANULOWANO");
+            zakonczWykrywanieBargeIn();
             if (syntezator != null) {
                 syntezator.stop();
                 syntezator.shutdown();

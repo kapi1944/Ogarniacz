@@ -57,7 +57,7 @@ describe('KontrolerSesjiGlosowejEcho', () => {
   it('pokazuje partial, ale przekazuje do agenta wyłącznie poprawioną wypowiedź finalną', async () => {
     const glos = przygotujGlos([])
     let zakonczRozpoznawanie: ((tekst: string) => void) | undefined
-    let odebranoStan: ((stan: 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie', tekst?: string) => void) | undefined
+    let odebranoStan: ((stan: 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie' | 'bargeIn', tekst?: string) => void) | undefined
     glos.rozpoznaj = vi.fn(() => new Promise<string>((rozwiaz) => { zakonczRozpoznawanie = rozwiaz }))
     glos.nasluchujStanu = vi.fn(async (obsluga) => {
       odebranoStan = obsluga
@@ -203,6 +203,61 @@ describe('KontrolerSesjiGlosowejEcho', () => {
 
     expect(glos.zatrzymajMowienie).toHaveBeenCalledTimes(1)
     expect(rozpoznaj).toHaveBeenNthCalledWith(2, 30_000, 4_000, expect.any(Function))
+    await kontroler.anuluj()
+  })
+
+  it('zatrzymuje TTS i zachowuje sesję, gdy Android wykryje wypowiedź użytkownika', async () => {
+    const glos = przygotujGlos(['Pierwsze polecenie', 'Popraw to na jutro'])
+    let odebranoStan: ((stan: 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie' | 'bargeIn', tekst?: string) => void) | undefined
+    let zakonczMowienie: (() => void) | undefined
+    glos.nasluchujStanu = vi.fn(async (obsluga) => {
+      odebranoStan = obsluga
+      return () => undefined
+    })
+    glos.mow = vi.fn(() => new Promise<void>((_rozwiaz, odrzuc) => { zakonczMowienie = () => odrzuc(Object.assign(new Error('Wypowiedź została przerwana.'), { code: 'ANULOWANO' })) }))
+    glos.zatrzymajMowienie = vi.fn(async () => { zakonczMowienie?.() })
+    const echo = { obsluz: vi.fn(async () => odpowiedz) }
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo,
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.inicjalizuj()
+    await kontroler.rozpocznij()
+    await czekajNa(() => kontroler.pobierzStan() === 'mowienie')
+    odebranoStan?.('bargeIn')
+    await czekajNa(() => (glos.rozpoznaj as ReturnType<typeof vi.fn>).mock.calls.length === 2)
+
+    expect(glos.zatrzymajMowienie).toHaveBeenCalledTimes(1)
+    expect(echo.obsluz).toHaveBeenNthCalledWith(2, 'Popraw to na jutro', 'stt', expect.any(AbortSignal))
+    await kontroler.anuluj()
+  })
+
+  it('nie zatrzymuje TTS bez potwierdzonego sygnału barge-in', async () => {
+    const glos = przygotujGlos(['Pierwsze polecenie'])
+    let odebranoStan: ((stan: 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie' | 'bargeIn', tekst?: string) => void) | undefined
+    let zakonczMowienie: (() => void) | undefined
+    glos.nasluchujStanu = vi.fn(async (obsluga) => {
+      odebranoStan = obsluga
+      return () => undefined
+    })
+    glos.mow = vi.fn(() => new Promise<void>((rozwiaz) => { zakonczMowienie = rozwiaz }))
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo: { obsluz: vi.fn(async () => odpowiedz) },
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.inicjalizuj()
+    await kontroler.rozpocznij()
+    await czekajNa(() => kontroler.pobierzStan() === 'mowienie')
+    odebranoStan?.('mowiUzytkownik', 'Jasne, zapisałem')
+
+    expect(glos.zatrzymajMowienie).not.toHaveBeenCalled()
+    zakonczMowienie?.()
     await kontroler.anuluj()
   })
 })
