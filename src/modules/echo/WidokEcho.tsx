@@ -44,6 +44,7 @@ interface Wiadomosc {
   id: string;
   autor: "uzytkownik" | "echo";
   tresc: string;
+  zrodloWejscia?: ZrodloWejsciaEcho;
   ryzyko?: "niskie" | "umiarkowane" | "wysokie";
   wartosciDomyslne?: WartoscDomyslnaEcho[];
   wyniki?: WynikNarzedziaEcho[];
@@ -158,7 +159,7 @@ const etykietyModulowEcho: Partial<Record<NazwaModulu, string>> = {
 export function uruchomAutomatycznyOdczytEcho(
   glosWlaczony: boolean,
   odczytWlaczony: boolean,
-  wiadomosc: Pick<Wiadomosc, "id" | "autor" | "tresc"> | undefined,
+  wiadomosc: Pick<Wiadomosc, "id" | "autor" | "tresc" | "zrodloWejscia"> | undefined,
   ostatnioOdczytana: string | undefined,
   odczytaj: (tresc: string) => void,
 ): string | undefined {
@@ -166,6 +167,7 @@ export function uruchomAutomatycznyOdczytEcho(
     !glosWlaczony ||
     !odczytWlaczony ||
     wiadomosc?.autor !== "echo" ||
+    wiadomosc.zrodloWejscia !== "tekst" ||
     wiadomosc.id === "powitanie" ||
     wiadomosc.id === ostatnioOdczytana
   ) {
@@ -245,6 +247,7 @@ export function WidokEcho() {
 
   const dodajOdpowiedz = (
     odpowiedz: Awaited<ReturnType<EchoService["obsluz"]>>,
+    zrodloWejscia: ZrodloWejsciaEcho,
   ) => {
     ustawTryb(odpowiedz.tryb);
     ustawWiadomosci((obecne) => [
@@ -253,6 +256,7 @@ export function WidokEcho() {
         id: crypto.randomUUID(),
         autor: "echo",
         tresc: odpowiedz.tekst,
+        zrodloWejscia,
         ryzyko: odpowiedz.ryzyko,
         wartosciDomyslne: odpowiedz.wartosciDomyslne,
         wyniki: odpowiedz.wyniki,
@@ -280,7 +284,7 @@ export function WidokEcho() {
                 tresc: wypowiedz,
               },
             ]),
-          odebranoOdpowiedz: dodajOdpowiedz,
+          odebranoOdpowiedz: (odpowiedz) => dodajOdpowiedz(odpowiedz, "stt"),
         },
       }),
     [echo],
@@ -309,7 +313,7 @@ export function WidokEcho() {
     ustawTekst("");
     ustawWysylanie(true);
     try {
-      dodajOdpowiedz(await echo.obsluz(wypowiedz, zrodlo));
+      dodajOdpowiedz(await echo.obsluz(wypowiedz, zrodlo), zrodlo);
     } finally {
       ustawWysylanie(false);
     }
@@ -357,7 +361,7 @@ export function WidokEcho() {
     if (!oczekujacaAkcja) return;
     const akcja = oczekujacaAkcja;
     ustawOczekujacaAkcje(undefined);
-    dodajOdpowiedz(await echo.potwierdz(akcja));
+    dodajOdpowiedz(await echo.potwierdz(akcja), "tekst");
   };
 
   const anulujPotwierdzenie = () => {

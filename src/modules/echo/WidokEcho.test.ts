@@ -14,6 +14,31 @@ describe('ustawienia i wyniki Widoku Echo', () => {
     expect(odczytaj).not.toHaveBeenCalled()
   })
 
+  it('nie dubluje TTS dla odpowiedzi rozpoczętej głosowo', () => {
+    const odczytaj = vi.fn()
+    uruchomAutomatycznyOdczytEcho(
+      true,
+      true,
+      { id: 'odpowiedz-1', autor: 'echo', tresc: 'Gotowe.', zrodloWejscia: 'stt' },
+      undefined,
+      odczytaj,
+    )
+    expect(odczytaj).not.toHaveBeenCalled()
+  })
+
+  it('odczytuje odpowiedź tekstową tylko po włączeniu ustawienia', () => {
+    const odczytaj = vi.fn()
+    const ostatnioOdczytana = uruchomAutomatycznyOdczytEcho(
+      true,
+      true,
+      { id: 'odpowiedz-1', autor: 'echo', tresc: 'Gotowe.', zrodloWejscia: 'tekst' },
+      undefined,
+      odczytaj,
+    )
+    expect(odczytaj).toHaveBeenCalledWith('Gotowe.')
+    expect(ostatnioOdczytana).toBe('odpowiedz-1')
+  })
+
   it('proaktywność i wyciszenie realnie sterują widocznością sugestii', () => {
     expect(czyPokazacSugestieEcho(true, false)).toBe(true)
     expect(czyPokazacSugestieEcho(false, false)).toBe(false)

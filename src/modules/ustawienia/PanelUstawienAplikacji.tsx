@@ -178,7 +178,7 @@ export function PanelUstawienAplikacji() {
 
       <SekcjaUstawien tytul="Echo" resetuj={resetujEcho}>
         <Przelacznik etykieta="Głos" opis="Pozwala korzystać z wejścia głosowego, gdy urządzenie je udostępnia." zaznaczony={szkic.glosEcho} zmien={(glosEcho) => aktualizujSzkic({ ...szkic, glosEcho })} />
-        <Przelacznik etykieta="Automatyczny odczyt" opis="Odczytuje odpowiedzi Echo na obsługiwanym urządzeniu." zaznaczony={szkic.automatycznyOdczytEcho} zmien={(automatycznyOdczytEcho) => aktualizujSzkic({ ...szkic, automatycznyOdczytEcho })} />
+        <Przelacznik etykieta="Czytaj odpowiedzi Echo na głos" opis="W rozmowie tekstowej odczytuje odpowiedzi Echo na obsługiwanym urządzeniu." zaznaczony={szkic.automatycznyOdczytEcho} zmien={(automatycznyOdczytEcho) => aktualizujSzkic({ ...szkic, automatycznyOdczytEcho })} />
         <Przelacznik etykieta="Proaktywność" opis="Pozwala Echo pokazywać lokalne sugestie." zaznaczony={szkic.proaktywnoscEcho && !szkic.echoWyciszone} zmien={(wartosc) => aktualizujSzkic({ ...szkic, proaktywnoscEcho: wartosc, echoWyciszone: !wartosc })} />
         <Przelacznik etykieta="Pamięć preferencji" opis="Przechowuje osobno jawne preferencje rozmowy, bez kopiowania danych domenowych." zaznaczony={szkic.pamiecPreferencjiEcho} zmien={(pamiecPreferencjiEcho) => aktualizujSzkic({ ...szkic, pamiecPreferencjiEcho })} />
         <Przelacznik etykieta="Dostęp do internetu" opis="Pozwala użyć skonfigurowanego providera danych bieżących; sam przełącznik nie wykonuje requestów." zaznaczony={szkic.internetEcho} zmien={(internetEcho) => aktualizujSzkic({ ...szkic, internetEcho })} />
