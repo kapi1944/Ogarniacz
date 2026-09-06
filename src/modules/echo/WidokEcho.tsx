@@ -121,6 +121,7 @@ export function adresWyniku(element: {
 }
 
 export function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
+  if (nazwa === 'list_calendar') return 'planer';
   if (nazwa === "assess_purchase_affordability") return "finanse";
   if (nazwa === "assess_mechanic_trip") return "samochod";
   if (nazwa === "pharmacy_overview") return "zdrowie";

@@ -754,7 +754,8 @@ describe("Agent Echo", () => {
     await agent.obsluz("Dodaj jutro o 9 odebrać paczkę.");
 
     const pytanie = await agent.obsluz("Przełóż na piątek.");
-    expect(pytanie.tekst).toBe("Którego przypomnienia dotyczy zmiana?");
+    expect(pytanie.tekst).toContain("Którego przypomnienia dotyczy zmiana?");
+    expect(pytanie.tekst).toContain('1. Telefon do mechanika');
     expect(przeloz).not.toHaveBeenCalled();
 
     await agent.obsluz("Nie, ten poprzedni.");

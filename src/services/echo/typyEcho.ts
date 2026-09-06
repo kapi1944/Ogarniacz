@@ -31,7 +31,7 @@ export interface WartoscDomyslnaEcho {
 }
 
 export interface OczekujaceDoprecyzowanieEcho {
-  intencja: 'utworz_przypomnienie' | 'przeloz_przypomnienie' | 'edytuj_zadanie' | 'usun_zadanie' | 'utworz_wizyte' | 'utworz_skierowanie' | 'utworz_recepte' | 'dodaj_wpis_terapii'
+  intencja: 'utworz_przypomnienie' | 'przeloz_przypomnienie' | 'edytuj_zadanie' | 'wykonaj_zadanie' | 'usun_zadanie' | 'utworz_wizyte' | 'utworz_skierowanie' | 'utworz_recepte' | 'dodaj_wpis_terapii'
   brakujacePola: ('tytul' | 'data' | 'godzina' | 'encja' | 'cel' | 'pozycje' | 'terapia')[]
   zebrane: {
     tytul?: string
@@ -48,6 +48,7 @@ export interface OczekujaceDoprecyzowanieEcho {
 }
 
 export interface AktualizacjaKontekstuEcho {
+  intencjaSemantyczna?: IntencjaSemantycznaEcho
   temat?: string
   ostatniaIntencja?: string
   oczekujacaAkcja?: { intencja: string; dane: unknown } | null
@@ -56,6 +57,8 @@ export interface AktualizacjaKontekstuEcho {
 }
 
 export interface MigawkaKontekstuEcho {
+  intencjaSemantyczna?: IntencjaSemantycznaEcho
+  historiaIntencji?: IntencjaSemantycznaEcho[]
   tury: TuraRozmowyEcho[]
   streszczenie?: string
   temat?: string
@@ -71,6 +74,7 @@ export interface MigawkaKontekstuEcho {
 }
 
 export interface DefinicjaNarzedziaEcho {
+  rodzaj?: 'odczyt' | 'zapis'
   nazwa: string
   opis: string
   schematArgumentow: unknown
@@ -89,6 +93,7 @@ export type DecyzjaModeluEcho =
   | { typ: 'narzedzia'; wywolania: WywolanieNarzedziaEcho[]; aktualizacjaKontekstu?: AktualizacjaKontekstuEcho }
 
 export interface ZadanieModeluEcho {
+  wynikiBiezacejTury?: WynikNarzedziaEcho[]
   instrukcjeSystemowe: string[]
   kontekstCzasu: KontekstCzasuEcho
   kontekstRozmowy: MigawkaKontekstuEcho
@@ -117,6 +122,16 @@ export interface OdpowiedzEcho {
   akcjaDoPotwierdzenia?: AkcjaDoPotwierdzeniaEcho
   wartosciDomyslne?: WartoscDomyslnaEcho[]
   wyniki?: WynikNarzedziaEcho[]
+}
+
+export interface IntencjaSemantycznaEcho {
+  typ: string
+  pewnosc: number
+  wartosci: { pole: string; wartosc: string; zrodlo: 'wypowiedz' | 'kontekst' | 'dane' | 'propozycja' }[]
+  encje: { typ: string; id?: string; etykieta: string }[]
+  brakujacePola: string[]
+  konflikty: string[]
+  korekta: boolean
 }
 
 export interface KandydatPamieciEcho {

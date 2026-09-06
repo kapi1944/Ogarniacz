@@ -1,6 +1,7 @@
 import { dzisiajIso } from '../../domain/fabryki'
 import { KontekstRozmowyEcho } from './KontekstRozmowyEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
+import { LokalnyModelProviderEcho } from './LokalnyModelProviderEcho'
 import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
 import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho } from './NarzedziaEcho'
@@ -52,7 +53,9 @@ export class AgentEcho {
   private wynikiBiezacejTury: import('./typyEcho').WynikNarzedziaEcho[] = []
 
   constructor(opcje: OpcjeAgentaEcho = {}) {
-    this.provider = opcje.provider ?? new LokalnySemantycznyProviderEcho()
+    this.provider = opcje.provider ?? (import.meta.env.VITE_ECHO_MODEL && import.meta.env.VITE_ECHO_MODEL_URL
+      ? new LokalnyModelProviderEcho(import.meta.env.VITE_ECHO_MODEL_URL, import.meta.env.VITE_ECHO_MODEL)
+      : new LokalnySemantycznyProviderEcho())
     this.kontekst = opcje.kontekst ?? new KontekstRozmowyEcho()
     this.rejestr = opcje.rejestr ?? utworzDomyslnyRejestrNarzedziEcho()
     this.wykonawca = opcje.wykonawca ?? new WykonawcaNarzedziEcho(this.rejestr)
@@ -68,6 +71,7 @@ export class AgentEcho {
     const oczyszczona = tresc.trim()
     if (!oczyszczona) return this.odpowiedz('Powiedz albo napisz, czym mam się zająć.')
     this.wynikiBiezacejTury = []
+    this.oczekujacaAkcja = undefined
     this.onZmianaStanu?.('rozumiem')
     this.kontekst.dodajTure('uzytkownik', oczyszczona)
     this.kontekst.ustawTemat(this.kontekst.migawka().temat ?? (zrodlo === 'stt' ? 'rozmowa głosowa' : 'rozmowa tekstowa'))
@@ -92,13 +96,15 @@ export class AgentEcho {
     if (!this.oczekujacaAkcja || this.oczekujacaAkcja.wywolanie.id !== akcja.wywolanie.id) {
       return this.odpowiedz('To potwierdzenie nie jest już aktualne. Powiedz, co mam zrobić ponownie.', 'umiarkowane')
     }
+    const wywolanie = this.oczekujacaAkcja.wywolanie
     this.oczekujacaAkcja = undefined
     this.onZmianaStanu?.('wykonuje')
-    const wynik = await this.wykonawca.wykonaj(akcja.wywolanie, true)
+    const wynik = await this.wykonawca.wykonaj(wywolanie, true)
     this.wynikiBiezacejTury = [wynik]
     this.kontekst.dodajWynikNarzedzia(wynik)
     if (wynik.status !== 'wykonane') return this.odpowiedz('Nie udało się bezpiecznie wykonać tej zmiany.', akcja.ryzyko)
-    this.kontekst.ustawOstatniaAkcje(akcja.wywolanie.nazwa, akcja.wywolanie.argumenty)
+    this.kontekst.ustawOstatniaAkcje(wywolanie.nazwa, wywolanie.argumenty)
+    this.zapamietajEncjeWyniku(wywolanie.nazwa, wynik.dane)
     return this.uruchomPetle(sygnalZewnetrzny)
   }
 
@@ -116,6 +122,7 @@ export class AgentEcho {
       kontekstRozmowy: this.kontekst.migawka(),
       pamiecPreferencji,
       narzedzia: this.rejestr.definicje(),
+      wynikiBiezacejTury: [...this.wynikiBiezacejTury],
     }
   }
 
@@ -129,7 +136,9 @@ export class AgentEcho {
       return this.odpowiedz('Zatrzymałem tę próbę, bo wymagała zbyt wielu kroków. Spróbujmy ująć cel trochę węziej.')
     } catch (blad) {
       if (blad instanceof DOMException && blad.name === 'AbortError') return this.odpowiedz('Przerwałem tę odpowiedź.')
-      return this.odpowiedz('Nie mogę teraz dokończyć tej rozmowy. Twoje dane nie zostały zmienione.')
+      return this.odpowiedz(this.wynikiBiezacejTury.length
+        ? 'Nie mogę teraz dokończyć tej rozmowy. Sprawdź wyniki wykonanych działań przed ponowieniem prośby.'
+        : 'Nie mogę teraz dokończyć tej rozmowy. Twoje dane nie zostały zmienione.')
     }
   }
 
@@ -151,7 +160,7 @@ export class AgentEcho {
       if (wynik.status === 'wymaga_potwierdzenia') {
         const narzedzie = this.rejestr.pobierz(wywolanie.nazwa)
         const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie, ryzyko: narzedzie?.ryzyko ?? 'wysokie', opis: wynik.komunikat ?? 'Zmiana danych' }
-        this.oczekujacaAkcja = akcja
+        this.oczekujacaAkcja = structuredClone(akcja)
         return { tekst: `Mogę to zrobić, ale najpierw potrzebuję potwierdzenia: ${akcja.opis}`, ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
       }
       if (wynik.status === 'zablokowane') {
@@ -177,6 +186,7 @@ export class AgentEcho {
   private async pobierzDecyzje(zadanie: ZadanieModeluEcho, sygnalZewnetrzny?: AbortSignal): Promise<DecyzjaModeluEcho> {
     this.onZmianaStanu?.('rozumiem')
     const kontroler = new AbortController()
+    if (sygnalZewnetrzny?.aborted) throw new DOMException('Anulowano', 'AbortError')
     const anuluj = () => kontroler.abort()
     sygnalZewnetrzny?.addEventListener('abort', anuluj, { once: true })
     let licznik: ReturnType<typeof setTimeout> | undefined

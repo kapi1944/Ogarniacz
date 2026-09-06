@@ -5,6 +5,7 @@ const LIMIT_WYNIKOW = 8
 const LIMIT_ENCJI = 12
 
 export class KontekstRozmowyEcho {
+  private historiaIntencji: NonNullable<MigawkaKontekstuEcho['historiaIntencji']> = []
   private tury: TuraRozmowyEcho[] = []
   private pominieteTury = 0
   private streszczenie?: string
@@ -37,6 +38,7 @@ export class KontekstRozmowyEcho {
 
   zastosujAktualizacje(aktualizacja?: AktualizacjaKontekstuEcho): void {
     if (!aktualizacja) return
+    if (aktualizacja.intencjaSemantyczna) this.historiaIntencji = [...this.historiaIntencji, structuredClone(aktualizacja.intencjaSemantyczna)].slice(-6)
     if (aktualizacja.temat !== undefined) this.temat = aktualizacja.temat
     if (aktualizacja.ostatniaIntencja !== undefined) this.ostatniaIntencja = aktualizacja.ostatniaIntencja
     if (aktualizacja.oczekujacaAkcja !== undefined) this.oczekujacaAkcja = aktualizacja.oczekujacaAkcja ?? undefined
@@ -58,6 +60,8 @@ export class KontekstRozmowyEcho {
       ? `Pominięto ${this.pominieteTury} starszych tur. ${this.streszczenie ?? 'Brak zatwierdzonego streszczenia.'}`
       : this.streszczenie
     return {
+      intencjaSemantyczna: structuredClone(this.historiaIntencji.at(-1)),
+      historiaIntencji: structuredClone(this.historiaIntencji),
       tury: [...this.tury],
       streszczenie: informacjaOLimicie,
       temat: this.temat,

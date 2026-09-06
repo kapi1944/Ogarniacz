@@ -359,6 +359,9 @@ function frazaZadania(lista: SlowoWypowiedzi[], pomin: number[]): string {
     "na",
     "jednak",
     "prosze",
+    "oznacz",
+    "jako",
+    "wykonane",
   ]);
   return lista
     .filter(
@@ -424,19 +427,21 @@ function pytanieDlaDoprecyzowania(
 function wybierzKandydata(
   tekst: string,
   kandydaci: NonNullable<OczekujaceDoprecyzowanieEcho["zebrane"]["kandydaci"]>,
+  kolejnoscRozmowy = false,
 ) {
   const uproszczony = uprosc(tekst);
-  const tokeny = new Set(slowa(tekst).map(({ uproszczone }) => uproszczone));
-  if (tokeny.has("poprzedni")) return kandydaci.at(-2);
-  if (["to", "ten", "ostatni"].some((token) => tokeny.has(token)))
-    return kandydaci.at(-1);
-  return kandydaci.find(
+  if (kolejnoscRozmowy && slowa(tekst).some((slowo) => ['poprzedni', 'wczesniejszy'].includes(slowo.uproszczone))) return kandydaci.at(-2);
+  const wybor = new Map([['1', 0], ['pierwszy', 0], ['pierwsze', 0], ['2', 1], ['drugi', 1], ['drugie', 1], ['3', 2], ['trzeci', 2], ['trzecie', 2]]);
+  const indeks = wybor.get(uproszczony.trim().replace(/[.!?]+$/, ''));
+  if (indeks !== undefined) return kandydaci[indeks];
+  const pasujace = kandydaci.filter(
     (kandydat) =>
       kandydat.etykieta &&
       uprosc(kandydat.etykieta)
         .split(/\s+/)
         .some((slowo) => slowo.length > 3 && uproszczony.includes(slowo)),
   );
+  return pasujace.length === 1 ? pasujace[0] : undefined;
 }
 
 function okreslenieCzasu(czas: RozpoznanyCzas, godzina: string): string {
@@ -1208,7 +1213,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       );
     }
     if (
-      oczekujace.intencja === "edytuj_zadanie" ||
+      oczekujace.intencja === "edytuj_zadanie" || oczekujace.intencja === 'wykonaj_zadanie' ||
       oczekujace.intencja === "usun_zadanie"
     ) {
       const kandydat = wybierzKandydata(
@@ -1226,7 +1231,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
               oczekujace.zebrane.okreslenieCzasu ?? oczekujace.zebrane.termin!,
           })
         : this.wywolajZadanie({
-            typ: "usun_zadanie",
+            typ: oczekujace.intencja === 'wykonaj_zadanie' ? 'wykonaj_zadanie' : "usun_zadanie",
             id: kandydat.id,
             tytul: kandydat.etykieta ?? "zadanie",
           });
@@ -1235,6 +1240,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       const kandydat = wybierzKandydata(
         tekst,
         oczekujace.zebrane.kandydaci ?? [],
+        true,
       );
       if (!kandydat) return this.pytanie(oczekujace);
       const obecnyCzas = czasyPrzypomnienia(
@@ -1289,9 +1295,11 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
   }
 
   private pytanie(oczekujace: OczekujaceDoprecyzowanieEcho): DecyzjaModeluEcho {
+    const kandydaci = oczekujace.zebrane.kandydaci?.slice(0, 3);
+    oczekujace = { ...oczekujace, zebrane: { ...oczekujace.zebrane, kandydaci } };
     return {
       typ: "pytanie",
-      tresc: pytanieDlaDoprecyzowania(oczekujace),
+      tresc: [pytanieDlaDoprecyzowania(oczekujace), ...(kandydaci?.map((element, indeks) => `${indeks + 1}. ${element.etykieta ?? element.typ}`) ?? [])].join('\n'),
       aktualizacjaKontekstu: {
         ostatniaIntencja: oczekujace.intencja,
         oczekujaceDoprecyzowanie: oczekujace,
@@ -1662,7 +1670,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
           intencja:
             zamiar.typ === "znajdz_do_edycji"
               ? "edytuj_zadanie"
-              : "usun_zadanie",
+              : zamiar.typ === 'znajdz_do_wykonania' ? 'wykonaj_zadanie' : "usun_zadanie",
           brakujacePola: ["encja"],
           zebrane: {
             fraza: zamiar.fraza,
@@ -1685,7 +1693,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
             okreslenie: zamiar.okreslenie,
           })
         : this.wywolajZadanie({
-            typ: "usun_zadanie",
+            typ: zamiar.typ === 'znajdz_do_wykonania' ? 'wykonaj_zadanie' : "usun_zadanie",
             id: znalezione[0].id,
             tytul: znalezione[0].tytul,
           });

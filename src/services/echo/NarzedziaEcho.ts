@@ -50,6 +50,8 @@ import type {
 } from "./typyEcho";
 
 export interface NarzedzieEcho<TArgumenty, TWynik> {
+  rodzaj?: 'odczyt' | 'zapis';
+  sprawdzStan?(argumenty: TArgumenty, sprawdzDostep: (nazwa: string) => boolean | string): Promise<string | undefined>;
   nazwa: string;
   opis: string;
   schematArgumentow: z.ZodType<TArgumenty>;
@@ -58,6 +60,8 @@ export interface NarzedzieEcho<TArgumenty, TWynik> {
 }
 
 interface NarzedzieWykonywalneEcho {
+  rodzaj?: 'odczyt' | 'zapis';
+  sprawdzStan?(argumenty: unknown, sprawdzDostep: (nazwa: string) => boolean | string): Promise<string | undefined>;
   nazwa: string;
   opis: string;
   schematArgumentow: z.ZodType;
@@ -86,6 +90,7 @@ export class RejestrNarzedziEcho {
   definicje(): DefinicjaNarzedziaEcho[] {
     return [...this.narzedzia.values()].map((narzedzie) => ({
       nazwa: narzedzie.nazwa,
+      rodzaj: narzedzie.rodzaj ?? (/^(list_|get_|search_|preview_|assess_|upcoming_|explain_|finance_period_summary$|budget_state$|vehicle_status$|vehicle_service_history$|vehicle_cost_summary$|pharmacy_overview$|current_external_data$|subscription_state$)/.test(narzedzie.nazwa) ? 'odczyt' : 'zapis'),
       opis: narzedzie.opis,
       schematArgumentow: z.toJSONSchema(narzedzie.schematArgumentow),
       ryzyko: narzedzie.ryzyko,
@@ -169,6 +174,11 @@ export class WykonawcaNarzedziEcho {
       };
 
     try {
+      const konflikt = await narzedzie.sprawdzStan?.(walidacja.data, this.sprawdzDostep);
+      if (konflikt && !potwierdzone) return {
+        wywolanieId: wywolanie.id, nazwa: wywolanie.nazwa,
+        status: 'wymaga_potwierdzenia', komunikat: konflikt,
+      };
       const dane = await narzedzie.wykonaj(walidacja.data);
       await this.zapiszDziennik(
         `Echo wykonało narzędzie ${narzedzie.nazwa}.`,
@@ -339,6 +349,12 @@ export function utworzDomyslnyRejestrNarzedziEcho(
       godzina: godzina.optional(),
     }),
     ryzyko: "niskie",
+    sprawdzStan: async ({ tytul, termin }) => {
+      const nazwa = tytul.trim().toLocaleLowerCase('pl-PL');
+      const zadania = await pobierzRepozytorium('zadania').lista();
+      return zadania.some((element) => element.status !== 'wykonane' && element.termin === termin && element.tytul.trim().toLocaleLowerCase('pl-PL') === nazwa)
+        ? 'Takie otwarte zadanie na ten termin już istnieje. Nadal utworzyć kolejne?' : undefined;
+    },
     wykonaj: async (argumenty) => {
       const zadanie = {
         ...utworzZadanie({ ...argumenty, opis: argumenty.opis ?? "" }),
@@ -484,6 +500,20 @@ export function utworzDomyslnyRejestrNarzedziEcho(
       priorytet: priorytet.optional(),
     }),
     ryzyko: "niskie",
+    sprawdzStan: async ({ tytul, czas }, sprawdzDostep) => {
+      const przypomnienia = await pobierzRepozytorium('przypomnienia').lista();
+      const nazwa = tytul.trim().toLocaleLowerCase('pl-PL');
+      if (przypomnienia.some((element) => !['wykonane', 'pominiete'].includes(element.stan) && element.czas === czas && element.tytul.trim().toLocaleLowerCase('pl-PL') === nazwa)) {
+        return 'Takie przypomnienie na ten termin już istnieje. Nadal utworzyć kolejne?';
+      }
+      if (sprawdzDostep('upcoming_bills') !== true) return undefined;
+      const rachunki = await pobierzRepozytorium('rachunki').lista();
+      const oplacony = rachunki.find((element) => element.status === 'zaplacony'
+        && element.termin.slice(0, 7) === czas.slice(0, 7)
+        && uproscDoWyszukiwania(element.nazwa).length > 0
+        && uproscDoWyszukiwania(element.nazwa).every((slowo) => uproscDoWyszukiwania(tytul).includes(slowo)));
+      return oplacony ? `„${oplacony.nazwa}” za ${oplacony.termin.slice(0, 7)} jest już oznaczone jako opłacone. Nadal utworzyć przypomnienie?` : undefined;
+    },
     wykonaj: async ({ tytul, czas, priorytet: poziom }) => {
       const przypomnienie: Przypomnienie = {
         ...utworzMetadane(),
@@ -1583,6 +1613,32 @@ export function utworzDomyslnyRejestrNarzedziEcho(
         await pobierzRepozytorium("wydatki").lista(),
         miesiac,
       ),
+  });
+  rejestr.zarejestruj({
+    nazwa: 'subscription_state',
+    opis: 'Sprawdza subskrypcje i rachunki o podanej nazwie za miesiąc. Brak rachunku oznacza nieznany status opłacenia, nie zaległość. Zwraca dowody z repozytorium.',
+    schematArgumentow: z.object({ fraza: z.string().trim().min(2), miesiac: z.string().regex(/^\d{4}-\d{2}$/) }),
+    ryzyko: 'niskie',
+    wykonaj: async ({ fraza, miesiac }) => {
+      const slowa = uproscDoWyszukiwania(fraza);
+      const pasuje = (nazwa: string) => slowa.length > 0 && slowa.every((slowo) => uproscDoWyszukiwania(nazwa).includes(slowo));
+      const [subskrypcje, rachunki] = await Promise.all([
+        pobierzRepozytorium('platnosciStale').lista(), pobierzRepozytorium('rachunki').lista(),
+      ]);
+      return {
+        subskrypcje: subskrypcje.filter((element) => element.rodzaj === 'subskrypcja' && pasuje(element.nazwa)),
+        rachunki: rachunki.filter((element) => element.termin.startsWith(miesiac) && pasuje(element.nazwa)),
+        zrodlo: 'dane zapisane w Ogarniaczu',
+      };
+    },
+  });
+  rejestr.zarejestruj({
+    nazwa: 'list_calendar',
+    opis: 'Odczytuje zapisane bloki kalendarza Planera w zakresie dat. Zadania i wizyty odczytuj osobnymi narzędziami.',
+    schematArgumentow: z.object({ od: dataIso, do: dataIso }),
+    ryzyko: 'niskie',
+    wykonaj: async ({ od, do: koniec }) => (await pobierzRepozytorium('blokiCzasu').lista())
+      .filter((element) => element.poczatek.slice(0, 10) >= od && element.poczatek.slice(0, 10) <= koniec && element.status !== 'odrzucony'),
   });
   rejestr.zarejestruj({
     nazwa: "list_subscriptions",
