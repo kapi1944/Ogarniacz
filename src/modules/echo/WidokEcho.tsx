@@ -236,6 +236,7 @@ export function WidokEcho() {
   const [oczekujacaAkcja, ustawOczekujacaAkcje] =
     useState<AkcjaDoPotwierdzeniaEcho>();
   const [bladGlosu, ustawBladGlosu] = useState("");
+  const [czesciowaWypowiedz, ustawCzesciowaWypowiedz] = useState("");
   const [wysylanie, ustawWysylanie] = useState(false);
   const koniecRozmowy = useRef<HTMLDivElement>(null);
   const ostatnioOdczytana = useRef<string | undefined>(undefined);
@@ -275,6 +276,7 @@ export function WidokEcho() {
         cyklZycia: platforma.cyklZycia,
         obsluga: {
           zmienStan: ustawStan,
+          odebranoCzesciowaWypowiedz: ustawCzesciowaWypowiedz,
           zglosBlad: ustawBladGlosu,
           odebranoWypowiedz: (wypowiedz) =>
             ustawWiadomosci((obecne) => [
@@ -383,10 +385,13 @@ export function WidokEcho() {
     bezczynny: "Gotowy",
     oczekiwanieNaWywolanie: "Czekam na „Hej Echo”…",
     sluchanie: "Słucham…",
-    transkrypcja: "Rozpoznaję…",
-    myslenie: "Myślę…",
+    mowiUzytkownik: "Mówisz…",
+    transkrypcja: "Przetwarzam wypowiedź…",
+    myslenie: "Przetwarzam…",
     mowienie: "Mówię… Dotknij mikrofonu, aby mi przerwać.",
-    oczekiwanie: "Czekam na dalszą wypowiedź…",
+    oczekiwanie: "Oczekuję na dalszą wypowiedź…",
+    oczekujeDoprecyzowania: "Oczekuję na doprecyzowanie…",
+    oczekujePotwierdzenia: "Oczekuję na potwierdzenie…",
     blad: "Błąd rozmowy głosowej",
   };
   const sesjaAktywna = !["bezczynny", "oczekiwanieNaWywolanie", "blad"].includes(stan);
@@ -400,7 +405,7 @@ export function WidokEcho() {
       <section className="siatka-echo">
         <Karta klasa="panel-rozmowy">
           <div className={`stan-glosu stan-glosu--${stan}`} aria-live="polite">
-            {wysylanie ? "Układam odpowiedź…" : etykietyStanu[stan]}
+            {wysylanie ? "Układam odpowiedź…" : `${etykietyStanu[stan]}${czesciowaWypowiedz ? ` ${czesciowaWypowiedz}` : ""}`}
           </div>
           <div
             className="wiadomosci"

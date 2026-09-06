@@ -1,21 +1,21 @@
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 
-export type StanNatywnegoGlosu = 'sluchanie' | 'transkrypcja' | 'mowienie'
+export type StanNatywnegoGlosu = 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie'
 
 interface EchoGlosPlugin {
   sprawdzDostepnosc: () => Promise<{ rozpoznawanie: boolean; mowienie: boolean; zgoda: string }>
-  rozpocznijNasluchiwanie: (opcje: { limitMs: number }) => Promise<{ tekst: string }>
+  rozpocznijNasluchiwanie: (opcje: { limitMs: number; limitPauzyMs?: number }) => Promise<{ tekst: string }>
   anulujNasluchiwanie: () => Promise<void>
   mow: (opcje: { tekst: string }) => Promise<void>
   zatrzymajMowienie: () => Promise<void>
-  addListener: (nazwa: 'stanGlosu', obsluga: (dane: { stan: StanNatywnegoGlosu }) => void) => Promise<PluginListenerHandle>
+  addListener: (nazwa: 'stanGlosu', obsluga: (dane: { stan: StanNatywnegoGlosu; tekst?: string }) => void) => Promise<PluginListenerHandle>
 }
 
 interface RozpoznawanieMowyPrzegladarki {
   lang: string
   continuous: boolean
   interimResults: boolean
-  onresult: (zdarzenie: { results: Record<number, Record<number, { transcript: string }>> }) => void
+  onresult: (zdarzenie: { results: { length: number; [indeks: number]: { isFinal: boolean; [indeks: number]: { transcript: string } } } }) => void
   onerror: (zdarzenie: { error?: string }) => void
   onend: () => void
   start: () => void
@@ -45,8 +45,8 @@ export function utworzUslugeGlosuEcho(czyAndroid: boolean) {
         zgoda: 'prompt',
       }
     },
-    async rozpoznaj(limitMs = 15_000): Promise<string> {
-      if (czyAndroid) return (await wtyczka.rozpocznijNasluchiwanie({ limitMs })).tekst
+    async rozpoznaj(limitMs = 15_000, limitPauzyMs?: number, odebranoCzesciowy?: (tekst: string) => void): Promise<string> {
+      if (czyAndroid) return (await wtyczka.rozpocznijNasluchiwanie({ limitMs, limitPauzyMs })).tekst
       const Konstruktor = konstruktorRozpoznawania()
       if (!Konstruktor) throw new Error('Rozpoznawanie mowy nie jest dostępne w tej przeglądarce.')
       return new Promise((rozwiaz, odrzuc) => {
@@ -66,8 +66,13 @@ export function utworzUslugeGlosuEcho(czyAndroid: boolean) {
         }
         rozpoznawanie.lang = 'pl-PL'
         rozpoznawanie.continuous = false
-        rozpoznawanie.interimResults = false
-        rozpoznawanie.onresult = (zdarzenie) => zakoncz(() => rozwiaz(zdarzenie.results[0]?.[0]?.transcript?.trim() ?? ''))
+        rozpoznawanie.interimResults = true
+        rozpoznawanie.onresult = (zdarzenie) => {
+          const wynik = zdarzenie.results[zdarzenie.results.length - 1]
+          const tekst = wynik?.[0]?.transcript?.trim() ?? ''
+          if (wynik?.isFinal) zakoncz(() => rozwiaz(tekst))
+          else if (tekst) odebranoCzesciowy?.(tekst)
+        }
         rozpoznawanie.onerror = () => zakoncz(() => odrzuc(new Error('Nie udało się rozpoznać mowy.')))
         rozpoznawanie.onend = () => zakoncz(() => odrzuc(new Error('Nie usłyszałem wypowiedzi.')))
         rozpoznawanie.start()
@@ -94,9 +99,9 @@ export function utworzUslugeGlosuEcho(czyAndroid: boolean) {
       if (czyAndroid) return wtyczka.zatrzymajMowienie()
       if ('speechSynthesis' in window) speechSynthesis.cancel()
     },
-    async nasluchujStanu(obsluga: (stan: StanNatywnegoGlosu) => void) {
+    async nasluchujStanu(obsluga: (stan: StanNatywnegoGlosu, tekst?: string) => void) {
       if (!czyAndroid) return () => undefined
-      const nasluchiwanie = await wtyczka.addListener('stanGlosu', ({ stan }) => obsluga(stan))
+      const nasluchiwanie = await wtyczka.addListener('stanGlosu', ({ stan, tekst }) => obsluga(stan, tekst))
       return () => void nasluchiwanie.remove()
     },
   }

@@ -120,6 +120,7 @@ export interface OdpowiedzEcho {
   tryb: TrybEcho
   wymagaPotwierdzenia?: boolean
   akcjaDoPotwierdzenia?: AkcjaDoPotwierdzeniaEcho
+  oczekujeDoprecyzowania?: boolean
   wartosciDomyslne?: WartoscDomyslnaEcho[]
   wyniki?: WynikNarzedziaEcho[]
 }

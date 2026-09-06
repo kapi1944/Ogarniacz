@@ -195,7 +195,7 @@ export class AgentEcho {
       const tresc = decyzja.tresc.trim() || 'Nie mam jeszcze wystarczających danych, żeby odpowiedzieć.'
       this.kontekst.dodajTure('echo', tresc)
       this.kontekst.ustawNierozwiazanePytanie(decyzja.typ === 'pytanie' ? tresc : undefined)
-      return this.odpowiedz(tresc, 'niskie', decyzja.typ === 'odpowiedz' ? decyzja.wartosciDomyslne : undefined)
+      return this.odpowiedz(tresc, 'niskie', decyzja.typ === 'odpowiedz' ? decyzja.wartosciDomyslne : undefined, decyzja.typ === 'pytanie')
     }
 
     if (decyzja.wywolania.length === 0) return undefined
@@ -251,8 +251,8 @@ export class AgentEcho {
     }
   }
 
-  private odpowiedz(tekst: string, ryzyko: OdpowiedzEcho['ryzyko'] = 'niskie', wartosciDomyslne?: OdpowiedzEcho['wartosciDomyslne']): OdpowiedzEcho {
-    return { tekst, ryzyko, tryb: this.provider.tryb, wartosciDomyslne, wyniki: this.wynikiBiezacejTury.length ? [...this.wynikiBiezacejTury] : undefined }
+  private odpowiedz(tekst: string, ryzyko: OdpowiedzEcho['ryzyko'] = 'niskie', wartosciDomyslne?: OdpowiedzEcho['wartosciDomyslne'], oczekujeDoprecyzowania = false): OdpowiedzEcho {
+    return { tekst, ryzyko, tryb: this.provider.tryb, wartosciDomyslne, oczekujeDoprecyzowania, wyniki: this.wynikiBiezacejTury.length ? [...this.wynikiBiezacejTury] : undefined }
   }
 
   private odpowiedzNaPreferencje(tekst: string): OdpowiedzEcho {

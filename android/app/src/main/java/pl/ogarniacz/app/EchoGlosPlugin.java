@@ -106,10 +106,14 @@ public class EchoGlosPlugin extends Plugin {
             zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pl-PL");
             zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "pl-PL");
-            zamiar.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false);
+            zamiar.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
             zamiar.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
             int zadanyLimit = wywolanie.getInt("limitMs", DOMYSLNY_LIMIT_NASLUCHIWANIA_MS);
             int limit = Math.max(3000, Math.min(30000, zadanyLimit));
+            int zadanyLimitPauzy = wywolanie.getInt("limitPauzyMs", 4000);
+            int limitPauzy = Math.max(500, Math.min(5000, zadanyLimitPauzy));
+            zamiar.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, limitPauzy);
+            zamiar.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, limitPauzy);
             przekroczenieCzasu = () -> zakonczRozpoznawanie("Przekroczono czas oczekiwania na wypowiedź.", "TIMEOUT");
             obslugaCzasu.postDelayed(przekroczenieCzasu, limit);
             rozpoznawanie.startListening(zamiar);
@@ -192,24 +196,36 @@ public class EchoGlosPlugin extends Plugin {
     }
 
     private void powiadomStan(String stan) {
+        powiadomStan(stan, null);
+    }
+
+    private void powiadomStan(String stan, String tekst) {
         JSObject dane = new JSObject();
         dane.put("stan", stan);
+        if (tekst != null) dane.put("tekst", tekst);
         notifyListeners("stanGlosu", dane);
+    }
+
+    private String tekstRozpoznania(Bundle wyniki) {
+        ArrayList<String> teksty = wyniki.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+        return teksty == null || teksty.isEmpty() ? "" : teksty.get(0).trim();
     }
 
     private class SluchaczRozpoznawania implements RecognitionListener {
         @Override public void onReadyForSpeech(Bundle parametry) { powiadomStan("sluchanie"); }
-        @Override public void onBeginningOfSpeech() { powiadomStan("sluchanie"); }
+        @Override public void onBeginningOfSpeech() { powiadomStan("mowiUzytkownik"); }
         @Override public void onRmsChanged(float poziom) {}
         @Override public void onBufferReceived(byte[] bufor) {}
         @Override public void onEndOfSpeech() { powiadomStan("transkrypcja"); }
-        @Override public void onPartialResults(Bundle wyniki) {}
+        @Override public void onPartialResults(Bundle wyniki) {
+            String tekst = tekstRozpoznania(wyniki);
+            if (!tekst.isEmpty()) powiadomStan("mowiUzytkownik", tekst);
+        }
         @Override public void onEvent(int typ, Bundle parametry) {}
 
         @Override
         public void onResults(Bundle wyniki) {
-            ArrayList<String> teksty = wyniki.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-            String tekst = teksty == null || teksty.isEmpty() ? "" : teksty.get(0).trim();
+            String tekst = tekstRozpoznania(wyniki);
             if (tekst.isEmpty()) zakonczRozpoznawanie("Nie rozpoznano wypowiedzi.", "BRAK_MOWY");
             else zakonczRozpoznawanieWynikiem(tekst);
         }

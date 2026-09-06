@@ -4,10 +4,11 @@ import type { UslugaGlosuEcho } from '../../platform/GlosEchoService'
 import type { PlatformaOgarniacza } from '../../platform/typy'
 import { KonfiguracjaRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 
-export type StanSesjiGlosowejEcho = 'bezczynny' | 'oczekiwanieNaWywolanie' | 'sluchanie' | 'transkrypcja' | 'myslenie' | 'mowienie' | 'oczekiwanie' | 'blad'
+export type StanSesjiGlosowejEcho = 'bezczynny' | 'oczekiwanieNaWywolanie' | 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'myslenie' | 'mowienie' | 'oczekiwanie' | 'oczekujeDoprecyzowania' | 'oczekujePotwierdzenia' | 'blad'
 
 interface ObslugaSesjiGlosowej {
   zmienStan: (stan: StanSesjiGlosowejEcho) => void
+  odebranoCzesciowaWypowiedz?: (tekst: string) => void
   odebranoWypowiedz: (tekst: string) => void
   odebranoOdpowiedz: (odpowiedz: OdpowiedzEcho) => void
   zglosBlad: (komunikat: string) => void
@@ -58,9 +59,11 @@ export class KontrolerSesjiGlosowejEcho {
   constructor(private readonly zaleznosci: ZaleznosciKontrolera) {}
 
   async inicjalizuj() {
-    this.usunStanGlosu = await this.zaleznosci.glos.nasluchujStanu((stan) => {
+    this.usunStanGlosu = await this.zaleznosci.glos.nasluchujStanu((stan, tekst) => {
+      if (stan === 'mowiUzytkownik') this.ustawStan('mowiUzytkownik')
       if (stan === 'transkrypcja') this.ustawStan('transkrypcja')
       if (stan === 'mowienie') this.ustawStan('mowienie')
+      if (tekst) this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.(tekst)
     })
     this.usunCyklZycia = await this.zaleznosci.cyklZycia.nasluchuj((stan) => {
       this.aplikacjaAktywna = stan === 'aktywny'
@@ -145,12 +148,22 @@ export class KontrolerSesjiGlosowejEcho {
 
   private async prowadzRozmowe(numer: number) {
     let kontynuacja = false
+    let stanOczekiwania: StanSesjiGlosowejEcho = 'oczekiwanie'
     while (this.czyAktualna(numer)) {
       try {
-        this.ustawStan(kontynuacja ? 'oczekiwanie' : 'sluchanie')
-        const parametry = this.zaleznosci.konfiguracjaRozmowy?.pobierzParametryGlosu() ?? { limitPierwszejWypowiedziMs: 30_000, limitKontynuacjiMs: 12_000 }
-        const wypowiedz = await this.zaleznosci.glos.rozpoznaj(kontynuacja ? parametry.limitKontynuacjiMs : parametry.limitPierwszejWypowiedziMs)
+        this.ustawStan(kontynuacja ? stanOczekiwania : 'sluchanie')
+        const parametry = this.zaleznosci.konfiguracjaRozmowy?.pobierzParametryGlosu() ?? { limitPierwszejWypowiedziMs: 30_000, limitKontynuacjiMs: 12_000, limitPauzyMs: 4_000 }
+        this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.('')
+        const wypowiedz = await this.zaleznosci.glos.rozpoznaj(
+          kontynuacja ? parametry.limitKontynuacjiMs : parametry.limitPierwszejWypowiedziMs,
+          parametry.limitPauzyMs,
+          (tekst) => {
+            this.ustawStan('mowiUzytkownik')
+            this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.(tekst)
+          },
+        )
         if (!this.czyAktualna(numer) || !wypowiedz.trim()) break
+        this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.('')
         this.zaleznosci.obsluga.odebranoWypowiedz(wypowiedz)
         this.ustawStan('myslenie')
         this.kontrolerOdpowiedzi = new AbortController()
@@ -158,6 +171,11 @@ export class KontrolerSesjiGlosowejEcho {
         this.kontrolerOdpowiedzi = undefined
         if (!this.czyAktualna(numer)) break
         this.zaleznosci.obsluga.odebranoOdpowiedz(odpowiedz)
+        stanOczekiwania = odpowiedz.akcjaDoPotwierdzenia
+          ? 'oczekujePotwierdzenia'
+          : odpowiedz.oczekujeDoprecyzowania
+            ? 'oczekujeDoprecyzowania'
+            : 'oczekiwanie'
         this.ustawStan('mowienie')
         await this.zaleznosci.glos.mow(odpowiedz.tekst)
         kontynuacja = true

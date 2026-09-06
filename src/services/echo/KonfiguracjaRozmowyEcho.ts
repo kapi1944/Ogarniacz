@@ -3,11 +3,12 @@ export type TempoRozmowyEcho = 'spokojny' | 'szybki'
 export interface ParametryRozmowyGlosowejEcho {
   limitPierwszejWypowiedziMs: number
   limitKontynuacjiMs: number
+  limitPauzyMs: number
 }
 
 const PARAMETRY: Record<TempoRozmowyEcho, ParametryRozmowyGlosowejEcho> = {
-  spokojny: { limitPierwszejWypowiedziMs: 30_000, limitKontynuacjiMs: 12_000 },
-  szybki: { limitPierwszejWypowiedziMs: 12_000, limitKontynuacjiMs: 4_000 },
+  spokojny: { limitPierwszejWypowiedziMs: 30_000, limitKontynuacjiMs: 12_000, limitPauzyMs: 4_000 },
+  szybki: { limitPierwszejWypowiedziMs: 12_000, limitKontynuacjiMs: 4_000, limitPauzyMs: 1_200 },
 }
 
 export class KonfiguracjaRozmowyEcho {

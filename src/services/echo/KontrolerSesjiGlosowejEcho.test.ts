@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { czyWywolanieEcho, KontrolerSesjiGlosowejEcho, type StanSesjiGlosowejEcho } from './KontrolerSesjiGlosowejEcho'
+import { KonfiguracjaRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 import type { UslugaGlosuEcho } from '../../platform/GlosEchoService'
 import type { PlatformaOgarniacza } from '../../platform/typy'
 
@@ -42,6 +43,50 @@ function przygotujCyklZycia() {
 }
 
 describe('KontrolerSesjiGlosowejEcho', () => {
+  it('tryb spokojny zachowuje dłuższą pauzę niż szybki', () => {
+    const konfiguracja = new KonfiguracjaRozmowyEcho()
+    const spokojny = konfiguracja.pobierzParametryGlosu()
+    konfiguracja.ustawTempo('szybki')
+    const szybki = konfiguracja.pobierzParametryGlosu()
+
+    expect(spokojny.limitPauzyMs).toBe(4_000)
+    expect(szybki.limitPauzyMs).toBe(1_200)
+    expect(spokojny.limitPierwszejWypowiedziMs).toBeGreaterThan(szybki.limitPierwszejWypowiedziMs)
+  })
+
+  it('pokazuje partial, ale przekazuje do agenta wyłącznie poprawioną wypowiedź finalną', async () => {
+    const glos = przygotujGlos([])
+    let zakonczRozpoznawanie: ((tekst: string) => void) | undefined
+    let odebranoStan: ((stan: 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie', tekst?: string) => void) | undefined
+    glos.rozpoznaj = vi.fn(() => new Promise<string>((rozwiaz) => { zakonczRozpoznawanie = rozwiaz }))
+    glos.nasluchujStanu = vi.fn(async (obsluga) => {
+      odebranoStan = obsluga
+      return () => undefined
+    })
+    const echo = { obsluz: vi.fn(async () => odpowiedz) }
+    const czesciowe: string[] = []
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo,
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoCzesciowaWypowiedz: (tekst) => czesciowe.push(tekst), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.inicjalizuj()
+    await kontroler.rozpocznij()
+    await czekajNa(() => Boolean(odebranoStan && zakonczRozpoznawanie))
+    odebranoStan?.('mowiUzytkownik', 'Dodaj to jutro')
+
+    expect(czesciowe).toEqual(['', 'Dodaj to jutro'])
+    expect(echo.obsluz).not.toHaveBeenCalled()
+
+    zakonczRozpoznawanie?.('Dodaj to jutro, nie, czekaj, jednak w piątek.')
+    await czekajNa(() => echo.obsluz.mock.calls.length === 1)
+
+    expect(echo.obsluz).toHaveBeenCalledWith('Dodaj to jutro, nie, czekaj, jednak w piątek.', 'stt', expect.any(AbortSignal))
+    await kontroler.anuluj()
+  })
+
   it('rozpoznaje wyłącznie dokładne wywołanie Hej Echo', () => {
     expect(czyWywolanieEcho('Hej Echo!')).toBe(true)
     expect(czyWywolanieEcho('hej, echo')).toBe(true)
@@ -157,7 +202,7 @@ describe('KontrolerSesjiGlosowejEcho', () => {
     await czekajNa(() => rozpoznaj.mock.calls.length === 2)
 
     expect(glos.zatrzymajMowienie).toHaveBeenCalledTimes(1)
-    expect(rozpoznaj).toHaveBeenNthCalledWith(2, 30_000)
+    expect(rozpoznaj).toHaveBeenNthCalledWith(2, 30_000, 4_000, expect.any(Function))
     await kontroler.anuluj()
   })
 })
