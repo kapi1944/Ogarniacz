@@ -8,6 +8,8 @@
     "build": "npm run typecheck && vite build",
     "server:build": "tsc -p tsconfig.server.json",
     "server:start": "npm run server:build && node --env-file-if-exists=.env dist-server/main.js",
+    "server:production": "node --env-file-if-exists=.env dist-server/main.js",
+    "build:production": "npm run build && npm run server:build",
     "server:test": "node --experimental-strip-types --test server/*.test.ts",
     "sync:doctor": "node scripts/sync-doctor.mjs",
     "android:doctor": "node scripts/android.mjs doctor",

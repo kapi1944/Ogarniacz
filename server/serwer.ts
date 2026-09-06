@@ -1,4 +1,6 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import { readFile, stat } from 'node:fs/promises'
+import { extname, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { KonfiguracjaSerwera } from './config.ts'
 import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } from './echo.ts'
@@ -23,6 +25,53 @@ function odpowiedzJson(odpowiedz: ServerResponse, status: number, dane: unknown)
   odpowiedz.end(tresc)
 }
 
+const typyZawartosci: Record<string, string> = {
+  '.css': 'text/css; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.ico': 'image/x-icon',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.map': 'application/json; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2',
+}
+
+function czySciezkaWewnatrzKatalogu(sciezka: string, katalog: string): boolean {
+  return sciezka === katalog || sciezka.startsWith(`${katalog}${sep}`)
+}
+
+async function odpowiedzZasobemStatycznym(zadanie: IncomingMessage, odpowiedz: ServerResponse, konfiguracja: KonfiguracjaSerwera): Promise<void> {
+  const adres = new URL(zadanie.url ?? '/', 'http://localhost')
+  let sciezkaZadania: string
+  try {
+    sciezkaZadania = decodeURIComponent(adres.pathname)
+  } catch {
+    odpowiedzJson(odpowiedz, 400, { error: 'Niepoprawny adres zasobu.' })
+    return
+  }
+  const katalog = resolve(konfiguracja.sciezkaZasobowStatycznych)
+  const kandydat = resolve(katalog, `.${sciezkaZadania}`)
+  const istniejePlik = czySciezkaWewnatrzKatalogu(kandydat, katalog)
+    && await stat(kandydat).then((informacje) => informacje.isFile()).catch(() => false)
+  const sciezkaPliku = istniejePlik ? kandydat : resolve(katalog, 'index.html')
+  if (!czySciezkaWewnatrzKatalogu(sciezkaPliku, katalog)) {
+    odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu.' })
+    return
+  }
+  try {
+    const dane = await readFile(sciezkaPliku)
+    odpowiedz.writeHead(200, {
+      'content-type': typyZawartosci[extname(sciezkaPliku)] ?? 'application/octet-stream',
+      'cache-control': 'no-cache',
+    })
+    odpowiedz.end(zadanie.method === 'HEAD' ? undefined : dane)
+  } catch {
+    odpowiedzJson(odpowiedz, 503, { error: 'Build aplikacji nie jest dostępny na serwerze.' })
+  }
+}
 export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSync, obslugaEcho: ObslugaEchoApi = niedostepnaObslugaEcho) {
   return createServer(async (zadanie: IncomingMessage, odpowiedz: ServerResponse) => {
     if (zadanie.method === 'GET' && (zadanie.url === '/health' || zadanie.url === '/api/health')) {
@@ -88,6 +137,14 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
           odpowiedzJson(odpowiedz, 400, { error: 'Niepoprawna wiadomość Echo.' })
         }
       }
+      return
+    }
+    if (zadanie.url?.startsWith('/api/')) {
+      odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu.' })
+      return
+    }
+    if (zadanie.method === 'GET' || zadanie.method === 'HEAD') {
+      await odpowiedzZasobemStatycznym(zadanie, odpowiedz, konfiguracja)
       return
     }
     odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu.' })
