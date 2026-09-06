@@ -270,6 +270,7 @@ export function WidokEcho() {
       new KontrolerSesjiGlosowejEcho({
         glos: platforma.glosEcho,
         echo,
+        nasluchujWywolania: true,
         konfiguracjaRozmowy: echo.agent.konfiguracjaRozmowy,
         cyklZycia: platforma.cyklZycia,
         obsluga: {
@@ -380,6 +381,7 @@ export function WidokEcho() {
 
   const etykietyStanu: Record<StanSesjiGlosowejEcho, string> = {
     bezczynny: "Gotowy",
+    oczekiwanieNaWywolanie: "Czekam na „Hej Echo”…",
     sluchanie: "Słucham…",
     transkrypcja: "Rozpoznaję…",
     myslenie: "Myślę…",
@@ -387,7 +389,7 @@ export function WidokEcho() {
     oczekiwanie: "Czekam na dalszą wypowiedź…",
     blad: "Błąd rozmowy głosowej",
   };
-  const sesjaAktywna = !["bezczynny", "blad"].includes(stan);
+  const sesjaAktywna = !["bezczynny", "oczekiwanieNaWywolanie", "blad"].includes(stan);
 
   return (
     <div className="widok widok-echo">
