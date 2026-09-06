@@ -51,6 +51,7 @@ function wykonajPrzechwytywanie(polecenie, argumenty, opcje = {}) {
     cwd: opcje.katalog ?? katalogRepozytorium,
     env: opcje.srodowisko ?? process.env,
     encoding: 'utf8',
+    input: opcje.wejscie,
     windowsHide: true,
     shell: opcje.powłoka ?? false,
   })
@@ -444,6 +445,89 @@ function sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko) {
   wykonajEtap('Weryfikacja podpisu release APK', java, ['-jar', apkSigner, 'verify', '--verbose', sciezkaApk], { srodowisko })
 }
 
+function pobierzRepozytoriumGitHub() {
+  const wynik = wykonajPrzechwytywanie('git', ['config', '--get', 'remote.origin.url'])
+  const adres = wynik.stdout?.trim() ?? ''
+  const dopasowanie = /github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?$/.exec(adres)
+  if (!dopasowanie) throw new Error('origin nie wskazuje repozytorium GitHub wymaganym do publikacji release.')
+  return `${dopasowanie[1]}/${dopasowanie[2]}`
+}
+
+function pobierzTokenGitHub() {
+  const wynik = wykonajPrzechwytywanie('git', ['credential', 'fill'], { wejscie: 'protocol=https\nhost=github.com\n\n' })
+  if (wynik.status !== 0) throw new Error('Nie udało się odczytać poświadczeń GitHub z git credential helper.')
+  const pola = Object.fromEntries((wynik.stdout ?? '').split(/\r?\n/).filter((linia) => linia.includes('=')).map((linia) => {
+    const indeks = linia.indexOf('=')
+    return [linia.slice(0, indeks), linia.slice(indeks + 1)]
+  }))
+  if (!pola.password) throw new Error('Brak tokenu GitHub w git credential helper.')
+  return pola.password
+}
+
+async function zadanieGitHub(url, token, opcje = {}) {
+  const odpowiedz = await fetch(url, {
+    ...opcje,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...opcje.headers,
+    },
+  })
+  if (!odpowiedz.ok) throw new Error(`GitHub API zwróciło HTTP ${odpowiedz.status}.`)
+  return odpowiedz
+}
+
+async function opublikujReleaseGitHub({ manifest, sciezkaApk, sciezkaSkrotu, sciezkaManifestu, adresManifestu, notatkiWydania }) {
+  const repozytorium = pobierzRepozytoriumGitHub()
+  const tag = `v${manifest.versionName}`
+  const istniejeTag = wykonajPrzechwytywanie('git', ['ls-remote', '--exit-code', '--tags', 'origin', `refs/tags/${tag}`])
+  if (istniejeTag.status === 0) throw new Error(`Tag ${tag} już istnieje na origin; publikacja nie nadpisze wydania.`)
+  if (istniejeTag.status !== 2) throw new Error('Nie udało się sprawdzić tagów origin przed publikacją.')
+  const token = pobierzTokenGitHub()
+  wykonajEtap(`Git tag ${tag}`, 'git', ['tag', tag])
+  wykonajEtap(`Git push tag ${tag}`, 'git', ['push', 'origin', tag])
+  const api = `https://api.github.com/repos/${repozytorium}`
+  const utworzone = await zadanieGitHub(`${api}/releases`, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      tag_name: tag,
+      name: tag,
+      body: notatkiWydania?.trim() || `Ogarniacz ${manifest.versionName}`,
+      draft: true,
+      prerelease: false,
+    }),
+  })
+  const release = await utworzone.json()
+  const adresWysylki = String(release.upload_url ?? '').replace(/\{\?name,label\}$/, '')
+  if (!adresWysylki) throw new Error('GitHub nie zwrócił adresu wysyłania assets release.')
+  for (const sciezka of [sciezkaApk, sciezkaSkrotu, sciezkaManifestu]) {
+    const dane = readFileSync(sciezka)
+    await zadanieGitHub(`${adresWysylki}?name=${encodeURIComponent(basename(sciezka))}`, token, {
+      method: 'POST',
+      headers: { 'Content-Type': sciezka.endsWith('.json') ? 'application/json' : 'application/octet-stream' },
+      body: dane,
+    })
+  }
+  await zadanieGitHub(`${api}/releases/${release.id}`, token, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ draft: false }),
+  })
+
+  const odpowiedzManifestu = await fetch(adresManifestu, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } })
+  if (!odpowiedzManifestu.ok) throw new Error(`Publiczny latest.json po publikacji zwrócił HTTP ${odpowiedzManifestu.status}.`)
+  const opublikowany = walidujManifestAktualizacji(await odpowiedzManifestu.json())
+  if (opublikowany.versionCode !== manifest.versionCode || opublikowany.sha256 !== manifest.sha256) {
+    throw new Error('Publiczny latest.json nie odpowiada zweryfikowanemu artefaktowi release.')
+  }
+  const adresApk = new URL(opublikowany.apkUrl, adresManifestu)
+  const odpowiedzApk = await fetch(adresApk, { method: 'HEAD' })
+  if (!odpowiedzApk.ok) throw new Error(`Publiczny APK po publikacji zwrócił HTTP ${odpowiedzApk.status}.`)
+  console.log(`\nGITHUB RELEASE: OK — ${release.html_url}`)
+}
+
 function znajdzAapt(sdk) {
   const katalog = join(sdk, 'build-tools')
   if (!existsSync(katalog)) return undefined
@@ -530,6 +614,9 @@ async function wykonajRelease(opcje) {
   writeFileSync(sciezkaManifestu, `${JSON.stringify(manifest, null, 2)}\n`)
   writeFileSync(sciezkaSkrotu, `${manifest.sha256}  ${basename(sciezkaApk)}\n`)
   await sprawdzArtefaktRelease({ sciezkaApk, manifest, adresManifestu, diagnostyka, srodowisko })
+  if (opcje.publish === true) {
+    await opublikujReleaseGitHub({ manifest, sciezkaApk, sciezkaSkrotu, sciezkaManifestu, adresManifestu, notatkiWydania })
+  }
 
   console.log('\n=====================================')
   console.log('OGARNIACZ ANDROID RELEASE — SUCCESS')
