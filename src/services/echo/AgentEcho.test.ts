@@ -37,7 +37,7 @@ class ProviderSkryptowy implements ProviderModeluEcho {
 }
 
 function utworzWykonawce(rejestr: RejestrNarzedziEcho): WykonawcaNarzedziEcho {
-  return new WykonawcaNarzedziEcho(rejestr, undefined, async () => undefined);
+  return new WykonawcaNarzedziEcho(rejestr, { ocen: () => ({ dozwolone: true }) } as never, async () => undefined);
 }
 
 function utworzAgentaRozmowy() {
@@ -704,7 +704,7 @@ describe("Agent Echo", () => {
 
     const pierwsza = await agent.obsluz("Dodaj przypomnienie.");
     expect(pierwsza.tekst).toBe(
-      "Potrzebuję jeszcze dwóch informacji. Czego mam Ci przypomnieć?",
+      "Potrzebuję jeszcze kilku informacji. Czego mam Ci przypomnieć?",
     );
     expect(
       agent.kontekst.migawka().oczekujaceDoprecyzowanie?.brakujacePola,
@@ -763,14 +763,12 @@ describe("Agent Echo", () => {
     expect(przeloz.mock.calls[0][0].id).toBe("przypomnienie-1");
   });
 
-  it("ujawnia automatyczną godzinę i pozwala zmienić ją kolejną wypowiedzią", async () => {
+  it("dopytuje o godzinę zamiast automatycznie uzupełniać ją dla przypomnienia", async () => {
     const { agent, przeloz } = utworzAgentaRozmowy();
     const utworzenie = await agent.obsluz("Dodaj jutro telefon do mechanika.");
 
-    expect(utworzenie.wartosciDomyslne).toEqual([
-      { pole: "godzina", wartosc: "08:00", opis: "brak podanej godziny" },
-    ]);
-    const zmiana = await agent.obsluz("Zmień godzinę na 9.");
+    expect(utworzenie.tekst).toBe('O której?');
+    const zmiana = await agent.obsluz("O 9.");
     expect(new Date(przeloz.mock.calls[0][0].czas).getHours()).toBe(9);
     expect(zmiana.wartosciDomyslne).toEqual([]);
   });

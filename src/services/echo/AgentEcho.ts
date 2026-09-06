@@ -2,6 +2,7 @@ import { dzisiajIso } from '../../domain/fabryki'
 import { KontekstRozmowyEcho } from './KontekstRozmowyEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import { LokalnyModelProviderEcho } from './LokalnyModelProviderEcho'
+import { KonfiguracjaRozmowyEcho, rozpoznajZmianeTempaEcho } from './KonfiguracjaRozmowyEcho'
 import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
 import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho } from './NarzedziaEcho'
@@ -26,6 +27,7 @@ export interface OpcjeAgentaEcho {
   onZmianaStanu?: (stan: StanPracyEcho) => void
   magazynPamieci?: MagazynPamieciEcho
   pamiecPreferencjiWlaczona?: boolean
+  konfiguracjaRozmowy?: KonfiguracjaRozmowyEcho
 }
 
 function pobierzBiezacyCzas(): KontekstCzasuEcho {
@@ -35,6 +37,37 @@ function pobierzBiezacyCzas(): KontekstCzasuEcho {
     dataLokalna: dzisiajIso(teraz),
     strefaCzasowa: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Warsaw',
   }
+}
+
+function dataDniaTygodnia(data: string, dzien: number): string {
+  const [rok, miesiac, dzienMiesiaca] = data.split('-').map(Number)
+  const teraz = new Date(Date.UTC(rok, miesiac - 1, dzienMiesiaca))
+  const przesuniecie = (dzien - teraz.getUTCDay() + 7) % 7 || 7
+  teraz.setUTCDate(teraz.getUTCDate() + przesuniecie)
+  return teraz.toISOString().slice(0, 10)
+}
+
+function korektaOczekujacejAkcji(tekst: string, akcja: AkcjaDoPotwierdzeniaEcho, dataLokalna: string): AkcjaDoPotwierdzeniaEcho | undefined {
+  const argumenty = structuredClone(akcja.wywolanie.argumenty)
+  if (!argumenty || typeof argumenty !== 'object') return undefined
+  const uproszczony = tekst.toLocaleLowerCase('pl-PL').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l')
+  const dni = new Map([['poniedzialek', 1], ['wtorek', 2], ['sroda', 3], ['czwartek', 4], ['piatek', 5], ['sobota', 6], ['sobote', 6], ['niedziela', 0], ['niedziele', 0]])
+  const znaleziony = [...dni].find(([nazwa]) => uproszczony.split(/[^a-z]+/).includes(nazwa))
+  const data = znaleziony ? dataDniaTygodnia(dataLokalna, znaleziony[1]) : undefined
+  if (!data) return undefined
+  const dane = argumenty as Record<string, unknown>
+  if ('termin' in dane || akcja.wywolanie.nazwa === 'create_task') dane.termin = data
+  else if ('zmiany' in dane && dane.zmiany && typeof dane.zmiany === 'object') (dane.zmiany as Record<string, unknown>).termin = data
+  else return undefined
+  return { ...akcja, wywolanie: { ...akcja.wywolanie, id: crypto.randomUUID(), argumenty: dane }, opis: `${akcja.opis} Termin: ${data}.` }
+}
+
+function podsumujAkcje(akcja: AkcjaDoPotwierdzeniaEcho): string {
+  const argumenty = akcja.wywolanie.argumenty && typeof akcja.wywolanie.argumenty === 'object' ? akcja.wywolanie.argumenty as Record<string, unknown> : {}
+  const tytul = typeof argumenty.tytul === 'string' ? ` „${argumenty.tytul}”` : ''
+  const termin = typeof argumenty.termin === 'string' ? `, termin: ${argumenty.termin}` : ''
+  const czas = typeof argumenty.czas === 'string' ? `, czas: ${new Date(argumenty.czas).toLocaleString('pl-PL')}` : ''
+  return `${akcja.opis}${tytul}${termin}${czas}. Zapisać?`
 }
 
 export class AgentEcho {
@@ -49,6 +82,7 @@ export class AgentEcho {
   private readonly magazynPamieci?: MagazynPamieciEcho
   private readonly pamiecPreferencjiWlaczona: boolean
   private readonly politykaPamieci = new PolitykaPamieciEcho()
+  readonly konfiguracjaRozmowy: KonfiguracjaRozmowyEcho
   private oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
   private wynikiBiezacejTury: import('./typyEcho').WynikNarzedziaEcho[] = []
 
@@ -65,16 +99,29 @@ export class AgentEcho {
     this.onZmianaStanu = opcje.onZmianaStanu
     this.magazynPamieci = opcje.magazynPamieci
     this.pamiecPreferencjiWlaczona = opcje.pamiecPreferencjiWlaczona ?? true
+    this.konfiguracjaRozmowy = opcje.konfiguracjaRozmowy ?? new KonfiguracjaRozmowyEcho()
   }
 
   async obsluz(tresc: string, zrodlo: ZrodloWejsciaEcho = 'tekst', sygnalZewnetrzny?: AbortSignal): Promise<OdpowiedzEcho> {
     const oczyszczona = tresc.trim()
     if (!oczyszczona) return this.odpowiedz('Powiedz albo napisz, czym mam się zająć.')
     this.wynikiBiezacejTury = []
-    this.oczekujacaAkcja = undefined
     this.onZmianaStanu?.('rozumiem')
     this.kontekst.dodajTure('uzytkownik', oczyszczona)
     this.kontekst.ustawTemat(this.kontekst.migawka().temat ?? (zrodlo === 'stt' ? 'rozmowa głosowa' : 'rozmowa tekstowa'))
+    const tempo = rozpoznajZmianeTempaEcho(oczyszczona)
+    if (tempo) {
+      this.konfiguracjaRozmowy.ustawTempo(tempo)
+      return this.odpowiedzNaPreferencje(`Ustawiłem tryb ${tempo === 'szybki' ? 'szybki' : 'spokojny'}.`)
+    }
+    if (this.oczekujacaAkcja && /^(tak|jasne|potwierdzam|zapisz|zgoda)[.!]?$/i.test(oczyszczona)) return this.potwierdz(this.oczekujacaAkcja, sygnalZewnetrzny)
+    if (this.oczekujacaAkcja) {
+      const poprawiona = korektaOczekujacejAkcji(oczyszczona, this.oczekujacaAkcja, this.pobierzCzas().dataLokalna)
+      if (poprawiona) {
+        this.oczekujacaAkcja = poprawiona
+        return { tekst: podsumujAkcje(poprawiona), ryzyko: poprawiona.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: structuredClone(poprawiona) }
+      }
+    }
     const preferencja = rozpoznajTrwalaPreferencjeEcho(oczyszczona)
     if (
       preferencja
@@ -161,7 +208,7 @@ export class AgentEcho {
         const narzedzie = this.rejestr.pobierz(wywolanie.nazwa)
         const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie, ryzyko: narzedzie?.ryzyko ?? 'wysokie', opis: wynik.komunikat ?? 'Zmiana danych' }
         this.oczekujacaAkcja = structuredClone(akcja)
-        return { tekst: `Mogę to zrobić, ale najpierw potrzebuję potwierdzenia: ${akcja.opis}`, ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
+        return { tekst: podsumujAkcje(akcja), ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
       }
       if (wynik.status === 'zablokowane') {
         return this.odpowiedz(wynik.komunikat ?? 'Echo nie może wykonać tego działania.')

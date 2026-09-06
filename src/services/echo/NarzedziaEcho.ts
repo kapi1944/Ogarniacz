@@ -69,6 +69,10 @@ interface NarzedzieWykonywalneEcho {
   wykonaj(argumenty: unknown): Promise<unknown>;
 }
 
+export function rodzajNarzedziaEcho(narzedzie: Pick<NarzedzieWykonywalneEcho, 'nazwa' | 'rodzaj'>): 'odczyt' | 'zapis' {
+  return narzedzie.rodzaj ?? (/^(list_|get_|search_|preview_|assess_|upcoming_|explain_|finance_period_summary$|budget_state$|vehicle_status$|vehicle_service_history$|vehicle_cost_summary$|pharmacy_overview$|current_external_data$|subscription_state$)/.test(narzedzie.nazwa) ? 'odczyt' : 'zapis')
+}
+
 export class RejestrNarzedziEcho {
   private readonly narzedzia = new Map<string, NarzedzieWykonywalneEcho>();
 
@@ -90,7 +94,7 @@ export class RejestrNarzedziEcho {
   definicje(): DefinicjaNarzedziaEcho[] {
     return [...this.narzedzia.values()].map((narzedzie) => ({
       nazwa: narzedzie.nazwa,
-      rodzaj: narzedzie.rodzaj ?? (/^(list_|get_|search_|preview_|assess_|upcoming_|explain_|finance_period_summary$|budget_state$|vehicle_status$|vehicle_service_history$|vehicle_cost_summary$|pharmacy_overview$|current_external_data$|subscription_state$)/.test(narzedzie.nazwa) ? 'odczyt' : 'zapis'),
+      rodzaj: rodzajNarzedziaEcho(narzedzie),
       opis: narzedzie.opis,
       schematArgumentow: z.toJSONSchema(narzedzie.schematArgumentow),
       ryzyko: narzedzie.ryzyko,
@@ -164,20 +168,18 @@ export class WykonawcaNarzedziEcho {
         komunikat: "Argumenty narzędzia są niepoprawne.",
       };
 
-    const decyzja = this.polityka.ocen(narzedzie.ryzyko, potwierdzone);
-    if (!decyzja.dozwolone)
-      return {
-        wywolanieId: wywolanie.id,
-        nazwa: wywolanie.nazwa,
-        status: "wymaga_potwierdzenia",
-        komunikat: narzedzie.opis,
-      };
-
     try {
       const konflikt = await narzedzie.sprawdzStan?.(walidacja.data, this.sprawdzDostep);
       if (konflikt && !potwierdzone) return {
         wywolanieId: wywolanie.id, nazwa: wywolanie.nazwa,
         status: 'wymaga_potwierdzenia', komunikat: konflikt,
+      };
+      const decyzja = this.polityka.ocen(narzedzie.ryzyko, potwierdzone, rodzajNarzedziaEcho(narzedzie));
+      if (!decyzja.dozwolone) return {
+        wywolanieId: wywolanie.id,
+        nazwa: wywolanie.nazwa,
+        status: "wymaga_potwierdzenia",
+        komunikat: narzedzie.opis,
       };
       const dane = await narzedzie.wykonaj(walidacja.data);
       await this.zapiszDziennik(

@@ -2,6 +2,7 @@ import type { EchoService } from '../EchoService'
 import type { OdpowiedzEcho } from './typyEcho'
 import type { UslugaGlosuEcho } from '../../platform/GlosEchoService'
 import type { PlatformaOgarniacza } from '../../platform/typy'
+import { KonfiguracjaRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 
 export type StanSesjiGlosowejEcho = 'bezczynny' | 'sluchanie' | 'transkrypcja' | 'myslenie' | 'mowienie' | 'oczekiwanie' | 'blad'
 
@@ -17,6 +18,7 @@ interface ZaleznosciKontrolera {
   echo: Pick<EchoService, 'obsluz'>
   cyklZycia: PlatformaOgarniacza['cyklZycia']
   obsluga: ObslugaSesjiGlosowej
+  konfiguracjaRozmowy?: KonfiguracjaRozmowyEcho
 }
 
 function komunikatBledu(blad: unknown) {
@@ -92,7 +94,8 @@ export class KontrolerSesjiGlosowejEcho {
     while (this.czyAktualna(numer)) {
       try {
         this.ustawStan(kontynuacja ? 'oczekiwanie' : 'sluchanie')
-        const wypowiedz = await this.zaleznosci.glos.rozpoznaj(kontynuacja ? 7_000 : 20_000)
+        const parametry = this.zaleznosci.konfiguracjaRozmowy?.pobierzParametryGlosu() ?? { limitPierwszejWypowiedziMs: 30_000, limitKontynuacjiMs: 12_000 }
+        const wypowiedz = await this.zaleznosci.glos.rozpoznaj(kontynuacja ? parametry.limitKontynuacjiMs : parametry.limitPierwszejWypowiedziMs)
         if (!this.czyAktualna(numer) || !wypowiedz.trim()) break
         this.zaleznosci.obsluga.odebranoWypowiedz(wypowiedz)
         this.ustawStan('myslenie')

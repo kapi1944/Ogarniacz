@@ -266,6 +266,7 @@ export function WidokEcho() {
       new KontrolerSesjiGlosowejEcho({
         glos: platforma.glosEcho,
         echo,
+        konfiguracjaRozmowy: echo.agent.konfiguracjaRozmowy,
         cyklZycia: platforma.cyklZycia,
         obsluga: {
           zmienStan: ustawStan,

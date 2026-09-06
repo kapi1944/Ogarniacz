@@ -131,7 +131,7 @@ describe('KontrolerSesjiGlosowejEcho', () => {
     await czekajNa(() => rozpoznaj.mock.calls.length === 2)
 
     expect(glos.zatrzymajMowienie).toHaveBeenCalledTimes(1)
-    expect(rozpoznaj).toHaveBeenNthCalledWith(2, 20_000)
+    expect(rozpoznaj).toHaveBeenNthCalledWith(2, 30_000)
     await kontroler.anuluj()
   })
 })

@@ -6,8 +6,8 @@ export type DecyzjaPolitykiEcho =
   | { dozwolone: false; powod: 'wymaga_potwierdzenia' }
 
 export class PolitykaDzialanEcho {
-  ocen(ryzyko: RyzykoDzialania, potwierdzone: boolean): DecyzjaPolitykiEcho {
-    if (!czyWymagaPotwierdzenia(ryzyko) || potwierdzone) return { dozwolone: true }
+  ocen(ryzyko: RyzykoDzialania, potwierdzone: boolean, rodzaj: 'odczyt' | 'zapis' = 'odczyt'): DecyzjaPolitykiEcho {
+    if (potwierdzone || (rodzaj === 'odczyt' && !czyWymagaPotwierdzenia(ryzyko))) return { dozwolone: true }
     return { dozwolone: false, powod: 'wymaga_potwierdzenia' }
   }
 }

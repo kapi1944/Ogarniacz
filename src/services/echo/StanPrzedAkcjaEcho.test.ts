@@ -15,7 +15,9 @@ describe('Echo sprawdza stan przed akcją', () => {
   it('pyta przed przypomnieniem o opłaconym Spotify i zapisuje dopiero po potwierdzeniu', async () => {
     await pobierzRepozytorium('rachunki').zapisz({ ...utworzMetadane(), nazwa: 'Spotify', kwota: 25, termin: '2026-09-10', status: 'zaplacony' })
     const agent = new AgentEcho({ pobierzCzas: () => ({ teraz: '2026-09-06T12:00:00Z', dataLokalna: '2026-09-06', strefaCzasowa: 'Europe/Warsaw' }) })
-    const odpowiedz = await agent.obsluz('Przypomnij mi jutro rano opłacić Spotify.')
+    const brakGodziny = await agent.obsluz('Przypomnij mi jutro rano opłacić Spotify.')
+    expect(brakGodziny.tekst).toBe('O której?')
+    const odpowiedz = await agent.obsluz('O 8.')
     expect(odpowiedz.tekst).toContain('już oznaczone jako opłacone')
     expect(await pobierzRepozytorium('przypomnienia').lista()).toHaveLength(0)
     expect(odpowiedz.akcjaDoPotwierdzenia).toBeDefined()
@@ -31,7 +33,7 @@ describe('Echo sprawdza stan przed akcją', () => {
     const rejestr = utworzDomyslnyRejestrNarzedziEcho()
     const wykonawca = new WykonawcaNarzedziEcho(rejestr, undefined, async () => undefined, (nazwa) => nazwa !== 'upcoming_bills')
     const argumenty = { tytul: 'Lekarz', czas: '2026-09-07T06:00:00.000Z' }
-    expect((await wykonawca.wykonaj({ id: '1', nazwa: 'create_reminder', argumenty })).status).toBe('wykonane')
+    expect((await wykonawca.wykonaj({ id: '1', nazwa: 'create_reminder', argumenty }, true)).status).toBe('wykonane')
     expect((await wykonawca.wykonaj({ id: '2', nazwa: 'create_reminder', argumenty })).status).toBe('wymaga_potwierdzenia')
     expect(await pobierzRepozytorium('przypomnienia').lista()).toHaveLength(1)
   })
@@ -45,7 +47,10 @@ describe('Echo sprawdza stan przed akcją', () => {
   it('zakończenie zadania znalezionego po nazwie nie usuwa go', async () => {
     const zadanie = utworzZadanie({ tytul: 'Raport kwartalny', opis: '', priorytet: 'normalny', szacowanyCzasMin: 30 })
     await pobierzRepozytorium('zadania').zapisz(zadanie)
-    const wynik = await new AgentEcho().obsluz('Oznacz raport kwartalny jako wykonane.')
+    const agent = new AgentEcho()
+    const przed = await agent.obsluz('Oznacz raport kwartalny jako wykonane.')
+    expect(przed.wymagaPotwierdzenia).toBe(true)
+    const wynik = await agent.potwierdz(przed.akcjaDoPotwierdzenia!)
     expect(wynik.wyniki?.some((element) => element.nazwa === 'complete_task')).toBe(true)
     expect(await pobierzRepozytorium('zadania').pobierz(zadanie.id)).toMatchObject({ status: 'wykonane' })
   })

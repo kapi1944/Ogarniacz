@@ -10,7 +10,6 @@ import type {
 
 const DOMYSLNA_GODZINA_RANO = "08:00";
 const DOMYSLNA_GODZINA_PO_PRACY = "17:00";
-const DOMYSLNA_GODZINA_PO_POLUDNIU = "15:00";
 
 interface SlowoWypowiedzi {
   oryginalne: string;
@@ -183,44 +182,17 @@ function rozpoznajCzas(
   }[] = [];
   for (const [indeks, slowo] of lista.entries()) {
     if (slowo.uproszczone === "rano") {
-      godziny.push({
-        indeksy: [indeks],
-        godzina: DOMYSLNA_GODZINA_RANO,
-        etykieta: "rano",
-        domyslna: {
-          pole: "godzina",
-          wartosc: DOMYSLNA_GODZINA_RANO,
-          opis: "dla określenia „rano”",
-        },
-      });
+      continue;
     } else if (
       slowo.uproszczone === "po" &&
       lista[indeks + 1]?.uproszczone === "pracy"
     ) {
-      godziny.push({
-        indeksy: [indeks, indeks + 1],
-        godzina: DOMYSLNA_GODZINA_PO_PRACY,
-        etykieta: "po pracy",
-        domyslna: {
-          pole: "godzina",
-          wartosc: DOMYSLNA_GODZINA_PO_PRACY,
-          opis: "dla określenia „po pracy”",
-        },
-      });
+      continue;
     } else if (
       slowo.uproszczone === "po" &&
       lista[indeks + 1]?.uproszczone === "poludniu"
     ) {
-      godziny.push({
-        indeksy: [indeks, indeks + 1],
-        godzina: DOMYSLNA_GODZINA_PO_POLUDNIU,
-        etykieta: "po południu",
-        domyslna: {
-          pole: "godzina",
-          wartosc: DOMYSLNA_GODZINA_PO_POLUDNIU,
-          opis: "dla określenia „po południu”",
-        },
-      });
+      continue;
     } else if (/^(?:[01]?\d|2[0-3])(?::[0-5]\d)?$/.test(slowo.uproszczone)) {
       const [godzina, minuta = "00"] = slowo.uproszczone.split(":");
       const indeksy =
@@ -454,16 +426,8 @@ function zamiarUtworzenia(
   tytul: string,
   czas: RozpoznanyCzas,
 ): ZamiarSemantycznyEcho {
-  const godzina = czas.godzina ?? DOMYSLNA_GODZINA_RANO;
-  const wartosciDomyslne = czas.godzina
-    ? czas.wartosciDomyslne
-    : [
-        {
-          pole: "godzina",
-          wartosc: godzina,
-          opis: "brak podanej godziny",
-        } satisfies WartoscDomyslnaEcho,
-      ];
+  const godzina = czas.godzina!;
+  const wartosciDomyslne = czas.wartosciDomyslne;
   return {
     typ: "utworz_przypomnienie",
     tytul,
@@ -1145,6 +1109,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       const brakujacePola = [
         ...(!tytul ? ["tytul" as const] : []),
         ...(!czas.data ? ["data" as const] : []),
+        ...(!czas.godzina ? ["godzina" as const] : []),
       ];
       if (brakujacePola.length > 0)
         return this.pytanie({
@@ -1156,7 +1121,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
             godzina: czas.godzina,
             okreslenieCzasu: okreslenieCzasu(
               czas,
-              czas.godzina ?? DOMYSLNA_GODZINA_RANO,
+              czas.godzina ?? "",
             ),
           },
         });
@@ -1272,15 +1237,16 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       zebrane.tytul = zbudujTytul(lista, czas.indeksy) || undefined;
     if (!zebrane.data && czas.data) {
       zebrane.data = czas.data;
-      zebrane.godzina = czas.godzina;
       zebrane.okreslenieCzasu = okreslenieCzasu(
         czas,
-        czas.godzina ?? DOMYSLNA_GODZINA_RANO,
+        czas.godzina ?? "",
       );
     }
+    if (!zebrane.godzina && czas.godzina) zebrane.godzina = czas.godzina;
     const brakujacePola = [
       ...(!zebrane.tytul ? ["tytul" as const] : []),
       ...(!zebrane.data ? ["data" as const] : []),
+      ...(!zebrane.godzina ? ["godzina" as const] : []),
     ];
     if (brakujacePola.length > 0)
       return this.pytanie({ ...oczekujace, brakujacePola, zebrane });
