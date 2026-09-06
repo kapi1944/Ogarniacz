@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Bot,
   Mic,
@@ -15,40 +15,14 @@ import {
   Znacznik,
 } from "../../components/Interfejs";
 import { useRepozytorium } from "../../hooks/useRepozytorium";
-import { EchoService } from "../../services/EchoService";
-import {
-  KontrolerSesjiGlosowejEcho,
-  type StanSesjiGlosowejEcho,
-} from "../../services/echo/KontrolerSesjiGlosowejEcho";
-import type {
-  AkcjaDoPotwierdzeniaEcho,
-  TrybEcho,
-  WartoscDomyslnaEcho,
-  ZrodloWejsciaEcho,
-} from "../../services/echo/typyEcho";
+import type { ZrodloWejsciaEcho } from "../../services/echo/typyEcho";
 import { platforma } from "../../platform/platforma";
 import { Link } from "react-router-dom";
 import type { WynikNarzedziaEcho } from "../../services/echo/typyEcho";
 import { useAplikacja } from "../../app/KontekstAplikacji";
-import {
-  utworzDomyslnyRejestrNarzedziEcho,
-  WykonawcaNarzedziEcho,
-} from "../../services/echo/NarzedziaEcho";
+import { useSesjaEcho, type WiadomoscEcho } from "../../app/DostawcaSesjiEcho";
 import type { NazwaModulu } from "../../domain/typy";
-import {
-  MagazynPreferencjiEcho,
-  preferencjePlanowaniaZPamieci,
-} from "../../services/echo/PamiecPreferencjiEcho";
-
-interface Wiadomosc {
-  id: string;
-  autor: "uzytkownik" | "echo";
-  tresc: string;
-  zrodloWejscia?: ZrodloWejsciaEcho;
-  ryzyko?: "niskie" | "umiarkowane" | "wysokie";
-  wartosciDomyslne?: WartoscDomyslnaEcho[];
-  wyniki?: WynikNarzedziaEcho[];
-}
+import type { StanSesjiGlosowejEcho } from "../../services/echo/KontrolerSesjiGlosowejEcho";
 
 function typWynikuNarzedzia(nazwa: string): string | undefined {
   if (nazwa.includes("task")) return "zadanie";
@@ -146,20 +120,10 @@ export function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
   return undefined;
 }
 
-const etykietyModulowEcho: Partial<Record<NazwaModulu, string>> = {
-  finanse: "Finanse",
-  samochod: "Samochód",
-  zdrowie: "Zdrowie",
-  zadania: "Zadania",
-  projekty: "Projekty",
-  zakupy: "Zakupy",
-  dokumenty: "Dokumenty",
-};
-
 export function uruchomAutomatycznyOdczytEcho(
   glosWlaczony: boolean,
   odczytWlaczony: boolean,
-  wiadomosc: Pick<Wiadomosc, "id" | "autor" | "tresc" | "zrodloWejscia"> | undefined,
+  wiadomosc: Pick<WiadomoscEcho, "id" | "autor" | "tresc" | "zrodloWejscia"> | undefined,
   ostatnioOdczytana: string | undefined,
   odczytaj: (tresc: string) => void,
 ): string | undefined {
@@ -185,62 +149,9 @@ export function czyPokazacSugestieEcho(
 }
 
 export function WidokEcho() {
-  const [stan, ustawStan] = useState<StanSesjiGlosowejEcho>("bezczynny");
-  const { ustawienia, zapiszUstawienia } = useAplikacja();
-  const magazynPamieci = useMemo(() => new MagazynPreferencjiEcho(), []);
-  const echo = useMemo(() => {
-    const rejestr = utworzDomyslnyRejestrNarzedziEcho({
-      pobierzPreferencjePlanowania: async () =>
-        ustawienia.pamiecPreferencjiEcho
-          ? preferencjePlanowaniaZPamieci(
-              await magazynPamieci.wyszukaj("", 20),
-            )
-          : {},
-    });
-    const wykonawca = new WykonawcaNarzedziEcho(
-      rejestr,
-      undefined,
-      undefined,
-      (nazwa) => {
-        if (nazwa === "current_external_data")
-          return ustawienia.internetEcho
-            ? true
-            : "Dostęp Echo do internetu jest wyłączony. Możesz włączyć go w Ustawieniach Echo.";
-        const modul = modulNarzedzia(nazwa);
-        if (!modul || ustawienia.modulyEcho.includes(modul)) return true;
-        return `Nie mam obecnie dostępu do modułu ${etykietyModulowEcho[modul] ?? modul}. Możesz włączyć go w Ustawieniach Echo.`;
-      },
-    );
-    return new EchoService({
-      rejestr,
-      wykonawca,
-      magazynPamieci,
-      pamiecPreferencjiWlaczona: ustawienia.pamiecPreferencjiEcho,
-      ustawAutomatycznyOdczyt: async (automatycznyOdczytEcho) => {
-        await zapiszUstawienia({ automatycznyOdczytEcho });
-      },
-    });
-  }, [
-    magazynPamieci,
-    ustawienia.internetEcho,
-    ustawienia.modulyEcho,
-    ustawienia.pamiecPreferencjiEcho,
-    zapiszUstawienia,
-  ]);
+  const { ustawienia } = useAplikacja();
+  const { echo, kontrolerGlosu, stan, ustawStan, tryb, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz } = useSesjaEcho();
   const [tekst, ustawTekst] = useState("");
-  const [tryb, ustawTryb] = useState<TrybEcho>(echo.agent.provider.tryb);
-  const [wiadomosci, ustawWiadomosci] = useState<Wiadomosc[]>([
-    {
-      id: "powitanie",
-      autor: "echo",
-      tresc:
-        "Napisz albo powiedz, co masz na głowie. Z Echo możesz rozmawiać normalnie.",
-    },
-  ]);
-  const [oczekujacaAkcja, ustawOczekujacaAkcje] =
-    useState<AkcjaDoPotwierdzeniaEcho>();
-  const [bladGlosu, ustawBladGlosu] = useState("");
-  const [czesciowaWypowiedz, ustawCzesciowaWypowiedz] = useState("");
   const [wysylanie, ustawWysylanie] = useState(false);
   const koniecRozmowy = useRef<HTMLDivElement>(null);
   const ostatnioOdczytana = useRef<string | undefined>(undefined);
@@ -249,64 +160,6 @@ export function WidokEcho() {
   useEffect(() => {
     koniecRozmowy.current?.scrollIntoView({ block: "end", behavior: "smooth" });
   }, [wiadomosci]);
-
-  const dodajOdpowiedz = (
-    odpowiedz: Awaited<ReturnType<EchoService["obsluz"]>>,
-    zrodloWejscia: ZrodloWejsciaEcho,
-  ) => {
-    ustawTryb(odpowiedz.tryb);
-    ustawWiadomosci((obecne) => [
-      ...obecne,
-      {
-        id: crypto.randomUUID(),
-        autor: "echo",
-        tresc: odpowiedz.tekst,
-        zrodloWejscia,
-        ryzyko: odpowiedz.ryzyko,
-        wartosciDomyslne: odpowiedz.wartosciDomyslne,
-        wyniki: odpowiedz.wyniki,
-      },
-    ]);
-    ustawOczekujacaAkcje(odpowiedz.akcjaDoPotwierdzenia);
-  };
-
-  const kontrolerGlosu = useMemo(
-    () =>
-      new KontrolerSesjiGlosowejEcho({
-        glos: platforma.glosEcho,
-        echo,
-        nasluchujWywolania: true,
-        konfiguracjaRozmowy: echo.agent.konfiguracjaRozmowy,
-        cyklZycia: platforma.cyklZycia,
-        obsluga: {
-          zmienStan: ustawStan,
-          odebranoCzesciowaWypowiedz: ustawCzesciowaWypowiedz,
-          zglosBlad: ustawBladGlosu,
-          odebranoWypowiedz: (wypowiedz) =>
-            ustawWiadomosci((obecne) => [
-              ...obecne,
-              {
-                id: crypto.randomUUID(),
-                autor: "uzytkownik",
-                tresc: wypowiedz,
-              },
-            ]),
-          odebranoOdpowiedz: (odpowiedz) => dodajOdpowiedz(odpowiedz, "stt"),
-        },
-      }),
-    [echo],
-  );
-
-  useEffect(() => {
-    if (!ustawienia.glosEcho) {
-      void kontrolerGlosu.anuluj();
-      return;
-    }
-    void kontrolerGlosu.inicjalizuj();
-    return () => {
-      void kontrolerGlosu.zniszcz();
-    };
-  }, [kontrolerGlosu, ustawienia.glosEcho]);
 
   const wyslij = async (
     wypowiedz: string,

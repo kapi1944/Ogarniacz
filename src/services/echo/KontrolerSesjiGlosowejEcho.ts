@@ -8,6 +8,7 @@ export type StanSesjiGlosowejEcho = 'bezczynny' | 'oczekiwanieNaWywolanie' | 'sl
 
 interface ObslugaSesjiGlosowej {
   zmienStan: (stan: StanSesjiGlosowejEcho) => void
+  wywolanoEcho?: () => void
   odebranoCzesciowaWypowiedz?: (tekst: string) => void
   odebranoWypowiedz: (tekst: string) => void
   odebranoOdpowiedz: (odpowiedz: OdpowiedzEcho) => void
@@ -137,6 +138,7 @@ export class KontrolerSesjiGlosowejEcho {
         try {
           const wypowiedz = await this.zaleznosci.glos.rozpoznaj(5_000)
           if (czyWywolanieEcho(wypowiedz)) {
+            this.zaleznosci.obsluga.wywolanoEcho?.()
             await this.rozpocznij()
             return
           }

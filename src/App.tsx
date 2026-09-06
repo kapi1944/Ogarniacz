@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { DostawcaAplikacji } from './app/KontekstAplikacji'
+import { DostawcaSesjiEcho } from './app/DostawcaSesjiEcho'
 import { StraznikModulu, UkladAplikacji } from './app/UkladAplikacji'
 import { WidokPulpitu } from './modules/pulpit/WidokPulpitu'
 import { NawigacjaPlatformy } from './platform/NawigacjaPlatformy'
@@ -50,7 +51,7 @@ function LadowanieWidoku() {
 }
 
 export default function App() {
-  return <BrowserRouter><DostawcaAplikacji><NawigacjaPlatformy /><UkladAplikacji><Suspense fallback={<LadowanieWidoku />}><Routes>
+  return <BrowserRouter><DostawcaAplikacji><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><Suspense fallback={<LadowanieWidoku />}><Routes>
     <Route path="/" element={<WidokPulpitu />} />
     <Route path="/skrzynka" element={chron('skrzynka', <WidokSkrzynki />)} />
     <Route path="/zadania" element={chron('zadania', <WidokZadan />)} />
@@ -85,5 +86,5 @@ export default function App() {
     <Route path="/ustawienia" element={chron('ustawienia', <WidokUstawien />)} />
     <Route path="/ustawienia/personalizacja" element={chron('ustawienia', <EdytorPersonalizacji />)} />
     <Route path="*" element={<NieZnaleziono />} />
-  </Routes></Suspense></UkladAplikacji></DostawcaAplikacji></BrowserRouter>
+  </Routes></Suspense></UkladAplikacji></DostawcaSesjiEcho></DostawcaAplikacji></BrowserRouter>
 }

@@ -1,0 +1,118 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAplikacja } from './KontekstAplikacji'
+import { platforma } from '../platform/platforma'
+import { EchoService } from '../services/EchoService'
+import { KontrolerSesjiGlosowejEcho, type StanSesjiGlosowejEcho } from '../services/echo/KontrolerSesjiGlosowejEcho'
+import { utworzDomyslnyRejestrNarzedziEcho, WykonawcaNarzedziEcho } from '../services/echo/NarzedziaEcho'
+import { MagazynPreferencjiEcho, preferencjePlanowaniaZPamieci } from '../services/echo/PamiecPreferencjiEcho'
+import type { AkcjaDoPotwierdzeniaEcho, OdpowiedzEcho, TrybEcho, WartoscDomyslnaEcho, WynikNarzedziaEcho, ZrodloWejsciaEcho } from '../services/echo/typyEcho'
+import type { NazwaModulu } from '../domain/typy'
+
+export interface WiadomoscEcho {
+  id: string
+  autor: 'uzytkownik' | 'echo'
+  tresc: string
+  zrodloWejscia?: ZrodloWejsciaEcho
+  ryzyko?: 'niskie' | 'umiarkowane' | 'wysokie'
+  wartosciDomyslne?: WartoscDomyslnaEcho[]
+  wyniki?: WynikNarzedziaEcho[]
+}
+
+interface WartoscSesjiEcho {
+  echo: EchoService
+  kontrolerGlosu: KontrolerSesjiGlosowejEcho
+  stan: StanSesjiGlosowejEcho
+  ustawStan: (stan: StanSesjiGlosowejEcho) => void
+  tryb: TrybEcho
+  wiadomosci: WiadomoscEcho[]
+  ustawWiadomosci: React.Dispatch<React.SetStateAction<WiadomoscEcho[]>>
+  oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
+  ustawOczekujacaAkcje: (akcja?: AkcjaDoPotwierdzeniaEcho) => void
+  bladGlosu: string
+  ustawBladGlosu: (blad: string) => void
+  czesciowaWypowiedz: string
+  dodajOdpowiedz: (odpowiedz: OdpowiedzEcho, zrodloWejscia: ZrodloWejsciaEcho) => void
+}
+
+const KontekstSesjiEcho = createContext<WartoscSesjiEcho | null>(null)
+
+const etykietyModulowEcho: Partial<Record<NazwaModulu, string>> = {
+  finanse: 'Finanse', samochod: 'Samochód', zdrowie: 'Zdrowie', zadania: 'Zadania', projekty: 'Projekty', zakupy: 'Zakupy', dokumenty: 'Dokumenty',
+}
+
+function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
+  if (nazwa === 'list_calendar') return 'planer'
+  if (nazwa === 'assess_purchase_affordability') return 'finanse'
+  if (nazwa === 'assess_mechanic_trip') return 'samochod'
+  if (nazwa === 'pharmacy_overview') return 'zdrowie'
+  if (nazwa.includes('project')) return 'projekty'
+  if (nazwa.includes('inbox') || nazwa.includes('waiting')) return 'skrzynka'
+  if (nazwa.includes('plan')) return 'planer'
+  if (nazwa.includes('habit')) return 'nawyki'
+  if (nazwa.includes('shopping')) return 'zakupy'
+  if (/finance|transaction|bill|budget|subscription|installment/.test(nazwa)) return 'finanse'
+  if (/vehicle|refuel/.test(nazwa)) return 'samochod'
+  if (nazwa.includes('note') || nazwa.includes('knowledge')) return 'notatki'
+  if (nazwa.includes('later')) return 'na_pozniej'
+  if (nazwa.includes('document')) return 'dokumenty'
+  if (nazwa.includes('contact')) return 'kontakty'
+  if (nazwa.includes('expiry')) return 'terminy'
+  if (nazwa.includes('place') || nazwa.includes('errand')) return 'miasto'
+  if (nazwa.includes('reminder')) return 'przypomnienia'
+  if (nazwa.includes('task')) return 'zadania'
+  if (nazwa.includes('medication')) return 'leki'
+  if (/health|appointment|referral|prescription|therapy/.test(nazwa)) return 'zdrowie'
+  return undefined
+}
+
+export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
+  const { ustawienia, zapiszUstawienia } = useAplikacja()
+  const nawiguj = useNavigate()
+  const magazynPamieci = useMemo(() => new MagazynPreferencjiEcho(), [])
+  const echo = useMemo(() => {
+    const rejestr = utworzDomyslnyRejestrNarzedziEcho({
+      pobierzPreferencjePlanowania: async () => ustawienia.pamiecPreferencjiEcho ? preferencjePlanowaniaZPamieci(await magazynPamieci.wyszukaj('', 20)) : {},
+    })
+    const wykonawca = new WykonawcaNarzedziEcho(rejestr, undefined, undefined, (nazwa) => {
+      if (nazwa === 'current_external_data') return ustawienia.internetEcho ? true : 'Dostęp Echo do internetu jest wyłączony. Możesz włączyć go w Ustawieniach Echo.'
+      const modul = modulNarzedzia(nazwa)
+      if (!modul || ustawienia.modulyEcho.includes(modul)) return true
+      return `Nie mam obecnie dostępu do modułu ${etykietyModulowEcho[modul] ?? modul}. Możesz włączyć go w Ustawieniach Echo.`
+    })
+    return new EchoService({ rejestr, wykonawca, magazynPamieci, pamiecPreferencjiWlaczona: ustawienia.pamiecPreferencjiEcho, ustawAutomatycznyOdczyt: async (automatycznyOdczytEcho) => { await zapiszUstawienia({ automatycznyOdczytEcho }) } })
+  }, [magazynPamieci, ustawienia.internetEcho, ustawienia.modulyEcho, ustawienia.pamiecPreferencjiEcho, zapiszUstawienia])
+  const [stan, ustawStan] = useState<StanSesjiGlosowejEcho>('bezczynny')
+  const [tryb, ustawTryb] = useState<TrybEcho>(echo.agent.provider.tryb)
+  const [wiadomosci, ustawWiadomosci] = useState<WiadomoscEcho[]>([{ id: 'powitanie', autor: 'echo', tresc: 'Napisz albo powiedz, co masz na głowie. Z Echo możesz rozmawiać normalnie.' }])
+  const [oczekujacaAkcja, ustawOczekujacaAkcje] = useState<AkcjaDoPotwierdzeniaEcho>()
+  const [bladGlosu, ustawBladGlosu] = useState('')
+  const [czesciowaWypowiedz, ustawCzesciowaWypowiedz] = useState('')
+  const dodajOdpowiedz = useCallback((odpowiedz: OdpowiedzEcho, zrodloWejscia: ZrodloWejsciaEcho) => {
+    ustawTryb(odpowiedz.tryb)
+    ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'echo', tresc: odpowiedz.tekst, zrodloWejscia, ryzyko: odpowiedz.ryzyko, wartosciDomyslne: odpowiedz.wartosciDomyslne, wyniki: odpowiedz.wyniki }])
+    ustawOczekujacaAkcje(odpowiedz.akcjaDoPotwierdzenia)
+  }, [])
+  const kontrolerGlosu = useMemo(() => new KontrolerSesjiGlosowejEcho({
+    glos: platforma.glosEcho, echo, nasluchujWywolania: true, konfiguracjaRozmowy: echo.agent.konfiguracjaRozmowy, cyklZycia: platforma.cyklZycia,
+    obsluga: {
+      zmienStan: ustawStan, wywolanoEcho: () => nawiguj('/echo'), odebranoCzesciowaWypowiedz: ustawCzesciowaWypowiedz, zglosBlad: ustawBladGlosu,
+      odebranoWypowiedz: (wypowiedz) => ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'uzytkownik', tresc: wypowiedz }]),
+      odebranoOdpowiedz: (odpowiedz) => dodajOdpowiedz(odpowiedz, 'stt'),
+    },
+  }), [dodajOdpowiedz, echo, nawiguj])
+
+  useEffect(() => {
+    if (!ustawienia.glosEcho) { void kontrolerGlosu.anuluj(); return }
+    void kontrolerGlosu.inicjalizuj()
+    return () => { void kontrolerGlosu.zniszcz() }
+  }, [kontrolerGlosu, ustawienia.glosEcho])
+
+  return <KontekstSesjiEcho.Provider value={{ echo, kontrolerGlosu, stan, ustawStan, tryb, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz }}>{children}</KontekstSesjiEcho.Provider>
+}
+
+export function useSesjaEcho() {
+  const kontekst = useContext(KontekstSesjiEcho)
+  if (!kontekst) throw new Error('Brak Dostawcy sesji Echo')
+  return kontekst
+}
