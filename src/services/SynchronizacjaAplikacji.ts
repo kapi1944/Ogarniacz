@@ -2,6 +2,7 @@ import { nasluchujZmianDanych } from '../data/ZdarzeniaDanych'
 import { RepozytoriumZdalneHttp } from '../data/RepozytoriumZdalneHttp'
 import type { RepozytoriumZdalne } from '../data/DostawcaSynchronizacji'
 import { platforma } from '../platform/platforma'
+import { pobierzKonfiguracjeSynchronizacji } from './KonfiguracjaSynchronizacji'
 import { nazwyTabelSynchronizowanych, oznaczOczekujacaSynchronizacje, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, SyncEngine } from './SyncEngine'
 
 const syncEngine = new SyncEngine()
@@ -10,8 +11,7 @@ let repozytoriumZdalne: RepozytoriumZdalne | undefined
 let inicjalizacja: Promise<() => void> | undefined
 
 function utworzRepozytoriumZdalne(): RepozytoriumZdalne | undefined {
-  const adresApi = import.meta.env.VITE_SYNC_API_URL?.trim()
-  const kluczDostepu = import.meta.env.VITE_SYNC_ACCESS_KEY?.trim()
+  const { adresApi, kluczDostepu } = pobierzKonfiguracjeSynchronizacji()
   return adresApi && kluczDostepu ? new RepozytoriumZdalneHttp(adresApi, kluczDostepu) : undefined
 }
 
@@ -26,7 +26,8 @@ export function rozstrzygnijKonfliktSynchronizacji(id: string, wybor: 'lokalny' 
 }
 
 export function czySynchronizacjaSkonfigurowana(): boolean {
-  return Boolean(import.meta.env.VITE_SYNC_API_URL?.trim() && import.meta.env.VITE_SYNC_ACCESS_KEY?.trim())
+  const { adresApi, kluczDostepu } = pobierzKonfiguracjeSynchronizacji()
+  return Boolean(adresApi && kluczDostepu)
 }
 
 export function inicjalizujSynchronizacjeAplikacji(): Promise<() => void> {

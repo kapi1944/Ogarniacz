@@ -12,6 +12,7 @@ import {
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
+import { sprawdzAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
 
 test('oblicza rosnący versionCode z wersji package.json', () => {
   assert.equal(obliczKodWersji('1.0.1'), 1_000_001)
@@ -23,6 +24,12 @@ test('akceptuje dokładnie JDK wymagane przez toolchain Capacitor', () => {
   assert.equal(czyZgodnyJdk(21, 21), true)
   assert.equal(czyZgodnyJdk(17, 21), false)
   assert.equal(czyZgodnyJdk(25, 21), false)
+})
+
+test('generuje wąskie zezwolenie HTTP tylko dla skonfigurowanego prywatnego endpointu', () => {
+  assert.equal(sprawdzAdresSynchronizacji('http://192.168.0.116:8787').hostname, '192.168.0.116')
+  assert.ok(utworzKonfiguracjeBezpieczenstwaSieci('http://192.168.0.116:8787').includes('<domain includeSubdomains="false">192.168.0.116</domain>'))
+  assert.throws(() => sprawdzAdresSynchronizacji('http://example.com'), /wyłącznie/)
 })
 
 test('oblicza SHA-256 pliku APK', async () => {

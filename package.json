@@ -1,7 +1,7 @@
 {
   "name": "ogarniacz-v1",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,7 @@
     "server:build": "tsc -p tsconfig.server.json",
     "server:start": "npm run server:build && node --env-file-if-exists=.env dist-server/main.js",
     "server:test": "node --experimental-strip-types --test server/*.test.ts",
+    "sync:doctor": "node scripts/sync-doctor.mjs",
     "android:doctor": "node scripts/android.mjs doctor",
     "android:sync": "node scripts/android.mjs sync",
     "android:open": "cap open android",

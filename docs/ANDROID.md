@@ -96,8 +96,8 @@ Kolejne OTA muszą mieć wyższy `versionCode`, ten sam `applicationId` i podpis
 Warunkiem jest zainstalowana bazowa wersja **release** Ogarniacza, podpisana tym samym stałym keystore i z wbudowanym adresem GitHub z `.env.production`. Jeśli telefon ma wersję debug albo starszy build bez tego adresu, wykonaj jednorazowe przejście opisane w sekcji D.
 
 1. Na komputerze upewnij się, że `main` jest czysty, a `android/keystore.properties` wskazuje dokładnie ten sam zachowany keystore, którym podpisano wersję na Galaxy S23+.
-2. Podbij wersję, np. `npm run version:patch`. Nowy `versionCode` musi być większy od zainstalowanego.
-3. Uruchom `npm run android:release -- --release-notes-file .\informacje-o-wydaniu.md`.
+2. Podbij wersję, np. `npm run version:patch`. Nowy `versionCode` musi być większy od opublikowanego w `latest.json`.
+3. Ustaw prywatnie `VITE_SYNC_API_URL` i `VITE_SYNC_ACCESS_KEY`, a następnie uruchom `npm run android:release -- --release-notes-file .\informacje-o-wydaniu.md`. Skrypt przed buildem pobiera aktualny manifest i zatrzymuje się, jeśli versionCode nie rośnie; przed publikacją weryfikuje applicationId, wersję, podpis, nazwę, rozmiar, SHA-256 oraz zgodność `latest.json` z APK.
 4. W GitHubie utwórz zwykły, publiczny release (nie draft/prerelease), najlepiej z tagiem zgodnym z wersją, np. `v1.0.3`.
 5. Dodaj jako assets pliki z `android/app/build/outputs/apk/release/`: `Ogarniacz-X.Y.Z-release.apk`, `Ogarniacz-X.Y.Z-release.apk.sha256` oraz `latest.json`. Opublikuj release dopiero po dodaniu kompletu.
 6. Na Galaxy S23+ otwórz **Ogarniacz → Ustawienia → Informacje o aplikacji → Sprawdź aktualizacje**. Panel pokaże dostępną wersję i informacje o wydaniu.

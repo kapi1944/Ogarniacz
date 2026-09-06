@@ -10,6 +10,12 @@ test('konfiguracja odrzuca niepoprawny port', () => {
   assert.throws(() => utworzKonfiguracjeSerwera({ PORT: '70000' }), /PORT/)
 })
 
+test('konfiguracja serwera domyślnie nasłuchuje w LAN i ogranicza CORS do originu Capacitor', () => {
+  const konfiguracja = utworzKonfiguracjeSerwera({})
+  assert.equal(konfiguracja.host, '0.0.0.0')
+  assert.deepEqual(konfiguracja.dozwolonePochodzeniaCors, ['https://localhost'])
+})
+
 test('migracje tworzą schemat centralnej bazy idempotentnie', () => {
   const baza = new DatabaseSync(':memory:')
   assert.equal(uruchomMigracje(baza), 3)

@@ -4,13 +4,13 @@ import type { KonfiguracjaSerwera } from './config.ts'
 import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } from './echo.ts'
 import { czyDostepDoSynchronizacji, odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
 
-const POCHODZENIE_APLIKACJI_ANDROID = 'https://localhost'
 const METODY_SYNCHRONIZACJI = 'GET, POST, OPTIONS'
 const NAGLOWKI_SYNCHRONIZACJI = 'Authorization, Content-Type, X-Ogarniacz-Installation-Id'
 
-function ustawCorsSynchronizacji(zadanie: IncomingMessage, odpowiedz: ServerResponse): boolean {
-  if (zadanie.headers.origin !== POCHODZENIE_APLIKACJI_ANDROID) return false
-  odpowiedz.setHeader('access-control-allow-origin', POCHODZENIE_APLIKACJI_ANDROID)
+function ustawCorsSynchronizacji(zadanie: IncomingMessage, odpowiedz: ServerResponse, konfiguracja: KonfiguracjaSerwera): boolean {
+  const pochodzenie = zadanie.headers.origin
+  if (!pochodzenie || !konfiguracja.dozwolonePochodzeniaCors.includes(pochodzenie)) return false
+  odpowiedz.setHeader('access-control-allow-origin', pochodzenie)
   odpowiedz.setHeader('access-control-allow-methods', METODY_SYNCHRONIZACJI)
   odpowiedz.setHeader('access-control-allow-headers', NAGLOWKI_SYNCHRONIZACJI)
   odpowiedz.setHeader('vary', 'Origin')
@@ -30,7 +30,7 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
       return
     }
     if (zadanie.url?.startsWith('/api/sync/')) {
-      const czyDozwolonePochodzenie = ustawCorsSynchronizacji(zadanie, odpowiedz)
+      const czyDozwolonePochodzenie = ustawCorsSynchronizacji(zadanie, odpowiedz, konfiguracja)
       if (zadanie.method === 'OPTIONS') {
         if (!czyDozwolonePochodzenie) {
           odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })

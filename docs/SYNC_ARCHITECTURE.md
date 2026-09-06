@@ -10,6 +10,12 @@ UI zna wyłącznie `SyncEngine` i kontrakt `RepozytoriumZdalne`. `RepozytoriumZd
 
 Serwer mapuje poprawny `SYNC_ACCESS_KEY` na jeden skonfigurowany `SYNC_USER_ID`. Klient nie przesyła ani nie współdzieli identyfikatora użytkownika: każde urządzenie przekazuje wyłącznie własny `installationId`. Ten wariant jest przeznaczony do prywatnego wdrożenia jednego użytkownika za HTTPS albo w zaufanej sieci; publiczne wdrożenie nadal wymaga docelowych sesji `HttpOnly`.
 
+## Endpoint i diagnostyka
+
+Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL`, a klucza `VITE_SYNC_ACCESS_KEY`; oba są wstrzykiwane wyłącznie do prywatnego builda. Przy `http://` skrypt Androida generuje `network_security_config.xml` dla dokładnie tego prywatnego hosta (IPv4 prywatny, `localhost` albo `.local`). Nie ma globalnego zezwolenia cleartext. HTTPS nie wymaga wyjątku Androida.
+
+`npm run sync:doctor` wykonuje wyłącznie odczyty: waliduje URL, DNS/IP, `/health`, preflight CORS oraz uwierzytelniony `GET /api/sync/changes`. Nie wypisuje klucza. Na serwerze domyślne `HOST=0.0.0.0` udostępnia API w LAN, a `CORS_ALLOWED_ORIGINS` ogranicza originy (domyślnie rzeczywisty origin Capacitor: `https://localhost`).
+
 ## Konflikty
 
 Jeżeli lokalna i zdalna wersja tego samego rekordu zmieniły się od ostatniego sync i nie są identyczne, żadna nie nadpisuje drugiej. Obie wersje oraz identyfikatory instalacji trafiają do lokalnego rejestru konfliktów. Ustawienia pozwalają wybrać wersję lokalną albo zdalną. Nie zastosowano CRDT.

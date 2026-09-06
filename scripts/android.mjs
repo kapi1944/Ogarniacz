@@ -13,12 +13,14 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { fileURLToPath } from 'node:url'
 import {
   obliczKodWersji,
+  obliczSha256,
   czyZgodnyJdk,
   parsujUrzadzeniaAdb,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
+import { pobierzKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
 
 const katalogRepozytorium = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const katalogAndroida = join(katalogRepozytorium, 'android')
@@ -333,6 +335,9 @@ function zbudujFrontend(srodowisko) {
 }
 
 function synchronizujCapacitor(srodowisko) {
+  const { adresApi } = pobierzKonfiguracjeSynchronizacji(katalogRepozytorium, srodowisko)
+  const konfiguracjaSieci = join(katalogAndroida, 'app', 'src', 'main', 'res', 'xml', 'network_security_config.xml')
+  writeFileSync(konfiguracjaSieci, utworzKonfiguracjeBezpieczenstwaSieci(adresApi))
   const capacitor = join(katalogRepozytorium, 'node_modules', '@capacitor', 'cli', 'bin', 'capacitor')
   wykonajEtap('Capacitor sync Android', process.execPath, [capacitor, 'sync', 'android'], { srodowisko })
 }
@@ -439,9 +444,60 @@ function sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko) {
   wykonajEtap('Weryfikacja podpisu release APK', java, ['-jar', apkSigner, 'verify', '--verbose', sciezkaApk], { srodowisko })
 }
 
+function znajdzAapt(sdk) {
+  const katalog = join(sdk, 'build-tools')
+  if (!existsSync(katalog)) return undefined
+  return podkatalogi(katalog)
+    .sort((a, b) => basename(b).localeCompare(basename(a), undefined, { numeric: true }))
+    .map((wersja) => join(wersja, czyWindows ? 'aapt.exe' : 'aapt'))
+    .find(existsSync)
+}
+
+async function sprawdzArtefaktRelease({ sciezkaApk, manifest, adresManifestu, diagnostyka, srodowisko }) {
+  const oczekiwanaNazwa = `Ogarniacz-${manifest.versionName}-release.apk`
+  if (basename(sciezkaApk) !== oczekiwanaNazwa) throw new Error(`Nazwa APK musi być ${oczekiwanaNazwa}.`)
+  const aapt = znajdzAapt(diagnostyka.sdk)
+  if (!aapt) throw new Error('Nie znaleziono aapt w Android SDK build-tools.')
+  const daneApk = wykonajPrzechwytywanie(aapt, ['dump', 'badging', sciezkaApk], { srodowisko })
+  if (daneApk.status !== 0) throw new Error('Nie udało się odczytać metadanych APK przez aapt.')
+  const packageMatch = /package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'/.exec(daneApk.stdout)
+  if (!packageMatch) throw new Error('APK nie zawiera kompletnych metadanych package/version.')
+  if (packageMatch[1] !== 'pl.ogarniacz.app') throw new Error(`APK ma nieprawidłowy applicationId: ${packageMatch[1]}.`)
+  if (packageMatch[2] !== String(manifest.versionCode) || packageMatch[3] !== manifest.versionName) {
+    throw new Error('APK ma versionName/versionCode niezgodne z latest.json.')
+  }
+  if (manifest.size !== statSync(sciezkaApk).size) throw new Error('Rozmiar APK nie zgadza się z latest.json.')
+  if (manifest.sha256 !== await obliczSha256(sciezkaApk)) throw new Error('SHA-256 APK nie zgadza się z latest.json.')
+  const adresApk = new URL(manifest.apkUrl, adresManifestu)
+  if (basename(adresApk.pathname) !== oczekiwanaNazwa) throw new Error('latest.json nie wskazuje artefaktu bieżącego wydania.')
+}
+
+async function sprawdzMonotonicznoscWydania(adresManifestu) {
+  let odpowiedz
+  try {
+    odpowiedz = await fetch(adresManifestu, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } })
+  } catch (blad) {
+    throw new Error(`Nie udało się pobrać obecnego latest.json: ${blad instanceof Error ? blad.message : String(blad)}`)
+  }
+  if (!odpowiedz.ok) throw new Error(`Obecny latest.json zwrócił HTTP ${odpowiedz.status}.`)
+  const obecny = walidujManifestAktualizacji(await odpowiedz.json())
+  const nastepnyKod = obliczKodWersji(pakiet.version)
+  if (nastepnyKod <= obecny.versionCode) {
+    throw new Error(`versionCode ${nastepnyKod} nie jest większy od opublikowanego ${obecny.versionCode} (${obecny.versionName}).`)
+  }
+  return obecny
+}
+
 async function wykonajRelease(opcje) {
   const podpisWstepny = sprawdzKonfiguracjePodpisu()
-  wymagajAdresuHttps('VITE_ANDROID_UPDATE_MANIFEST_URL', odczytajZmiennaBudowania('VITE_ANDROID_UPDATE_MANIFEST_URL'))
+  const adresManifestu = wymagajAdresuHttps('VITE_ANDROID_UPDATE_MANIFEST_URL', odczytajZmiennaBudowania('VITE_ANDROID_UPDATE_MANIFEST_URL'))
+  const konfiguracjaSynchronizacji = pobierzKonfiguracjeSynchronizacji(katalogRepozytorium)
+  if (!konfiguracjaSynchronizacji.adresApi || !konfiguracjaSynchronizacji.kluczDostepu) {
+    throw new Error('Release wymaga kompletnej VITE_SYNC_API_URL i VITE_SYNC_ACCESS_KEY, aby nie opublikować APK bez synchronizacji.')
+  }
+  sprawdzAdresSynchronizacji(konfiguracjaSynchronizacji.adresApi)
+  const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu)
+  console.log(`\nVERSION: OK — ${pakiet.version} (${obliczKodWersji(pakiet.version)}) > ${obecnyManifest.versionName} (${obecnyManifest.versionCode})`)
   const { diagnostyka, srodowisko } = wymagajSrodowiska()
   zbudujFrontend(srodowisko)
   synchronizujCapacitor(srodowisko)
@@ -473,6 +529,7 @@ async function wykonajRelease(opcje) {
   const sciezkaSkrotu = `${sciezkaApk}.sha256`
   writeFileSync(sciezkaManifestu, `${JSON.stringify(manifest, null, 2)}\n`)
   writeFileSync(sciezkaSkrotu, `${manifest.sha256}  ${basename(sciezkaApk)}\n`)
+  await sprawdzArtefaktRelease({ sciezkaApk, manifest, adresManifestu, diagnostyka, srodowisko })
 
   console.log('\n=====================================')
   console.log('OGARNIACZ ANDROID RELEASE — SUCCESS')
