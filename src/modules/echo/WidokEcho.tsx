@@ -239,8 +239,7 @@ export function WidokEcho() {
   ];
 
   const etykietyStanu: Record<StanSesjiGlosowejEcho, string> = {
-    bezczynny: "Gotowy",
-    oczekiwanieNaWywolanie: "Czekam na „Hej Echo”…",
+    bezczynny: "Dotknij mikrofonu, aby porozmawiać",
     sluchanie: "Słucham…",
     mowiUzytkownik: "Mówisz…",
     transkrypcja: "Przetwarzam wypowiedź…",
@@ -251,7 +250,7 @@ export function WidokEcho() {
     oczekujePotwierdzenia: "Oczekuję na potwierdzenie…",
     blad: "Błąd rozmowy głosowej",
   };
-  const sesjaAktywna = !["bezczynny", "oczekiwanieNaWywolanie", "blad"].includes(stan);
+  const sesjaAktywna = !["bezczynny", "blad"].includes(stan);
 
   return (
     <div className="widok widok-echo">

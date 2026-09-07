@@ -4,11 +4,10 @@ import type { UslugaGlosuEcho } from '../../platform/GlosEchoService'
 import type { PlatformaOgarniacza } from '../../platform/typy'
 import { KonfiguracjaRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 
-export type StanSesjiGlosowejEcho = 'bezczynny' | 'oczekiwanieNaWywolanie' | 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'myslenie' | 'mowienie' | 'oczekiwanie' | 'oczekujeDoprecyzowania' | 'oczekujePotwierdzenia' | 'blad'
+export type StanSesjiGlosowejEcho = 'bezczynny' | 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'myslenie' | 'mowienie' | 'oczekiwanie' | 'oczekujeDoprecyzowania' | 'oczekujePotwierdzenia' | 'blad'
 
 interface ObslugaSesjiGlosowej {
   zmienStan: (stan: StanSesjiGlosowejEcho) => void
-  wywolanoEcho?: () => void
   odebranoCzesciowaWypowiedz?: (tekst: string) => void
   odebranoWypowiedz: (tekst: string) => void
   odebranoOdpowiedz: (odpowiedz: OdpowiedzEcho) => void
@@ -21,7 +20,6 @@ interface ZaleznosciKontrolera {
   cyklZycia: PlatformaOgarniacza['cyklZycia']
   obsluga: ObslugaSesjiGlosowej
   konfiguracjaRozmowy?: KonfiguracjaRozmowyEcho
-  nasluchujWywolania?: boolean
 }
 
 function komunikatBledu(blad: unknown) {
@@ -34,18 +32,6 @@ function czyCicheZakonczenie(blad: unknown) {
   return kod === 'ANULOWANO' || kod === 'BRAK_MOWY' || /anulowano|nie usłyszałem|czas oczekiwania/i.test(komunikat)
 }
 
-export function czyWywolanieEcho(tekst: string) {
-  const uproszczony = tekst
-    .toLocaleLowerCase('pl-PL')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/ł/g, 'l')
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .trim()
-    .replace(/\s+/g, ' ')
-  return uproszczony === 'hej echo'
-}
-
 export class KontrolerSesjiGlosowejEcho {
   private numerSesji = 0
   private aktywna = false
@@ -54,8 +40,7 @@ export class KontrolerSesjiGlosowejEcho {
   private usunStanGlosu?: () => void
   private usunCyklZycia?: () => void
   private aplikacjaAktywna = true
-  private nasluchujeWywolania = false
-  private petlaWywolaniaTrwa = false
+  private rozpoznawanieAktywne = false
   private przerwanoMowieniePrzezWtracenie = false
 
   constructor(private readonly zaleznosci: ZaleznosciKontrolera) {}
@@ -68,23 +53,20 @@ export class KontrolerSesjiGlosowejEcho {
         void this.zaleznosci.glos.zatrzymajMowienie()
         return
       }
+      if (!this.rozpoznawanieAktywne || !this.aktywna) return
       if (stan === 'mowiUzytkownik') this.ustawStan('mowiUzytkownik')
       if (stan === 'transkrypcja') this.ustawStan('transkrypcja')
-      if (stan === 'mowienie') this.ustawStan('mowienie')
-      if (tekst) this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.(tekst)
+      if (tekst) this.ustawCzesciowaWypowiedz(tekst)
     })
     this.usunCyklZycia = await this.zaleznosci.cyklZycia.nasluchuj((stan) => {
       this.aplikacjaAktywna = stan === 'aktywny'
       if (!this.aplikacjaAktywna) void this.anuluj()
-      else void this.prowadzNasluchiwanieWywolania()
     })
     this.aplikacjaAktywna = (await this.zaleznosci.cyklZycia.pobierzStan()) === 'aktywny'
-    if (this.zaleznosci.nasluchujWywolania && this.aplikacjaAktywna) void this.rozpocznijNasluchiwanieWywolania()
   }
 
   async rozpocznij() {
     if (this.aktywna) await this.anuluj()
-    else if (this.petlaWywolaniaTrwa) await this.zaleznosci.glos.anulujRozpoznawanie()
     const numer = ++this.numerSesji
     this.aktywna = true
     this.zaleznosci.obsluga.zglosBlad('')
@@ -102,18 +84,18 @@ export class KontrolerSesjiGlosowejEcho {
   async anuluj() {
     this.numerSesji += 1
     this.aktywna = false
+    this.rozpoznawanieAktywne = false
     this.kontrolerOdpowiedzi?.abort()
     this.kontrolerOdpowiedzi = undefined
     await Promise.allSettled([
       this.zaleznosci.glos.anulujRozpoznawanie(),
       this.zaleznosci.glos.zatrzymajMowienie(),
     ])
+    this.ustawCzesciowaWypowiedz('')
     this.ustawStan('bezczynny')
-    void this.prowadzNasluchiwanieWywolania()
   }
 
   async zniszcz() {
-    this.nasluchujeWywolania = false
     await this.anuluj()
     this.usunStanGlosu?.()
     this.usunCyklZycia?.()
@@ -123,38 +105,6 @@ export class KontrolerSesjiGlosowejEcho {
     return this.stan
   }
 
-  private async rozpocznijNasluchiwanieWywolania() {
-    if (!this.zaleznosci.nasluchujWywolania) return
-    this.nasluchujeWywolania = true
-    await this.prowadzNasluchiwanieWywolania()
-  }
-
-  private async prowadzNasluchiwanieWywolania() {
-    if (!this.nasluchujeWywolania || !this.aplikacjaAktywna || this.aktywna || this.petlaWywolaniaTrwa) return
-    this.petlaWywolaniaTrwa = true
-    try {
-      while (this.nasluchujeWywolania && this.aplikacjaAktywna && !this.aktywna) {
-        this.ustawStan('oczekiwanieNaWywolanie')
-        try {
-          const wypowiedz = await this.zaleznosci.glos.rozpoznaj(5_000)
-          if (czyWywolanieEcho(wypowiedz)) {
-            this.zaleznosci.obsluga.wywolanoEcho?.()
-            await this.rozpocznij()
-            return
-          }
-        } catch (blad) {
-          if (!czyCicheZakonczenie(blad)) {
-            this.ustawStan('blad')
-            this.zaleznosci.obsluga.zglosBlad(komunikatBledu(blad))
-            return
-          }
-        }
-      }
-    } finally {
-      this.petlaWywolaniaTrwa = false
-    }
-  }
-
   private async prowadzRozmowe(numer: number) {
     let kontynuacja = false
     let stanOczekiwania: StanSesjiGlosowejEcho = 'oczekiwanie'
@@ -162,17 +112,19 @@ export class KontrolerSesjiGlosowejEcho {
       try {
         this.ustawStan(kontynuacja ? stanOczekiwania : 'sluchanie')
         const parametry = this.zaleznosci.konfiguracjaRozmowy?.pobierzParametryGlosu() ?? { limitPierwszejWypowiedziMs: 30_000, limitKontynuacjiMs: 12_000, limitPauzyMs: 4_000 }
-        this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.('')
+        this.ustawCzesciowaWypowiedz('')
+        this.rozpoznawanieAktywne = true
         const wypowiedz = await this.zaleznosci.glos.rozpoznaj(
           kontynuacja ? parametry.limitKontynuacjiMs : parametry.limitPierwszejWypowiedziMs,
           parametry.limitPauzyMs,
           (tekst) => {
             this.ustawStan('mowiUzytkownik')
-            this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.(tekst)
+            if (this.czyAktualna(numer)) this.ustawCzesciowaWypowiedz(tekst)
           },
         )
+        this.rozpoznawanieAktywne = false
         if (!this.czyAktualna(numer) || !wypowiedz.trim()) break
-        this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.('')
+        this.ustawCzesciowaWypowiedz('')
         this.zaleznosci.obsluga.odebranoWypowiedz(wypowiedz)
         this.ustawStan('myslenie')
         this.kontrolerOdpowiedzi = new AbortController()
@@ -190,13 +142,15 @@ export class KontrolerSesjiGlosowejEcho {
         await this.zaleznosci.glos.mow(odpowiedz.tekst)
         kontynuacja = true
       } catch (blad) {
+        this.rozpoznawanieAktywne = false
         if (!this.czyAktualna(numer)) return
         if (this.przerwanoMowieniePrzezWtracenie) {
           this.przerwanoMowieniePrzezWtracenie = false
           kontynuacja = true
           continue
         }
-        if (kontynuacja && czyCicheZakonczenie(blad)) break
+        if (czyCicheZakonczenie(blad)) break
+        this.ustawCzesciowaWypowiedz('')
         this.ustawStan('blad')
         this.zaleznosci.obsluga.zglosBlad(komunikatBledu(blad))
         this.aktywna = false
@@ -205,8 +159,9 @@ export class KontrolerSesjiGlosowejEcho {
     }
     if (this.czyAktualna(numer)) {
       this.aktywna = false
+      this.rozpoznawanieAktywne = false
+      this.ustawCzesciowaWypowiedz('')
       this.ustawStan('bezczynny')
-      void this.prowadzNasluchiwanieWywolania()
     }
   }
 
@@ -217,5 +172,9 @@ export class KontrolerSesjiGlosowejEcho {
   private ustawStan(stan: StanSesjiGlosowejEcho) {
     this.stan = stan
     this.zaleznosci.obsluga.zmienStan(stan)
+  }
+
+  private ustawCzesciowaWypowiedz(tekst: string) {
+    this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.(tekst)
   }
 }

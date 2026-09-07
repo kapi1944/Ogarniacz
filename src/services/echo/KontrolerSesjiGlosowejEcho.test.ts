@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { czyWywolanieEcho, KontrolerSesjiGlosowejEcho, type StanSesjiGlosowejEcho } from './KontrolerSesjiGlosowejEcho'
+import { KontrolerSesjiGlosowejEcho, type StanSesjiGlosowejEcho } from './KontrolerSesjiGlosowejEcho'
 import { KonfiguracjaRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 import type { UslugaGlosuEcho } from '../../platform/GlosEchoService'
 import type { PlatformaOgarniacza } from '../../platform/typy'
@@ -85,32 +85,45 @@ describe('KontrolerSesjiGlosowejEcho', () => {
 
     expect(echo.obsluz).toHaveBeenCalledWith('Dodaj to jutro, nie, czekaj, jednak w piątek.', 'stt', expect.any(AbortSignal))
     await kontroler.anuluj()
+    odebranoStan?.('mowiUzytkownik', 'Spóźniony fragment')
+
+    expect(czesciowe.at(-1)).toBe('')
   })
 
-  it('rozpoznaje wyłącznie dokładne wywołanie Hej Echo', () => {
-    expect(czyWywolanieEcho('Hej Echo!')).toBe(true)
-    expect(czyWywolanieEcho('hej, echo')).toBe(true)
-    expect(czyWywolanieEcho('Echo')).toBe(false)
-    expect(czyWywolanieEcho('Hej Echo przypomnij mi o zakupach')).toBe(false)
-  })
-
-  it('po wywołaniu uruchamia istniejącą sesję z następną wypowiedzią', async () => {
-    const brakMowy = Object.assign(new Error('Nie usłyszałem wypowiedzi.'), { code: 'BRAK_MOWY' })
-    const glos = przygotujGlos(['Hej Echo', 'Przypomnij mi o zakupach.', brakMowy])
-    const echo = { obsluz: vi.fn(async () => odpowiedz) }
+  it('nie uruchamia STT podczas inicjalizacji ani powrotu aplikacji na pierwszy plan', async () => {
+    const glos = przygotujGlos([])
+    const cykl = przygotujCyklZycia()
     const kontroler = new KontrolerSesjiGlosowejEcho({
       glos,
-      echo,
-      nasluchujWywolania: true,
-      cyklZycia: przygotujCyklZycia().usluga,
+      echo: { obsluz: vi.fn(async () => odpowiedz) },
+      cyklZycia: cykl.usluga,
       obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
     })
 
     await kontroler.inicjalizuj()
-    await czekajNa(() => echo.obsluz.mock.calls.length === 1)
+    cykl.zmienStan('nieaktywny')
+    cykl.zmienStan('aktywny')
 
-    expect(echo.obsluz).toHaveBeenCalledWith('Przypomnij mi o zakupach.', 'stt', expect.any(AbortSignal))
-    await kontroler.zniszcz()
+    expect(glos.rozpoznaj).not.toHaveBeenCalled()
+    expect(kontroler.pobierzStan()).toBe('bezczynny')
+  })
+
+  it('nie uruchamia nowego STT po anulowaniu ani po cichym końcu rozmowy', async () => {
+    const brakMowy = Object.assign(new Error('Nie usłyszałem wypowiedzi.'), { code: 'BRAK_MOWY' })
+    const glos = przygotujGlos([brakMowy])
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo: { obsluz: vi.fn(async () => odpowiedz) },
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.rozpocznij()
+    await czekajNa(() => kontroler.pobierzStan() === 'bezczynny')
+    await kontroler.anuluj()
+
+    expect(glos.rozpoznaj).toHaveBeenCalledTimes(1)
+    expect(kontroler.pobierzStan()).toBe('bezczynny')
   })
 
   it('prowadzi rozmowę przez centralny agent i kończy cicho po oknie follow-up', async () => {

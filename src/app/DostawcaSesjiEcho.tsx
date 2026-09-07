@@ -1,5 +1,4 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAplikacja } from './KontekstAplikacji'
 import { platforma } from '../platform/platforma'
 import { EchoService } from '../services/EchoService'
@@ -68,7 +67,6 @@ function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
 
 export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
-  const nawiguj = useNavigate()
   const magazynPamieci = useMemo(() => new MagazynPreferencjiEcho(), [])
   const echo = useMemo(() => {
     const rejestr = utworzDomyslnyRejestrNarzedziEcho({
@@ -94,13 +92,13 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
     ustawOczekujacaAkcje(odpowiedz.akcjaDoPotwierdzenia)
   }, [])
   const kontrolerGlosu = useMemo(() => new KontrolerSesjiGlosowejEcho({
-    glos: platforma.glosEcho, echo, nasluchujWywolania: true, konfiguracjaRozmowy: echo.agent.konfiguracjaRozmowy, cyklZycia: platforma.cyklZycia,
+    glos: platforma.glosEcho, echo, konfiguracjaRozmowy: echo.agent.konfiguracjaRozmowy, cyklZycia: platforma.cyklZycia,
     obsluga: {
-      zmienStan: ustawStan, wywolanoEcho: () => nawiguj('/echo'), odebranoCzesciowaWypowiedz: ustawCzesciowaWypowiedz, zglosBlad: ustawBladGlosu,
+      zmienStan: ustawStan, odebranoCzesciowaWypowiedz: ustawCzesciowaWypowiedz, zglosBlad: ustawBladGlosu,
       odebranoWypowiedz: (wypowiedz) => ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'uzytkownik', tresc: wypowiedz }]),
       odebranoOdpowiedz: (odpowiedz) => dodajOdpowiedz(odpowiedz, 'stt'),
     },
-  }), [dodajOdpowiedz, echo, nawiguj])
+  }), [dodajOdpowiedz, echo])
 
   useEffect(() => {
     if (!ustawienia.glosEcho) { void kontrolerGlosu.anuluj(); return }

@@ -36,6 +36,8 @@ public class EchoGlosPlugin extends Plugin {
     private boolean syntezatorGotowy;
     private PluginCall aktywneMowienie;
     private Runnable przekroczenieCzasu;
+    private long numerRozpoznawania;
+    private long numerBargeIn;
     private boolean wykrytoBargeIn;
     private String tekstBargeIn;
     private String tekstMowienia = "";
@@ -102,7 +104,7 @@ public class EchoGlosPlugin extends Plugin {
 
     private void uruchomRozpoznawanie(PluginCall wywolanie) {
         getActivity().runOnUiThread(() -> {
-            if (aktywneRozpoznawanie != null) {
+            if (aktywneRozpoznawanie != null || rozpoznawanie != null) {
                 wywolanie.reject("Sesja rozpoznawania mowy już trwa.", "SESJA_AKTYWNA");
                 return;
             }
@@ -120,8 +122,9 @@ public class EchoGlosPlugin extends Plugin {
                 return;
             }
             aktywneRozpoznawanie = wywolanie;
+            long numerSesji = ++numerRozpoznawania;
             rozpoznawanie = SpeechRecognizer.createSpeechRecognizer(getContext());
-            rozpoznawanie.setRecognitionListener(new SluchaczRozpoznawania());
+            rozpoznawanie.setRecognitionListener(new SluchaczRozpoznawania(numerSesji));
             Intent zamiar = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
             zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
             zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pl-PL");
@@ -134,7 +137,9 @@ public class EchoGlosPlugin extends Plugin {
             int limitPauzy = Math.max(500, Math.min(5000, zadanyLimitPauzy));
             zamiar.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, limitPauzy);
             zamiar.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, limitPauzy);
-            przekroczenieCzasu = () -> zakonczRozpoznawanie("Przekroczono czas oczekiwania na wypowiedź.", "TIMEOUT");
+            przekroczenieCzasu = () -> {
+                if (czyAktualneRozpoznawanie(numerSesji)) zakonczRozpoznawanie("Przekroczono czas oczekiwania na wypowiedź.", "TIMEOUT");
+            };
             obslugaCzasu.postDelayed(przekroczenieCzasu, limit);
             rozpoznawanie.startListening(zamiar);
             powiadomStan("sluchanie");
@@ -209,6 +214,7 @@ public class EchoGlosPlugin extends Plugin {
             rozpoznawanie.destroy();
             rozpoznawanie = null;
         }
+        numerRozpoznawania += 1;
         PluginCall wywolanie = aktywneRozpoznawanie;
         aktywneRozpoznawanie = null;
         if (wywolanie != null) wywolanie.reject(komunikat, kod);
@@ -221,6 +227,7 @@ public class EchoGlosPlugin extends Plugin {
             rozpoznawanie.destroy();
             rozpoznawanie = null;
         }
+        numerRozpoznawania += 1;
         PluginCall wywolanie = aktywneRozpoznawanie;
         aktywneRozpoznawanie = null;
         if (wywolanie == null) return;
@@ -228,9 +235,10 @@ public class EchoGlosPlugin extends Plugin {
     }
 
     private void uruchomWykrywanieBargeIn() {
-        if (rozpoznawanieBargeIn != null || !SpeechRecognizer.isRecognitionAvailable(getContext())) return;
+        if (aktywneMowienie == null || aktywneRozpoznawanie != null || rozpoznawanie != null || rozpoznawanieBargeIn != null || !SpeechRecognizer.isRecognitionAvailable(getContext())) return;
+        long numerSesji = ++numerBargeIn;
         rozpoznawanieBargeIn = SpeechRecognizer.createSpeechRecognizer(getContext());
-        rozpoznawanieBargeIn.setRecognitionListener(new SluchaczBargeIn());
+        rozpoznawanieBargeIn.setRecognitionListener(new SluchaczBargeIn(numerSesji));
         Intent zamiar = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         zamiar.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "pl-PL");
@@ -247,7 +255,16 @@ public class EchoGlosPlugin extends Plugin {
             rozpoznawanieBargeIn.destroy();
             rozpoznawanieBargeIn = null;
         }
+        numerBargeIn += 1;
         if (!wykrytoBargeIn) tekstMowienia = "";
+    }
+
+    private boolean czyAktualneRozpoznawanie(long numerSesji) {
+        return numerSesji == numerRozpoznawania && rozpoznawanie != null && aktywneRozpoznawanie != null;
+    }
+
+    private boolean czyAktualnyBargeIn(long numerSesji) {
+        return numerSesji == numerBargeIn && rozpoznawanieBargeIn != null;
     }
 
     private String normalizujTekst(String tekst) {
@@ -267,6 +284,12 @@ public class EchoGlosPlugin extends Plugin {
     }
 
     private class SluchaczBargeIn implements RecognitionListener {
+        private final long numerSesji;
+
+        SluchaczBargeIn(long numerSesji) {
+            this.numerSesji = numerSesji;
+        }
+
         @Override public void onReadyForSpeech(Bundle parametry) {}
         @Override public void onBeginningOfSpeech() {}
         @Override public void onRmsChanged(float poziom) {}
@@ -275,6 +298,7 @@ public class EchoGlosPlugin extends Plugin {
         @Override public void onEvent(int typ, Bundle parametry) {}
 
         @Override public void onPartialResults(Bundle wyniki) {
+            if (!czyAktualnyBargeIn(numerSesji) || aktywneMowienie == null) return;
             String tekst = tekstRozpoznania(wyniki);
             if (wykrytoBargeIn || !czyPotwierdzonyBargeIn(tekst)) return;
             wykrytoBargeIn = true;
@@ -283,13 +307,13 @@ public class EchoGlosPlugin extends Plugin {
         }
 
         @Override public void onResults(Bundle wyniki) {
+            if (!czyAktualnyBargeIn(numerSesji)) return;
             String tekst = tekstRozpoznania(wyniki);
             if (!wykrytoBargeIn || tekst.isEmpty()) {
                 zakonczWykrywanieBargeIn();
                 return;
             }
-            rozpoznawanieBargeIn.destroy();
-            rozpoznawanieBargeIn = null;
+            zakonczWykrywanieBargeIn();
             tekstMowienia = "";
             PluginCall wywolanie = aktywneRozpoznawanie;
             aktywneRozpoznawanie = null;
@@ -298,6 +322,7 @@ public class EchoGlosPlugin extends Plugin {
         }
 
         @Override public void onError(int blad) {
+            if (!czyAktualnyBargeIn(numerSesji)) return;
             if (wykrytoBargeIn && aktywneRozpoznawanie != null) {
                 PluginCall wywolanie = aktywneRozpoznawanie;
                 aktywneRozpoznawanie = null;
@@ -324,12 +349,19 @@ public class EchoGlosPlugin extends Plugin {
     }
 
     private class SluchaczRozpoznawania implements RecognitionListener {
-        @Override public void onReadyForSpeech(Bundle parametry) { powiadomStan("sluchanie"); }
-        @Override public void onBeginningOfSpeech() { powiadomStan("mowiUzytkownik"); }
+        private final long numerSesji;
+
+        SluchaczRozpoznawania(long numerSesji) {
+            this.numerSesji = numerSesji;
+        }
+
+        @Override public void onReadyForSpeech(Bundle parametry) { if (czyAktualneRozpoznawanie(numerSesji)) powiadomStan("sluchanie"); }
+        @Override public void onBeginningOfSpeech() { if (czyAktualneRozpoznawanie(numerSesji)) powiadomStan("mowiUzytkownik"); }
         @Override public void onRmsChanged(float poziom) {}
         @Override public void onBufferReceived(byte[] bufor) {}
-        @Override public void onEndOfSpeech() { powiadomStan("transkrypcja"); }
+        @Override public void onEndOfSpeech() { if (czyAktualneRozpoznawanie(numerSesji)) powiadomStan("transkrypcja"); }
         @Override public void onPartialResults(Bundle wyniki) {
+            if (!czyAktualneRozpoznawanie(numerSesji)) return;
             String tekst = tekstRozpoznania(wyniki);
             if (!tekst.isEmpty()) powiadomStan("mowiUzytkownik", tekst);
         }
@@ -337,6 +369,7 @@ public class EchoGlosPlugin extends Plugin {
 
         @Override
         public void onResults(Bundle wyniki) {
+            if (!czyAktualneRozpoznawanie(numerSesji)) return;
             String tekst = tekstRozpoznania(wyniki);
             if (tekst.isEmpty()) zakonczRozpoznawanie("Nie rozpoznano wypowiedzi.", "BRAK_MOWY");
             else zakonczRozpoznawanieWynikiem(tekst);
@@ -344,6 +377,7 @@ public class EchoGlosPlugin extends Plugin {
 
         @Override
         public void onError(int blad) {
+            if (!czyAktualneRozpoznawanie(numerSesji)) return;
             if (blad == SpeechRecognizer.ERROR_NO_MATCH || blad == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
                 zakonczRozpoznawanie("Nie usłyszałem wypowiedzi.", "BRAK_MOWY");
             } else if (blad == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
