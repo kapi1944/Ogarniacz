@@ -45,13 +45,16 @@ describe('Kontrolowana autonomia Echo', () => {
     expect(zapisz).toHaveBeenCalledWith({ tytul: 'ABC', termin: '2026-09-12' })
   })
 
-  it('przełącza centralnie tryb spokojny i szybki', async () => {
+  it('rozdziela tempo głosu od trybu rozmowy', async () => {
     const konfiguracja = new KonfiguracjaRozmowyEcho()
     const agent = new AgentEcho({ konfiguracjaRozmowy: konfiguracja })
-    await agent.obsluz('Echo, tryb szybki.')
+    await agent.obsluz('Echo, tempo szybkie.')
     expect(konfiguracja.pobierzTempo()).toBe('szybki')
     expect(konfiguracja.pobierzParametryGlosu().limitKontynuacjiMs).toBe(4_000)
-    await agent.obsluz('Echo, tryb spokojny.')
+    await agent.obsluz('Echo, tempo spokojne.')
+    expect(konfiguracja.pobierzTempo()).toBe('spokojny')
+    await agent.obsluz('Echo, tryb swobodny.')
+    expect(konfiguracja.pobierzTrybRozmowy()).toBe('swobodny')
     expect(konfiguracja.pobierzTempo()).toBe('spokojny')
   })
 })

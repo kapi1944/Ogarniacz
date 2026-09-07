@@ -30,6 +30,11 @@ describe.sequential('ustawienia aplikacji', () => {
     expect(wynik.harmonogram.dostepnoscDojazdu).toBe(DOMYSLNE_USTAWIENIA.harmonogram.dostepnoscDojazdu)
   })
 
+  it('zapamiętuje poprawny tryb rozmowy Echo i odrzuca błędny', () => {
+    expect(normalizujUstawienia({ trybRozmowyEcho: 'swobodny' }).trybRozmowyEcho).toBe('swobodny')
+    expect(normalizujUstawienia({ trybRozmowyEcho: 'inny' }).trybRozmowyEcho).toBe('szybki')
+  })
+
   it('ogranicza liczby do bezpiecznych zakresów', () => {
     const wynik = normalizujUstawienia({
       wyglad: { promienKart: 999, czasAnimacjiMs: Number.NaN },

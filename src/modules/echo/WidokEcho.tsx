@@ -150,7 +150,7 @@ export function czyPokazacSugestieEcho(
 
 export function WidokEcho() {
   const { ustawienia } = useAplikacja();
-  const { echo, kontrolerGlosu, stan, ustawStan, tryb, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz } = useSesjaEcho();
+  const { echo, kontrolerGlosu, stan, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz } = useSesjaEcho();
   const [tekst, ustawTekst] = useState("");
   const [wysylanie, ustawWysylanie] = useState(false);
   const koniecRozmowy = useRef<HTMLDivElement>(null);
@@ -437,6 +437,24 @@ export function WidokEcho() {
         <aside className="kolumna-echo">
           <Karta>
             <h2>Tryb rozmowy</h2>
+            <div className="segmenty" role="group" aria-label="Wybierz tryb rozmowy Echo">
+              {(['szybki', 'swobodny'] as const).map((wartosc) => (
+                <button
+                  type="button"
+                  className={trybRozmowy === wartosc ? 'aktywny' : ''}
+                  aria-pressed={trybRozmowy === wartosc}
+                  onClick={() => ustawTrybRozmowy(wartosc)}
+                  key={wartosc}
+                >
+                  {wartosc === 'szybki' ? 'Szybki' : 'Swobodny'}
+                </button>
+              ))}
+            </div>
+            <p className="tekst-pomocniczy">
+              {trybRozmowy === 'szybki'
+                ? 'Krótkie odpowiedzi i sprawne wykonanie poleceń.'
+                : 'Więcej miejsca na rozmowę, planowanie i warianty.'}
+            </p>
             <Znacznik
               wariant={tryb === "pelny_agent" ? "sukces" : "ostrzezenie"}
             >

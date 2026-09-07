@@ -12,7 +12,7 @@ function zadanie(): ZadanieModeluEcho {
   kontekst.dodajTure('echo', 'Spotkanie zostało przełożone.')
   kontekst.dodajTure('uzytkownik', 'Nie, yy jednak na piątek.')
   return {
-    instrukcjeSystemowe: [], kontekstCzasu: { teraz: '2026-09-06T12:00:00Z', dataLokalna: '2026-09-06', strefaCzasowa: 'Europe/Warsaw' },
+    instrukcjeSystemowe: [], trybRozmowy: 'szybki', kontekstCzasu: { teraz: '2026-09-06T12:00:00Z', dataLokalna: '2026-09-06', strefaCzasowa: 'Europe/Warsaw' },
     kontekstRozmowy: kontekst.migawka(), pamiecPreferencji: [],
     narzedzia: [
       { nazwa: 'update_task', opis: 'Zmień zadanie', rodzaj: 'zapis', ryzyko: 'niskie', schematArgumentow: {} },

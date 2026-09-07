@@ -642,6 +642,30 @@ describe("Agent Echo", () => {
     ).toContain("Dalsza wypowiedź");
   });
 
+  it("przekazuje tryb rozmowy do instrukcji bez resetowania kontekstu", async () => {
+    const provider = new ProviderSkryptowy([
+      { typ: "odpowiedz", tresc: "Krótka odpowiedź." },
+      { typ: "odpowiedz", tresc: "Pełniejsza odpowiedź." },
+    ]);
+    const agent = new AgentEcho({
+      provider,
+      rejestr: new RejestrNarzedziEcho(),
+    });
+
+    await agent.obsluz("Pierwsza wiadomość");
+    await agent.ustawTrybRozmowy("swobodny");
+    await agent.obsluz("Druga wiadomość");
+
+    expect(provider.zadania[0]?.trybRozmowy).toBe("szybki");
+    expect(provider.zadania[1]?.trybRozmowy).toBe("swobodny");
+    expect(provider.zadania[1]?.instrukcjeSystemowe.join(" ")).toContain(
+      "Tryb rozmowy: swobodny.",
+    );
+    expect(
+      provider.zadania[1]?.kontekstRozmowy.tury.map((tura) => tura.tresc),
+    ).toEqual(["Pierwsza wiadomość", "Krótka odpowiedź.", "Druga wiadomość"]);
+  });
+
   it.each([
     "Przypomnij mi jutro rano zadzwonić do mechanika.",
     "Ej, jutro rano muszę zadzwonić do mechanika, przypomnij mi.",

@@ -2,11 +2,11 @@ import { dzisiajIso } from '../../domain/fabryki'
 import { KontekstRozmowyEcho } from './KontekstRozmowyEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import { LokalnyModelProviderEcho } from './LokalnyModelProviderEcho'
-import { KonfiguracjaRozmowyEcho, rozpoznajZmianeAutomatycznegoOdczytuEcho, rozpoznajZmianeTempaEcho } from './KonfiguracjaRozmowyEcho'
+import { instrukcjaTrybuRozmowyEcho, KonfiguracjaRozmowyEcho, rozpoznajZmianeAutomatycznegoOdczytuEcho, rozpoznajZmianeTempaEcho, rozpoznajZmianeTrybuRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
 import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho } from './NarzedziaEcho'
-import type { AkcjaDoPotwierdzeniaEcho, DecyzjaModeluEcho, KontekstCzasuEcho, MagazynPamieciEcho, OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, ZadanieModeluEcho, ZrodloWejsciaEcho } from './typyEcho'
+import type { AkcjaDoPotwierdzeniaEcho, DecyzjaModeluEcho, KontekstCzasuEcho, MagazynPamieciEcho, OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, TrybRozmowyEcho, ZadanieModeluEcho, ZrodloWejsciaEcho } from './typyEcho'
 
 const INSTRUKCJE_SYSTEMOWE = [
   'Jesteś Echo, centralnym osobistym asystentem Ogarniacza. Rozmawiaj po polsku, naturalnie, spokojnie i zwięźle.',
@@ -29,6 +29,7 @@ export interface OpcjeAgentaEcho {
   pamiecPreferencjiWlaczona?: boolean
   konfiguracjaRozmowy?: KonfiguracjaRozmowyEcho
   ustawAutomatycznyOdczyt?: (wlaczony: boolean) => Promise<void>
+  ustawTrybRozmowy?: (trybRozmowy: TrybRozmowyEcho) => Promise<void>
 }
 
 function pobierzBiezacyCzas(): KontekstCzasuEcho {
@@ -85,6 +86,7 @@ export class AgentEcho {
   private readonly politykaPamieci = new PolitykaPamieciEcho()
   readonly konfiguracjaRozmowy: KonfiguracjaRozmowyEcho
   private readonly ustawAutomatycznyOdczyt?: (wlaczony: boolean) => Promise<void>
+  private readonly zapiszTrybRozmowy?: (trybRozmowy: TrybRozmowyEcho) => Promise<void>
   private oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
   private wynikiBiezacejTury: import('./typyEcho').WynikNarzedziaEcho[] = []
 
@@ -103,6 +105,7 @@ export class AgentEcho {
     this.pamiecPreferencjiWlaczona = opcje.pamiecPreferencjiWlaczona ?? true
     this.konfiguracjaRozmowy = opcje.konfiguracjaRozmowy ?? new KonfiguracjaRozmowyEcho()
     this.ustawAutomatycznyOdczyt = opcje.ustawAutomatycznyOdczyt
+    this.zapiszTrybRozmowy = opcje.ustawTrybRozmowy
   }
 
   async obsluz(tresc: string, zrodlo: ZrodloWejsciaEcho = 'tekst', sygnalZewnetrzny?: AbortSignal): Promise<OdpowiedzEcho> {
@@ -112,10 +115,15 @@ export class AgentEcho {
     this.onZmianaStanu?.('rozumiem')
     this.kontekst.dodajTure('uzytkownik', oczyszczona)
     this.kontekst.ustawTemat(this.kontekst.migawka().temat ?? (zrodlo === 'stt' ? 'rozmowa głosowa' : 'rozmowa tekstowa'))
+    const trybRozmowy = rozpoznajZmianeTrybuRozmowyEcho(oczyszczona)
+    if (trybRozmowy) {
+      await this.ustawTrybRozmowy(trybRozmowy)
+      return this.odpowiedzNaPreferencje(`Ustawiłem tryb rozmowy ${trybRozmowy === 'szybki' ? 'szybki' : 'swobodny'}.`)
+    }
     const tempo = rozpoznajZmianeTempaEcho(oczyszczona)
     if (tempo) {
       this.konfiguracjaRozmowy.ustawTempo(tempo)
-      return this.odpowiedzNaPreferencje(`Ustawiłem tryb ${tempo === 'szybki' ? 'szybki' : 'spokojny'}.`)
+      return this.odpowiedzNaPreferencje(`Ustawiłem tempo ${tempo === 'szybki' ? 'szybkie' : 'spokojne'}.`)
     }
     const automatycznyOdczyt = rozpoznajZmianeAutomatycznegoOdczytuEcho(oczyszczona)
     if (automatycznyOdczyt !== undefined) {
@@ -168,12 +176,18 @@ export class AgentEcho {
     this.oczekujacaAkcja = undefined
   }
 
+  async ustawTrybRozmowy(trybRozmowy: TrybRozmowyEcho): Promise<void> {
+    this.konfiguracjaRozmowy.ustawTrybRozmowy(trybRozmowy)
+    await this.zapiszTrybRozmowy?.(trybRozmowy)
+  }
+
   private async zbudujZadanieModelu(): Promise<ZadanieModeluEcho> {
     const pamiecPreferencji = this.pamiecPreferencjiWlaczona && this.magazynPamieci
       ? await this.magazynPamieci.wyszukaj('', 20)
       : []
     return {
-      instrukcjeSystemowe: INSTRUKCJE_SYSTEMOWE,
+      instrukcjeSystemowe: [...INSTRUKCJE_SYSTEMOWE, instrukcjaTrybuRozmowyEcho(this.konfiguracjaRozmowy.pobierzTrybRozmowy())],
+      trybRozmowy: this.konfiguracjaRozmowy.pobierzTrybRozmowy(),
       kontekstCzasu: this.pobierzCzas(),
       kontekstRozmowy: this.kontekst.migawka(),
       pamiecPreferencji,

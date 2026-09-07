@@ -5,7 +5,8 @@ import { EchoService } from '../services/EchoService'
 import { KontrolerSesjiGlosowejEcho, type StanSesjiGlosowejEcho } from '../services/echo/KontrolerSesjiGlosowejEcho'
 import { utworzDomyslnyRejestrNarzedziEcho, WykonawcaNarzedziEcho } from '../services/echo/NarzedziaEcho'
 import { MagazynPreferencjiEcho, preferencjePlanowaniaZPamieci } from '../services/echo/PamiecPreferencjiEcho'
-import type { AkcjaDoPotwierdzeniaEcho, OdpowiedzEcho, TrybEcho, WartoscDomyslnaEcho, WynikNarzedziaEcho, ZrodloWejsciaEcho } from '../services/echo/typyEcho'
+import { KonfiguracjaRozmowyEcho } from '../services/echo/KonfiguracjaRozmowyEcho'
+import type { AkcjaDoPotwierdzeniaEcho, OdpowiedzEcho, TrybEcho, TrybRozmowyEcho, WartoscDomyslnaEcho, WynikNarzedziaEcho, ZrodloWejsciaEcho } from '../services/echo/typyEcho'
 import type { NazwaModulu } from '../domain/typy'
 
 export interface WiadomoscEcho {
@@ -24,6 +25,8 @@ interface WartoscSesjiEcho {
   stan: StanSesjiGlosowejEcho
   ustawStan: (stan: StanSesjiGlosowejEcho) => void
   tryb: TrybEcho
+  trybRozmowy: TrybRozmowyEcho
+  ustawTrybRozmowy: (trybRozmowy: TrybRozmowyEcho) => void
   wiadomosci: WiadomoscEcho[]
   ustawWiadomosci: React.Dispatch<React.SetStateAction<WiadomoscEcho[]>>
   oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
@@ -68,6 +71,7 @@ function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
 export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
   const magazynPamieci = useMemo(() => new MagazynPreferencjiEcho(), [])
+  const konfiguracjaRozmowy = useMemo(() => new KonfiguracjaRozmowyEcho(ustawienia.trybRozmowyEcho), [])
   const echo = useMemo(() => {
     const rejestr = utworzDomyslnyRejestrNarzedziEcho({
       pobierzPreferencjePlanowania: async () => ustawienia.pamiecPreferencjiEcho ? preferencjePlanowaniaZPamieci(await magazynPamieci.wyszukaj('', 20)) : {},
@@ -78,14 +82,23 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
       if (!modul || ustawienia.modulyEcho.includes(modul)) return true
       return `Nie mam obecnie dostępu do modułu ${etykietyModulowEcho[modul] ?? modul}. Możesz włączyć go w Ustawieniach Echo.`
     })
-    return new EchoService({ rejestr, wykonawca, magazynPamieci, pamiecPreferencjiWlaczona: ustawienia.pamiecPreferencjiEcho, ustawAutomatycznyOdczyt: async (automatycznyOdczytEcho) => { await zapiszUstawienia({ automatycznyOdczytEcho }) } })
-  }, [magazynPamieci, ustawienia.internetEcho, ustawienia.modulyEcho, ustawienia.pamiecPreferencjiEcho, zapiszUstawienia])
+    return new EchoService({ rejestr, wykonawca, magazynPamieci, pamiecPreferencjiWlaczona: ustawienia.pamiecPreferencjiEcho, konfiguracjaRozmowy, ustawAutomatycznyOdczyt: async (automatycznyOdczytEcho) => { await zapiszUstawienia({ automatycznyOdczytEcho }) }, ustawTrybRozmowy: async (trybRozmowy) => { await zapiszUstawienia({ trybRozmowyEcho: trybRozmowy }) } })
+  }, [konfiguracjaRozmowy, magazynPamieci, ustawienia.internetEcho, ustawienia.modulyEcho, ustawienia.pamiecPreferencjiEcho, zapiszUstawienia])
   const [stan, ustawStan] = useState<StanSesjiGlosowejEcho>('bezczynny')
   const [tryb, ustawTryb] = useState<TrybEcho>(echo.agent.provider.tryb)
+  const [trybRozmowy, ustawTrybRozmowyStan] = useState<TrybRozmowyEcho>(konfiguracjaRozmowy.pobierzTrybRozmowy())
   const [wiadomosci, ustawWiadomosci] = useState<WiadomoscEcho[]>([{ id: 'powitanie', autor: 'echo', tresc: 'Napisz albo powiedz, co masz na głowie. Z Echo możesz rozmawiać normalnie.' }])
   const [oczekujacaAkcja, ustawOczekujacaAkcje] = useState<AkcjaDoPotwierdzeniaEcho>()
   const [bladGlosu, ustawBladGlosu] = useState('')
   const [czesciowaWypowiedz, ustawCzesciowaWypowiedz] = useState('')
+  useEffect(() => {
+    konfiguracjaRozmowy.ustawTrybRozmowy(ustawienia.trybRozmowyEcho)
+    ustawTrybRozmowyStan(ustawienia.trybRozmowyEcho)
+  }, [konfiguracjaRozmowy, ustawienia.trybRozmowyEcho])
+  const ustawTrybRozmowy = useCallback((nowyTryb: TrybRozmowyEcho) => {
+    ustawTrybRozmowyStan(nowyTryb)
+    void echo.ustawTrybRozmowy(nowyTryb)
+  }, [echo])
   const dodajOdpowiedz = useCallback((odpowiedz: OdpowiedzEcho, zrodloWejscia: ZrodloWejsciaEcho) => {
     ustawTryb(odpowiedz.tryb)
     ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'echo', tresc: odpowiedz.tekst, zrodloWejscia, ryzyko: odpowiedz.ryzyko, wartosciDomyslne: odpowiedz.wartosciDomyslne, wyniki: odpowiedz.wyniki }])
@@ -106,7 +119,7 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
     return () => { void kontrolerGlosu.zniszcz() }
   }, [kontrolerGlosu, ustawienia.glosEcho])
 
-  return <KontekstSesjiEcho.Provider value={{ echo, kontrolerGlosu, stan, ustawStan, tryb, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz }}>{children}</KontekstSesjiEcho.Provider>
+  return <KontekstSesjiEcho.Provider value={{ echo, kontrolerGlosu, stan, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz }}>{children}</KontekstSesjiEcho.Provider>
 }
 
 export function useSesjaEcho() {
