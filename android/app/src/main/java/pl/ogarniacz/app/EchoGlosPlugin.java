@@ -41,6 +41,7 @@ public class EchoGlosPlugin extends Plugin {
     private boolean wykrytoBargeIn;
     private String tekstBargeIn;
     private String tekstMowienia = "";
+    private String identyfikatorMowienia;
 
     @Override
     public void load() {
@@ -50,22 +51,35 @@ public class EchoGlosPlugin extends Plugin {
             syntezatorGotowy = wynik != TextToSpeech.LANG_MISSING_DATA && wynik != TextToSpeech.LANG_NOT_SUPPORTED;
             syntezator.setOnUtteranceProgressListener(new UtteranceProgressListener() {
                 @Override public void onStart(String identyfikator) {
-                    powiadomStan("mowienie");
+                    getActivity().runOnUiThread(() -> {
+                        if (!czyAktualneMowienie(identyfikator)) return;
+                        powiadomStan("mowienie");
+                        uruchomWykrywanieBargeIn();
+                    });
                 }
 
                 @Override public void onDone(String identyfikator) {
-                    zakonczWykrywanieBargeIn();
-                    zakonczMowienie(null);
+                    getActivity().runOnUiThread(() -> {
+                        if (!czyAktualneMowienie(identyfikator)) return;
+                        zakonczWykrywanieBargeIn();
+                        zakonczMowienie(null);
+                    });
                 }
 
                 @Override public void onStop(String identyfikator, boolean przerwane) {
-                    if (!wykrytoBargeIn) zakonczWykrywanieBargeIn();
-                    zakonczMowienie("Wypowiedź została przerwana.");
+                    getActivity().runOnUiThread(() -> {
+                        if (!czyAktualneMowienie(identyfikator)) return;
+                        if (!wykrytoBargeIn) zakonczWykrywanieBargeIn();
+                        zakonczMowienie("Wypowiedź została przerwana.");
+                    });
                 }
 
                 @Override public void onError(String identyfikator) {
-                    zakonczWykrywanieBargeIn();
-                    zakonczMowienie("Syntezator mowy nie odczytał odpowiedzi.");
+                    getActivity().runOnUiThread(() -> {
+                        if (!czyAktualneMowienie(identyfikator)) return;
+                        zakonczWykrywanieBargeIn();
+                        zakonczMowienie("Syntezator mowy nie odczytał odpowiedzi.");
+                    });
                 }
             });
         }));
@@ -121,6 +135,10 @@ public class EchoGlosPlugin extends Plugin {
                 }
                 return;
             }
+            if (rozpoznawanieBargeIn != null) {
+                wywolanie.reject("Trwa przechwytywanie wypowiedzi przerywającej Echo.", "SESJA_STT_AKTYWNA");
+                return;
+            }
             aktywneRozpoznawanie = wywolanie;
             long numerSesji = ++numerRozpoznawania;
             rozpoznawanie = SpeechRecognizer.createSpeechRecognizer(getContext());
@@ -169,23 +187,34 @@ public class EchoGlosPlugin extends Plugin {
             return;
         }
         getActivity().runOnUiThread(() -> {
-            if (aktywneMowienie != null) zakonczMowienie("Wypowiedź została przerwana.");
+            if (aktywneRozpoznawanie != null || rozpoznawanie != null) {
+                wywolanie.reject("Nie można rozpocząć odczytu podczas rozpoznawania mowy.", "SESJA_STT_AKTYWNA");
+                return;
+            }
+            if (aktywneMowienie != null) {
+                zakonczWykrywanieBargeIn();
+                if (syntezator != null) syntezator.stop();
+                zakonczMowienie("Wypowiedź została przerwana.");
+            }
             aktywneMowienie = wywolanie;
             tekstMowienia = tekst;
             wykrytoBargeIn = false;
             tekstBargeIn = null;
             String identyfikator = "echo-" + System.nanoTime();
+            identyfikatorMowienia = identyfikator;
             if (syntezator.speak(tekst, TextToSpeech.QUEUE_FLUSH, null, identyfikator) == TextToSpeech.ERROR) {
                 zakonczMowienie("Nie udało się uruchomić syntezatora mowy.");
                 return;
             }
-            uruchomWykrywanieBargeIn();
         });
     }
 
     @PluginMethod
     public void zatrzymajMowienie(PluginCall wywolanie) {
         getActivity().runOnUiThread(() -> {
+            wykrytoBargeIn = false;
+            tekstBargeIn = null;
+            zakonczWykrywanieBargeIn();
             if (syntezator != null) syntezator.stop();
             zakonczMowienie("Wypowiedź została przerwana.");
             wywolanie.resolve();
@@ -195,9 +224,14 @@ public class EchoGlosPlugin extends Plugin {
     private void zakonczMowienie(String blad) {
         PluginCall wywolanie = aktywneMowienie;
         aktywneMowienie = null;
+        identyfikatorMowienia = null;
         if (wywolanie == null) return;
         if (blad == null) wywolanie.resolve();
         else wywolanie.reject(blad, "ANULOWANO");
+    }
+
+    private boolean czyAktualneMowienie(String identyfikator) {
+        return aktywneMowienie != null && identyfikator.equals(identyfikatorMowienia);
     }
 
     private JSObject wynikRozpoznawania(String tekst) {
@@ -328,6 +362,8 @@ public class EchoGlosPlugin extends Plugin {
                 aktywneRozpoznawanie = null;
                 wywolanie.reject("Nie usłyszałem wypowiedzi.", "BRAK_MOWY");
             }
+            wykrytoBargeIn = false;
+            tekstBargeIn = null;
             zakonczWykrywanieBargeIn();
         }
     }

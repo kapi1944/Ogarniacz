@@ -29,7 +29,7 @@ function komunikatBledu(blad: unknown) {
 function czyCicheZakonczenie(blad: unknown) {
   const kod = typeof blad === 'object' && blad && 'code' in blad ? String(blad.code) : ''
   const komunikat = komunikatBledu(blad)
-  return kod === 'ANULOWANO' || kod === 'BRAK_MOWY' || /anulowano|nie usłyszałem|czas oczekiwania/i.test(komunikat)
+  return kod === 'ANULOWANO' || kod === 'BRAK_MOWY' || kod === 'TIMEOUT' || /anulowano|nie usłyszałem|czas oczekiwania/i.test(komunikat)
 }
 
 export class KontrolerSesjiGlosowejEcho {
@@ -39,6 +39,7 @@ export class KontrolerSesjiGlosowejEcho {
   private kontrolerOdpowiedzi?: AbortController
   private usunStanGlosu?: () => void
   private usunCyklZycia?: () => void
+  private inicjalizacja?: Promise<void>
   private aplikacjaAktywna = true
   private rozpoznawanieAktywne = false
   private przerwanoMowieniePrzezWtracenie = false
@@ -46,11 +47,16 @@ export class KontrolerSesjiGlosowejEcho {
   constructor(private readonly zaleznosci: ZaleznosciKontrolera) {}
 
   async inicjalizuj() {
+    if (this.inicjalizacja) return this.inicjalizacja
+    this.inicjalizacja = this.inicjalizujJednorazowo()
+    return this.inicjalizacja
+  }
+
+  private async inicjalizujJednorazowo() {
     this.usunStanGlosu = await this.zaleznosci.glos.nasluchujStanu((stan, tekst) => {
       if (stan === 'bargeIn' && this.stan === 'mowienie') {
         this.przerwanoMowieniePrzezWtracenie = true
         this.ustawStan('sluchanie')
-        void this.zaleznosci.glos.zatrzymajMowienie()
         return
       }
       if (!this.rozpoznawanieAktywne || !this.aktywna) return
@@ -66,6 +72,8 @@ export class KontrolerSesjiGlosowejEcho {
   }
 
   async rozpocznij() {
+    await this.inicjalizuj()
+    if (!this.aplikacjaAktywna) return
     if (this.aktywna) await this.anuluj()
     const numer = ++this.numerSesji
     this.aktywna = true
@@ -96,9 +104,13 @@ export class KontrolerSesjiGlosowejEcho {
   }
 
   async zniszcz() {
+    await this.inicjalizacja
     await this.anuluj()
     this.usunStanGlosu?.()
     this.usunCyklZycia?.()
+    this.usunStanGlosu = undefined
+    this.usunCyklZycia = undefined
+    this.inicjalizacja = undefined
   }
 
   pobierzStan() {
@@ -118,8 +130,9 @@ export class KontrolerSesjiGlosowejEcho {
           kontynuacja ? parametry.limitKontynuacjiMs : parametry.limitPierwszejWypowiedziMs,
           parametry.limitPauzyMs,
           (tekst) => {
+            if (!this.czyAktualna(numer) || !this.rozpoznawanieAktywne) return
             this.ustawStan('mowiUzytkownik')
-            if (this.czyAktualna(numer)) this.ustawCzesciowaWypowiedz(tekst)
+            this.ustawCzesciowaWypowiedz(tekst)
           },
         )
         this.rozpoznawanieAktywne = false

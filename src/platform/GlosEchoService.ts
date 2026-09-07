@@ -47,23 +47,25 @@ export function utworzUslugeGlosuEcho(czyAndroid: boolean) {
     },
     async rozpoznaj(limitMs = 15_000, limitPauzyMs?: number, odebranoCzesciowy?: (tekst: string) => void): Promise<string> {
       if (czyAndroid) return (await wtyczka.rozpocznijNasluchiwanie({ limitMs, limitPauzyMs })).tekst
+      if (rozpoznawaniePrzegladarki) throw Object.assign(new Error('Sesja rozpoznawania mowy już trwa.'), { code: 'SESJA_AKTYWNA' })
       const Konstruktor = konstruktorRozpoznawania()
       if (!Konstruktor) throw new Error('Rozpoznawanie mowy nie jest dostępne w tej przeglądarce.')
       return new Promise((rozwiaz, odrzuc) => {
         const rozpoznawanie = new Konstruktor()
         rozpoznawaniePrzegladarki = rozpoznawanie
         let zakonczone = false
-        const licznik = window.setTimeout(() => {
-          rozpoznawanie.abort()
-          odrzuc(new Error('Przekroczono czas oczekiwania na wypowiedź.'))
-        }, limitMs)
+        let licznik: number | undefined
         const zakoncz = (wynik: () => void) => {
           if (zakonczone) return
           zakonczone = true
-          window.clearTimeout(licznik)
+          if (licznik !== undefined) window.clearTimeout(licznik)
           rozpoznawaniePrzegladarki = undefined
           wynik()
         }
+        licznik = window.setTimeout(() => {
+          zakoncz(() => odrzuc(Object.assign(new Error('Przekroczono czas oczekiwania na wypowiedź.'), { code: 'TIMEOUT' })))
+          rozpoznawanie.abort()
+        }, limitMs)
         rozpoznawanie.lang = 'pl-PL'
         rozpoznawanie.continuous = false
         rozpoznawanie.interimResults = true

@@ -126,6 +126,47 @@ describe('KontrolerSesjiGlosowejEcho', () => {
     expect(kontroler.pobierzStan()).toBe('bezczynny')
   })
 
+  it('ignoruje partial spóźnionej sesji podczas nowej rozmowy', async () => {
+    const glos = przygotujGlos([])
+    const czesciowe: string[] = []
+    const obslugiCzesciowe: Array<(tekst: string) => void> = []
+    glos.rozpoznaj = vi.fn((_limit, _pauza, odebranoCzesciowy) => {
+      obslugiCzesciowe.push(odebranoCzesciowy)
+      return new Promise<string>(() => undefined)
+    })
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo: { obsluz: vi.fn(async () => odpowiedz) },
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoCzesciowaWypowiedz: (tekst) => czesciowe.push(tekst), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.rozpocznij()
+    await czekajNa(() => obslugiCzesciowe.length === 1)
+    await kontroler.ponow()
+    await czekajNa(() => obslugiCzesciowe.length === 2)
+    obslugiCzesciowe[0]('Stary fragment')
+
+    expect(czesciowe.at(-1)).toBe('')
+    await kontroler.anuluj()
+  })
+
+  it('kończy rozmowę po timeoutcie bez ponownego uruchomienia STT', async () => {
+    const timeout = Object.assign(new Error('Przekroczono czas oczekiwania na wypowiedź.'), { code: 'TIMEOUT' })
+    const glos = przygotujGlos([timeout])
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo: { obsluz: vi.fn(async () => odpowiedz) },
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.rozpocznij()
+    await czekajNa(() => kontroler.pobierzStan() === 'bezczynny')
+
+    expect(glos.rozpoznaj).toHaveBeenCalledTimes(1)
+  })
+
   it('prowadzi rozmowę przez centralny agent i kończy cicho po oknie follow-up', async () => {
     const brakMowy = Object.assign(new Error('Nie usłyszałem wypowiedzi.'), { code: 'BRAK_MOWY' })
     const glos = przygotujGlos(['Przypomnij mi jutro po pracy.', brakMowy])
@@ -241,9 +282,10 @@ describe('KontrolerSesjiGlosowejEcho', () => {
     await kontroler.rozpocznij()
     await czekajNa(() => kontroler.pobierzStan() === 'mowienie')
     odebranoStan?.('bargeIn')
+    zakonczMowienie?.()
     await czekajNa(() => (glos.rozpoznaj as ReturnType<typeof vi.fn>).mock.calls.length === 2)
 
-    expect(glos.zatrzymajMowienie).toHaveBeenCalledTimes(1)
+    expect(glos.zatrzymajMowienie).not.toHaveBeenCalled()
     expect(echo.obsluz).toHaveBeenNthCalledWith(2, 'Popraw to na jutro', 'stt', expect.any(AbortSignal))
     await kontroler.anuluj()
   })
