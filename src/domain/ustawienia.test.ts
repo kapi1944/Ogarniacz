@@ -84,6 +84,14 @@ describe.sequential('ustawienia aplikacji', () => {
     expect(wynik.pulpit.kafelki).toEqual(DOMYSLNE_KAFELKI_PULPITU)
   })
 
+  it('zachowuje tylko poprawne, unikalne odrzucone sugestie Echo', () => {
+    const wynik = normalizujUstawienia({
+      pulpit: { odrzuconeSugestieEcho: ['konflikt:a', 'konflikt:a', 7, 'praca:b'] },
+    })
+
+    expect(wynik.pulpit.odrzuconeSugestieEcho).toEqual(['konflikt:a', 'praca:b'])
+  })
+
   it('ignoruje nieznany typ kafelka i zachowuje poprawną widoczność oraz kolejność', () => {
     const wynik = normalizujUstawienia({
       pulpit: {

@@ -602,6 +602,7 @@ export interface UstawieniaPulpitu {
   pokazWykonane: boolean
   efektyAsap: boolean
   limitAlertow: number
+  odrzuconeSugestieEcho: string[]
   kafelki: KonfiguracjaKafelkaPulpitu[]
 }
 

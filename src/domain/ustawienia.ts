@@ -48,6 +48,7 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
     pokazWykonane: false,
     efektyAsap: true,
     limitAlertow: 4,
+    odrzuconeSugestieEcho: [],
     kafelki: DOMYSLNE_KAFELKI_PULPITU,
   },
   harmonogram: {
@@ -174,6 +175,11 @@ function kafelkiPulpitu(wartosc: unknown): KonfiguracjaKafelkaPulpitu[] {
   }).sort((a, b) => a.kolejnosc - b.kolejnosc || a.typ.localeCompare(b.typ, 'pl')).map((kafelek, kolejnosc) => ({ ...kafelek, kolejnosc }))
 }
 
+function odrzuconeSugestieEcho(wartosc: unknown): string[] {
+  if (!Array.isArray(wartosc)) return []
+  return [...new Set(wartosc.filter((element): element is string => typeof element === 'string' && element.length > 0 && element.length <= 500))].slice(-30)
+}
+
 export function normalizujUstawienia(wartosc: unknown): Ustawienia {
   const zrodlo = jakoRekord(wartosc)
   const wyglad = jakoRekord(zrodlo.wyglad)
@@ -238,6 +244,7 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
       pokazWykonane: logiczna(pulpit.pokazWykonane, domyslne.pulpit.pokazWykonane),
       efektyAsap: logiczna(pulpit.efektyAsap, domyslne.pulpit.efektyAsap),
       limitAlertow: liczba(pulpit.limitAlertow, 3, 5, domyslne.pulpit.limitAlertow),
+      odrzuconeSugestieEcho: odrzuconeSugestieEcho(pulpit.odrzuconeSugestieEcho),
       kafelki: kafelkiPulpitu(pulpit.kafelki),
     },
     harmonogram: {

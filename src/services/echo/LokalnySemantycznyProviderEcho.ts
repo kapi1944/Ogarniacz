@@ -81,6 +81,7 @@ type ZamiarPrzekrojowyEcho =
       typ: "zakupy_z_przypomnieniem";
       etap: "lista" | "gotowe";
       pozycje: string[];
+      zadania?: string[];
       data: string;
       godzina: string;
     }
@@ -570,6 +571,24 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
         typ: 'utworz_przypomnienie', tytul, data, godzina, okreslenieCzasu: `około ${godzina}`,
         wartosciDomyslne: [{ pole: 'godzina', wartosc: godzina, opis, pochodzenie: konflikt ? 'sugestia' : 'wartosc_wyliczona' }],
       }, opis);
+    }
+
+    const zakupyZadanieIPrzypomnienie = tekst.match(
+      /(?:jutro|pojutrze|dzisiaj|dziś).*?(?:muszę|musze)\s+kupić\s+(.+?)\s+i\s+odebrać\s+(.+?)[.!].*?przypomnij.*?dodaj\s+(.+?)\s+do\s+zakup[oó]w/i,
+    );
+    if (zakupyZadanieIPrzypomnienie && czas.data) {
+      return this.wywolajPrzekrojowo(
+        {
+          typ: "zakupy_z_przypomnieniem",
+          etap: "lista",
+          pozycje: [zakupyZadanieIPrzypomnienie[3].trim()],
+          zadania: [`Odebrać ${zakupyZadanieIPrzypomnienie[2].trim()}`],
+          data: czas.data,
+          godzina: czas.godzina ?? DOMYSLNA_GODZINA_RANO,
+        },
+        "list_shopping",
+        {},
+      );
     }
 
     const zakupyZPrzypomnieniem = tekst.match(
@@ -1598,6 +1617,15 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
           nazwa: "add_shopping_item",
           argumenty: { listaId: listaZakupow.id, nazwa },
         })),
+        ...(zamiar.zadania ?? []).map((tytul) => ({
+          id: `lokalne-${++this.licznikWywolan}`,
+          nazwa: "create_task",
+          argumenty: {
+            tytul,
+            termin: zamiar.data,
+            godzina: zamiar.godzina,
+          },
+        })),
         {
           id: `lokalne-${++this.licznikWywolan}`,
           nazwa: "create_reminder",
@@ -1623,7 +1651,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     if (zamiar.typ === "zakupy_z_przypomnieniem")
       return {
         typ: "odpowiedz",
-        tresc: `Dodałem ${zamiar.pozycje.join(" i ")} do listy zakupów oraz ustawiłem przypomnienie.`,
+        tresc: `Dodałem ${zamiar.pozycje.join(" i ")} do listy zakupów${zamiar.zadania?.length ? `, ${zamiar.zadania.join(" i ")}` : ""} oraz ustawiłem przypomnienie.`,
         aktualizacjaKontekstu,
       };
     if (zamiar.typ === "ocena_mechanika") {

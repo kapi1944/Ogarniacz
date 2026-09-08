@@ -193,6 +193,39 @@ describe("Agent Echo", () => {
     expect(odpowiedz.wyniki).toHaveLength(4);
   });
 
+  it("łączy zakupy, zadanie i przypomnienie w jednym naturalnym poleceniu", async () => {
+    await Promise.all([
+      baza.tabela("listyZakupow").clear(),
+      baza.tabela("pozycjeZakupow").clear(),
+      baza.tabela("przypomnienia").clear(),
+      baza.tabela("zadania").clear(),
+    ]);
+    await pobierzRepozytorium("listyZakupow").zapisz({
+      ...utworzMetadane("lista-wielokrokowa"),
+      nazwa: "Zakupy",
+      aktywna: true,
+    });
+    const agent = new AgentEcho({
+      provider: new LokalnySemantycznyProviderEcho(),
+      pobierzCzas: () => ({
+        teraz: "2026-08-31T10:00:00.000Z",
+        dataLokalna: "2026-08-31",
+        strefaCzasowa: "Europe/Warsaw",
+      }),
+    });
+
+    const odpowiedz = await agent.obsluz(
+      "Jutro po pracy muszę kupić karmę i odebrać paczkę. Przypomnij mi i dodaj karmę do zakupów.",
+    );
+
+    expect(odpowiedz.tekst).toContain("Dodałem karmę do listy zakupów");
+    expect((await pobierzRepozytorium("pozycjeZakupow").lista()).map((pozycja) => pozycja.nazwa)).toContain("karmę");
+    expect((await pobierzRepozytorium("zadania").lista())).toEqual(expect.arrayContaining([
+      expect.objectContaining({ tytul: "Odebrać paczkę", termin: "2026-09-01", godzinaElementu: "17:00" }),
+    ]));
+    expect((await pobierzRepozytorium("przypomnienia").lista())[0]?.czas).toContain("2026-09-01");
+  });
+
   it.each([
     [
       "Czy dam radę jutro po pracy pojechać do mechanika?",
