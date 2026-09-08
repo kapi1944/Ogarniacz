@@ -182,16 +182,28 @@ function rozpoznajCzas(
   }[] = [];
   for (const [indeks, slowo] of lista.entries()) {
     if (slowo.uproszczone === "rano") {
+      godziny.push({
+        indeksy: [indeks], godzina: DOMYSLNA_GODZINA_RANO, etykieta: 'rano',
+        domyslna: { pole: 'godzina', wartosc: DOMYSLNA_GODZINA_RANO, opis: 'Domyślna pora rano.', pochodzenie: 'zalozenie' },
+      });
       continue;
     } else if (
       slowo.uproszczone === "po" &&
       lista[indeks + 1]?.uproszczone === "pracy"
     ) {
+      godziny.push({
+        indeksy: [indeks, indeks + 1], godzina: DOMYSLNA_GODZINA_PO_PRACY, etykieta: 'po pracy',
+        domyslna: { pole: 'godzina', wartosc: DOMYSLNA_GODZINA_PO_PRACY, opis: 'Domyślna pora po pracy.', pochodzenie: 'zalozenie' },
+      });
       continue;
     } else if (
       slowo.uproszczone === "po" &&
       lista[indeks + 1]?.uproszczone === "poludniu"
     ) {
+      godziny.push({
+        indeksy: [indeks, indeks + 1], godzina: '15:00', etykieta: 'po południu',
+        domyslna: { pole: 'godzina', wartosc: '15:00', opis: 'Domyślna pora po południu.', pochodzenie: 'zalozenie' },
+      });
       continue;
     } else if (/^(?:[01]?\d|2[0-3])(?::[0-5]\d)?$/.test(slowo.uproszczone)) {
       const [godzina, minuta = "00"] = slowo.uproszczone.split(":");
@@ -238,6 +250,34 @@ function rozlozCzasIso(czas: string): { data: string; godzina: string } {
     data: `${wartosc.getFullYear()}-${String(wartosc.getMonth() + 1).padStart(2, "0")}-${String(wartosc.getDate()).padStart(2, "0")}`,
     godzina: `${String(wartosc.getHours()).padStart(2, "0")}:${String(wartosc.getMinutes()).padStart(2, "0")}`,
   };
+}
+
+function minutyGodziny(godzina: string): number {
+  const [godziny, minuty] = godzina.split(':').map(Number)
+  return godziny * 60 + minuty
+}
+
+function godzinaZMinut(minuty: number): string {
+  const normalna = ((minuty % 1440) + 1440) % 1440
+  return `${String(Math.floor(normalna / 60)).padStart(2, '0')}:${String(normalna % 60).padStart(2, '0')}`
+}
+
+function polowaPracy(od: string, doGodziny: string): string {
+  return godzinaZMinut(Math.round((minutyGodziny(od) + minutyGodziny(doGodziny)) / 30) * 15)
+}
+
+function znajdzKonflikt(
+  data: string,
+  godzina: string,
+  kontekst: ZadanieModeluEcho['kontekstPlanowania'],
+) {
+  const chwila = `${data}T${godzina}:00`
+  return kontekst?.zajetePrzedzialy.find((przedzial) => przedzial.od <= chwila && chwila < przedzial.do)
+}
+
+function najblizszaGodzinaPoKonflikcie(koniec: string): string {
+  const { godzina } = rozlozCzasIso(koniec)
+  return godzinaZMinut(minutyGodziny(godzina) + 15)
 }
 
 function ostatniaWypowiedz(kontekst: MigawkaKontekstuEcho): string {
@@ -377,7 +417,7 @@ function pytanieDlaDoprecyzowania(
   const ile = doprecyzowanie.brakujacePola.length;
   const wstep =
     ile > 1
-      ? `Potrzebuję jeszcze ${ile === 2 ? "dwóch" : "kilku"} informacji. `
+      ? "Potrzebuję jeszcze kilku informacji. "
       : "";
   if (
     doprecyzowanie.intencja === "utworz_wizyte" &&
@@ -510,6 +550,27 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     const zadania = ostatnieZadania(zadanie.kontekstRozmowy);
     const ostatnieZadanie = zadania.at(-1);
     const tokeny = new Set(lista.map(({ uproszczone }) => uproszczone));
+    const czyUtworzeniePrzypomnienia = lista.some(
+      ({ uproszczone: slowo }) => ["dodaj", "dopisz"].includes(slowo) || slowo.startsWith("przypomnij"),
+    );
+    const czyPolowaPracy = /połow(?:ie|y) pracy/i.test(tekst);
+    if (czyUtworzeniePrzypomnienia && czyPolowaPracy) {
+      const tytul = zbudujTytul(lista, czas.indeksy).replace(/\b(?:w\s+)?połowie\s+pracy\b/gi, '').replace(/\s+/g, ' ').trim();
+      if (!tytul) return this.pytanie({ intencja: 'utworz_przypomnienie', brakujacePola: ['tytul'], zebrane: {} });
+      const praca = zadanie.kontekstPlanowania?.praca;
+      if (!praca) return this.pytanie({ intencja: 'utworz_przypomnienie', brakujacePola: ['godzina'], zebrane: { tytul, data: czas.data ?? zadanie.kontekstCzasu.dataLokalna } });
+      const data = czas.data ?? zadanie.kontekstCzasu.dataLokalna;
+      const srodek = polowaPracy(praca.od, praca.do);
+      const konflikt = znajdzKonflikt(data, srodek, zadanie.kontekstPlanowania);
+      const godzina = konflikt ? najblizszaGodzinaPoKonflikcie(konflikt.do) : srodek;
+      const opis = konflikt
+        ? `Pracujesz ${praca.od}–${praca.do}, więc połowa wypada około ${srodek}. Masz wtedy „${konflikt.tytul}” ${rozlozCzasIso(konflikt.od).godzina}–${rozlozCzasIso(konflikt.do).godzina}; proponuję ${godzina}.`
+        : `Pracujesz ${praca.od}–${praca.do}, więc połowa wypada około ${srodek}.`;
+      return this.propozycjaTerminu(zadanie, {
+        typ: 'utworz_przypomnienie', tytul, data, godzina, okreslenieCzasu: `około ${godzina}`,
+        wartosciDomyslne: [{ pole: 'godzina', wartosc: godzina, opis, pochodzenie: konflikt ? 'sugestia' : 'wartosc_wyliczona' }],
+      }, opis);
+    }
 
     const zakupyZPrzypomnieniem = tekst.match(
       /dodaj\s+(.+?)\s+i\s+(.+?)\s+do\s+zakup[oó]w\s+i\s+przypomnij/i,
@@ -1100,17 +1161,13 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       }
     }
 
-    const czyUtworzenie = lista.some(
-      ({ uproszczone: slowo }) =>
-        ["dodaj", "dopisz"].includes(slowo) || slowo.startsWith("przypomnij"),
-    );
-    if (czyUtworzenie) {
+    if (czyUtworzeniePrzypomnienia) {
       const tytul = zbudujTytul(lista, czas.indeksy);
-      const brakujacePola = [
-        ...(!tytul ? ["tytul" as const] : []),
-        ...(!czas.data ? ["data" as const] : []),
-        ...(!czas.godzina ? ["godzina" as const] : []),
-      ];
+      const brakujacePola = !tytul
+        ? ["tytul" as const, ...(!czas.data ? ["data" as const] : [])]
+        : !czas.data
+          ? ["data" as const]
+          : !czas.godzina ? ["godzina" as const] : [];
       if (brakujacePola.length > 0)
         return this.pytanie({
           intencja: "utworz_przypomnienie",
@@ -1125,7 +1182,19 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
             ),
           },
         });
-      return this.wywolaj(zamiarUtworzenia(tytul, czas));
+      const zamiar = zamiarUtworzenia(tytul, czas);
+      const konflikt = znajdzKonflikt(zamiar.data, zamiar.godzina, zadanie.kontekstPlanowania);
+      if (konflikt) {
+        const godzina = najblizszaGodzinaPoKonflikcie(konflikt.do);
+        const opis = `Masz wtedy „${konflikt.tytul}” ${rozlozCzasIso(konflikt.od).godzina}–${rozlozCzasIso(konflikt.do).godzina}. Proponuję ${godzina}, bez przesuwania istniejącego planu.`;
+        return this.propozycjaTerminu(zadanie, {
+          ...zamiar,
+          godzina,
+          okreslenieCzasu: `o ${godzina}`,
+          wartosciDomyslne: [{ pole: 'godzina', wartosc: godzina, opis, pochodzenie: 'sugestia' }],
+        }, opis);
+      }
+      return this.wywolaj(zamiar);
     }
 
     return {
@@ -1140,6 +1209,28 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     oczekujace: OczekujaceDoprecyzowanieEcho,
   ): DecyzjaModeluEcho {
     const tekst = ostatniaWypowiedz(zadanie.kontekstRozmowy);
+    if (oczekujace.propozycja && oczekujace.intencja === 'utworz_przypomnienie') {
+      if (/^(tak|jasne|potwierdzam|zapisz|zgoda)[.!]?$/i.test(tekst.trim())) {
+        const { tytul, data, godzina } = oczekujace.zebrane;
+        return this.wywolaj({
+          typ: 'utworz_przypomnienie', tytul: tytul!, data: data!, godzina: godzina!,
+          okreslenieCzasu: oczekujace.zebrane.okreslenieCzasu ?? `o ${godzina}`,
+          wartosciDomyslne: [{ pole: 'godzina', wartosc: godzina!, opis: oczekujace.propozycja.opis, pochodzenie: oczekujace.propozycja.pochodzenie }],
+        });
+      }
+      if (/\bpo obiedzie\b/i.test(tekst)) {
+        const obiad = zadanie.kontekstPlanowania?.preferowanaGodzinaObiadu;
+        if (!obiad) return this.pytanie({ ...oczekujace, brakujacePola: ['godzina'], propozycja: undefined });
+        const godzina = godzinaZMinut(minutyGodziny(obiad.godzina) + 30);
+        const opis = `Z preferencji pamiętam obiad około ${obiad.godzina}, więc proponuję ${godzina}.`;
+        return this.propozycjaTerminu(zadanie, {
+          typ: 'utworz_przypomnienie', tytul: oczekujace.zebrane.tytul!, data: oczekujace.zebrane.data!, godzina,
+          okreslenieCzasu: `po obiedzie, o ${godzina}`,
+          wartosciDomyslne: [{ pole: 'godzina', wartosc: godzina, opis, pochodzenie: 'preferencja' }],
+        }, opis);
+      }
+      return this.pytanie(oczekujace);
+    }
     if (oczekujace.intencja === "utworz_wizyte") {
       const czas = rozpoznajCzas(
         slowa(tekst),
@@ -1243,11 +1334,11 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       );
     }
     if (!zebrane.godzina && czas.godzina) zebrane.godzina = czas.godzina;
-    const brakujacePola = [
-      ...(!zebrane.tytul ? ["tytul" as const] : []),
-      ...(!zebrane.data ? ["data" as const] : []),
-      ...(!zebrane.godzina ? ["godzina" as const] : []),
-    ];
+    const brakujacePola = !zebrane.tytul
+      ? ["tytul" as const, ...(!zebrane.data ? ["data" as const] : [])]
+      : !zebrane.data
+        ? ["data" as const]
+        : !zebrane.godzina ? ["godzina" as const] : [];
     if (brakujacePola.length > 0)
       return this.pytanie({ ...oczekujace, brakujacePola, zebrane });
     const uzupelnionyCzas: RozpoznanyCzas = {
@@ -1270,6 +1361,27 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
         ostatniaIntencja: oczekujace.intencja,
         oczekujaceDoprecyzowanie: oczekujace,
         oczekujacaAkcja: null,
+      },
+    };
+  }
+
+  private propozycjaTerminu(zadanie: ZadanieModeluEcho, zamiar: ZamiarSemantycznyEcho, opis: string): DecyzjaModeluEcho {
+    const tresc = zadanie.trybRozmowy === 'szybki'
+      ? `${opis} Zapisać?`
+      : `${opis} To sugestia, nie zapisany fakt. Zapisać przypomnienie „${zamiar.tytul}”?`;
+    return {
+      typ: 'pytanie',
+      tresc,
+      wartosciDomyslne: zamiar.wartosciDomyslne,
+      aktualizacjaKontekstu: {
+        ostatniaIntencja: zamiar.typ,
+        oczekujaceDoprecyzowanie: {
+          intencja: 'utworz_przypomnienie',
+          brakujacePola: [],
+          zebrane: { tytul: zamiar.tytul, data: zamiar.data, godzina: zamiar.godzina, okreslenieCzasu: zamiar.okreslenieCzasu },
+          propozycja: { opis, pochodzenie: zamiar.wartosciDomyslne[0]?.pochodzenie ?? 'sugestia' },
+        },
+        wartosciDomyslne: zamiar.wartosciDomyslne,
       },
     };
   }

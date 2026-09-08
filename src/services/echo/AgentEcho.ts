@@ -1,16 +1,20 @@
 import { dzisiajIso } from '../../domain/fabryki'
 import { KontekstRozmowyEcho } from './KontekstRozmowyEcho'
+import { pobierzKontekstPlanowaniaEcho } from './KontekstPlanowaniaEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import { LokalnyModelProviderEcho } from './LokalnyModelProviderEcho'
 import { instrukcjaTrybuRozmowyEcho, KonfiguracjaRozmowyEcho, rozpoznajZmianeAutomatycznegoOdczytuEcho, rozpoznajZmianeTempaEcho, rozpoznajZmianeTrybuRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
 import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho } from './NarzedziaEcho'
-import type { AkcjaDoPotwierdzeniaEcho, DecyzjaModeluEcho, KontekstCzasuEcho, MagazynPamieciEcho, OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, TrybRozmowyEcho, ZadanieModeluEcho, ZrodloWejsciaEcho } from './typyEcho'
+import type { AkcjaDoPotwierdzeniaEcho, DecyzjaModeluEcho, KontekstCzasuEcho, KontekstPlanowaniaEcho, MagazynPamieciEcho, OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, TrybRozmowyEcho, ZadanieModeluEcho, ZrodloWejsciaEcho } from './typyEcho'
 
 const INSTRUKCJE_SYSTEMOWE = [
   'Jesteś Echo, centralnym osobistym asystentem Ogarniacza. Rozmawiaj po polsku, naturalnie i rzeczowo. Styl odpowiedzi wynika z wybranego trybu rozmowy.',
   'Nie zgaduj danych użytkownika. Pobieraj tylko potrzebne dane za pomocą dostępnych narzędzi.',
+  'Wyraźnie rozróżniaj fakty z danych, preferencje użytkownika, wartości wyliczone, założenia i sugestie. Nie zapisuj sugestii ani założeń jako faktów bez akceptacji.',
+  'Przy niejasnym czasie najpierw zaproponuj wartość wynikającą z grafiku, planu lub jawnej preferencji. Zadaj jedno krótkie pytanie tylko wtedy, gdy brak wpływa na rezultat.',
+  'Przed zmianą kolidującą z istniejącym planem wskaż konflikt i zaproponuj najmniej ingerujący wolny termin. Nie przesuwaj istniejących danych po cichu.',
   'Nie znasz implementacji bazy i nie możesz wykonywać kodu, SQL ani poleceń systemowych.',
   'Jeśli brakuje istotnej informacji, zadaj jedno naturalne pytanie. Jeśli danych nie ma, powiedz wprost, że ich nie ma.',
   'Możesz proponować działania, ale decyzję o wykonaniu i potwierdzeniu podejmuje warstwa polityki.',
@@ -30,6 +34,7 @@ export interface OpcjeAgentaEcho {
   konfiguracjaRozmowy?: KonfiguracjaRozmowyEcho
   ustawAutomatycznyOdczyt?: (wlaczony: boolean) => Promise<void>
   ustawTrybRozmowy?: (trybRozmowy: TrybRozmowyEcho) => Promise<void>
+  pobierzKontekstPlanowania?: (kontekstCzasu: KontekstCzasuEcho, preferencje: readonly import('./typyEcho').KandydatPamieciEcho[]) => Promise<KontekstPlanowaniaEcho>
 }
 
 function pobierzBiezacyCzas(): KontekstCzasuEcho {
@@ -87,6 +92,7 @@ export class AgentEcho {
   readonly konfiguracjaRozmowy: KonfiguracjaRozmowyEcho
   private readonly ustawAutomatycznyOdczyt?: (wlaczony: boolean) => Promise<void>
   private readonly zapiszTrybRozmowy?: (trybRozmowy: TrybRozmowyEcho) => Promise<void>
+  private readonly pobierzKontekstPlanowania: NonNullable<OpcjeAgentaEcho['pobierzKontekstPlanowania']>
   private oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
   private wynikiBiezacejTury: import('./typyEcho').WynikNarzedziaEcho[] = []
 
@@ -106,6 +112,7 @@ export class AgentEcho {
     this.konfiguracjaRozmowy = opcje.konfiguracjaRozmowy ?? new KonfiguracjaRozmowyEcho()
     this.ustawAutomatycznyOdczyt = opcje.ustawAutomatycznyOdczyt
     this.zapiszTrybRozmowy = opcje.ustawTrybRozmowy
+    this.pobierzKontekstPlanowania = opcje.pobierzKontekstPlanowania ?? pobierzKontekstPlanowaniaEcho
   }
 
   async obsluz(tresc: string, zrodlo: ZrodloWejsciaEcho = 'tekst', sygnalZewnetrzny?: AbortSignal): Promise<OdpowiedzEcho> {
@@ -185,12 +192,14 @@ export class AgentEcho {
     const pamiecPreferencji = this.pamiecPreferencjiWlaczona && this.magazynPamieci
       ? await this.magazynPamieci.wyszukaj('', 20)
       : []
+    const kontekstCzasu = this.pobierzCzas()
     return {
       instrukcjeSystemowe: [...INSTRUKCJE_SYSTEMOWE, instrukcjaTrybuRozmowyEcho(this.konfiguracjaRozmowy.pobierzTrybRozmowy())],
       trybRozmowy: this.konfiguracjaRozmowy.pobierzTrybRozmowy(),
-      kontekstCzasu: this.pobierzCzas(),
+      kontekstCzasu,
       kontekstRozmowy: this.kontekst.migawka(),
       pamiecPreferencji,
+      kontekstPlanowania: await this.pobierzKontekstPlanowania(kontekstCzasu, pamiecPreferencji),
       narzedzia: this.rejestr.definicje(),
       wynikiBiezacejTury: [...this.wynikiBiezacejTury],
     }
@@ -218,7 +227,7 @@ export class AgentEcho {
       const tresc = decyzja.tresc.trim() || 'Nie mam jeszcze wystarczających danych, żeby odpowiedzieć.'
       this.kontekst.dodajTure('echo', tresc)
       this.kontekst.ustawNierozwiazanePytanie(decyzja.typ === 'pytanie' ? tresc : undefined)
-      return this.odpowiedz(tresc, 'niskie', decyzja.typ === 'odpowiedz' ? decyzja.wartosciDomyslne : undefined, decyzja.typ === 'pytanie')
+      return this.odpowiedz(tresc, 'niskie', decyzja.wartosciDomyslne, decyzja.typ === 'pytanie')
     }
 
     if (decyzja.wywolania.length === 0) return undefined

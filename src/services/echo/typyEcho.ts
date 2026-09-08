@@ -29,6 +29,13 @@ export interface WartoscDomyslnaEcho {
   pole: 'godzina'
   wartosc: string
   opis: string
+  pochodzenie?: 'fakt' | 'preferencja' | 'wartosc_wyliczona' | 'zalozenie' | 'sugestia'
+}
+
+export interface KontekstPlanowaniaEcho {
+  praca?: { od: string; do: string; zrodlo: 'grafik' }
+  zajetePrzedzialy: { tytul: string; od: string; do: string; zrodlo: 'blok_czasu' | 'wizyta' }[]
+  preferowanaGodzinaObiadu?: { godzina: string; zrodlo: 'preferencja' }
 }
 
 export interface OczekujaceDoprecyzowanieEcho {
@@ -46,6 +53,7 @@ export interface OczekujaceDoprecyzowanieEcho {
     kod?: string
     tresc?: string
   }
+  propozycja?: { opis: string; pochodzenie: 'fakt' | 'preferencja' | 'wartosc_wyliczona' | 'zalozenie' | 'sugestia' }
 }
 
 export interface AktualizacjaKontekstuEcho {
@@ -90,7 +98,7 @@ export interface WywolanieNarzedziaEcho {
 
 export type DecyzjaModeluEcho =
   | { typ: 'odpowiedz'; tresc: string; aktualizacjaKontekstu?: AktualizacjaKontekstuEcho; wartosciDomyslne?: WartoscDomyslnaEcho[] }
-  | { typ: 'pytanie'; tresc: string; aktualizacjaKontekstu?: AktualizacjaKontekstuEcho }
+  | { typ: 'pytanie'; tresc: string; aktualizacjaKontekstu?: AktualizacjaKontekstuEcho; wartosciDomyslne?: WartoscDomyslnaEcho[] }
   | { typ: 'narzedzia'; wywolania: WywolanieNarzedziaEcho[]; aktualizacjaKontekstu?: AktualizacjaKontekstuEcho }
 
 export interface ZadanieModeluEcho {
@@ -100,6 +108,7 @@ export interface ZadanieModeluEcho {
   kontekstCzasu: KontekstCzasuEcho
   kontekstRozmowy: MigawkaKontekstuEcho
   pamiecPreferencji: KandydatPamieciEcho[]
+  kontekstPlanowania?: KontekstPlanowaniaEcho
   narzedzia: DefinicjaNarzedziaEcho[]
 }
 

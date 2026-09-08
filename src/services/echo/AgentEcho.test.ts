@@ -803,12 +803,12 @@ describe("Agent Echo", () => {
   });
 
   it("dopytuje o godzinę zamiast automatycznie uzupełniać ją dla przypomnienia", async () => {
-    const { agent, przeloz } = utworzAgentaRozmowy();
+    const { agent, utworz } = utworzAgentaRozmowy();
     const utworzenie = await agent.obsluz("Dodaj jutro telefon do mechanika.");
 
     expect(utworzenie.tekst).toBe('O której?');
     const zmiana = await agent.obsluz("O 9.");
-    expect(new Date(przeloz.mock.calls[0][0].czas).getHours()).toBe(9);
+    expect(new Date(utworz.mock.calls[0][0].czas).getHours()).toBe(9);
     expect(zmiana.wartosciDomyslne).toEqual([]);
   });
 

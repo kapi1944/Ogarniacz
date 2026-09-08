@@ -200,6 +200,12 @@ export class WykonawcaNarzedziEcho {
         wywolanieId: wywolanie.id, nazwa: wywolanie.nazwa,
         status: 'wymaga_potwierdzenia', komunikat: konflikt,
       };
+      if (narzedzie.ryzyko === 'wysokie' && !potwierdzone) return {
+        wywolanieId: wywolanie.id,
+        nazwa: wywolanie.nazwa,
+        status: 'wymaga_potwierdzenia',
+        komunikat: narzedzie.opis,
+      };
       const decyzja = this.polityka.ocen(narzedzie.ryzyko, potwierdzone, rodzajNarzedziaEcho(narzedzie));
       if (!decyzja.dozwolone) return {
         wywolanieId: wywolanie.id,
