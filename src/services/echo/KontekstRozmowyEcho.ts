@@ -19,6 +19,7 @@ export class KontekstRozmowyEcho {
   private wartosciDomyslne: MigawkaKontekstuEcho['wartosciDomyslne'] = []
   private nierozwiazanePytanie?: string
   private odniesieniaCzasowe: string[] = []
+  private planWykonania?: MigawkaKontekstuEcho['planWykonania']
 
   dodajTure(rola: TuraRozmowyEcho['rola'], tresc: string): void {
     this.tury.push({ rola, tresc, znacznikCzasu: new Date().toISOString() })
@@ -50,6 +51,7 @@ export class KontekstRozmowyEcho {
   ustawNierozwiazanePytanie(pytanie?: string): void { this.nierozwiazanePytanie = pytanie }
   ustawOdniesieniaCzasowe(odniesienia: string[]): void { this.odniesieniaCzasowe = odniesienia.slice(-6) }
   ustawStreszczenie(streszczenie?: string): void { this.streszczenie = streszczenie }
+  ustawPlanWykonania(plan?: MigawkaKontekstuEcho['planWykonania']): void { this.planWykonania = structuredClone(plan) }
 
   ustawEncje(encje: MigawkaKontekstuEcho['ostatnieEncje']): void {
     this.ostatnieEncje = encje.slice(-LIMIT_ENCJI)
@@ -74,6 +76,7 @@ export class KontekstRozmowyEcho {
       wartosciDomyslne: [...this.wartosciDomyslne],
       nierozwiazanePytanie: this.nierozwiazanePytanie,
       odniesieniaCzasowe: [...this.odniesieniaCzasowe],
+      planWykonania: structuredClone(this.planWykonania),
     }
   }
 }

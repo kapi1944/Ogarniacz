@@ -80,6 +80,7 @@ export interface MigawkaKontekstuEcho {
   wartosciDomyslne: WartoscDomyslnaEcho[]
   nierozwiazanePytanie?: string
   odniesieniaCzasowe: string[]
+  planWykonania?: PlanWykonaniaEcho
 }
 
 export interface DefinicjaNarzedziaEcho {
@@ -94,6 +95,28 @@ export interface WywolanieNarzedziaEcho {
   id: string
   nazwa: string
   argumenty: unknown
+  zaleznosci?: string[]
+}
+
+export interface KrokPlanuWykonaniaEcho {
+  id: string
+  kolejnosc: number
+  narzedzie: string
+  opis: string
+  parametry: unknown
+  zaleznosci: string[]
+  ryzyko: RyzykoDzialania
+  wymagaPotwierdzenia: boolean
+  status: 'oczekuje' | 'wykonany' | 'blad' | 'pominiety'
+  komunikat?: string
+}
+
+export interface PlanWykonaniaEcho {
+  id: string
+  cel: string
+  utworzonoAt: string
+  status: 'oczekuje' | 'w_trakcie' | 'wykonany' | 'czesciowo_wykonany'
+  kroki: KrokPlanuWykonaniaEcho[]
 }
 
 export type DecyzjaModeluEcho =
@@ -123,6 +146,7 @@ export interface AkcjaDoPotwierdzeniaEcho {
   wywolanie: WywolanieNarzedziaEcho
   ryzyko: RyzykoDzialania
   opis: string
+  plan?: PlanWykonaniaEcho
 }
 
 export interface OdpowiedzEcho {

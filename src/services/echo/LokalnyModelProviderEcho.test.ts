@@ -40,6 +40,23 @@ describe('Lokalny model Echo — kontrakt i granica danych', () => {
     expect(wyslane.stream).toBe(false)
   })
 
+  it('zwraca uporządkowany plan kilku istniejących narzędzi z zależnościami', async () => {
+    const { model } = utworzProvider({
+      ...decyzja,
+      kroki: [
+        { id: 'k1', narzedzie: 'search_tasks', argumenty: '{}', zaleznosci: [] },
+        { id: 'k2', narzedzie: 'update_task', argumenty: decyzja.argumenty, zaleznosci: ['k1'] },
+      ],
+    })
+    expect(await model.odpowiedz(zadanie(), new AbortController().signal)).toMatchObject({
+      typ: 'narzedzia',
+      wywolania: [
+        { id: 'k1', nazwa: 'search_tasks', zaleznosci: [] },
+        { id: 'k2', nazwa: 'update_task', zaleznosci: ['k1'] },
+      ],
+    })
+  })
+
   it.each([
     { ...intencja, pewnosc: 0.4 },
     { ...intencja, brakujacePola: ['godzina'] },

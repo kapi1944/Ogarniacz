@@ -6,6 +6,7 @@ import { LokalnyModelProviderEcho } from './LokalnyModelProviderEcho'
 import { instrukcjaTrybuRozmowyEcho, KonfiguracjaRozmowyEcho, rozpoznajZmianeAutomatycznegoOdczytuEcho, rozpoznajZmianeTempaEcho, rozpoznajZmianeTrybuRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
 import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
+import { najwyzszeRyzykoPlanu, opisPlanuDlaUzytkownika, utworzPlanWykonaniaEcho } from './PlanWykonaniaEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho } from './NarzedziaEcho'
 import type { AkcjaDoPotwierdzeniaEcho, DecyzjaModeluEcho, KontekstCzasuEcho, KontekstPlanowaniaEcho, MagazynPamieciEcho, OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, TrybRozmowyEcho, ZadanieModeluEcho, ZrodloWejsciaEcho } from './typyEcho'
 
@@ -70,6 +71,7 @@ function korektaOczekujacejAkcji(tekst: string, akcja: AkcjaDoPotwierdzeniaEcho,
 }
 
 function podsumujAkcje(akcja: AkcjaDoPotwierdzeniaEcho): string {
+  if (akcja.plan) return opisPlanuDlaUzytkownika(akcja.plan)
   const argumenty = akcja.wywolanie.argumenty && typeof akcja.wywolanie.argumenty === 'object' ? akcja.wywolanie.argumenty as Record<string, unknown> : {}
   const tytul = typeof argumenty.tytul === 'string' ? ` „${argumenty.tytul}”` : ''
   const termin = typeof argumenty.termin === 'string' ? `, termin: ${argumenty.termin}` : ''
@@ -139,7 +141,7 @@ export class AgentEcho {
       return this.odpowiedzNaPreferencje(automatycznyOdczyt ? 'Będę czytał odpowiedzi na głos.' : 'Będę odpowiadał tylko tekstem.')
     }
     if (this.oczekujacaAkcja && /^(tak|jasne|potwierdzam|zapisz|zgoda)[.!]?$/i.test(oczyszczona)) return this.potwierdz(this.oczekujacaAkcja, sygnalZewnetrzny)
-    if (this.oczekujacaAkcja) {
+    if (this.oczekujacaAkcja && !this.oczekujacaAkcja.plan) {
       const poprawiona = korektaOczekujacejAkcji(oczyszczona, this.oczekujacaAkcja, this.pobierzCzas().dataLokalna)
       if (poprawiona) {
         this.oczekujacaAkcja = poprawiona
@@ -167,9 +169,15 @@ export class AgentEcho {
     if (!this.oczekujacaAkcja || this.oczekujacaAkcja.wywolanie.id !== akcja.wywolanie.id) {
       return this.odpowiedz('To potwierdzenie nie jest już aktualne. Powiedz, co mam zrobić ponownie.', 'umiarkowane')
     }
-    const wywolanie = this.oczekujacaAkcja.wywolanie
+    const oczekujaca = this.oczekujacaAkcja
+    const wywolanie = oczekujaca.wywolanie
     this.oczekujacaAkcja = undefined
     this.onZmianaStanu?.('wykonuje')
+    if (oczekujaca.plan) {
+      const odpowiedzCzesciowa = await this.wykonajPlan(oczekujaca.plan, true)
+      if (odpowiedzCzesciowa) return odpowiedzCzesciowa
+      return this.uruchomPetle(sygnalZewnetrzny)
+    }
     const wynik = await this.wykonawca.wykonaj(wywolanie, true)
     this.wynikiBiezacejTury = [wynik]
     this.kontekst.dodajWynikNarzedzia(wynik)
@@ -181,6 +189,7 @@ export class AgentEcho {
 
   anulujPotwierdzenie(): void {
     this.oczekujacaAkcja = undefined
+    this.kontekst.ustawPlanWykonania()
   }
 
   async ustawTrybRozmowy(trybRozmowy: TrybRozmowyEcho): Promise<void> {
@@ -231,6 +240,23 @@ export class AgentEcho {
     }
 
     if (decyzja.wywolania.length === 0) return undefined
+    if (decyzja.wywolania.length > 1 || this.oczekujacaAkcja?.plan) {
+      const cel = [...this.kontekst.migawka().tury].reverse().find((tura) => tura.rola === 'uzytkownik')?.tresc ?? 'Wykonanie polecenia'
+      const plan = utworzPlanWykonaniaEcho(cel, decyzja.wywolania, this.rejestr)
+      this.kontekst.ustawPlanWykonania(plan)
+      this.oczekujacaAkcja = undefined
+      if (plan.kroki.some((krok) => krok.wymagaPotwierdzenia)) {
+        const akcja: AkcjaDoPotwierdzeniaEcho = {
+          wywolanie: decyzja.wywolania[0],
+          ryzyko: najwyzszeRyzykoPlanu(plan),
+          opis: 'Plan wielokrokowy',
+          plan,
+        }
+        this.oczekujacaAkcja = structuredClone(akcja)
+        return { tekst: opisPlanuDlaUzytkownika(plan), ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
+      }
+      return this.wykonajPlan(plan, false)
+    }
     for (const wywolanie of decyzja.wywolania) {
       this.onZmianaStanu?.('wykonuje')
       const wynik = await this.wykonawca.wykonaj(wywolanie)
@@ -260,6 +286,44 @@ export class AgentEcho {
       }
     }
     return undefined
+  }
+
+  private async wykonajPlan(plan: import('./typyEcho').PlanWykonaniaEcho, potwierdzone: boolean): Promise<OdpowiedzEcho | undefined> {
+    plan.status = 'w_trakcie'
+    this.kontekst.ustawPlanWykonania(plan)
+    const statusy = new Map<string, import('./typyEcho').KrokPlanuWykonaniaEcho['status']>()
+    for (const krok of plan.kroki) {
+      const zaleznoscNieudana = krok.zaleznosci.some((id) => statusy.get(id) !== 'wykonany')
+      if (zaleznoscNieudana) {
+        krok.status = 'pominiety'
+        krok.komunikat = 'Pominięto, ponieważ zależny krok nie został wykonany.'
+        const wynik = { wywolanieId: krok.id, nazwa: krok.narzedzie, status: 'zablokowane' as const, komunikat: krok.komunikat }
+        this.wynikiBiezacejTury.push(wynik)
+        this.kontekst.dodajWynikNarzedzia(wynik)
+        statusy.set(krok.id, krok.status)
+        continue
+      }
+      this.onZmianaStanu?.('wykonuje')
+      const wynik = await this.wykonawca.wykonaj({ id: krok.id, nazwa: krok.narzedzie, argumenty: krok.parametry }, potwierdzone)
+      this.wynikiBiezacejTury.push(wynik)
+      this.kontekst.dodajWynikNarzedzia(wynik)
+      krok.status = wynik.status === 'wykonane' ? 'wykonany' : 'blad'
+      krok.komunikat = wynik.komunikat
+      statusy.set(krok.id, krok.status)
+      if (wynik.status === 'wykonane') {
+        this.kontekst.ustawOstatniaAkcje(krok.narzedzie, krok.parametry)
+        this.zapamietajEncjeWyniku(krok.narzedzie, wynik.dane)
+      }
+      this.kontekst.ustawPlanWykonania(plan)
+    }
+    const wykonane = plan.kroki.filter((krok) => krok.status === 'wykonany')
+    const nieudane = plan.kroki.filter((krok) => krok.status === 'blad' || krok.status === 'pominiety')
+    plan.status = nieudane.length ? 'czesciowo_wykonany' : 'wykonany'
+    this.kontekst.ustawPlanWykonania(plan)
+    if (!nieudane.length) return undefined
+    const czescWykonana = wykonane.length ? `Wykonałem: ${wykonane.map((krok) => krok.opis).join(', ')}. ` : 'Nie udało się wykonać żadnego kroku. '
+    const czescNieudana = `Nie udało się: ${nieudane.map((krok) => `${krok.opis}${krok.komunikat ? ` — ${krok.komunikat}` : ''}`).join(', ')}.`
+    return this.odpowiedz(`${czescWykonana}${czescNieudana}`, najwyzszeRyzykoPlanu(plan))
   }
 
   private async pobierzDecyzje(zadanie: ZadanieModeluEcho, sygnalZewnetrzny?: AbortSignal): Promise<DecyzjaModeluEcho> {
