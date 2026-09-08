@@ -1,13 +1,26 @@
 import { configDefaults, defineConfig } from 'vitest/config'
+import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const pakiet = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
+const commitShaBundle = (() => {
+  const commitZeSrodowiska = process.env.GITHUB_SHA?.trim()
+  if (commitZeSrodowiska && /^[a-f0-9]{40}$/i.test(commitZeSrodowiska)) return commitZeSrodowiska.toLowerCase()
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim().toLowerCase()
+  } catch {
+    return 'nieznany'
+  }
+})()
+const wersjaBundle = process.env.WEB_OTA_BUNDLE_VERSION?.trim() || commitShaBundle.slice(0, 7)
 
 export default defineConfig({
   define: {
     __WERSJA_APLIKACJI__: JSON.stringify(pakiet.version),
+    __WERSJA_BUNDLE__: JSON.stringify(wersjaBundle),
+    __COMMIT_SHA_BUNDLE__: JSON.stringify(commitShaBundle),
   },
   plugins: [
     react(),

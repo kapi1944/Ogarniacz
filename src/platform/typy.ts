@@ -83,6 +83,38 @@ export interface WynikUruchomieniaInstalatora {
   wymagaZgody: boolean
 }
 
+export interface ManifestAktualizacjiWeb {
+  bundleVersion: string
+  commitSha: string
+  url: string
+  sha256: string
+  signature: string
+  minNativeVersionCode: number
+  publishedAt: string
+}
+
+export interface MetadaneBundleWeb {
+  bundleVersion: string
+  commitSha: string
+  installedAt: string
+  source: 'builtin' | 'web-ota'
+}
+
+export interface StanAktualizacjiWeb {
+  aktualny: MetadaneBundleWeb
+  poprzedni?: MetadaneBundleWeb
+  odrzucone: Array<Pick<MetadaneBundleWeb, 'bundleVersion' | 'commitSha'>>
+  pending: boolean
+}
+
+export interface WynikSprawdzeniaAktualizacjiWeb {
+  manifest: ManifestAktualizacjiWeb
+  stan: StanAktualizacjiWeb
+  czyDostepna: boolean
+  czyOdrzucona: boolean
+  wymagaNowszegoApk: boolean
+}
+
 export interface OdebraneDaneUdostepniania {
   tekst: string
   tytul?: string
@@ -137,5 +169,18 @@ export interface PlatformaOgarniacza {
       obslugaStanu: (stan: 'pobieranie' | 'weryfikacja', procent: number) => void,
     ) => Promise<PobranaAktualizacja>
     uruchomInstalator: (aktualizacja: PobranaAktualizacja) => Promise<WynikUruchomieniaInstalatora>
+  }
+  aktualizacjeWeb: {
+    skonfigurowane: () => boolean
+    pobierzStan: () => Promise<StanAktualizacjiWeb>
+    sprawdz: () => Promise<WynikSprawdzeniaAktualizacjiWeb>
+    pobierzIAktywuj: (
+      manifest: ManifestAktualizacjiWeb,
+      ponownaProba: boolean,
+      obslugaStanu: (stan: 'pobieranie' | 'weryfikacja' | 'rozpakowywanie', procent: number) => void,
+    ) => Promise<void>
+    potwierdzGotowoscBundle: () => Promise<void>
+    przywrocPoprzednia: () => Promise<void>
+    przywrocWbudowana: () => Promise<void>
   }
 }

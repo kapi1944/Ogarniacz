@@ -17,6 +17,9 @@ android/keystore.properties
 *.keystore
 *.p12
 *.pfx
+android/web-ota-public-key.pem
+*web-ota-private-key*.pem
+artifacts/
 
 # Editor directories and files
 .vscode/*

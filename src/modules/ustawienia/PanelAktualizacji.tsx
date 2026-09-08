@@ -3,6 +3,7 @@ import { Download, RefreshCw } from 'lucide-react'
 import { Karta, Znacznik } from '../../components/Interfejs'
 import { platforma } from '../../platform/platforma'
 import type { PobranaAktualizacja, WynikSprawdzeniaAktualizacji } from '../../platform/typy'
+import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 
 type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'gotowe' | 'zgoda' | 'blad'
 
@@ -99,8 +100,8 @@ export function PanelAktualizacji() {
   const zajete = etap === 'sprawdzanie' || etap === 'pobieranie' || etap === 'weryfikacja'
   const wariant = etap === 'blad' ? 'blad' : etap === 'dostepna' || etap === 'zgoda' ? 'ostrzezenie' : etap === 'brak' || etap === 'gotowe' ? 'sukces' : 'neutralny'
 
-  return <Karta>
-    <div className="naglowek-karty"><div><h2>Informacje o aplikacji</h2><p>Ogarniacz · local-first PWA i Android</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
+  return <><Karta>
+    <div className="naglowek-karty"><div><h2>Aktualizacja aplikacji</h2><p>Warstwa natywna Android · OTA APK</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
     <div className="lista-kompaktowa">
       <div><span>Aktualnie zainstalowana wersja</span><strong>{wersja}</strong></div>
       <div><span>Dostępna wersja</span><strong>{dostepna?.manifest.versionName ?? '—'}</strong></div>
@@ -115,5 +116,5 @@ export function PanelAktualizacji() {
       {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Pobierz i zainstaluj</button>}
       {etap === 'zgoda' && pobrana && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana)}>Uruchom instalator</button>}
     </div>
-  </Karta>
+  </Karta><PanelAktualizacjiWeb /></>
 }

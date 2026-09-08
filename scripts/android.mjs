@@ -575,6 +575,16 @@ async function sprawdzMonotonicznoscWydania(adresManifestu) {
 async function wykonajRelease(opcje) {
   const podpisWstepny = sprawdzKonfiguracjePodpisu()
   const adresManifestu = wymagajAdresuHttps('VITE_ANDROID_UPDATE_MANIFEST_URL', odczytajZmiennaBudowania('VITE_ANDROID_UPDATE_MANIFEST_URL'))
+  const adresManifestuWeb = wymagajAdresuHttps(
+    'VITE_ANDROID_WEB_UPDATE_MANIFEST_URL',
+    odczytajZmiennaBudowania('VITE_ANDROID_WEB_UPDATE_MANIFEST_URL'),
+  )
+  if (adresManifestuWeb === adresManifestu || new URL(adresManifestuWeb).pathname.includes('/releases/latest/')) {
+    throw new Error('Web OTA musi używać osobnego kanału; /releases/latest pozostaje wyłącznie dla OTA APK.')
+  }
+  if (adresManifestuWeb === adresManifestu || new URL(adresManifestuWeb).pathname.includes('/releases/latest/')) {
+    throw new Error('Web OTA musi używać osobnego kanału i nie może korzystać z /releases/latest.')
+  }
   const konfiguracjaSynchronizacji = pobierzKonfiguracjeSynchronizacji(katalogRepozytorium)
   if (!konfiguracjaSynchronizacji.adresApi || !konfiguracjaSynchronizacji.kluczDostepu) {
     throw new Error('Release wymaga kompletnej VITE_SYNC_API_URL i VITE_SYNC_ACCESS_KEY, aby nie opublikować APK bez synchronizacji.')

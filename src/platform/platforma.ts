@@ -1,5 +1,6 @@
 import { Capacitor, SystemBars, SystemBarsStyle } from '@capacitor/core'
 import { utworzUslugeAktualizacji } from './AktualizacjeService'
+import { utworzUslugeAktualizacjiWeb } from './AktualizacjeWebService'
 import { utworzUslugePlikow } from './FileService'
 import { utworzUslugeHaptyki } from './HapticsService'
 import { utworzUslugeGlosuEcho } from './GlosEchoService'
@@ -25,6 +26,7 @@ export const platforma: PlatformaOgarniacza = {
   wakeWordEcho: utworzUslugeWakeWordEcho(czyAndroid),
   migawkiWidgetow: utworzMostMigawekWidgetow(czyAndroid),
   aktualizacje: utworzUslugeAktualizacji(czyAndroid),
+  aktualizacjeWeb: utworzUslugeAktualizacjiWeb(czyAndroid),
 }
 
 let inicjalizacjaPlatformy: Promise<void> | undefined

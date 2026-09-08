@@ -26,6 +26,22 @@ if (plikWlasciwosciLokalnych.exists()) {
 }
 def kluczPicovoice = System.getenv('PICOVOICE_ACCESS_KEY') ?: wlasciwosciLokalne.getProperty('picovoice.accessKey', '')
 def literalKluczaPicovoice = '"' + kluczPicovoice.replace('\\', '\\\\').replace('"', '\\"') + '"'
+def plikKluczaWebOta = rootProject.file('web-ota-public-key.pem')
+def kluczWebOta = plikKluczaWebOta.exists()
+    ? plikKluczaWebOta.text.replaceAll('-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\\s', '')
+    : ''
+def literalKluczaWebOta = '"' + kluczWebOta.replace('\\', '\\\\').replace('"', '\\"') + '"'
+def commitShaBundle = System.getenv('GITHUB_SHA')?.trim()
+if (!commitShaBundle?.matches('(?i)^[a-f0-9]{40}$')) {
+    try {
+        def procesGit = ['git', 'rev-parse', 'HEAD'].execute(null, rootProject.projectDir.parentFile)
+        procesGit.waitFor()
+        commitShaBundle = procesGit.exitValue() == 0 ? procesGit.in.text.trim() : 'nieznany'
+    } catch (Exception ignored) {
+        commitShaBundle = 'nieznany'
+    }
+}
+def wersjaBundle = System.getenv('WEB_OTA_BUNDLE_VERSION')?.trim() ?: commitShaBundle.take(7)
 
 android {
     namespace = "pl.ogarniacz.app"
@@ -38,6 +54,9 @@ android {
         versionName wersjaAplikacji
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField "String", "PICOVOICE_ACCESS_KEY", literalKluczaPicovoice
+        buildConfigField "String", "WEB_OTA_PUBLIC_KEY", literalKluczaWebOta
+        buildConfigField "String", "WEB_BUNDLE_VERSION", '"' + wersjaBundle + '"'
+        buildConfigField "String", "WEB_BUNDLE_COMMIT_SHA", '"' + commitShaBundle.toLowerCase() + '"'
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -80,6 +99,9 @@ gradle.taskGraph.whenReady { grafZadan ->
     }
     if (czyPowstajeArtefaktRelease && !rootProject.file(wlasciwosciPodpisu.getProperty('storeFile')).exists()) {
         throw new GradleException('Nie znaleziono pliku stałego release keystore wskazanego w android/keystore.properties.')
+    }
+    if (czyPowstajeArtefaktRelease && !plikKluczaWebOta.exists()) {
+        throw new GradleException('Brak android/web-ota-public-key.pem. Release z Web OTA wymaga publicznego klucza podpisu bundle.')
     }
 }
 

@@ -5,6 +5,7 @@ import { inicjalizujBaze } from './data/BazaOgarniacza'
 import { repozytoriumUstawien } from './data/RepozytoriumUstawien'
 import { zastosujUstawieniaInterfejsu } from './domain/ustawienia'
 import { inicjalizujPlatforme } from './platform/platforma'
+import { PotwierdzenieGotowosciBundle } from './app/PotwierdzenieGotowosciBundle'
 import { inicjalizujWidgetSnapshotService } from './services/WidgetSnapshotService'
 import { inicjalizujSynchronizacjeAplikacji } from './services/SynchronizacjaAplikacji'
 import { AktualizacjaPwa } from './app/AktualizacjaPwa'
@@ -18,5 +19,7 @@ zastosujUstawieniaInterfejsu(
   window.matchMedia('(prefers-reduced-motion: reduce)').matches,
 )
 inicjalizujWidgetSnapshotService()
-createRoot(document.getElementById('root')!).render(<StrictMode><App /><AktualizacjaPwa /></StrictMode>)
+createRoot(document.getElementById('root')!).render(
+  <StrictMode><App /><AktualizacjaPwa /><PotwierdzenieGotowosciBundle /></StrictMode>,
+)
 void inicjalizujSynchronizacjeAplikacji()
