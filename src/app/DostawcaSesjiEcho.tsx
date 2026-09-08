@@ -6,6 +6,8 @@ import { KontrolerSesjiGlosowejEcho, type StanSesjiGlosowejEcho } from '../servi
 import { modulNarzedziaEcho, utworzDomyslnyRejestrNarzedziEcho, WykonawcaNarzedziEcho } from '../services/echo/NarzedziaEcho'
 import { MagazynPreferencjiEcho, preferencjePlanowaniaZPamieci } from '../services/echo/PamiecPreferencjiEcho'
 import { KonfiguracjaRozmowyEcho } from '../services/echo/KonfiguracjaRozmowyEcho'
+import { KontrolerWakeWordEcho, type WynikTestuWakeWordEcho } from '../services/echo/KontrolerWakeWordEcho'
+import { AdapterNatywnegoSilnikaWakeWordEcho, type StanSilnikaWakeWordEcho } from '../services/echo/SilnikWakeWordEcho'
 import type { AkcjaDoPotwierdzeniaEcho, OdpowiedzEcho, TrybEcho, TrybRozmowyEcho, WartoscDomyslnaEcho, WynikNarzedziaEcho, ZrodloWejsciaEcho } from '../services/echo/typyEcho'
 import type { NazwaModulu } from '../domain/typy'
 
@@ -22,6 +24,10 @@ export interface WiadomoscEcho {
 interface WartoscSesjiEcho {
   echo: EchoService
   kontrolerGlosu: KontrolerSesjiGlosowejEcho
+  kontrolerWakeWord: KontrolerWakeWordEcho
+  stanWakeWord: StanSilnikaWakeWordEcho
+  komunikatWakeWord?: string
+  testujWakeWord: () => Promise<WynikTestuWakeWordEcho>
   stan: StanSesjiGlosowejEcho
   ustawStan: (stan: StanSesjiGlosowejEcho) => void
   tryb: TrybEcho
@@ -66,6 +72,8 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
   const [oczekujacaAkcja, ustawOczekujacaAkcje] = useState<AkcjaDoPotwierdzeniaEcho>()
   const [bladGlosu, ustawBladGlosu] = useState('')
   const [czesciowaWypowiedz, ustawCzesciowaWypowiedz] = useState('')
+  const [stanWakeWord, ustawStanWakeWord] = useState<StanSilnikaWakeWordEcho>('zatrzymany')
+  const [komunikatWakeWord, ustawKomunikatWakeWord] = useState<string>()
   useEffect(() => {
     konfiguracjaRozmowy.ustawTrybRozmowy(ustawienia.trybRozmowyEcho)
     ustawTrybRozmowyStan(ustawienia.trybRozmowyEcho)
@@ -87,6 +95,17 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
       odebranoOdpowiedz: (odpowiedz) => dodajOdpowiedz(odpowiedz, 'stt'),
     },
   }), [dodajOdpowiedz, echo])
+  const kontrolerWakeWord = useMemo(() => new KontrolerWakeWordEcho(
+    new AdapterNatywnegoSilnikaWakeWordEcho(platforma.wakeWordEcho),
+    kontrolerGlosu,
+    platforma.cyklZycia,
+    (nowyStan, komunikat) => { ustawStanWakeWord(nowyStan); ustawKomunikatWakeWord(komunikat) },
+  ), [kontrolerGlosu])
+
+  useEffect(() => {
+    kontrolerGlosu.ustawPrzygotowanieWejscia(() => kontrolerWakeWord.wstrzymajDlaSesji())
+    return () => kontrolerGlosu.ustawPrzygotowanieWejscia()
+  }, [kontrolerGlosu, kontrolerWakeWord])
 
   useEffect(() => {
     if (!ustawienia.glosEcho) { void kontrolerGlosu.anuluj(); return }
@@ -94,7 +113,16 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
     return () => { void kontrolerGlosu.zniszcz() }
   }, [kontrolerGlosu, ustawienia.glosEcho])
 
-  return <KontekstSesjiEcho.Provider value={{ echo, kontrolerGlosu, stan, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz }}>{children}</KontekstSesjiEcho.Provider>
+  useEffect(() => {
+    if (!ustawienia.hejEcho || !ustawienia.glosEcho) {
+      void kontrolerWakeWord.zatrzymaj().then(() => kontrolerWakeWord.sprawdzStan())
+      return
+    }
+    void kontrolerWakeWord.uruchom()
+    return () => { void kontrolerWakeWord.zniszcz() }
+  }, [kontrolerWakeWord, ustawienia.glosEcho, ustawienia.hejEcho])
+
+  return <KontekstSesjiEcho.Provider value={{ echo, kontrolerGlosu, kontrolerWakeWord, stanWakeWord, komunikatWakeWord, testujWakeWord: () => kontrolerWakeWord.testuj(), stan, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz }}>{children}</KontekstSesjiEcho.Provider>
 }
 
 export function useSesjaEcho() {

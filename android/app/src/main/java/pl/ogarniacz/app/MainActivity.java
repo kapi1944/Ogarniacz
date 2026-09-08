@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle zapisanyStan) {
         registerPlugin(AktualizacjePlugin.class);
         registerPlugin(EchoGlosPlugin.class);
+        registerPlugin(WakeWordEchoPlugin.class);
         registerPlugin(OdbiorUdostepnianiaPlugin.class);
         super.onCreate(zapisanyStan);
     }

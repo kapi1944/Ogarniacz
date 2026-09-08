@@ -654,6 +654,7 @@ export interface Ustawienia extends EncjaBazowa {
   proaktywnoscEcho: boolean
   echoWyciszone: boolean
   glosEcho: boolean
+  hejEcho: boolean
   automatycznyOdczytEcho: boolean
   trybRozmowyEcho: 'szybki' | 'swobodny'
   pamiecPreferencjiEcho: boolean

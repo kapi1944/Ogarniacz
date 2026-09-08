@@ -5,6 +5,7 @@ import { useAplikacja } from '../../app/KontekstAplikacji'
 import { Karta, Komunikat } from '../../components/Interfejs'
 import { DOMYSLNE_USTAWIENIA, normalizujUstawienia } from '../../domain/ustawienia'
 import type { NazwaModulu, TypSzybkiegoDodawania, Ustawienia } from '../../domain/typy'
+import { useSesjaEcho } from '../../app/DostawcaSesjiEcho'
 
 type NazwaSekcji = 'wyglad' | 'nawigacja' | 'pulpit' | 'harmonogram' | 'zadania' | 'szybkieDodawanie' | 'dostepnosc'
 
@@ -40,6 +41,7 @@ const modulyEcho: { wartosc: NazwaModulu; etykieta: string }[] = [
 ]
 
 export function PanelUstawienAplikacji() {
+  const { stanWakeWord, komunikatWakeWord, testujWakeWord } = useSesjaEcho()
   const {
     zapisaneUstawienia,
     zapiszUstawienia,
@@ -48,6 +50,8 @@ export function PanelUstawienAplikacji() {
   } = useAplikacja()
   const [szkic, ustawSzkic] = useState(() => normalizujUstawienia(zapisaneUstawienia))
   const [komunikat, ustawKomunikat] = useState('')
+  const [wynikTestuWakeWord, ustawWynikTestuWakeWord] = useState('')
+  const [testWakeWordTrwa, ustawTestWakeWordTrwa] = useState(false)
 
   useEffect(() => {
     ustawSzkic(normalizujUstawienia(zapisaneUstawienia))
@@ -81,6 +85,7 @@ export function PanelUstawienAplikacji() {
     proaktywnoscEcho: DOMYSLNE_USTAWIENIA.proaktywnoscEcho,
     echoWyciszone: DOMYSLNE_USTAWIENIA.echoWyciszone,
     glosEcho: DOMYSLNE_USTAWIENIA.glosEcho,
+    hejEcho: DOMYSLNE_USTAWIENIA.hejEcho,
     automatycznyOdczytEcho: DOMYSLNE_USTAWIENIA.automatycznyOdczytEcho,
     trybRozmowyEcho: DOMYSLNE_USTAWIENIA.trybRozmowyEcho,
     pamiecPreferencjiEcho: DOMYSLNE_USTAWIENIA.pamiecPreferencjiEcho,
@@ -96,6 +101,14 @@ export function PanelUstawienAplikacji() {
   const zapisz = async () => {
     await zapiszUstawienia(szkic)
     ustawKomunikat('Ustawienia zostały zapisane.')
+  }
+
+  const testujHejEcho = async () => {
+    ustawTestWakeWordTrwa(true)
+    ustawWynikTestuWakeWord('Powiedz „Hej Echo”…')
+    const wynik = await testujWakeWord()
+    ustawWynikTestuWakeWord(wynik === 'wykryto' ? 'Fraza „Hej Echo” została wykryta.' : wynik === 'nieWykryto' ? 'Nie wykryto frazy w czasie testu.' : komunikatWakeWord ?? 'Silnik wake-word nie jest dostępny.')
+    ustawTestWakeWordTrwa(false)
   }
 
   const zmienWidocznoscTypu = (typ: TypSzybkiegoDodawania, widoczny: boolean) => {
@@ -180,6 +193,8 @@ export function PanelUstawienAplikacji() {
       <SekcjaUstawien tytul="Echo" resetuj={resetujEcho}>
         <label className="pole pole--pelne"><span>Tryb rozmowy</span><select value={szkic.trybRozmowyEcho} onChange={(e) => aktualizujSzkic({ ...szkic, trybRozmowyEcho: e.target.value as Ustawienia['trybRozmowyEcho'] })}><option value="szybki">Szybki</option><option value="swobodny">Swobodny</option></select><small>Zmienia styl odpowiedzi, bez wpływu na głos, tempo nasłuchiwania ani historię rozmowy.</small></label>
         <Przelacznik etykieta="Głos" opis="Pozwala korzystać z wejścia głosowego, gdy urządzenie je udostępnia." zaznaczony={szkic.glosEcho} zmien={(glosEcho) => aktualizujSzkic({ ...szkic, glosEcho })} />
+        <Przelacznik etykieta="Hej Echo" opis="Lokalnie wykrywa wyłącznie frazę aktywującą i dopiero wtedy uruchamia rozmowę." zaznaczony={szkic.hejEcho} zmien={(hejEcho) => aktualizujSzkic({ ...szkic, hejEcho })} />
+        <div className="pole pole--pelne"><span>Stan silnika</span><strong>{stanWakeWord === 'aktywny' ? 'Aktywny' : stanWakeWord === 'niedostepny' ? 'Niedostępny' : stanWakeWord === 'brakKonfiguracji' ? 'Brak konfiguracji' : stanWakeWord === 'uruchamianie' ? 'Uruchamianie' : stanWakeWord === 'blad' ? 'Błąd' : 'Wyłączony'}</strong>{komunikatWakeWord && <small>{komunikatWakeWord}</small>}<button type="button" className="przycisk przycisk--drugorzedny" disabled={testWakeWordTrwa || stanWakeWord === 'niedostepny' || stanWakeWord === 'brakKonfiguracji'} onClick={() => void testujHejEcho()}>{testWakeWordTrwa ? 'Nasłuchuję…' : 'Testuj „Hej Echo”'}</button>{wynikTestuWakeWord && <small>{wynikTestuWakeWord}</small>}</div>
         <Przelacznik etykieta="Czytaj odpowiedzi Echo na głos" opis="W rozmowie tekstowej odczytuje odpowiedzi Echo na obsługiwanym urządzeniu." zaznaczony={szkic.automatycznyOdczytEcho} zmien={(automatycznyOdczytEcho) => aktualizujSzkic({ ...szkic, automatycznyOdczytEcho })} />
         <Przelacznik etykieta="Proaktywność" opis="Pozwala Echo pokazywać lokalne sugestie." zaznaczony={szkic.proaktywnoscEcho && !szkic.echoWyciszone} zmien={(wartosc) => aktualizujSzkic({ ...szkic, proaktywnoscEcho: wartosc, echoWyciszone: !wartosc })} />
         <Przelacznik etykieta="Pamięć preferencji" opis="Przechowuje osobno jawne preferencje rozmowy, bez kopiowania danych domenowych." zaznaczony={szkic.pamiecPreferencjiEcho} zmien={(pamiecPreferencjiEcho) => aktualizujSzkic({ ...szkic, pamiecPreferencjiEcho })} />

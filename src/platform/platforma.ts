@@ -6,6 +6,7 @@ import { utworzUslugeGlosuEcho } from './GlosEchoService'
 import { utworzUslugeCykluZycia } from './LifecycleService'
 import { utworzUslugePowiadomien } from './NotificationService'
 import { utworzUslugeUdostepniania } from './ShareService'
+import { utworzUslugeWakeWordEcho } from './WakeWordEchoService'
 import { utworzMostMigawekWidgetow } from './WidgetBridgeService'
 import type { PlatformaOgarniacza } from './typy'
 
@@ -21,6 +22,7 @@ export const platforma: PlatformaOgarniacza = {
   udostepnianie: utworzUslugeUdostepniania(czyAndroid),
   haptyka: utworzUslugeHaptyki(czyAndroid),
   glosEcho: utworzUslugeGlosuEcho(czyAndroid),
+  wakeWordEcho: utworzUslugeWakeWordEcho(czyAndroid),
   migawkiWidgetow: utworzMostMigawekWidgetow(czyAndroid),
   aktualizacje: utworzUslugeAktualizacji(czyAndroid),
 }

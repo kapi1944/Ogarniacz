@@ -35,6 +35,11 @@ describe.sequential('ustawienia aplikacji', () => {
     expect(normalizujUstawienia({ trybRozmowyEcho: 'inny' }).trybRozmowyEcho).toBe('szybki')
   })
 
+  it('zachowuje ustawienie lokalnego „Hej Echo”', () => {
+    expect(normalizujUstawienia({ hejEcho: true }).hejEcho).toBe(true)
+    expect(normalizujUstawienia({ hejEcho: 'tak' }).hejEcho).toBe(false)
+  })
+
   it('ogranicza liczby do bezpiecznych zakresów', () => {
     const wynik = normalizujUstawienia({
       wyglad: { promienKart: 999, czasAnimacjiMs: Number.NaN },

@@ -43,6 +43,8 @@ export class KontrolerSesjiGlosowejEcho {
   private aplikacjaAktywna = true
   private rozpoznawanieAktywne = false
   private przerwanoMowieniePrzezWtracenie = false
+  private readonly obserwatorzyStanu = new Set<(stan: StanSesjiGlosowejEcho) => void>()
+  private przygotujWejscie?: () => Promise<void>
 
   constructor(private readonly zaleznosci: ZaleznosciKontrolera) {}
 
@@ -75,6 +77,8 @@ export class KontrolerSesjiGlosowejEcho {
     await this.inicjalizuj()
     if (!this.aplikacjaAktywna) return
     if (this.aktywna) await this.anuluj()
+    await this.przygotujWejscie?.()
+    if (!this.aplikacjaAktywna) return
     const numer = ++this.numerSesji
     this.aktywna = true
     this.zaleznosci.obsluga.zglosBlad('')
@@ -115,6 +119,15 @@ export class KontrolerSesjiGlosowejEcho {
 
   pobierzStan() {
     return this.stan
+  }
+
+  nasluchujStanu(obsluga: (stan: StanSesjiGlosowejEcho) => void) {
+    this.obserwatorzyStanu.add(obsluga)
+    return () => { this.obserwatorzyStanu.delete(obsluga) }
+  }
+
+  ustawPrzygotowanieWejscia(obsluga?: () => Promise<void>) {
+    this.przygotujWejscie = obsluga
   }
 
   private async prowadzRozmowe(numer: number) {
@@ -185,6 +198,7 @@ export class KontrolerSesjiGlosowejEcho {
   private ustawStan(stan: StanSesjiGlosowejEcho) {
     this.stan = stan
     this.zaleznosci.obsluga.zmienStan(stan)
+    this.obserwatorzyStanu.forEach((obsluga) => obsluga(stan))
   }
 
   private ustawCzesciowaWypowiedz(tekst: string) {
