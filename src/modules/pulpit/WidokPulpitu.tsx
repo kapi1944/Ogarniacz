@@ -49,6 +49,7 @@ import { NawigatorDnia } from './NawigatorDnia'
 import { OsCzasu } from './OsCzasu'
 import { sortujElementyDzisiaj, wybierzElementTeraz } from './logikaDniaPulpitu'
 import { kandydaciSugestiiEchoPulpitu, widoczneSugestieEchoPulpitu } from './SugestieEchoPulpitu'
+import { utworzBriefingDnia } from '../../services/BriefingDniaService'
 import {
   utworzHarmonogramDnia,
   utworzNowaReguleHarmonogramu,
@@ -301,6 +302,12 @@ export function WidokPulpitu() {
   const podsumowanieSmart = elementyDoOgarnięcia.length === 0 && horyzontSiedmiuDni.length === 0
     ? 'Dzień wygląda spokojnie.'
     : `Masz ${elementyDoOgarnięcia.length} ${elementyDoOgarnięcia.length === 1 ? 'rzecz do zrobienia' : 'rzeczy do zrobienia'}${horyzontSiedmiuDni.find((element) => element.typ === 'wizyta') ? ', wizytę w najbliższych dniach' : ''}${pilneSygnaly.length ? ` i ${pilneSygnaly.length === 1 ? 'jeden pilny sygnał' : `${pilneSygnaly.length} pilne sygnały`}` : ''}.`
+  const skrotBriefingu = utworzBriefingDnia({
+    data: dzisiaj,
+    elementyDzisiaj: elementyDnia,
+    elementyJutro: [],
+    praca: harmonogram.pracuje ? { od: harmonogram.odPracy, do: harmonogram.doPracy } : undefined,
+  }, 'poranny').skrot
   const klasaUwagiKafelka = (kafelek: KonfiguracjaKafelkaPulpitu) => alerty.some((alert) => alert.sourceRef.modul === kafelek.typ || kafelek.typ === 'pilne' && poziomSmartSygnalu(alert) === 'pilne') ? 'strefa-pulpitu--wymaga-uwagi' : ''
   const oznaczZadanieJakoWykonane = async (element: ElementOgarniacza) => {
     if (element.typ !== 'zadanie') return
@@ -362,7 +369,7 @@ export function WidokPulpitu() {
     </div>}
 
     <section className="pulpit-sekcja--teraz centrum-dowodzenia">
-      <Karta klasa="centrum-dowodzenia__glowna"><div className="centrum-dowodzenia__czas"><span>{poraDnia}</span><time dateTime={format(teraz, 'HH:mm')}>{format(teraz, 'HH:mm')}</time></div><div className="tytul-karty"><Clock3 aria-hidden="true" /><span>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższe'}</span></div>{!elementTeraz ? <PustyStan tytul="Spokojny dzień" opis="Brak trwających i zaplanowanych elementów na dziś." akcja={<div className="plan-dnia__akcje"><button type="button" className="przycisk przycisk--maly" onClick={otworzSzybkieDodawanie}>Dodaj element</button><Link className="przycisk przycisk--tekstowy" to="/echo">Zapytaj Echo</Link></div>} /> : <div className="centrum-dowodzenia__element">{elementTeraz.element.referencjaZrodla ? <Link to={adresReferencjiZrodla(elementTeraz.element.referencjaZrodla)}><strong>{elementTeraz.element.godzina && `${elementTeraz.element.godzina} · `}{elementTeraz.element.tytul}</strong></Link> : <strong>{elementTeraz.element.godzina && `${elementTeraz.element.godzina} · `}{elementTeraz.element.tytul}</strong>}<small>{elementTeraz.stan === 'trwa' ? 'Trwa teraz' : 'Najbliższy krok'} · {opisElementuKafelka(elementTeraz.element)}</small></div>}<p className="centrum-dowodzenia__opis">{opisDnia}</p><small className="centrum-dowodzenia__podsumowanie">{podsumowanieSmart}</small></Karta>
+      <Karta klasa="centrum-dowodzenia__glowna"><div className="centrum-dowodzenia__czas"><span>{poraDnia}</span><time dateTime={format(teraz, 'HH:mm')}>{format(teraz, 'HH:mm')}</time></div><div className="tytul-karty"><Clock3 aria-hidden="true" /><span>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższe'}</span></div>{!elementTeraz ? <PustyStan tytul="Spokojny dzień" opis="Brak trwających i zaplanowanych elementów na dziś." akcja={<div className="plan-dnia__akcje"><button type="button" className="przycisk przycisk--maly" onClick={otworzSzybkieDodawanie}>Dodaj element</button><Link className="przycisk przycisk--tekstowy" to="/echo">Zapytaj Echo</Link></div>} /> : <div className="centrum-dowodzenia__element">{elementTeraz.element.referencjaZrodla ? <Link to={adresReferencjiZrodla(elementTeraz.element.referencjaZrodla)}><strong>{elementTeraz.element.godzina && `${elementTeraz.element.godzina} · `}{elementTeraz.element.tytul}</strong></Link> : <strong>{elementTeraz.element.godzina && `${elementTeraz.element.godzina} · `}{elementTeraz.element.tytul}</strong>}<small>{elementTeraz.stan === 'trwa' ? 'Trwa teraz' : 'Najbliższy krok'} · {opisElementuKafelka(elementTeraz.element)}</small></div>}<p className="centrum-dowodzenia__opis">{opisDnia}</p><small className="centrum-dowodzenia__podsumowanie">{skrotBriefingu ? `Briefing Echo: ${skrotBriefingu}` : podsumowanieSmart}</small></Karta>
       <Karta klasa="centrum-dowodzenia__bok"><div className="tytul-karty"><ArrowRight aria-hidden="true" /><span>Za chwilę</span></div>{kolejneElementy.length === 0 ? <p className="tekst-pomocniczy">Nie ma kolejnych spraw na dziś.</p> : <div className="lista-kompaktowa">{kolejneElementy.slice(0, 2).map((element) => <div key={element.id}><div>{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla)}><strong>{element.tytul}</strong></Link> : <strong>{element.tytul}</strong>}<small>{element.godzina ?? etykietaTerminuBezGodziny(element.trybTerminu)}</small></div></div>)}</div>}</Karta>
       {ustawienia.pulpit.pokazAlerty && <Karta klasa="centrum-dowodzenia__bok centrum-dowodzenia__alerty"><div className="tytul-karty"><AlertCircle aria-hidden="true" /><span>Sygnały</span></div>{alertyWCentrum.length === 0 ? <p className="tekst-pomocniczy">Brak alertów wymagających uwagi.</p> : <div className="lista-kompaktowa">{alertyWCentrum.map((alert) => <div key={alert.id}><div><Link to={adresReferencjiZrodla(alert.sourceRef)}><strong>{alert.tytul}</strong></Link><small>{poziomSmartSygnalu(alert) === 'pilne' ? 'Pilne' : poziomSmartSygnalu(alert) === 'wazne' ? 'Ważne' : 'Informacyjne'} · {alert.opis}</small></div></div>)}</div>}{alerty.length > ustawienia.pulpit.limitAlertow && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPokazWiecejAlertow((wartosc) => !wartosc)}>{pokazWiecejAlertow ? 'Pokaż mniej' : 'Pokaż więcej'}</button>}</Karta>}
     </section>

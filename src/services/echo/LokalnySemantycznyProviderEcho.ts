@@ -89,7 +89,8 @@ type ZamiarPrzekrojowyEcho =
   | { typ: "ocena_wydatku"; kwota: number }
   | { typ: "sprawy_w_aptece" }
   | { typ: "plan_dnia"; etap: "podglad" | "zapis"; data: string; odGodziny?: string; godzinaObiadu?: string }
-  | { typ: "wolne_okna"; data: string; minuty: number };
+  | { typ: "wolne_okna"; data: string; minuty: number }
+  | { typ: "briefing_dnia" };
 
 type ZamiarWywolaniaEcho =
   | ZamiarSemantycznyEcho
@@ -557,6 +558,14 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     const zadania = ostatnieZadania(zadanie.kontekstRozmowy);
     const ostatnieZadanie = zadania.at(-1);
     const tokeny = new Set(lista.map(({ uproszczone }) => uproszczone));
+    const uproszczonyTekst = uprosc(tekst)
+    const czyBriefingPoranny = /(?:co mnie dzis czeka|jak wyglada moj dzien|dzien dobry)/i.test(uproszczonyTekst)
+    const czyBriefingWieczorny = /(?:podsumuj (?:dzisiaj|dzis|dzien)|co zostalo na jutro)/i.test(uproszczonyTekst)
+    if (czyBriefingPoranny || czyBriefingWieczorny) return this.wywolajPrzekrojowo(
+      { typ: 'briefing_dnia' },
+      'daily_briefing',
+      { data: zadanie.kontekstCzasu.dataLokalna, rodzaj: czyBriefingWieczorny ? 'wieczorny' : 'poranny', tryb: zadanie.trybRozmowy },
+    )
     const czyPlanDnia = /zaplanuj(?: mi)? (?:dzisiaj|dzis|jutro|dzien)/i.test(uprosc(tekst))
     const czyPrzeplanowanie = /(?:nie wyrobie sie|przeplanuj reszte|plan.*opozn)/i.test(uprosc(tekst))
     const czyCoTeraz = /(?:mam .*wolne godziny|co najlepiej teraz zrobic)/i.test(uprosc(tekst))
@@ -1734,6 +1743,10 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
           : `Nie znalazłem wolnego okna długości ${zamiar.minuty} min.`,
         aktualizacjaKontekstu,
       }
+    }
+    if (zamiar.typ === 'briefing_dnia') {
+      const dane = wynik.dane as { tekst?: unknown }
+      return { typ: 'odpowiedz', tresc: typeof dane.tekst === 'string' ? dane.tekst : 'Nie udało się przygotować briefingu z zapisanych danych.', aktualizacjaKontekstu }
     }
     if (zamiar.typ === 'plan_dnia' && zamiar.etap === 'podglad') {
       const dane = wynik.dane as { pozycje?: { id: string; tytul: string; poczatek?: string; status: string; powod?: string }[] }

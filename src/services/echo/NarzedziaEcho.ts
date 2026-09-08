@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { pobierzRepozytorium } from "../../data/Repozytorium";
 import { utworzMetadane } from "../../domain/fabryki";
+import { zadanieLegacyNaElement } from "../../domain/adapterZadania";
 import type {
   DziennikEcho,
   DziennikNawyku,
@@ -45,6 +46,8 @@ import { DOMYSLNE_USTAWIENIA } from "../../domain/ustawienia";
 import { utworzHarmonogramDnia } from "../../modules/pulpit/logikaOsiCzasu";
 import { repozytoriumElementowZadan } from "../../data/RepozytoriumElementowZadan";
 import { zaproponujPodzialPoczekalni } from "../PoczekalniaService";
+import { utworzBriefingDnia } from "../BriefingDniaService";
+import { pobierzNajnowszaHistorie } from "../HistoriaZmianService";
 import { PolitykaDzialanEcho } from "./PolitykaDzialanEcho";
 import type {
   DefinicjaNarzedziaEcho,
@@ -1531,6 +1534,32 @@ export function utworzDomyslnyRejestrNarzedziEcho(
         liczba,
         typ: "planer",
       };
+    },
+  });
+  rejestr.zarejestruj({
+    nazwa: "daily_briefing",
+    opis: "Tworzy poranny albo wieczorny briefing wyłącznie z danych Ogarniacza.",
+    schematArgumentow: z.object({ data: dataIso, rodzaj: z.enum(["poranny", "wieczorny"]), tryb: z.enum(["szybki", "swobodny"]) }),
+    ryzyko: "niskie",
+    wykonaj: async ({ data, rodzaj, tryb }) => {
+      const dataJutro = new Date(`${data}T12:00:00Z`);
+      dataJutro.setUTCDate(dataJutro.getUTCDate() + 1);
+      const jutro = dataJutro.toISOString().slice(0, 10);
+      const [dzisiaj, nastepnyDzien, przypomnienia, historia] = await Promise.all([
+        zbudujDanePlanu(data), zbudujDanePlanu(jutro), pobierzRepozytorium("przypomnienia").lista(), pobierzNajnowszaHistorie(100),
+      ]);
+      const elementyDnia = (dane: Awaited<ReturnType<typeof zbudujDanePlanu>>, dzien: string) => [
+        ...dane.zadania.map(zadanieLegacyNaElement).filter((element) => element.data === dzien || element.terminGraniczny?.slice(0, 10) === dzien),
+        ...dane.wydarzenia,
+      ];
+      return utworzBriefingDnia({
+        data,
+        elementyDzisiaj: elementyDnia(dzisiaj, data),
+        elementyJutro: elementyDnia(nastepnyDzien, jutro),
+        przypomnienia: przypomnienia.filter((element) => element.czas?.startsWith(data)).map((element) => ({ tytul: element.tytul, czas: element.czas! })),
+        historia,
+        praca: dzisiaj.harmonogram.pracuje ? { od: dzisiaj.harmonogram.odPracy, do: dzisiaj.harmonogram.doPracy } : undefined,
+      }, rodzaj, tryb);
     },
   });
 
