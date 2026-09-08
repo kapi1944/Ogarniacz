@@ -21,7 +21,6 @@ import { Link } from "react-router-dom";
 import type { WynikNarzedziaEcho } from "../../services/echo/typyEcho";
 import { useAplikacja } from "../../app/KontekstAplikacji";
 import { useSesjaEcho, type WiadomoscEcho } from "../../app/DostawcaSesjiEcho";
-import type { NazwaModulu } from "../../domain/typy";
 import type { StanSesjiGlosowejEcho } from "../../services/echo/KontrolerSesjiGlosowejEcho";
 
 function typWynikuNarzedzia(nazwa: string): string | undefined {
@@ -93,31 +92,6 @@ export function adresWyniku(element: {
   };
   const sciezka = element.typ ? sciezki[element.typ] : undefined;
   return sciezka ? `${sciezka}?element=${element.id}` : undefined;
-}
-
-export function modulNarzedzia(nazwa: string): NazwaModulu | undefined {
-  if (nazwa === 'list_calendar') return 'planer';
-  if (nazwa === "assess_purchase_affordability") return "finanse";
-  if (nazwa === "assess_mechanic_trip") return "samochod";
-  if (nazwa === "pharmacy_overview") return "zdrowie";
-  if (nazwa.includes("project")) return "projekty";
-  if (nazwa.includes("inbox") || nazwa.includes("waiting")) return "skrzynka";
-  if (nazwa.includes("plan")) return "planer";
-  if (nazwa.includes("habit")) return "nawyki";
-  if (nazwa.includes("shopping")) return "zakupy";
-  if (/finance|transaction|bill|budget|subscription|installment/.test(nazwa)) return "finanse";
-  if (/vehicle|refuel/.test(nazwa)) return "samochod";
-  if (nazwa.includes("note") || nazwa.includes("knowledge")) return "notatki";
-  if (nazwa.includes("later")) return "na_pozniej";
-  if (nazwa.includes("document")) return "dokumenty";
-  if (nazwa.includes("contact")) return "kontakty";
-  if (nazwa.includes("expiry")) return "terminy";
-  if (nazwa.includes("place") || nazwa.includes("errand")) return "miasto";
-  if (nazwa.includes("reminder")) return "przypomnienia";
-  if (nazwa.includes("task")) return "zadania";
-  if (nazwa.includes("medication")) return "leki";
-  if (/health|appointment|referral|prescription|therapy/.test(nazwa)) return "zdrowie";
-  return undefined;
 }
 
 export function uruchomAutomatycznyOdczytEcho(

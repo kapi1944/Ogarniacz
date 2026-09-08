@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { adresWyniku, czyPokazacSugestieEcho, elementyWyniku, modulNarzedzia, uruchomAutomatycznyOdczytEcho } from './WidokEcho'
+import { adresWyniku, czyPokazacSugestieEcho, elementyWyniku, uruchomAutomatycznyOdczytEcho } from './WidokEcho'
+import { modulNarzedziaEcho } from '../../services/echo/NarzedziaEcho'
 
 describe('ustawienia i wyniki Widoku Echo', () => {
   it('nie uruchamia auto-TTS, gdy głos Echo jest wyłączony', () => {
@@ -46,10 +47,10 @@ describe('ustawienia i wyniki Widoku Echo', () => {
   })
 
   it('wiąże narzędzia przekrojowe z właściwymi uprawnieniami modułów', () => {
-    expect(modulNarzedzia('finance_period_summary')).toBe('finanse')
-    expect(modulNarzedzia('assess_purchase_affordability')).toBe('finanse')
-    expect(modulNarzedzia('assess_mechanic_trip')).toBe('samochod')
-    expect(modulNarzedzia('pharmacy_overview')).toBe('zdrowie')
+    expect(modulNarzedziaEcho('finance_period_summary')).toBe('finanse')
+    expect(modulNarzedziaEcho('assess_purchase_affordability')).toBe('finanse')
+    expect(modulNarzedziaEcho('assess_mechanic_trip')).toBe('samochod')
+    expect(modulNarzedziaEcho('pharmacy_overview')).toBe('zdrowie')
   })
 
   it.each([

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { baza } from '../../data/BazaOgarniacza'
 import { AgentEcho } from './AgentEcho'
-import { LokalnyOgraniczonyProviderEcho } from './LokalnyOgraniczonyProviderEcho'
+import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import {
   MagazynPreferencjiEcho,
   preferencjePlanowaniaZPamieci,
@@ -15,7 +15,7 @@ describe('pamięć preferencji Echo', () => {
 
   it('zapisuje trwałą preferencję, gdy pamięć jest włączona', async () => {
     const agent = new AgentEcho({
-      provider: new LokalnyOgraniczonyProviderEcho(),
+      provider: new LokalnySemantycznyProviderEcho(),
       magazynPamieci: new MagazynPreferencjiEcho(),
       pamiecPreferencjiWlaczona: true,
     })
@@ -26,7 +26,7 @@ describe('pamięć preferencji Echo', () => {
 
   it('nie zapisuje nowej preferencji, gdy pamięć jest wyłączona', async () => {
     const agent = new AgentEcho({
-      provider: new LokalnyOgraniczonyProviderEcho(),
+      provider: new LokalnySemantycznyProviderEcho(),
       magazynPamieci: new MagazynPreferencjiEcho(),
       pamiecPreferencjiWlaczona: false,
     })

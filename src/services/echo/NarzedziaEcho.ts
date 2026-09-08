@@ -4,6 +4,7 @@ import { utworzMetadane } from "../../domain/fabryki";
 import type {
   DziennikEcho,
   DziennikNawyku,
+  NazwaModulu,
   Projekt,
   Przypomnienie,
   Recepta,
@@ -71,6 +72,31 @@ interface NarzedzieWykonywalneEcho {
 
 export function rodzajNarzedziaEcho(narzedzie: Pick<NarzedzieWykonywalneEcho, 'nazwa' | 'rodzaj'>): 'odczyt' | 'zapis' {
   return narzedzie.rodzaj ?? (/^(list_|get_|search_|preview_|assess_|upcoming_|explain_|finance_period_summary$|budget_state$|vehicle_status$|vehicle_service_history$|vehicle_cost_summary$|pharmacy_overview$|current_external_data$|subscription_state$)/.test(narzedzie.nazwa) ? 'odczyt' : 'zapis')
+}
+
+export function modulNarzedziaEcho(nazwa: string): NazwaModulu | undefined {
+  if (nazwa === 'list_calendar') return 'planer'
+  if (nazwa === 'assess_purchase_affordability') return 'finanse'
+  if (nazwa === 'assess_mechanic_trip') return 'samochod'
+  if (nazwa === 'pharmacy_overview') return 'zdrowie'
+  if (nazwa.includes('project')) return 'projekty'
+  if (nazwa.includes('inbox') || nazwa.includes('waiting')) return 'skrzynka'
+  if (nazwa.includes('plan')) return 'planer'
+  if (nazwa.includes('habit')) return 'nawyki'
+  if (nazwa.includes('shopping')) return 'zakupy'
+  if (/finance|transaction|bill|budget|subscription|installment/.test(nazwa)) return 'finanse'
+  if (/vehicle|refuel/.test(nazwa)) return 'samochod'
+  if (nazwa.includes('note') || nazwa.includes('knowledge')) return 'notatki'
+  if (nazwa.includes('later')) return 'na_pozniej'
+  if (nazwa.includes('document')) return 'dokumenty'
+  if (nazwa.includes('contact')) return 'kontakty'
+  if (nazwa.includes('expiry')) return 'terminy'
+  if (nazwa.includes('place') || nazwa.includes('errand')) return 'miasto'
+  if (nazwa.includes('reminder')) return 'przypomnienia'
+  if (nazwa.includes('task')) return 'zadania'
+  if (nazwa.includes('medication')) return 'leki'
+  if (/health|appointment|referral|prescription|therapy/.test(nazwa)) return 'zdrowie'
+  return undefined
 }
 
 export class RejestrNarzedziEcho {

@@ -82,6 +82,7 @@ export function PanelUstawienAplikacji() {
     echoWyciszone: DOMYSLNE_USTAWIENIA.echoWyciszone,
     glosEcho: DOMYSLNE_USTAWIENIA.glosEcho,
     automatycznyOdczytEcho: DOMYSLNE_USTAWIENIA.automatycznyOdczytEcho,
+    trybRozmowyEcho: DOMYSLNE_USTAWIENIA.trybRozmowyEcho,
     pamiecPreferencjiEcho: DOMYSLNE_USTAWIENIA.pamiecPreferencjiEcho,
     internetEcho: DOMYSLNE_USTAWIENIA.internetEcho,
     modulyEcho: DOMYSLNE_USTAWIENIA.modulyEcho,
@@ -177,6 +178,7 @@ export function PanelUstawienAplikacji() {
       </SekcjaUstawien>
 
       <SekcjaUstawien tytul="Echo" resetuj={resetujEcho}>
+        <label className="pole pole--pelne"><span>Tryb rozmowy</span><select value={szkic.trybRozmowyEcho} onChange={(e) => aktualizujSzkic({ ...szkic, trybRozmowyEcho: e.target.value as Ustawienia['trybRozmowyEcho'] })}><option value="szybki">Szybki</option><option value="swobodny">Swobodny</option></select><small>Zmienia styl odpowiedzi, bez wpływu na głos, tempo nasłuchiwania ani historię rozmowy.</small></label>
         <Przelacznik etykieta="Głos" opis="Pozwala korzystać z wejścia głosowego, gdy urządzenie je udostępnia." zaznaczony={szkic.glosEcho} zmien={(glosEcho) => aktualizujSzkic({ ...szkic, glosEcho })} />
         <Przelacznik etykieta="Czytaj odpowiedzi Echo na głos" opis="W rozmowie tekstowej odczytuje odpowiedzi Echo na obsługiwanym urządzeniu." zaznaczony={szkic.automatycznyOdczytEcho} zmien={(automatycznyOdczytEcho) => aktualizujSzkic({ ...szkic, automatycznyOdczytEcho })} />
         <Przelacznik etykieta="Proaktywność" opis="Pozwala Echo pokazywać lokalne sugestie." zaznaczony={szkic.proaktywnoscEcho && !szkic.echoWyciszone} zmien={(wartosc) => aktualizujSzkic({ ...szkic, proaktywnoscEcho: wartosc, echoWyciszone: !wartosc })} />
