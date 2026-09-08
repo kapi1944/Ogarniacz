@@ -1,0 +1,107 @@
+name: Publikacja Web OTA
+
+on:
+  workflow_dispatch:
+    inputs:
+      min_native_version_code:
+        description: Minimalny versionCode zgodnego APK
+        required: true
+        default: ''1000006''
+        type: string
+      bundle_version:
+        description: Opcjonalna nazwa wersji; domyslnie pierwsze 7 znakow SHA
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: web-ota-production
+  cancel-in-progress: false
+
+jobs:
+  publikacja:
+    name: Zbuduj, podpisz i opublikuj
+    runs-on: ubuntu-latest
+    environment: web-ota-production
+    env:
+      WEB_OTA_PRIVATE_KEY: ${{ secrets.WEB_OTA_PRIVATE_KEY }}
+      WEB_OTA_PUBLIC_KEY_SHA256: ${{ vars.WEB_OTA_PUBLIC_KEY_SHA256 }}
+      ADRES_ZIP: https://github.com/${{ github.repository }}/releases/download/web-ota/web-ota.zip
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Pobierz repozytorium
+        uses: actions/checkout@v4
+
+      - name: Przygotuj Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Sprawdz konfiguracje publikacji
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$WEB_OTA_PRIVATE_KEY" ]] || { echo "Brak sekretu WEB_OTA_PRIVATE_KEY." >&2; exit 1; }
+          [[ "$WEB_OTA_PUBLIC_KEY_SHA256" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "Brak poprawnej zmiennej WEB_OTA_PUBLIC_KEY_SHA256." >&2; exit 1; }
+          wersja="${{ inputs.bundle_version }}"
+          [[ -n "$wersja" ]] || wersja="${GITHUB_SHA:0:7}"
+          [[ "$wersja" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || { echo "Nieprawidlowy bundle_version." >&2; exit 1; }
+          [[ "${{ inputs.min_native_version_code }}" =~ ^[1-9][0-9]*$ ]] || { echo "Nieprawidlowy min_native_version_code." >&2; exit 1; }
+          echo "WEB_OTA_BUNDLE_VERSION=$wersja" >> "$GITHUB_ENV"
+
+      - name: Zainstaluj zaleznosci
+        run: npm ci
+
+      - name: Zbuduj dist
+        run: npm run build
+
+      - name: Spakuj zawartosc dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/index.html
+          mkdir -p artifacts/web-ota
+          (cd dist && zip -q -r ../artifacts/web-ota/web-ota.zip .)
+
+      - name: Utworz i podpisz manifest
+        run: >-
+          node scripts/web-ota-manifest.mjs
+          --zip artifacts/web-ota/web-ota.zip
+          --output artifacts/web-ota/web-ota.json
+          --url "$ADRES_ZIP"
+          --commit-sha "$GITHUB_SHA"
+          --bundle-version "$WEB_OTA_BUNDLE_VERSION"
+          --min-native-version-code "${{ inputs.min_native_version_code }}"
+
+      - name: Opublikuj kanal web-ota
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view web-ota >/dev/null 2>&1; then
+            gh release create web-ota --target "$GITHUB_SHA" --title "Web OTA" --notes "Staly kanal podpisanych szybkich aktualizacji Ogarniacza."
+          fi
+          gh release upload web-ota artifacts/web-ota/web-ota.zip --clobber
+          gh release upload web-ota artifacts/web-ota/web-ota.json --clobber
+
+      - name: Zweryfikuj opublikowane assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/weryfikacja
+          gh release download web-ota --pattern web-ota.zip --pattern web-ota.json --dir artifacts/weryfikacja --clobber
+          cmp artifacts/web-ota/web-ota.zip artifacts/weryfikacja/web-ota.zip
+          cmp artifacts/web-ota/web-ota.json artifacts/weryfikacja/web-ota.json
+
+      - name: Zachowaj kopie diagnostyczna
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-ota-${{ env.WEB_OTA_BUNDLE_VERSION }}
+          path: |
+            artifacts/web-ota/web-ota.zip
+            artifacts/web-ota/web-ota.json
+          if-no-files-found: error
+          retention-days: 30

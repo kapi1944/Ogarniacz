@@ -19,6 +19,8 @@
     "android:build": "node scripts/android.mjs build",
     "android:deploy": "node scripts/android.mjs deploy",
     "android:release": "node scripts/android.mjs release",
+    "web-ota:manifest": "node scripts/web-ota-manifest.mjs",
+    "web-ota:test": "node --test scripts/web-ota-manifest.test.mjs",
     "android:keystore:create": "node scripts/android.mjs keystore",
     "android:test": "node --test scripts/android.test.mjs",
     "version:patch": "npm version patch --no-git-tag-version",
