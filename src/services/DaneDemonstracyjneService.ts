@@ -24,7 +24,7 @@ export async function wczytajDaneDemonstracyjne(): Promise<void> {
     utworzZadanie({ tytul: 'Odebrać paczkę', opis: '', priorytet: 'normalny', termin: jutro, szacowanyCzasMin: 30, kontekst: 'paczkomat' }),
     utworzZadanie({ tytul: 'Zadzwonić do serwisu', opis: '', priorytet: 'krytyczny', termin: format(addDays(new Date(), -1), 'yyyy-MM-dd'), kontekst: 'telefon' }),
   ])
-  const inbox: ElementSkrzynki = { ...utworzMetadane(), tresc: 'Sprawdzić pomysł na kurs fotografii', zrodlo: 'tekst', sugerowanyTyp: 'pomysly', status: 'nowe' }
+  const inbox: ElementSkrzynki = { ...utworzMetadane(), tresc: 'Sprawdzić pomysł na kurs fotografii', zrodlo: 'tekst', sugerowanyTyp: 'pomysly', status: 'do_sklasyfikowania' }
   await pobierzRepozytorium('skrzynka').zapisz(inbox)
   const lek: Lek = { ...utworzMetadane(), nazwa: 'Przykładowy lek', dawkaInstrukcja: 'Instrukcja wpisana przez użytkownika', godziny: ['08:00', '20:00'], aktywny: true }
   await pobierzRepozytorium('leki').zapisz(lek)

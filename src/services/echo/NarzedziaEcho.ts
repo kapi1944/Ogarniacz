@@ -45,7 +45,7 @@ import {
 import { DOMYSLNE_USTAWIENIA } from "../../domain/ustawienia";
 import { utworzHarmonogramDnia } from "../../modules/pulpit/logikaOsiCzasu";
 import { repozytoriumElementowZadan } from "../../data/RepozytoriumElementowZadan";
-import { zaproponujPodzialPoczekalni } from "../PoczekalniaService";
+import { czyElementInboxDoKlasyfikacji, przeksztalcElementInbox, zapiszSzybkiZrzut, zaproponujPodzialPoczekalni } from "../PoczekalniaService";
 import { utworzBriefingDnia } from "../BriefingDniaService";
 import { pobierzNajnowszaHistorie } from "../HistoriaZmianService";
 import { PolitykaDzialanEcho } from "./PolitykaDzialanEcho";
@@ -1346,8 +1346,9 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     ryzyko: "niskie",
     wykonaj: async () =>
       (await pobierzRepozytorium("skrzynka").lista())
-        .filter((x) => x.status === "nowe")
-        .map((x) => ({ id: x.id, tytul: x.tresc, typ: "poczekalnia" })),
+        .filter(czyElementInboxDoKlasyfikacji)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .map((x) => ({ id: x.id, tytul: x.tresc, sugerowanyTyp: x.sugerowanyTyp ?? zaproponujPodzialPoczekalni(x.tresc)[0]?.typ, typ: "poczekalnia" })),
   });
   rejestr.zarejestruj({
     nazwa: "list_waiting_room",
@@ -1356,8 +1357,41 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     ryzyko: "niskie",
     wykonaj: async () =>
       (await pobierzRepozytorium("skrzynka").lista()).filter(
-        (x) => x.status === "nowe",
+        czyElementInboxDoKlasyfikacji,
       ),
+  });
+  rejestr.zarejestruj({
+    nazwa: "capture_inbox",
+    opis: "Zapisuje szybki zrzut; tylko oczywisty zakup klasyfikuje od razu.",
+    schematArgumentow: z.object({ tresc: z.string().trim().min(1).max(5000), zrodlo: z.enum(["tekst", "glos"]).optional() }),
+    ryzyko: "niskie",
+    wykonaj: async ({ tresc, zrodlo }) => {
+      const wynik = await zapiszSzybkiZrzut(tresc, zrodlo ?? "tekst");
+      return { id: wynik.element.id, tytul: wynik.element.tresc, typ: wynik.wynik?.typ ?? "poczekalnia", sklasyfikowano: Boolean(wynik.wynik) };
+    },
+  });
+  rejestr.zarejestruj({
+    nazwa: "convert_inbox_item",
+    opis: "Konwertuje wskazany element Inbox do istniejącego typu bez utraty treści.",
+    schematArgumentow: z.object({ id: z.string().min(1), typ: z.enum(["zadanie", "notatka", "przypomnienie", "zakup", "projekt", "pomysl", "na_pozniej", "wizyta"]) }),
+    ryzyko: "niskie",
+    wykonaj: async ({ id, typ }) => {
+      const element = await pobierzRepozytorium("skrzynka").pobierz(id);
+      if (!element || !czyElementInboxDoKlasyfikacji(element)) return null;
+      return { ...await przeksztalcElementInbox(element, typ), tytul: element.tresc };
+    },
+  });
+  rejestr.zarejestruj({
+    nazwa: "delete_inbox_item",
+    opis: "Usuwa wskazany element Inbox po świadomej decyzji użytkownika.",
+    schematArgumentow: z.object({ id: z.string().min(1) }),
+    ryzyko: "umiarkowane",
+    wykonaj: async ({ id }) => {
+      const element = await pobierzRepozytorium("skrzynka").pobierz(id);
+      if (!element) return null;
+      await pobierzRepozytorium("skrzynka").usun(id);
+      return { id, tytul: element.tresc, usunieto: true };
+    },
   });
   rejestr.zarejestruj({
     nazwa: "preview_process_inbox",

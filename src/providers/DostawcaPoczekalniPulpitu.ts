@@ -1,6 +1,7 @@
 import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
 import type { DostawcaElementowPulpitu, ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { ElementSkrzynki } from '../domain/typy'
+import { czyElementInboxDoKlasyfikacji } from '../services/PoczekalniaService'
 
 type ZrodloListy = Pick<Repozytorium<ElementSkrzynki>, 'lista'>
 
@@ -13,7 +14,7 @@ export class DostawcaPoczekalniPulpitu implements DostawcaElementowPulpitu {
 
   async pobierzElementy(_zakres: ZakresDat): Promise<ElementOgarniacza<'poczekalnia'>[]> {
     const nieprzetworzone = (await this.repozytoriumSkrzynki.lista())
-      .filter((element) => element.status === 'nowe')
+      .filter(czyElementInboxDoKlasyfikacji)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
     return nieprzetworzone.map((element) => ({
       id: `poczekalnia:${element.id}`,

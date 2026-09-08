@@ -72,7 +72,7 @@ export interface ElementSkrzynki extends EncjaBazowa {
   tresc: string
   zrodlo: 'tekst' | 'glos'
   sugerowanyTyp?: NazwaModulu
-  status: 'nowe' | 'przetworzone'
+  status: 'do_sklasyfikowania' | 'nowe' | 'przetworzone'
   przeksztalconoNa?: PowiazanieEncji
 }
 

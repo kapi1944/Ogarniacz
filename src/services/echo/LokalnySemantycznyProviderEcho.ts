@@ -90,7 +90,15 @@ type ZamiarPrzekrojowyEcho =
   | { typ: "sprawy_w_aptece" }
   | { typ: "plan_dnia"; etap: "podglad" | "zapis"; data: string; odGodziny?: string; godzinaObiadu?: string }
   | { typ: "wolne_okna"; data: string; minuty: number }
-  | { typ: "briefing_dnia" };
+  | { typ: "briefing_dnia" }
+  | { typ: "szybki_zrzut" }
+  | { typ: "porzadkuj_inbox"; elementy: ElementPorzadkowaniaInbox[]; nastepnyIndeks: number; komunikat: string };
+
+interface ElementPorzadkowaniaInbox {
+  id: string
+  tytul: string
+  sugerowanyTyp?: string
+}
 
 type ZamiarWywolaniaEcho =
   | ZamiarSemantycznyEcho
@@ -145,6 +153,18 @@ function dataPoPrzesunieciu(dataLokalna: string, dni: number): string {
 
 function lokalnaGodzina(teraz: string, strefaCzasowa: string): string {
   return new Intl.DateTimeFormat('pl-PL', { timeZone: strefaCzasowa, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(teraz))
+}
+
+function pokazElementPorzadkowaniaInbox(elementy: ElementPorzadkowaniaInbox[], indeks: number, komunikat = ''): DecyzjaModeluEcho {
+  const element = elementy[indeks]
+  if (!element) return { typ: 'odpowiedz', tresc: `${komunikat}${komunikat ? ' ' : ''}To wszystkie elementy w tym przebiegu porządkowania.`, aktualizacjaKontekstu: { oczekujacaAkcja: null } }
+  const etykiety: Record<string, string> = { zadania: 'zadanie', notatki: 'notatkę', przypomnienia: 'przypomnienie', zakupy: 'zakup', projekty: 'projekt', pomysly: 'pomysł', na_pozniej: 'na później', wizyty: 'wizytę' }
+  const sugestia = etykiety[element.sugerowanyTyp ?? ''] ?? 'zadanie'
+  return {
+    typ: 'pytanie',
+    tresc: `${komunikat}${komunikat ? ' ' : ''}Element ${indeks + 1} z ${elementy.length}: „${element.tytul}”. Sugeruję: ${sugestia}. Powiedz kategorię, „usuń” albo „następne”.`,
+    aktualizacjaKontekstu: { oczekujacaAkcja: { intencja: 'porzadkuj_inbox', dane: { elementy, indeks } } },
+  }
 }
 
 function dzienTygodnia(dataLokalna: string): number {
@@ -546,6 +566,26 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     if (wynik && zamiarWyniku)
       return this.odpowiedzPoWyniku(wynik, zamiarWyniku);
 
+    const porzadkowanie = zadanie.kontekstRozmowy.oczekujacaAkcja?.intencja === 'porzadkuj_inbox'
+      ? zadanie.kontekstRozmowy.oczekujacaAkcja.dane as { elementy?: ElementPorzadkowaniaInbox[]; indeks?: number }
+      : undefined
+    if (porzadkowanie?.elementy && typeof porzadkowanie.indeks === 'number') {
+      const decyzja = uprosc(ostatniaWypowiedz(zadanie.kontekstRozmowy)).replace(/[^a-z_ ]/g, '').trim()
+      if (/^(nastepne|dalej)$/.test(decyzja)) return pokazElementPorzadkowaniaInbox(porzadkowanie.elementy, porzadkowanie.indeks + 1)
+      const typy: Record<string, string> = { zadanie: 'zadanie', notatka: 'notatka', przypomnienie: 'przypomnienie', zakup: 'zakup', projekt: 'projekt', pomysl: 'pomysl', 'na pozniej': 'na_pozniej', wizyta: 'wizyta' }
+      const typ = typy[decyzja]
+      const element = porzadkowanie.elementy[porzadkowanie.indeks]
+      if (element && (typ || decyzja === 'usun')) {
+        const wynik = this.wywolajPrzekrojowo(
+          { typ: 'porzadkuj_inbox', elementy: porzadkowanie.elementy, nastepnyIndeks: porzadkowanie.indeks + 1, komunikat: decyzja === 'usun' ? 'Element został usunięty.' : 'Element został sklasyfikowany.' },
+          decyzja === 'usun' ? 'delete_inbox_item' : 'convert_inbox_item',
+          decyzja === 'usun' ? { id: element.id } : { id: element.id, typ },
+        )
+        if (decyzja === 'usun' && wynik.typ === 'narzedzia') wynik.wywolania[0].opisPotwierdzenia = `Usunąć z Inboxu „${element.tytul}”?`
+        return wynik
+      }
+    }
+
     const doprecyzowanie = zadanie.kontekstRozmowy.oczekujaceDoprecyzowanie;
     if (doprecyzowanie)
       return this.kontynuujDoprecyzowanie(zadanie, doprecyzowanie);
@@ -559,6 +599,15 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     const ostatnieZadanie = zadania.at(-1);
     const tokeny = new Set(lista.map(({ uproszczone }) => uproszczone));
     const uproszczonyTekst = uprosc(tekst)
+    const poprzedniaWypowiedz = [...zadanie.kontekstRozmowy.tury].slice(0, -1).reverse().find((tura) => tura.rola === 'uzytkownik')?.tresc
+    const trescZrzutu = tekst.match(/^zapisz\s*:\s*(.+)$/i)?.[1]
+      ?? tekst.match(/wrzu[cć] mi to do ogarniacza\s*:?\s*(.+)$/i)?.[1]
+      ?? tekst.match(/musz[eę] pami[eę]ta[cć] o\s+(.+)$/i)?.[1]
+      ?? (/^zapisz to(?:,|\s).*ogarn[eę] p[oó][zź]niej/i.test(tekst) ? poprzedniaWypowiedz : undefined)
+    if (trescZrzutu?.trim()) return this.wywolajPrzekrojowo({ typ: 'szybki_zrzut' }, 'capture_inbox', { tresc: trescZrzutu.trim(), zrodlo: 'tekst' })
+    if (/(?:uporzadkuj|ogarnij|co mam|ile mam).*(?:inbox|skrzyn)/i.test(uproszczonyTekst)) return this.wywolajPrzekrojowo(
+      { typ: 'porzadkuj_inbox', elementy: [], nastepnyIndeks: 0, komunikat: '' }, 'list_inbox', {},
+    )
     const czyBriefingPoranny = /(?:co mnie dzis czeka|jak wyglada moj dzien|dzien dobry)/i.test(uproszczonyTekst)
     const czyBriefingWieczorny = /(?:podsumuj (?:dzisiaj|dzis|dzien)|co zostalo na jutro)/i.test(uproszczonyTekst)
     if (czyBriefingPoranny || czyBriefingWieczorny) return this.wywolajPrzekrojowo(
@@ -1747,6 +1796,19 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     if (zamiar.typ === 'briefing_dnia') {
       const dane = wynik.dane as { tekst?: unknown }
       return { typ: 'odpowiedz', tresc: typeof dane.tekst === 'string' ? dane.tekst : 'Nie udało się przygotować briefingu z zapisanych danych.', aktualizacjaKontekstu }
+    }
+    if (zamiar.typ === 'szybki_zrzut') {
+      const dane = wynik.dane as { typ?: unknown }
+      return { typ: 'odpowiedz', tresc: dane.typ === 'zakupy' ? 'Dodałem to do zakupów.' : 'Zapisałem to w Inboxie do późniejszego uporządkowania.', aktualizacjaKontekstu }
+    }
+    if (zamiar.typ === 'porzadkuj_inbox') {
+      if (!zamiar.elementy.length) {
+        const elementy = Array.isArray(wynik.dane) ? wynik.dane.filter((element): element is ElementPorzadkowaniaInbox => Boolean(element && typeof element === 'object' && typeof (element as { id?: unknown }).id === 'string' && typeof (element as { tytul?: unknown }).tytul === 'string')) : []
+        return elementy.length
+          ? pokazElementPorzadkowaniaInbox(elementy, 0, `Masz ${elementy.length} ${elementy.length === 1 ? 'rzecz' : 'rzeczy'} w Inboxie.`)
+          : { typ: 'odpowiedz', tresc: 'Inbox jest pusty.', aktualizacjaKontekstu }
+      }
+      return pokazElementPorzadkowaniaInbox(zamiar.elementy, zamiar.nastepnyIndeks, zamiar.komunikat)
     }
     if (zamiar.typ === 'plan_dnia' && zamiar.etap === 'podglad') {
       const dane = wynik.dane as { pozycje?: { id: string; tytul: string; poczatek?: string; status: string; powod?: string }[] }

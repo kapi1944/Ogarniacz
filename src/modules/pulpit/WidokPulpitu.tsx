@@ -116,7 +116,7 @@ function etykietaKafelka(kafelek: KonfiguracjaKafelkaPulpitu): string {
   if (kafelek.typ === 'samochod') return 'Samochód'
   if (kafelek.typ === 'zakupy') return 'Zakupy'
   if (kafelek.typ === 'notatki') return 'Notatki'
-  if (kafelek.typ === 'poczekalnia') return 'Poczekalnia'
+  if (kafelek.typ === 'poczekalnia') return 'Inbox'
   return kafelek.typ
 }
 
@@ -131,7 +131,7 @@ function opisElementuKafelka(element: ElementOgarniacza): string {
   if (element.typ === 'samochod') return [termin, element.dane?.pozostaloKm === undefined ? '' : `${element.dane.pozostaloKm} km do wymiany`].filter(Boolean).join(' · ')
   if (element.typ === 'zakupy') return `${element.dane?.kupione ?? 0}/${element.dane?.liczbaPozycji ?? 0} kupionych${termin ? ` · ${termin}` : ''}`
   if (element.typ === 'notatka') return [element.dane?.przypieta ? 'Przypięta' : '', termin].filter(Boolean).join(' · ') || 'Bez terminu'
-  if (element.typ === 'poczekalnia') return `Nieprzetworzone: ${element.dane?.liczbaNieprzetworzonych ?? 0}`
+  if (element.typ === 'poczekalnia') return `Do sklasyfikowania: ${element.dane?.liczbaNieprzetworzonych ?? 0}`
   return termin || 'Bez terminu'
 }
 

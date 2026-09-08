@@ -25,7 +25,7 @@ const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
     { etykieta: 'Echo', adres: '/echo', modul: 'echo', ikona: MessageCircle },
   ] },
   { etykieta: 'Praca', pozycje: [
-    { etykieta: 'Skrzynka', adres: '/skrzynka', modul: 'skrzynka', ikona: Inbox },
+    { etykieta: 'Inbox', adres: '/skrzynka', modul: 'skrzynka', ikona: Inbox },
     { etykieta: 'Zadania', adres: '/zadania', modul: 'zadania', ikona: CheckSquare },
     { etykieta: 'Projekty', adres: '/projekty', modul: 'projekty', ikona: PackageCheck },
   ] },

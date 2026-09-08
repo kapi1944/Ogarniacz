@@ -127,7 +127,7 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
   skrzynka: schematEncji.extend({
     tresc: z.string(),
     zrodlo: z.enum(['tekst', 'glos']),
-    status: z.enum(['nowe', 'przetworzone']),
+    status: z.enum(['do_sklasyfikowania', 'nowe', 'przetworzone']),
   }),
   leki: schematEncji.extend({
     nazwa: z.string(),
