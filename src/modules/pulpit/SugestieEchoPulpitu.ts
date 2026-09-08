@@ -5,7 +5,7 @@ export interface SugestiaEchoPulpitu {
   id: string
   tresc: string
   priorytet: number
-  zrodlo: 'alert' | 'harmonogram'
+  zrodlo: 'alert' | 'harmonogram' | 'plan'
 }
 
 function minuty(godzina: string): number {
@@ -41,6 +41,19 @@ export function kandydaciSugestiiEchoPulpitu(
   })
   const pozostalo = odlegloscDoGodziny(teraz, harmonogram.doPracy)
   const otwarteZadania = elementyDnia.filter((element) => element.typ === 'zadanie' && element.status === 'otwarty')
+  const minutaTeraz = teraz.getHours() * 60 + teraz.getMinutes()
+  const opoznione = otwarteZadania
+    .filter((element) => element.godzina && minuty(element.godzina) < minutaTeraz)
+    .sort((a, b) => minuty(a.godzina!) - minuty(b.godzina!))
+  const opoznienie = opoznione.length ? Math.round((minutaTeraz - minuty(opoznione[0].godzina!)) / 5) * 5 : 0
+  if (opoznienie >= 15) {
+    sugestie.push({
+      id: `opoznienie-planu:${opoznione.map((element) => `${element.id}:${element.updatedAt}`).join(',')}:${opoznienie}`,
+      tresc: `Plan dnia jest opóźniony o około ${opoznienie} min. Przeplanować pozostałe zadania?`,
+      priorytet: 95,
+      zrodlo: 'plan',
+    })
+  }
   if (harmonogram.pracuje && pozostalo > 0 && pozostalo <= 60 && otwarteZadania.length >= 3) sugestie.push({
     id: `koniec-pracy:${harmonogram.doPracy}:${otwarteZadania.map((element) => `${element.id}:${element.updatedAt}`).join(',')}`,
     tresc: `Do końca pracy zostało ${pozostalo} min, a masz jeszcze ${otwarteZadania.length} otwarte zadania. Mogę zaproponować, co przełożyć.`,

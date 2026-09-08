@@ -59,11 +59,34 @@ function korektaOczekujacejAkcji(tekst: string, akcja: AkcjaDoPotwierdzeniaEcho,
   const argumenty = structuredClone(akcja.wywolanie.argumenty)
   if (!argumenty || typeof argumenty !== 'object') return undefined
   const uproszczony = tekst.toLocaleLowerCase('pl-PL').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l')
+  const dane = argumenty as Record<string, unknown>
+  if (akcja.wywolanie.nazwa === 'accept_plan_selection' && Array.isArray(dane.propozycje)) {
+    const propozycja = (dane.propozycje as { zadanieId?: unknown; tytul?: unknown; poczatek?: unknown; koniec?: unknown }[]).find((element) =>
+      typeof element.zadanieId === 'string' && typeof element.tytul === 'string' && uproszczony.includes(element.tytul.toLocaleLowerCase('pl-PL').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l')),
+    )
+    if (propozycja && typeof propozycja.zadanieId === 'string') {
+      const obecne = Array.isArray(dane.ograniczenia) ? dane.ograniczenia as Record<string, unknown>[] : []
+      const pozostale = obecne.filter((element) => element.zadanieId !== propozycja.zadanieId)
+      const ograniczenie: Record<string, unknown> = { zadanieId: propozycja.zadanieId }
+      let opisKorekty: string | undefined
+      if (/pozniej/.test(uproszczony) && typeof propozycja.koniec === 'string') {
+        ograniczenie.nieWczesniejNiz = propozycja.koniec.slice(11, 16)
+        opisKorekty = `„${propozycja.tytul}” zaplanuję później, nie wcześniej niż o ${ograniczenie.nieWczesniejNiz}`
+      } else if (/przed obiadem/.test(uproszczony)) {
+        ograniczenie.niePozniejNiz = typeof dane.godzinaObiadu === 'string' ? dane.godzinaObiadu : '12:00'
+        opisKorekty = `„${propozycja.tytul}” zaplanuję przed obiadem, do ${ograniczenie.niePozniejNiz}`
+      }
+      if (opisKorekty) return {
+        ...akcja,
+        wywolanie: { ...akcja.wywolanie, id: crypto.randomUUID(), argumenty: { ...dane, ograniczenia: [...pozostale, ograniczenie] } },
+        opis: `${opisKorekty}. Zapisać zmieniony plan?`,
+      }
+    }
+  }
   const dni = new Map([['poniedzialek', 1], ['wtorek', 2], ['sroda', 3], ['czwartek', 4], ['piatek', 5], ['sobota', 6], ['sobote', 6], ['niedziela', 0], ['niedziele', 0]])
   const znaleziony = [...dni].find(([nazwa]) => uproszczony.split(/[^a-z]+/).includes(nazwa))
   const data = znaleziony ? dataDniaTygodnia(dataLokalna, znaleziony[1]) : undefined
   if (!data) return undefined
-  const dane = argumenty as Record<string, unknown>
   if ('termin' in dane || akcja.wywolanie.nazwa === 'create_task') dane.termin = data
   else if ('zmiany' in dane && dane.zmiany && typeof dane.zmiany === 'object') (dane.zmiany as Record<string, unknown>).termin = data
   else return undefined
@@ -72,6 +95,7 @@ function korektaOczekujacejAkcji(tekst: string, akcja: AkcjaDoPotwierdzeniaEcho,
 
 function podsumujAkcje(akcja: AkcjaDoPotwierdzeniaEcho): string {
   if (akcja.plan) return opisPlanuDlaUzytkownika(akcja.plan)
+  if (akcja.opis.trim().endsWith('?')) return akcja.opis
   const argumenty = akcja.wywolanie.argumenty && typeof akcja.wywolanie.argumenty === 'object' ? akcja.wywolanie.argumenty as Record<string, unknown> : {}
   const tytul = typeof argumenty.tytul === 'string' ? ` „${argumenty.tytul}”` : ''
   const termin = typeof argumenty.termin === 'string' ? `, termin: ${argumenty.termin}` : ''
@@ -184,6 +208,7 @@ export class AgentEcho {
     if (wynik.status !== 'wykonane') return this.odpowiedz('Nie udało się bezpiecznie wykonać tej zmiany.', akcja.ryzyko)
     this.kontekst.ustawOstatniaAkcje(wywolanie.nazwa, wywolanie.argumenty)
     this.zapamietajEncjeWyniku(wywolanie.nazwa, wynik.dane)
+    if (wywolanie.odpowiedzPoWykonaniu) return this.odpowiedz(wywolanie.odpowiedzPoWykonaniu, akcja.ryzyko)
     return this.uruchomPetle(sygnalZewnetrzny)
   }
 
@@ -264,7 +289,7 @@ export class AgentEcho {
       this.kontekst.dodajWynikNarzedzia(wynik)
       if (wynik.status === 'wymaga_potwierdzenia') {
         const narzedzie = this.rejestr.pobierz(wywolanie.nazwa)
-        const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie, ryzyko: narzedzie?.ryzyko ?? 'wysokie', opis: wynik.komunikat ?? 'Zmiana danych' }
+        const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie, ryzyko: narzedzie?.ryzyko ?? 'wysokie', opis: wywolanie.opisPotwierdzenia ?? wynik.komunikat ?? 'Zmiana danych' }
         this.oczekujacaAkcja = structuredClone(akcja)
         return { tekst: podsumujAkcje(akcja), ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
       }

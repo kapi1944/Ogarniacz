@@ -119,6 +119,7 @@ describe("Agent Echo", () => {
         "process_inbox",
         "preview_day_plan",
         "preview_replan_from_now",
+        "find_free_slots",
         "explain_planning_conflict",
         "accept_plan_selection",
         "mark_habit_full",

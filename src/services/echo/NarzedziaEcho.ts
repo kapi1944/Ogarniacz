@@ -36,6 +36,8 @@ import { pobierzSprawyWedlugMiejsca } from "../MiejscaService";
 import {
   DOMYSLNE_PREFERENCJE_PLANOWANIA,
   generujPlan,
+  generujPrzeplanowanie,
+  znajdzWolneOkna,
   zatwierdzPlan,
   type PreferencjePlanowania,
 } from "../PlanerService";
@@ -1460,7 +1462,9 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     };
   };
   const podgladPlanu = async (data: string, odGodziny?: string) => ({
-    ...generujPlan(await zbudujDanePlanu(data, odGodziny)),
+    ...(odGodziny
+      ? generujPrzeplanowanie(await zbudujDanePlanu(data, odGodziny))
+      : generujPlan(await zbudujDanePlanu(data))),
     zapisano: false,
   });
   rejestr.zarejestruj({
@@ -1476,6 +1480,13 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     schematArgumentow: z.object({ data: dataIso, odGodziny: godzina }),
     ryzyko: "niskie",
     wykonaj: async ({ data, odGodziny }) => podgladPlanu(data, odGodziny),
+  });
+  rejestr.zarejestruj({
+    nazwa: "find_free_slots",
+    opis: "Wyznacza wolne okna o podanej długości bez zapisu.",
+    schematArgumentow: z.object({ data: dataIso, minuty: z.number().int().positive().max(720), odGodziny: godzina.optional() }),
+    ryzyko: "niskie",
+    wykonaj: async ({ data, minuty, odGodziny }) => znajdzWolneOkna(await zbudujDanePlanu(data, odGodziny), minuty),
   });
   rejestr.zarejestruj({
     nazwa: "explain_planning_conflict",
@@ -1502,11 +1513,14 @@ export function utworzDomyslnyRejestrNarzedziEcho(
       data: dataIso,
       zadaniaIds: z.array(z.string().min(1)),
       godzinaStartu: godzina.optional(),
+      godzinaObiadu: godzina.optional(),
+      propozycje: z.array(z.object({ zadanieId: z.string(), tytul: z.string(), poczatek: z.string(), koniec: z.string() })).optional(),
+      ograniczenia: z.array(z.object({ zadanieId: z.string(), nieWczesniejNiz: godzina.optional(), niePozniejNiz: godzina.optional() })).optional(),
     }),
     ryzyko: "umiarkowane",
-    wykonaj: async ({ data, zadaniaIds, godzinaStartu }) => {
-      const dane = await zbudujDanePlanu(data, godzinaStartu);
-      const plan = generujPlan(dane);
+    wykonaj: async ({ data, zadaniaIds, godzinaStartu, ograniczenia }) => {
+      const dane = { ...await zbudujDanePlanu(data, godzinaStartu), ograniczenia };
+      const plan = godzinaStartu ? generujPrzeplanowanie(dane) : generujPlan(dane);
       const liczba = await zatwierdzPlan(
         plan,
         repozytoriumElementowZadan,

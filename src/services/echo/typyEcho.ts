@@ -96,6 +96,8 @@ export interface WywolanieNarzedziaEcho {
   nazwa: string
   argumenty: unknown
   zaleznosci?: string[]
+  opisPotwierdzenia?: string
+  odpowiedzPoWykonaniu?: string
 }
 
 export interface KrokPlanuWykonaniaEcho {

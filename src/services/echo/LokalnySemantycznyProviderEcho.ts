@@ -87,7 +87,9 @@ type ZamiarPrzekrojowyEcho =
     }
   | { typ: "ocena_mechanika" }
   | { typ: "ocena_wydatku"; kwota: number }
-  | { typ: "sprawy_w_aptece" };
+  | { typ: "sprawy_w_aptece" }
+  | { typ: "plan_dnia"; etap: "podglad" | "zapis"; data: string; odGodziny?: string; godzinaObiadu?: string }
+  | { typ: "wolne_okna"; data: string; minuty: number };
 
 type ZamiarWywolaniaEcho =
   | ZamiarSemantycznyEcho
@@ -138,6 +140,10 @@ function dataPoPrzesunieciu(dataLokalna: string, dni: number): string {
   return new Date(Date.UTC(rok, miesiac - 1, dzien + dni))
     .toISOString()
     .slice(0, 10);
+}
+
+function lokalnaGodzina(teraz: string, strefaCzasowa: string): string {
+  return new Intl.DateTimeFormat('pl-PL', { timeZone: strefaCzasowa, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(teraz))
 }
 
 function dzienTygodnia(dataLokalna: string): number {
@@ -551,6 +557,27 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     const zadania = ostatnieZadania(zadanie.kontekstRozmowy);
     const ostatnieZadanie = zadania.at(-1);
     const tokeny = new Set(lista.map(({ uproszczone }) => uproszczone));
+    const czyPlanDnia = /zaplanuj(?: mi)? (?:dzisiaj|dzis|jutro|dzien)/i.test(uprosc(tekst))
+    const czyPrzeplanowanie = /(?:nie wyrobie sie|przeplanuj reszte|plan.*opozn)/i.test(uprosc(tekst))
+    const czyCoTeraz = /(?:mam .*wolne godziny|co najlepiej teraz zrobic)/i.test(uprosc(tekst))
+    if (czyPlanDnia || czyPrzeplanowanie || czyCoTeraz) {
+      const data = czas.data ?? zadanie.kontekstCzasu.dataLokalna
+      const odGodziny = czyPrzeplanowanie || czyCoTeraz
+        ? lokalnaGodzina(zadanie.kontekstCzasu.teraz, zadanie.kontekstCzasu.strefaCzasowa)
+        : undefined
+      return this.wywolajPrzekrojowo(
+        { typ: 'plan_dnia', etap: 'podglad', data, odGodziny, godzinaObiadu: zadanie.kontekstPlanowania?.preferowanaGodzinaObiadu?.godzina },
+        odGodziny ? 'preview_replan_from_now' : 'preview_day_plan',
+        odGodziny ? { data, odGodziny } : { data },
+      )
+    }
+    const czyWolneOkno = /(?:gdzie|kiedy).*(?:wcisn|znajd).*(?:godzin|minut)/i.test(uprosc(tekst))
+    if (czyWolneOkno) {
+      const liczba = Number(tekst.match(/(\d+)\s*(?:godzin|minut)/i)?.[1])
+      const minuty = /godzin/i.test(tekst) ? (Number.isFinite(liczba) ? liczba * 60 : 60) : (Number.isFinite(liczba) ? liczba : 60)
+      const data = czas.data ?? zadanie.kontekstCzasu.dataLokalna
+      return this.wywolajPrzekrojowo({ typ: 'wolne_okna', data, minuty }, 'find_free_slots', { data, minuty })
+    }
     const czyUtworzeniePrzypomnienia = lista.some(
       ({ uproszczone: slowo }) => ["dodaj", "dopisz"].includes(slowo) || slowo.startsWith("przypomnij"),
     );
@@ -1697,6 +1724,48 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
           : "Na podstawie danych zapisanych w Ogarniaczu nie masz jutro zapisanych spraw w aptece.",
         aktualizacjaKontekstu,
       };
+    }
+    if (zamiar.typ === 'wolne_okna') {
+      const okna = Array.isArray(wynik.dane) ? wynik.dane as { poczatek: string; koniec: string }[] : []
+      return {
+        typ: 'odpowiedz',
+        tresc: okna.length
+          ? `Najbliższe wolne okna: ${okna.map((okno) => `${okno.poczatek.slice(11, 16)}–${okno.koniec.slice(11, 16)}`).join(', ')}.`
+          : `Nie znalazłem wolnego okna długości ${zamiar.minuty} min.`,
+        aktualizacjaKontekstu,
+      }
+    }
+    if (zamiar.typ === 'plan_dnia' && zamiar.etap === 'podglad') {
+      const dane = wynik.dane as { pozycje?: { id: string; tytul: string; poczatek?: string; status: string; powod?: string }[] }
+      const zaplanowane = (dane.pozycje ?? []).filter((pozycja) => pozycja.status === 'zaplanowana' && pozycja.poczatek)
+      const konflikty = (dane.pozycje ?? []).filter((pozycja) => pozycja.status === 'konflikt')
+      if (!zaplanowane.length) return {
+        typ: 'odpowiedz',
+        tresc: konflikty.length ? `Nie znalazłem bezpiecznego układu. ${konflikty[0].powod ?? 'Brakuje wolnego miejsca.'}` : 'Nie ma otwartych zadań z określonym czasem do zaplanowania.',
+        aktualizacjaKontekstu,
+      }
+      const propozycja = zaplanowane.slice(0, 5).map((pozycja) => `${pozycja.poczatek!.slice(11, 16)} — ${pozycja.tytul}`).join(', ')
+      const decyzja = this.wywolajPrzekrojowo(
+        { ...zamiar, etap: 'zapis' },
+        'accept_plan_selection',
+        {
+          data: zamiar.data,
+          zadaniaIds: zaplanowane.map((pozycja) => pozycja.id),
+          propozycje: zaplanowane.map((pozycja) => ({ zadanieId: pozycja.id.replace(/^draft:/, ''), tytul: pozycja.tytul, poczatek: pozycja.poczatek!, koniec: (pozycja as { koniec?: string }).koniec ?? pozycja.poczatek! })),
+          ...(zamiar.odGodziny ? { godzinaStartu: zamiar.odGodziny } : {}),
+          ...(zamiar.godzinaObiadu ? { godzinaObiadu: zamiar.godzinaObiadu } : {}),
+        },
+      )
+      if (decyzja.typ === 'narzedzia') {
+        decyzja.wywolania[0].opisPotwierdzenia = `Proponuję: ${propozycja}.${konflikty.length ? ` ${konflikty.length} zadań nie mieści się bez konfliktu.` : ''} Zapisz ten plan?`
+        decyzja.wywolania[0].odpowiedzPoWykonaniu = 'Plan dnia został zapisany.'
+      }
+      return decyzja
+    }
+    if (zamiar.typ === 'plan_dnia') return {
+      typ: 'odpowiedz',
+      tresc: 'Plan dnia został zapisany.',
+      aktualizacjaKontekstu,
     }
     if (zamiar.typ === "odczytaj_zdrowie") {
       const znalezione = Array.isArray(wynik.dane)

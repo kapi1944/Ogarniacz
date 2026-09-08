@@ -17,6 +17,14 @@ export interface DanePlanera {
   harmonogram: HarmonogramDnia
   odGodziny?: string
   preferencje?: PreferencjePlanowania
+  zadaniaDoPrzeplanowaniaIds?: readonly string[]
+  ograniczenia?: readonly OgraniczenieZadaniaPlanera[]
+}
+
+export interface OgraniczenieZadaniaPlanera {
+  zadanieId: string
+  nieWczesniejNiz?: string
+  niePozniejNiz?: string
 }
 
 export interface PreferencjePlanowania {
@@ -45,6 +53,12 @@ export interface WynikPlanera {
   pozycje: PozycjaDraftu[]
   minutyDostepne: number
   minutyZaplanowane: number
+}
+
+export interface WolneOknoPlanera {
+  poczatek: string
+  koniec: string
+  minuty: number
 }
 
 export const DOMYSLNE_PREFERENCJE_PLANOWANIA: PreferencjePlanowania = {
@@ -82,7 +96,7 @@ function odejmijPrzedzial(zrodlo: readonly Przedzial[], zajety: Przedzial): Prze
   })
 }
 
-function przedzialyDostepne(dane: DanePlanera): Przedzial[] {
+function przedzialyDostepne(dane: DanePlanera, preferencje: PreferencjePlanowania): Przedzial[] {
   const poczatek = Math.max(
     minutyDnia(dane.harmonogram.zakresAktywny.od),
     dane.odGodziny ? minutyDnia(dane.odGodziny) : 0,
@@ -100,7 +114,9 @@ function przedzialyDostepne(dane: DanePlanera): Przedzial[] {
     .filter((element) => element.data === dane.data && element.godzina && element.status !== 'anulowany')
     .map((element) => {
       const od = minutyDnia(element.godzina!)
-      return { od, do: od + Math.max(1, element.czasTrwaniaMinuty ?? 1) }
+      const czas = Math.max(1, element.czasTrwaniaMinuty ?? 1)
+      const margines = czas > 1 ? preferencje.minimalnaPrzerwaMinuty : 0
+      return { od: Math.max(0, od - margines), do: od + czas + margines }
     })
     .sort((a, b) => a.od - b.od || a.do - b.do)
 
@@ -119,19 +135,22 @@ function terminMinuty(element: ElementOgarniacza<'zadanie'>, data: string): numb
 }
 
 function kandydaci(dane: DanePlanera): ElementOgarniacza<'zadanie'>[] {
+  const doPrzeplanowania = new Set(dane.zadaniaDoPrzeplanowaniaIds ?? [])
   return dane.zadania
     .map(zadanieLegacyNaElement)
     .filter((zadanie) => zadanie.status === 'otwarty')
     .filter((zadanie) => !czyZadanieZablokowane(dane.zadania.find((zrodlo) => zrodlo.id === zadanie.id)!, dane.zadania))
-    .filter((zadanie) => !(zadanie.data && zadanie.godzina && zadanie.trybTerminu === 'o_godzinie'))
+    .filter((zadanie) => doPrzeplanowania.has(zadanie.id) || !(zadanie.data && zadanie.godzina && zadanie.trybTerminu === 'o_godzinie'))
     .filter((zadanie) => !dane.zadania.find((zrodlo) => zrodlo.id === zadanie.id)?.dataStartu
       || dane.zadania.find((zrodlo) => zrodlo.id === zadanie.id)!.dataStartu! <= dane.data)
     .sort((a, b) => {
+      const przeplanowanie = Number(doPrzeplanowania.has(b.id)) - Number(doPrzeplanowania.has(a.id))
       const terminA = a.terminGraniczny ?? '9999'
       const terminB = b.terminGraniczny ?? '9999'
       const zalegleA = terminA.slice(0, 10) < dane.data
       const zalegleB = terminB.slice(0, 10) < dane.data
-      return Number(zalegleB) - Number(zalegleA)
+      return przeplanowanie
+        || Number(zalegleB) - Number(zalegleA)
         || wagiPriorytetu[b.priorytet ?? 'normalny'] - wagiPriorytetu[a.priorytet ?? 'normalny']
         || terminA.localeCompare(terminB)
         || a.tytul.localeCompare(b.tytul, 'pl')
@@ -139,21 +158,21 @@ function kandydaci(dane: DanePlanera): ElementOgarniacza<'zadanie'>[] {
     })
 }
 
-function znajdzSlot(przedzialy: readonly Przedzial[], czas: number, deadline?: number, preferujSkupienie?: Przedzial): Przedzial | undefined {
+function znajdzSlot(przedzialy: readonly Przedzial[], czas: number, deadline?: number, preferujSkupienie?: Przedzial, nieWczesniejNiz?: number): Przedzial | undefined {
   const dostepne = preferujSkupienie
     ? [...przedzialy.filter((przedzial) => przedzial.od >= preferujSkupienie.od && przedzial.do <= preferujSkupienie.do), ...przedzialy]
     : przedzialy
-  return dostepne.find((przedzial) => {
+  return dostepne.map((przedzial) => ({ ...przedzial, od: Math.max(przedzial.od, nieWczesniejNiz ?? przedzial.od) })).find((przedzial) => {
     const koniec = przedzial.od + czas
     return koniec <= przedzial.do && (deadline === undefined || koniec <= deadline)
   })
 }
 
 export function generujPlan(dane: DanePlanera): WynikPlanera {
-  let wolne = przedzialyDostepne(dane)
+  const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }
+  let wolne = przedzialyDostepne(dane, preferencje)
   const minutyDostepne = wolne.reduce((suma, przedzial) => suma + przedzial.do - przedzial.od, 0)
   const pozycje: PozycjaDraftu[] = []
-  const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }
   const skupienie = preferencje.godzinySkupieniaOd && preferencje.godzinySkupieniaDo
     ? { od: minutyDnia(preferencje.godzinySkupieniaOd), do: minutyDnia(preferencje.godzinySkupieniaDo) }
     : undefined
@@ -172,8 +191,11 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
       continue
     }
     const deadline = terminMinuty(zadanie, dane.data)
+    const ograniczenie = dane.ograniczenia?.find((element) => element.zadanieId === zadanie.id)
+    const niePozniejNiz = ograniczenie?.niePozniejNiz ? minutyDnia(ograniczenie.niePozniejNiz) : undefined
+    const ostatecznyDeadline = deadline === undefined ? niePozniejNiz : niePozniejNiz === undefined ? deadline : Math.min(deadline, niePozniejNiz)
     const intensywne = zadanie.priorytet === 'asap' || zadanie.priorytet === 'pilny'
-    const slot = deadline === -1 ? undefined : znajdzSlot(wolne, czas, deadline, intensywne ? skupienie : undefined)
+    const slot = ostatecznyDeadline === -1 ? undefined : znajdzSlot(wolne, czas, ostatecznyDeadline, intensywne ? skupienie : undefined, ograniczenie?.nieWczesniejNiz ? minutyDnia(ograniczenie.nieWczesniejNiz) : undefined)
     if (!slot) {
       pozycje.push({
         id: `draft:${zadanie.id}`,
@@ -181,7 +203,7 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
         tytul: zadanie.tytul,
         czasTrwaniaMinuty: czas,
         status: 'konflikt',
-        powod: deadline === -1 ? 'Termin zadania już minął.' : 'Brak dostępnego slotu przed terminem.',
+        powod: ostatecznyDeadline === -1 ? 'Termin zadania już minął.' : 'Brak dostępnego slotu zgodnego z terminem i preferencjami.',
       })
       continue
     }
@@ -211,6 +233,34 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
 
 export const zaproponujPlan = generujPlan
 
+export function znajdzWolneOkna(dane: DanePlanera, wymaganeMinuty: number, limit = 3): WolneOknoPlanera[] {
+  if (!Number.isFinite(wymaganeMinuty) || wymaganeMinuty <= 0) return []
+  const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }
+  return przedzialyDostepne(dane, preferencje)
+    .filter((przedzial) => przedzial.do - przedzial.od >= wymaganeMinuty)
+    .slice(0, Math.max(0, limit))
+    .map((przedzial) => ({
+      poczatek: isoDnia(dane.data, przedzial.od),
+      koniec: isoDnia(dane.data, przedzial.od + wymaganeMinuty),
+      minuty: wymaganeMinuty,
+    }))
+}
+
+export function generujPrzeplanowanie(dane: DanePlanera): WynikPlanera {
+  if (!dane.odGodziny) return generujPlan(dane)
+  const odMinuty = minutyDnia(dane.odGodziny)
+  const otwarteZaplanowane = dane.zadania
+    .map(zadanieLegacyNaElement)
+    .filter((zadanie) => zadanie.status === 'otwarty' && zadanie.data === dane.data && zadanie.godzina && zadanie.trybTerminu === 'o_godzinie')
+  const doPrzeplanowania = otwarteZaplanowane.filter((zadanie) => minutyDnia(zadanie.godzina!) < odMinuty)
+  const nieruchome = otwarteZaplanowane.filter((zadanie) => minutyDnia(zadanie.godzina!) >= odMinuty)
+  return generujPlan({
+    ...dane,
+    wydarzenia: [...dane.wydarzenia, ...nieruchome],
+    zadaniaDoPrzeplanowaniaIds: doPrzeplanowania.map((zadanie) => zadanie.id),
+  })
+}
+
 export function walidujPozycjeDraftu(
   dane: DanePlanera,
   pozycja: PozycjaDraftu,
@@ -227,7 +277,8 @@ export function walidujPozycjeDraftu(
   const deadline = terminMinuty(element, dane.data)
   if (deadline === -1 || deadline !== undefined && doMinuty > deadline) return { poprawna: false, powod: 'Slot kończy się po terminie Zadania.' }
 
-  let wolne = przedzialyDostepne(dane)
+  const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }
+  let wolne = przedzialyDostepne(dane, preferencje)
   for (const inna of pozostale) {
     if (inna.id === pozycja.id || inna.status !== 'zaplanowana' || !inna.poczatek || !inna.koniec) continue
     wolne = odejmijPrzedzial(wolne, { od: minutyDnia(inna.poczatek.slice(11, 16)), do: minutyDnia(inna.koniec.slice(11, 16)) })

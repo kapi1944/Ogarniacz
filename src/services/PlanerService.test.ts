@@ -10,7 +10,7 @@ import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import { utworzHarmonogramDnia, type HarmonogramDnia } from '../modules/pulpit/logikaOsiCzasu'
 import { DostawcaZadanPulpitu } from '../providers/DostawcaZadanPulpitu'
 import { utworzZadanie } from './ZadaniaService'
-import { anulujPlan, generujPlan, walidujPozycjeDraftu, zatwierdzPlan, type DanePlanera } from './PlanerService'
+import { anulujPlan, generujPlan, generujPrzeplanowanie, walidujPozycjeDraftu, zatwierdzPlan, znajdzWolneOkna, type DanePlanera } from './PlanerService'
 
 const data = '2026-08-17'
 
@@ -131,7 +131,13 @@ describe('Planer draftu', () => {
 
   it('hard event blokuje slot', () => {
     const wynik = generujPlan(dane({ wydarzenia: [wydarzenie('07:00', 60)] }))
-    expect(wynik.pozycje[0]).toMatchObject({ status: 'zaplanowana', poczatek: `${data}T08:00:00` })
+    expect(wynik.pozycje[0]).toMatchObject({ status: 'zaplanowana', poczatek: `${data}T08:10:00` })
+  })
+
+  it('wyznacza wolne okno z marginesem wokół twardego wydarzenia', () => {
+    expect(znajdzWolneOkna(dane({ wydarzenia: [wydarzenie('08:00', 60)] }), 60)[0]).toEqual({
+      poczatek: `${data}T09:10:00`, koniec: `${data}T10:10:00`, minuty: 60,
+    })
   })
 
   it('punktowa dawka nie staje się godzinnym blokiem', () => {
@@ -153,9 +159,25 @@ describe('Planer draftu', () => {
   it('deadline wybiera wcześniejszy poprawny slot', () => {
     const wynik = generujPlan(dane({
       zadania: [zadanie({ terminGranicznyElementu: `${data}T09:00:00` })],
-      wydarzenia: [wydarzenie('08:00', 60)],
+      wydarzenia: [wydarzenie('08:10', 60)],
     }))
     expect(wynik.pozycje[0]).toMatchObject({ status: 'zaplanowana', poczatek: `${data}T07:00:00` })
+  })
+
+  it('po opóźnieniu przeplanowuje tylko minione niewykonane zadanie i zachowuje przyszłe', () => {
+    const spoznione = zadanie({ id: 'spoznione', tytul: 'Dokumenty', dataElementu: data, godzinaElementu: '08:00', trybTerminuElementu: 'o_godzinie' })
+    const przyszle = zadanie({ id: 'przyszle', tytul: 'Trening', dataElementu: data, godzinaElementu: '18:00', trybTerminuElementu: 'o_godzinie' })
+    const wynik = generujPrzeplanowanie(dane({ zadania: [spoznione, przyszle], odGodziny: '12:00' }))
+
+    expect(wynik.pozycje.find((pozycja) => pozycja.zadanieId === spoznione.id)?.poczatek).toBe(`${data}T12:00:00`)
+    expect(wynik.pozycje.some((pozycja) => pozycja.zadanieId === przyszle.id)).toBe(false)
+  })
+
+  it('przeplanowanie nie przesuwa wizyty ani nie planuje na jej marginesie', () => {
+    const spoznione = zadanie({ id: 'spoznione', dataElementu: data, godzinaElementu: '08:00', trybTerminuElementu: 'o_godzinie' })
+    const wynik = generujPrzeplanowanie(dane({ zadania: [spoznione], wydarzenia: [wydarzenie('12:00', 60)], odGodziny: '12:00' }))
+
+    expect(wynik.pozycje[0]).toMatchObject({ poczatek: `${data}T13:10:00` })
   })
 
   it('brak slotu przed deadline zwraca konflikt', () => {
@@ -163,6 +185,15 @@ describe('Planer draftu', () => {
       zadania: [zadanie({ terminGranicznyElementu: `${data}T07:30:00` })],
     }))
     expect(wynik.pozycje[0]).toMatchObject({ status: 'konflikt' })
+  })
+
+  it('stosuje korektę użytkownika bez wymyślania terminu przez model', () => {
+    const dokumenty = zadanie({ id: 'dokumenty', tytul: 'Dokumenty' })
+    const pozniej = generujPlan(dane({ zadania: [dokumenty], ograniczenia: [{ zadanieId: dokumenty.id, nieWczesniejNiz: '17:00' }] }))
+    const przedObiadem = generujPlan(dane({ zadania: [dokumenty], ograniczenia: [{ zadanieId: dokumenty.id, niePozniejNiz: '12:00' }] }))
+
+    expect(pozniej.pozycje[0].poczatek).toBe(`${data}T17:00:00`)
+    expect(przedObiadem.pozycje[0].koniec).toBe(`${data}T08:00:00`)
   })
 
   it('ręczna korekta jest walidowana względem hard events i dostępności', () => {

@@ -22,4 +22,14 @@ describe('sugestie Echo na Pulpicie', () => {
     expect(widoczneSugestieEchoPulpitu(kandydaci, [kandydaci[0].id])).toEqual([])
     expect(widoczneSugestieEchoPulpitu(kandydaci, [])).toHaveLength(1)
   })
+
+  it('pokazuje jedną sugestię przeplanowania, gdy otwarte zadanie realnie opóźnia plan', () => {
+    const opoznione = { ...zadanie('raport'), godzina: '10:00', czasTrwaniaMinuty: 30 }
+    const kandydaci = kandydaciSugestiiEchoPulpitu([], [opoznione], { pracuje: false, doPracy: '16:00' }, new Date('2026-09-08T10:50:00'))
+
+    expect(widoczneSugestieEchoPulpitu(kandydaci, [], 1)).toMatchObject([{
+      tresc: 'Plan dnia jest opóźniony o około 50 min. Przeplanować pozostałe zadania?',
+      zrodlo: 'plan',
+    }])
+  })
 })

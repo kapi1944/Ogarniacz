@@ -286,7 +286,7 @@ export function WidokPulpitu() {
   const elementyDoOgarnięcia = elementyBezGodziny.slice(0, 4)
   const kandydaciSugestiiEcho = useMemo(() => kandydaciSugestiiEchoPulpitu(alerty, elementyDnia, harmonogram, teraz), [alerty, elementyDnia, harmonogram, teraz])
   const sugestieEcho = ustawienia.proaktywnoscEcho && !ustawienia.echoWyciszone
-    ? widoczneSugestieEchoPulpitu(kandydaciSugestiiEcho, ustawienia.pulpit.odrzuconeSugestieEcho)
+    ? widoczneSugestieEchoPulpitu(kandydaciSugestiiEcho, ustawienia.pulpit.odrzuconeSugestieEcho, 1)
     : []
   const poraDnia = teraz.getHours() < 12 ? 'Dobry poranek' : teraz.getHours() < 18 ? 'Dzień dobry' : 'Dobry wieczór'
   const opisDnia = elementyDoOgarnięcia.length === 0
