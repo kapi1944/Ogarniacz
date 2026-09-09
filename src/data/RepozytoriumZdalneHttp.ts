@@ -1,5 +1,5 @@
 import { CapacitorHttp, type HttpResponse } from '@capacitor/core'
-import type { RepozytoriumZdalne, ZmianaSynchronizacji } from './DostawcaSynchronizacji'
+import { BladKonfliktuSynchronizacji, type RepozytoriumZdalne, type ZmianaSynchronizacji } from './DostawcaSynchronizacji'
 import { odtworzWartoscZTransportu, przygotujWartoscDoTransportu } from '../services/BackupService'
 import { pobierzInstallationId } from '../services/InstallationService'
 
@@ -58,6 +58,7 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
 
   private async odczytajOdpowiedz(odpowiedz: HttpResponse): Promise<unknown> {
     const dane = odpowiedz.data && typeof odpowiedz.data === 'object' ? odpowiedz.data as { error?: string } : {}
+    if (odpowiedz.status === 409) throw new BladKonfliktuSynchronizacji(dane.error)
     if (odpowiedz.status < 200 || odpowiedz.status >= 300) throw new Error(dane.error || `Serwer synchronizacji zwrócił ${odpowiedz.status}.`)
     return dane
   }

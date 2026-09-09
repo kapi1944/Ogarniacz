@@ -20,9 +20,18 @@ Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL`, a klucza `VITE_SYNC_
 
 Jeżeli lokalna i zdalna wersja tego samego rekordu zmieniły się od ostatniego sync i nie są identyczne, żadna nie nadpisuje drugiej. Obie wersje oraz identyfikatory instalacji trafiają do lokalnego rejestru konfliktów. Ustawienia pozwalają wybrać wersję lokalną albo zdalną. Nie zastosowano CRDT.
 
+Reguły w prostym języku:
+
+- identyczne wersje są uznawane za tę samą zmianę i nie tworzą duplikatu;
+- lokalna zmiana oparta dokładnie na bieżącej wersji serwera może ją bezpiecznie zastąpić;
+- zdalna zmiana bez lokalnej edycji jest przyjmowana automatycznie;
+- równoległe edycje, edycja kontra usunięcie oraz dwa różne utworzenia tego samego `id` stają się jawnym konfliktem;
+- konflikt wykryty przez serwer między pobraniem a wysłaniem powoduje ponowne pobranie i zachowanie obu wersji, nie ciche nadpisanie;
+- wybór wersji lokalnej tworzy nową zmianę opartą na wersji zdalnej, a wybór zdalnej usuwa oczekującą zmianę lokalną.
+
 ## Offline
 
-Bez połączenia silnik nie modyfikuje danych i zapisuje stan `offline`. Trwała kolejka przeżywa restart aplikacji; błąd providera zwiększa licznik prób i zachowuje ostatni błąd, a znacznik ostatniego udanego sync nie przesuwa się. Migracja jednorazowo odbudowuje kolejkę z `updatedAt` dla wcześniejszych baz.
+Bez połączenia silnik nie modyfikuje danych i zapisuje stan `offline`. Rekord domenowy i wpis trwałej kolejki są zapisywane w jednej transakcji Dexie, więc kolejka przeżywa restart bez osierocenia zmiany. Błąd providera zwiększa licznik prób i zachowuje ostatni błąd, a znacznik ostatniego udanego sync nie przesuwa się. Migracja jednorazowo odbudowuje kolejkę z `updatedAt` dla wcześniejszych baz.
 
 Po skonfigurowaniu klient synchronizuje przy starcie, po wznowieniu aplikacji, po odzyskaniu sieci i trzy sekundy po zmianie zapisanej przez wspólne repozytorium. Żaden z tych przebiegów nie blokuje lokalnego zapisu ani interfejsu. Service worker stosuje dla `/api/` wyłącznie `NetworkOnly` i nie używa odpowiedzi API jako danych offline.
 

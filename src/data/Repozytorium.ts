@@ -69,10 +69,12 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       usunietoAt: teraz,
       updatedAt: teraz,
     }) satisfies Przypomnienie)
-    await tabelaPrzypomnien.bulkPut(usuniete)
-    for (const przypomnienie of usuniete) {
-      await dodajDoKolejkiSynchronizacji('przypomnienia', przypomnienie, powiazane.find(({ id }) => id === przypomnienie.id))
-    }
+    await baza.transaction('rw', [tabelaPrzypomnien, tabelaKolejki()], async () => {
+      await tabelaPrzypomnien.bulkPut(usuniete)
+      for (const przypomnienie of usuniete) {
+        await dodajDoKolejkiSynchronizacji('przypomnienia', przypomnienie, powiazane.find(({ id }) => id === przypomnienie.id))
+      }
+    })
     powiadomOZmianieDanych('przypomnienia')
   }
 
@@ -100,10 +102,12 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
         : { czas: zmienioneCzasy.get(przypomnienie.zrodlo!.id), stan: 'nowe' as const, odroczoneDo: undefined }),
       updatedAt: teraz,
     } satisfies Przypomnienie))
-    await tabelaPrzypomnien.bulkPut(zaktualizowane)
-    for (const przypomnienie of zaktualizowane) {
-      await dodajDoKolejkiSynchronizacji('przypomnienia', przypomnienie, powiazane.find(({ id }) => id === przypomnienie.id))
-    }
+    await baza.transaction('rw', [tabelaPrzypomnien, tabelaKolejki()], async () => {
+      await tabelaPrzypomnien.bulkPut(zaktualizowane)
+      for (const przypomnienie of zaktualizowane) {
+        await dodajDoKolejkiSynchronizacji('przypomnienia', przypomnienie, powiazane.find(({ id }) => id === przypomnienie.id))
+      }
+    })
     powiadomOZmianieDanych('przypomnienia')
   }
 
@@ -169,17 +173,17 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     }
     const historia = baza.tabela('historiaZmian')
     let poprzednie: (T | undefined)[] = []
-    await baza.transaction('rw', [tabela, historia], async () => {
+    await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
       poprzednie = await tabela.bulkGet(encje.map((encja) => encja.id))
       await tabela.bulkPut(zapisane)
       const wpisy = zapisane
         .map((encja, indeks) => zbudujWpisHistorii(this.nazwa, poprzednie[indeks], encja, poprzednie[indeks] ? 'aktualizacja' : 'utworzenie', teraz))
         .filter((wpis) => wpis !== undefined)
       if (wpisy.length > 0) await historia.bulkPut(wpisy)
+      for (let indeks = 0; indeks < zapisane.length; indeks += 1) {
+        await dodajDoKolejkiSynchronizacji(this.nazwa, zapisane[indeks], poprzednie[indeks])
+      }
     })
-    for (let indeks = 0; indeks < zapisane.length; indeks += 1) {
-      await dodajDoKolejkiSynchronizacji(this.nazwa, zapisane[indeks], poprzednie[indeks])
-    }
     await this.zaktualizujTerminyPowiazanychPrzypomnien(zapisane.map((po, indeks) => ({ przed: poprzednie[indeks], po })))
     powiadomOZmianieDanych(this.nazwa)
   }
@@ -187,30 +191,29 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   async usun(id: string): Promise<void> {
     const tabela = this.tabela()
     if (!czyHistoriaWlaczona(this.nazwa)) {
-      const encja = await tabela.get(id)
-      if (!encja) return
-      const teraz = terazIso()
-      const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }
-      await tabela.put(usunieta)
-      await dodajDoKolejkiSynchronizacji(this.nazwa, usunieta, encja)
+      await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
+        const encja = await tabela.get(id)
+        if (!encja) return
+        const teraz = terazIso()
+        const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }
+        await tabela.put(usunieta)
+        await dodajDoKolejkiSynchronizacji(this.nazwa, usunieta, encja)
+      })
       await this.oznaczPowiazanePrzypomnieniaJakoUsuniete(id)
       powiadomOZmianieDanych(this.nazwa)
       return
     }
     const historia = baza.tabela('historiaZmian')
-    let poprzednia: T | undefined
-    await baza.transaction('rw', [tabela, historia], async () => {
+    await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
       const encja = await tabela.get(id)
       if (!encja) return
-      poprzednia = encja
       const teraz = terazIso()
       const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }
       await tabela.put(usunieta)
       const wpis = zbudujWpisHistorii(this.nazwa, encja, usunieta, 'usuniecie', teraz)
       if (wpis) await historia.put(wpis)
+      await dodajDoKolejkiSynchronizacji(this.nazwa, usunieta, encja)
     })
-    const usunieta = await tabela.get(id)
-    if (usunieta) await dodajDoKolejkiSynchronizacji(this.nazwa, usunieta, poprzednia)
     await this.oznaczPowiazanePrzypomnieniaJakoUsuniete(id)
     powiadomOZmianieDanych(this.nazwa)
   }
@@ -218,31 +221,30 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   async przywroc(id: string): Promise<void> {
     const tabela = this.tabela()
     if (!czyHistoriaWlaczona(this.nazwa)) {
-      const encja = await tabela.get(id)
-      if (!encja) return
-      const teraz = terazIso()
-      const kopia = { ...encja, updatedAt: teraz }
-      delete kopia.usunietoAt
-      await tabela.put(kopia)
-      await dodajDoKolejkiSynchronizacji(this.nazwa, kopia, encja)
+      await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
+        const encja = await tabela.get(id)
+        if (!encja) return
+        const teraz = terazIso()
+        const kopia = { ...encja, updatedAt: teraz }
+        delete kopia.usunietoAt
+        await tabela.put(kopia)
+        await dodajDoKolejkiSynchronizacji(this.nazwa, kopia, encja)
+      })
       powiadomOZmianieDanych(this.nazwa)
       return
     }
     const historia = baza.tabela('historiaZmian')
-    let poprzednia: T | undefined
-    await baza.transaction('rw', [tabela, historia], async () => {
+    await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
       const encja = await tabela.get(id)
       if (!encja) return
-      poprzednia = encja
       const teraz = terazIso()
       const kopia = { ...encja, updatedAt: teraz }
       delete kopia.usunietoAt
       await tabela.put(kopia)
       const wpis = zbudujWpisHistorii(this.nazwa, encja, kopia, 'aktualizacja', teraz)
       if (wpis) await historia.put(wpis)
+      await dodajDoKolejkiSynchronizacji(this.nazwa, kopia, encja)
     })
-    const przywrocona = await tabela.get(id)
-    if (przywrocona) await dodajDoKolejkiSynchronizacji(this.nazwa, przywrocona, poprzednia)
     powiadomOZmianieDanych(this.nazwa)
   }
 }

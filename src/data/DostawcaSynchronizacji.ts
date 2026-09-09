@@ -17,6 +17,13 @@ export interface ZmianaSynchronizacji {
   installationId: string
 }
 
+export class BladKonfliktuSynchronizacji extends Error {
+  constructor(komunikat = 'Serwer wykrył równoległą zmianę rekordu.') {
+    super(komunikat)
+    this.name = 'BladKonfliktuSynchronizacji'
+  }
+}
+
 export interface WynikSynchronizacji {
   wyslane: number
   pobrane: number

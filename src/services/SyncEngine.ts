@@ -7,6 +7,7 @@ import type {
   WynikSynchronizacji,
   ZmianaSynchronizacji,
 } from '../data/DostawcaSynchronizacji'
+import { BladKonfliktuSynchronizacji } from '../data/DostawcaSynchronizacji'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki } from '../data/KolejkaSynchronizacji'
 import { utworzMetadane } from '../domain/fabryki'
@@ -182,7 +183,10 @@ export class SyncEngine implements DostawcaSynchronizacji {
     await this.ustawStanPoKonfliktach()
   }
 
-  private async wykonajSynchronizacje(repozytoriumZdalne: RepozytoriumZdalne): Promise<WynikSynchronizacji> {
+  private async wykonajSynchronizacje(
+    repozytoriumZdalne: RepozytoriumZdalne,
+    poKonflikcieSerwera = false,
+  ): Promise<WynikSynchronizacji> {
     if (!this.czyOnline()) {
       await this.zapiszStan({ stan: 'offline', ostatniBlad: undefined })
       return { wyslane: 0, pobrane: 0, konflikty: 0, stan: 'offline' }
@@ -245,6 +249,9 @@ export class SyncEngine implements DostawcaSynchronizacji {
       })
       return { wyslane: doWyslania.length, pobrane: doPobrania.length, konflikty: konflikty.length, stan }
     } catch (blad) {
+      if (blad instanceof BladKonfliktuSynchronizacji && !poKonflikcieSerwera) {
+        return this.wykonajSynchronizacje(repozytoriumZdalne, true)
+      }
       const komunikat = blad instanceof Error ? blad.message : 'Nieznany błąd synchronizacji.'
       await zapiszBladKolejki((await pobierzKolejkeSynchronizacji()).map((zmiana) => zmiana.id), komunikat)
       await this.zapiszStan({

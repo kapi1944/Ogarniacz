@@ -2,6 +2,7 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { RepozytoriumZdalneInMemory } from '../data/RepozytoriumZdalneInMemory'
+import { BladKonfliktuSynchronizacji, type RepozytoriumZdalne, type ZmianaSynchronizacji } from '../data/DostawcaSynchronizacji'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { utworzZadanie } from './ZadaniaService'
 import { nazwyTabelSynchronizowanych, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
@@ -106,6 +107,55 @@ describe.sequential('SyncEngine', () => {
 
     await silnik.rozstrzygnijKonflikt(konflikt.id, 'zdalny')
     expect(await baza.tabela('zadania').get('wspolne')).toMatchObject({ tytul: 'Wersja zdalna' })
+  })
+
+  it('zachowuje edycję i tombstone jako jawny konflikt', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const lokalne = zadanie('usuniecie-konflikt', 'Edycja lokalna', '2026-08-23T10:00:00.000Z')
+    const zdalneUsuniecie = zadanie(
+      'usuniecie-konflikt',
+      'Wersja przed usunięciem',
+      '2026-08-24T10:00:00.000Z',
+      '2026-08-24T10:00:00.000Z',
+    )
+    await baza.tabela('zadania').put(lokalne)
+    await zdalne.ustawZmiany([{ tabela: 'zadania', rekord: zdalneUsuniecie, installationId: 'instalacja-zdalna' }])
+
+    const wynik = await utworzSilnik().synchronizuj(zdalne)
+
+    expect(wynik.stan).toBe('konflikt')
+    expect(await baza.tabela('zadania').get(lokalne.id)).toMatchObject({ tytul: 'Edycja lokalna', usunietoAt: undefined })
+    expect((await baza.tabela('konfliktySynchronizacji').get(`zadania:${lokalne.id}`))?.zdalny)
+      .toMatchObject({ usunietoAt: '2026-08-24T10:00:00.000Z' })
+  })
+
+  it('po konflikcie 409 pobiera nowszą wersję i zapisuje konflikt zamiast zwykłego błędu', async () => {
+    const lokalne = zadanie('wyscig-409', 'Edycja lokalna', '2026-08-23T10:00:00.000Z')
+    const zdalne = zadanie('wyscig-409', 'Edycja zdalna', '2026-08-24T10:00:00.000Z')
+    const zmianaZdalna: ZmianaSynchronizacji = {
+      tabela: 'zadania',
+      rekord: zdalne,
+      installationId: 'instalacja-zdalna',
+    }
+    await baza.tabela('zadania').put(lokalne)
+    let liczbaPobran = 0
+    const repozytoriumZdalne: RepozytoriumZdalne = {
+      trwale: true,
+      pobierzZmiany: vi.fn(async () => {
+        liczbaPobran += 1
+        return liczbaPobran === 1 ? [] : [zmianaZdalna]
+      }),
+      wyslijZmiany: vi.fn(async (_zmiany: ZmianaSynchronizacji[]) => {
+        throw new BladKonfliktuSynchronizacji()
+      }),
+    }
+
+    const wynik = await utworzSilnik().synchronizuj(repozytoriumZdalne)
+
+    expect(wynik.stan).toBe('konflikt')
+    expect(repozytoriumZdalne.pobierzZmiany).toHaveBeenCalledTimes(2)
+    expect(await baza.tabela('zadania').get(lokalne.id)).toMatchObject({ tytul: 'Edycja lokalna' })
+    expect(await baza.tabela('konfliktySynchronizacji').get(`zadania:${lokalne.id}`)).toBeDefined()
   })
 
   it('jest idempotentny bez nowych zmian', async () => {
