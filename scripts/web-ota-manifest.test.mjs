@@ -2,11 +2,11 @@ import assert from 'node:assert/strict'
 import { generateKeyPairSync, verify } from 'node:crypto'
 import test from 'node:test'
 import {
-  obliczKodWersjiNatywnej,
   obliczOdciskKluczaPublicznego,
   utworzDaneDoPodpisuWeb,
   utworzPodpisanyManifest,
 } from './web-ota-manifest.mjs'
+import { wczytajMinNativeVersionCode } from './web-ota-zgodnosc.mjs'
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 3072 })
 const kluczPrywatnyPem = privateKey.export({ type: 'pkcs8', format: 'pem' })
@@ -21,8 +21,8 @@ const daneBazowe = {
   oczekiwanyOdciskKlucza: obliczOdciskKluczaPublicznego(kluczPrywatnyPem),
 }
 
-test('liczy minNativeVersionCode tak samo jak Android', () => {
-  assert.equal(obliczKodWersjiNatywnej('1.0.6'), 1_000_006)
+test('pobiera minNativeVersionCode z kontrolowanego pliku zgodnosci', async () => {
+  assert.equal(await wczytajMinNativeVersionCode(), 1_000_007)
 })
 
 test('tworzy manifest zgodny z podpisem weryfikowanym przez APK', () => {

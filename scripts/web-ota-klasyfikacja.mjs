@@ -31,13 +31,21 @@ export function sklasyfikujZmianyWebOta(sciezki) {
   return { czyPublikowac: true, powod: 'Wszystkie zmiany dotycza wylacznie bezpiecznych plikow web.' }
 }
 
+export function czyWymuszenieAdministracyjne(zdarzenie, czyWymusic) {
+  return zdarzenie === 'workflow_dispatch' && czyWymusic === 'true'
+}
+
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const wynik = sklasyfikujZmianyWebOta(process.argv.slice(2))
-  if (wynik.czyPublikowac) {
-    console.log(`Web OTA dozwolone — ${wynik.powod}`)
+  if (process.argv[2] === '--wymuszenie') {
+    process.exitCode = czyWymuszenieAdministracyjne(process.argv[3], process.argv[4]) ? 0 : 2
   } else {
-    console.log('Web OTA pominięte — wymagane APK')
-    console.log(`Powod: ${wynik.powod}`)
-    process.exitCode = 2
+    const wynik = sklasyfikujZmianyWebOta(process.argv.slice(2))
+    if (wynik.czyPublikowac) {
+      console.log(`Web OTA dozwolone — ${wynik.powod}`)
+    } else {
+      console.log('Web OTA pominięte — najpierw wymagane jest nowe APK / zwiększenie minNativeVersionCode.')
+      console.log(`Powod: ${wynik.powod}`)
+      process.exitCode = 2
+    }
   }
 }

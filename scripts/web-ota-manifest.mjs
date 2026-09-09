@@ -2,6 +2,7 @@ import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'nod
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { wczytajMinNativeVersionCode } from './web-ota-zgodnosc.mjs'
 
 const MAKSYMALNY_ROZMIAR_ZIP = 50 * 1024 * 1024
 
@@ -37,17 +38,6 @@ export function obliczOdciskKluczaPublicznego(kluczPrywatnyPem) {
   const kluczPubliczny = createPublicKey(createPrivateKey(kluczPrywatnyPem))
   const daneDer = kluczPubliczny.export({ type: 'spki', format: 'der' })
   return createHash('sha256').update(daneDer).digest('hex')
-}
-
-export function obliczKodWersjiNatywnej(wersja) {
-  const dopasowanie = /^(\d+)\.(\d+)\.(\d+)$/.exec(wymagajTekstu(wersja, 'wersji w package.json'))
-  if (!dopasowanie) throw new Error('Wersja w package.json musi miec format X.Y.Z.')
-  const [, glowna, poboczna, poprawka] = dopasowanie.map(Number)
-  const kodWersji = glowna * 1_000_000 + poboczna * 1_000 + poprawka
-  if (!Number.isSafeInteger(kodWersji) || kodWersji <= 0 || kodWersji > 2_100_000_000) {
-    throw new Error('Wersja w package.json daje nieprawidlowy versionCode.')
-  }
-  return kodWersji
 }
 
 export function utworzPodpisanyManifest({
@@ -106,9 +96,7 @@ export async function wygenerujManifest(argumenty, srodowisko = process.env) {
   }
   const commitSha = wymagajTekstu(argumenty['commit-sha'] ?? srodowisko.GITHUB_SHA, '--commit-sha lub GITHUB_SHA')
   const bundleVersion = wymagajTekstu(argumenty['bundle-version'] ?? srodowisko.WEB_OTA_BUNDLE_VERSION ?? commitSha.slice(0, 7), '--bundle-version')
-  const minNativeVersionCode = argumenty['min-native-version-code']
-    ? Number(wymagajTekstu(argumenty['min-native-version-code'], '--min-native-version-code'))
-    : obliczKodWersjiNatywnej(JSON.parse(await readFile(resolve('package.json'), 'utf8')).version)
+  const minNativeVersionCode = await wczytajMinNativeVersionCode()
   const kluczPrywatnyPem = wymagajTekstu(srodowisko.WEB_OTA_PRIVATE_KEY, 'sekretu WEB_OTA_PRIVATE_KEY')
   const oczekiwanyOdciskKlucza = wymagajTekstu(srodowisko.WEB_OTA_PUBLIC_KEY_SHA256, 'WEB_OTA_PUBLIC_KEY_SHA256')
   if (!/^[a-f0-9]{64}$/i.test(oczekiwanyOdciskKlucza)) throw new Error('Nieprawidlowy WEB_OTA_PUBLIC_KEY_SHA256.')

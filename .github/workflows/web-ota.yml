@@ -6,10 +6,11 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      min_native_version_code:
-        description: Opcjonalny minimalny versionCode zgodnego APK; domyslnie wynika z package.json
+      force_web_ota:
+        description: Administracyjnie omin klasyfikacje zgodnosci z APK
         required: false
-        type: string
+        default: false
+        type: boolean
       bundle_version:
         description: Opcjonalna nazwa wersji; domyslnie pierwsze 7 znakow SHA
         required: false
@@ -39,13 +40,35 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if node scripts/web-ota-klasyfikacja.mjs --wymuszenie "${{ github.event_name }}" "${{ inputs.force_web_ota }}"; then
             echo "publikuj=true" >> "$GITHUB_OUTPUT"
-            echo "Reczna publikacja Web OTA zostala jawnie uruchomiona."
+            echo "::warning title=WYMUSZENIE ADMINISTRACYJNE WEB OTA::Pominieto klasyfikacje zgodnosci z APK, poniewaz force_web_ota ustawiono jawnie na true."
+            exit 0
+          else
+            kod=$?
+            if [[ "$kod" -ne 2 ]]; then
+              exit "$kod"
+            fi
+          fi
+
+          plik_zgodnosci="config/web-ota-compatibility.json"
+          if [[ ! -f "$plik_zgodnosci" ]]; then
+            echo "Web OTA pominięte — najpierw wymagane jest nowe APK / zwiększenie minNativeVersionCode."
+            echo "Powod: Brak kontrolowanego zrodla zgodnosci z APK."
+            echo "publikuj=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          mapfile -d '' pliki < <(git diff --name-only -z "${{ github.event.before }}" "$GITHUB_SHA")
+          kod_zgodnego_apk="$(node scripts/web-ota-zgodnosc.mjs --odczytaj < "$plik_zgodnosci")"
+          tag_zgodnego_apk="$(node scripts/web-ota-zgodnosc.mjs --tag-apk "$kod_zgodnego_apk")"
+          if ! git rev-parse --verify --quiet "refs/tags/$tag_zgodnego_apk" >/dev/null; then
+            echo "Web OTA pominięte — najpierw wymagane jest nowe APK / zwiększenie minNativeVersionCode."
+            echo "Powod: Nie istnieje wydany tag zgodnego APK $tag_zgodnego_apk."
+            echo "publikuj=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          mapfile -d '' pliki < <(git diff --name-only -z "$tag_zgodnego_apk" "$GITHUB_SHA")
           if wynik="$(node scripts/web-ota-klasyfikacja.mjs "${pliki[@]}")"; then
             echo "$wynik"
             echo "publikuj=true" >> "$GITHUB_OUTPUT"
@@ -92,13 +115,7 @@ jobs:
           wersja="${{ inputs.bundle_version }}"
           [[ -n "$wersja" ]] || wersja="${GITHUB_SHA:0:7}"
           [[ "$wersja" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || { echo "Nieprawidlowy bundle_version." >&2; exit 1; }
-          kod_wersji="${{ inputs.min_native_version_code }}"
-          if [[ -n "$kod_wersji" && ! "$kod_wersji" =~ ^[1-9][0-9]*$ ]]; then
-            echo "Nieprawidlowy min_native_version_code." >&2
-            exit 1
-          fi
           echo "WEB_OTA_BUNDLE_VERSION=$wersja" >> "$GITHUB_ENV"
-          echo "WEB_OTA_MIN_NATIVE_VERSION_CODE=$kod_wersji" >> "$GITHUB_ENV"
 
       - name: Zainstaluj zaleznosci
         run: npm ci
@@ -127,9 +144,6 @@ jobs:
             --commit-sha "$GITHUB_SHA"
             --bundle-version "$WEB_OTA_BUNDLE_VERSION"
           )
-          if [[ -n "$WEB_OTA_MIN_NATIVE_VERSION_CODE" ]]; then
-            argumenty+=(--min-native-version-code "$WEB_OTA_MIN_NATIVE_VERSION_CODE")
-          fi
           node scripts/web-ota-manifest.mjs "${argumenty[@]}"
 
       - name: Opublikuj ZIP
