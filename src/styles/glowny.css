@@ -279,6 +279,7 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .centrum-dowodzenia__element strong { display: block; font-size: clamp(1.1rem, 2vw, 1.45rem); line-height: 1.22; }
 .centrum-dowodzenia__element small, .centrum-dowodzenia__opis { color: var(--tekst-2); }
 .centrum-dowodzenia__opis { margin: 18px 0 0; font-size: .82rem; }
+.pulpit-licznik-uwagi { display: block; margin-top: 8px; color: var(--akcent); font-size: 2rem; line-height: 1; }
 .pulpit-sekcja--do-ogarnięcia { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(260px, .65fr); gap: 12px; align-items: stretch; }
 .pulpit-sekcja--do-ogarnięcia > .karta { min-height: 0; }
 .pulpit-sekcja--szybkie-akcje { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1857,7 +1858,7 @@ input[type="radio"] {
 
 /* Wspólny shell mobile: ten sam React działa w Web/PWA, Androidzie i na przyszłym hoście sieciowym. */
 .dolna-nawigacja { display: none; }
-.pulpit-sekcja--teraz { display: block; }
+.pulpit-sekcja--uwaga { display: block; }
 
 @media (max-width: 980px) {
   :root { --wysokosc-nawigacji-mobilnej: 68px; }
@@ -1980,12 +1981,11 @@ input[type="radio"] {
   .pulpit-sekcja--naglowek { order: 0; }
   .pulpit-sekcja--nawigator { order: 1; }
   .pulpit-sekcja--komunikaty { display: grid; order: 2; gap: 8px; }
-  .pulpit-sekcja--teraz { display: grid; order: 3; }
-  .pulpit-sekcja--do-ogarnięcia { order: 4; }
+  .pulpit-sekcja--uwaga { display: grid; order: 3; }
+  .pulpit-sekcja--kafelki { order: 4; }
   .pulpit-sekcja--szybkie-akcje { order: 5; }
   .pulpit-sekcja--os-czasu { order: 6; }
-  .pulpit-sekcja--kafelki { order: 7; }
-  .pulpit-sekcja--reszta { order: 8; }
+  .pulpit-sekcja--echo { order: 7; }
   .pulpit-sekcja--naglowek .naglowek-widoku__akcje { display: none; }
   .pulpit-sekcja--kafelki > .akcje-formularza { justify-content: flex-start; margin: 0 0 8px; overflow-x: auto; }
   .strefa-pulpitu--pilne { order: -1; }
@@ -2073,7 +2073,8 @@ input[type="radio"] {
 .plan-dnia__wprowadzenie strong { overflow-wrap: anywhere; font-size: .9rem; }
 .plan-dnia__etykieta { display: inline-flex; align-items: center; gap: 6px; color: var(--tekst-2); font-size: .75rem; font-weight: 700; text-transform: capitalize; }
 .plan-dnia__etykieta svg { width: 16px; color: var(--akcent); }
-.plan-dnia__najblizszy { border-inline: 1px solid var(--obramowanie); }
+.plan-dnia__najblizszy { background: color-mix(in srgb, var(--akcent) 9%, var(--panel)); border-radius: var(--promien-pola); }
+.plan-dnia__najblizszy strong { font-size: 1.05rem; line-height: 1.25; }
 .plan-dnia__wprowadzenie small { color: var(--tekst-2); font-size: .7rem; }
 .plan-dnia__zalegle { grid-template-columns: 1fr auto; color: var(--tekst); background: var(--ostrzezenie-tlo); border-radius: var(--promien-pola); }
 .plan-dnia__zalegle strong, .plan-dnia__zalegle small { grid-column: 1; }
@@ -2102,7 +2103,7 @@ input[type="radio"] {
 
 @media (max-width: 720px) {
   .plan-dnia__wprowadzenie { grid-template-columns: 1fr; }
-  .plan-dnia__najblizszy { border-block: 1px solid var(--obramowanie); border-inline: 0; }
+  .plan-dnia__najblizszy { padding: 12px; }
   .plan-dnia__agenda { padding: 13px; }
   .plan-dnia__decyzje .lista-kompaktowa > div { align-items: flex-start; }
 }

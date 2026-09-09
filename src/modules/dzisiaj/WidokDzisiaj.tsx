@@ -83,6 +83,11 @@ export function WidokPulpitu() {
   const charakterDnia = harmonogram.pracuje ? `Praca ${harmonogram.odPracy}–${harmonogram.doPracy}` : 'Dzień bez pracy'
 
   const minutyTeraz = teraz.getHours() * 60 + teraz.getMinutes()
+  const nastepnyElement = zaplanowane.find((element) => {
+    if (!element.godzina || element.id === elementTeraz?.element.id) return false
+    const [godzina, minuta] = element.godzina.split(':').map(Number)
+    return godzina * 60 + minuta >= minutyTeraz
+  })
   const opoznienieMinuty = zaplanowane
     .filter((element) => element.status !== 'wykonany' && element.godzina)
     .reduce((suma, element) => {
@@ -120,8 +125,8 @@ export function WidokPulpitu() {
     {komunikat && <Komunikat typ="sukces">{komunikat}{ostatniaZmiana && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijOstatniaZmiane()}><Undo2 aria-hidden="true" />Cofnij</button>}</Komunikat>}
 
     <section className="plan-dnia__wprowadzenie">
+      <div className="plan-dnia__najblizszy"><small>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższy krok'}</small><strong>{elementTeraz ? `${elementTeraz.element.godzina ? `${elementTeraz.element.godzina} · ` : ''}${elementTeraz.element.tytul}` : 'Dzień jest spokojny'}</strong>{elementTeraz?.stan === 'trwa' && <small>Następnie: {nastepnyElement ? `${nastepnyElement.godzina} · ${nastepnyElement.tytul}` : 'brak kolejnych spraw z godziną'}</small>}{elementTeraz?.element.typ === 'zadanie' && <div className="plan-dnia__akcje"><button type="button" className="przycisk przycisk--maly" disabled={!moze('zadania', 'edycja')} onClick={() => void wykonaj(elementTeraz.element)}><Check aria-hidden="true" />Wykonaj</button><button type="button" className="przycisk przycisk--tekstowy" disabled={!moze('zadania', 'edycja')} onClick={() => void przeloz(elementTeraz.element)}><Undo2 aria-hidden="true" />Przełóż</button></div>}</div>
       <div><small className="tekst-pomocniczy">{rytmDnia}</small><span className="plan-dnia__etykieta"><CalendarDays aria-hidden="true" />{new Intl.DateTimeFormat('pl-PL', { weekday: 'long', day: 'numeric', month: 'long' }).format(teraz)}</span><strong>{charakterDnia}{harmonogram.jestWyjatkiem ? ' · wyjątek grafiku' : ''}</strong></div>
-      <div className="plan-dnia__najblizszy"><small>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższy krok'}</small><strong>{elementTeraz ? `${elementTeraz.element.godzina ? `${elementTeraz.element.godzina} · ` : ''}${elementTeraz.element.tytul}` : 'Dzień jest spokojny'}</strong></div>
       {zalegle[0] && <Link className="plan-dnia__zalegle" to={adresReferencjiZrodla(zalegle[0].referencjaZrodla!)}><small>Najważniejsze zaległe</small><strong>{zalegle[0].tytul}</strong><ChevronRight aria-hidden="true" /></Link>}
     </section>
 
