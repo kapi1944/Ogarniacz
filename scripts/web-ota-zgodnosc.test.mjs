@@ -26,4 +26,8 @@ test('generator i workflow nie maja drugiego zrodla minNativeVersionCode', async
   assert.match(workflow, /config\/web-ota-compatibility\.json/)
   assert.doesNotMatch(workflow, /min_native_version_code|github\.event\.before/)
   assert.match(workflow, /git diff --name-only -z "\$tag_zgodnego_apk" "\$GITHUB_SHA"/)
+  assert.ok(
+    workflow.indexOf('refs/tags/$tag_zgodnego_apk') < workflow.indexOf('--wymuszenie'),
+    'force_web_ota nie moze omijac wymaganego tagu APK',
+  )
 })
