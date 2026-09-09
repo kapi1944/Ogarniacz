@@ -54,14 +54,16 @@ export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamkn
   const [kwota, ustawKwote] = useState('')
   const [instrukcja, ustawInstrukcje] = useState('')
   const [blad, ustawBlad] = useState('')
+  const [zapisywanie, ustawZapisywanie] = useState(false)
   const [szczegoly, ustawSzczegoly] = useState(Boolean(danePoczatkowe.typ))
   const [wiecejTypow, ustawWiecejTypow] = useState(false)
   const [utworzony, ustawUtworzony] = useState<{ id: string; typ: TypSzybkiegoDodawania; nazwa: string; termin: string } | null>(null)
   const [nadpisane, ustawNadpisane] = useState({ typ: Boolean(danePoczatkowe.typ), tytul: Boolean(danePoczatkowe.tytul), data: false, godzina: false })
   const sugestia = useMemo(() => ustawienia.szybkieDodawanie.parserWlaczony ? parserRegulowySzybkiegoDodawania.parse(tresc, { referenceDate: new Date() }) : undefined, [tresc, ustawienia.szybkieDodawanie.parserWlaczony])
   const uporzadkowane = useMemo(() => uporzadkujTypySzybkiegoDodawania(ustawienia.szybkieDodawanie).map((wartosc) => typy.find((element) => element.typ === wartosc)!).filter((element) => !element.modul || moze(element.modul, 'edycja')), [moze, ustawienia.szybkieDodawanie])
-  const bezposrednie = uporzadkowane.filter((element) => ustawienia.szybkieDodawanie.widoczneTypy.includes(element.typ))
+  const bezposrednie = uporzadkowane.filter((element) => ustawienia.szybkieDodawanie.widoczneTypy.includes(element.typ)).slice(0, 4)
   const pozostale = uporzadkowane.filter((element) => !bezposrednie.includes(element))
+  const zamknijBezpiecznie = () => { if (!zapisywanie) zamknij() }
 
   useEffect(() => {
     if (!sugestia) return
@@ -79,8 +81,10 @@ export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamkn
 
   const zapisz = async (zdarzenie: FormEvent) => {
     zdarzenie.preventDefault()
+    if (zapisywanie) return
     const nazwa = tytul.trim() || tresc.trim()
     if (!nazwa) return ustawBlad('Wpisz, co chcesz ogarnąć.')
+    ustawZapisywanie(true)
     try {
       let id = ''
       if (typ === 'zadanie') {
@@ -94,12 +98,15 @@ export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamkn
       if (typ === 'lek') { const lek = { ...utworzMetadane(), nazwa, dawkaInstrukcja: instrukcja.trim() || 'Uzupełnij instrukcję użytkownika', godziny: godzina ? [godzina] : [], aktywny: true } satisfies Lek; await pobierzRepozytorium('leki').zapisz(lek); id = lek.id }
       if (typ === 'wydatek') { const liczba = Number(kwota.replace(',', '.')); if (!Number.isFinite(liczba) || liczba <= 0) throw new Error('Podaj prawidłową kwotę wydatku.'); const wydatek = { ...utworzMetadane(), opis: nazwa, kwota: liczba, data: data || dzisiajIso(), kategoria: 'Inne' } satisfies Wydatek; await pobierzRepozytorium('wydatki').zapisz(wydatek); id = wydatek.id }
       if (typ === 'samochod') { const pojazd = { ...utworzMetadane(), nazwa, planowanySerwisData: data || undefined, planowanySerwisGodzina: data && godzina ? godzina : undefined, notatka: tresc.trim() || undefined } satisfies Pojazd; await pobierzRepozytorium('pojazdy').zapisz(pojazd); id = pojazd.id }
-      await zapiszUstawienia({ szybkieDodawanie: { ...ustawienia.szybkieDodawanie, licznikiUzyc: { ...ustawienia.szybkieDodawanie.licznikiUzyc, [typ]: ustawienia.szybkieDodawanie.licznikiUzyc[typ] + 1 } } })
-      await platforma.haptyka.sukces()
       ustawUtworzony({ id, typ, nazwa, termin: etykietaTerminu(data, godzina) })
       ustawBlad('')
+      void zapiszUstawienia({ szybkieDodawanie: { ...ustawienia.szybkieDodawanie, licznikiUzyc: { ...ustawienia.szybkieDodawanie.licznikiUzyc, [typ]: ustawienia.szybkieDodawanie.licznikiUzyc[typ] + 1 } } }).catch(() => undefined)
+      void platforma.haptyka.sukces().catch(() => undefined)
     } catch (przyczyna) {
       ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać elementu.')
+      ustawSzczegoly(true)
+    } finally {
+      ustawZapisywanie(false)
     }
   }
 
@@ -114,14 +121,14 @@ export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamkn
     <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void cofnij()}><Undo2 aria-hidden="true" />Cofnij</button><button type="button" className="przycisk przycisk--glowny" onClick={() => { nawiguj(`${sciezkiTypow[utworzony.typ]}?element=${encodeURIComponent(utworzony.id)}`); zamknij() }}><ArrowRight aria-hidden="true" />Przejdź do elementu</button></div>
   </Modal>
 
-  return <Modal tytul="Dodaj do Ogarniacza" opis="Zapisz sprawę teraz, a szczegóły doprecyzuj tylko wtedy, gdy ich potrzebujesz." zamknij={zamknij} szeroki>
-    <form className="formularz" onSubmit={zapisz}>
+  return <Modal tytul="Dodaj do Ogarniacza" opis="Zacznij od treści. Najczęstsze typy i potrzebne szczegóły są pod ręką." zamknij={zamknijBezpiecznie} szeroki>
+    <form className="formularz" onSubmit={zapisz} onKeyDown={(zdarzenie) => { if (zdarzenie.key === 'Escape') zamknijBezpiecznie() }}>
       {blad && <Komunikat typ="blad">{blad}</Komunikat>}
       <label className="pole pole--pelne"><span>Co chcesz ogarnąć? *</span><input autoFocus value={tresc} onChange={(e) => ustawTresc(e.target.value)} placeholder="np. dentysta jutro 16 albo kupić mleko" /></label>
       {tresc && sugestia && <div className="pole pole--pelne"><span>Propozycja Ogarniacza</span><div><Znacznik wariant="informacja">{typy.find((element) => element.typ === typ)?.etykieta}</Znacznik>{(data || godzina) && <small> · {etykietaTerminu(data, godzina)}</small>}{sugestia.confidence !== 'niska' && <small> · rozpoznano z tekstu</small>}</div></div>}
       <button type="button" className="przycisk przycisk--tekstowy pole--pelne" onClick={() => ustawSzczegoly(!szczegoly)}><SlidersHorizontal aria-hidden="true" />{szczegoly ? 'Ukryj szczegóły' : 'Dodaj szczegóły'}</button>
       {szczegoly && <>
-        <div className="wybor-typu pole--pelne">{bezposrednie.map((element) => { const Ikona = element.ikona; return <button type="button" key={element.typ} className={typ === element.typ ? 'wybor-typu__przycisk wybor-typu__przycisk--aktywny' : 'wybor-typu__przycisk'} onClick={() => wybierzTyp(element.typ)}><Ikona aria-hidden="true" />{element.etykieta}</button> })}{pozostale.length > 0 && <button type="button" className="wybor-typu__przycisk" onClick={() => ustawWiecejTypow(!wiecejTypow)}>Więcej</button>}{wiecejTypow && pozostale.map((element) => <button type="button" key={element.typ} className="wybor-typu__przycisk" onClick={() => wybierzTyp(element.typ)}>{element.etykieta}</button>)}</div>
+        <div className="wybor-typu pole--pelne" aria-label="Typ dodawanego elementu">{bezposrednie.map((element) => { const Ikona = element.ikona; return <button type="button" key={element.typ} aria-pressed={typ === element.typ} className={typ === element.typ ? 'wybor-typu__przycisk wybor-typu__przycisk--aktywny' : 'wybor-typu__przycisk'} onClick={() => wybierzTyp(element.typ)}><Ikona aria-hidden="true" />{element.etykieta}</button> })}{pozostale.length > 0 && <button type="button" className="wybor-typu__przycisk" aria-expanded={wiecejTypow} onClick={() => ustawWiecejTypow(!wiecejTypow)}>Wszystkie typy</button>}{wiecejTypow && pozostale.map((element) => <button type="button" key={element.typ} aria-pressed={typ === element.typ} className={typ === element.typ ? 'wybor-typu__przycisk wybor-typu__przycisk--aktywny' : 'wybor-typu__przycisk'} onClick={() => wybierzTyp(element.typ)}>{element.etykieta}</button>)}</div>
         <label className="pole pole--pelne"><span>Tytuł</span><input value={tytul} onChange={(e) => { ustawTytul(e.target.value); ustawNadpisane((stan) => ({ ...stan, tytul: true })) }} placeholder="Automatycznie z treści" /></label>
         {['zadanie', 'wydarzenie', 'przypomnienie', 'wizyta', 'wydatek', 'samochod'].includes(typ) && <label className="pole"><span>Termin</span><input type="date" required={typ === 'wydarzenie' || typ === 'przypomnienie'} value={data} onChange={(e) => { ustawDate(e.target.value); ustawNadpisane((stan) => ({ ...stan, data: true })) }} /></label>}
         {['zadanie', 'wydarzenie', 'przypomnienie', 'wizyta', 'lek', 'samochod'].includes(typ) && <label className="pole"><span>Godzina</span><input type="time" required={typ === 'wydarzenie' || typ === 'przypomnienie'} value={godzina} onChange={(e) => { ustawGodzine(e.target.value); ustawNadpisane((stan) => ({ ...stan, godzina: true })) }} /></label>}
@@ -129,7 +136,7 @@ export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamkn
         {typ === 'lek' && <label className="pole pole--pelne"><span>Instrukcja</span><input value={instrukcja} onChange={(e) => ustawInstrukcje(e.target.value)} placeholder="np. zgodnie z zaleceniem" /></label>}
         {typ === 'wydatek' && <label className="pole"><span>Kwota *</span><input type="number" min="0.01" step="0.01" value={kwota} onChange={(e) => ustawKwote(e.target.value)} /></label>}
       </>}
-      <div className="akcje-formularza pole--pelne"><button type="button" className="przycisk przycisk--drugorzedny" onClick={zamknij}>Anuluj</button><button type="submit" className="przycisk przycisk--glowny">Dodaj</button></div>
+      <div className="akcje-formularza pole--pelne"><small className="podpowiedz-klawiatury">Enter zapisuje</small><button type="button" className="przycisk przycisk--drugorzedny" disabled={zapisywanie} onClick={zamknijBezpiecznie}>Anuluj</button><button type="submit" className="przycisk przycisk--glowny" disabled={zapisywanie}>{zapisywanie ? 'Zapisuję…' : 'Dodaj'}</button></div>
     </form>
   </Modal>
 }

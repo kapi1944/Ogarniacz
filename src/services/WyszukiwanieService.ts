@@ -5,32 +5,33 @@ export interface WynikWyszukiwania {
   id: string
   modul: NazwaModulu
   etykieta: string
+  typ: string
   opis: string
   url: string
 }
 
-interface ZrodloWyszukiwania { tabela: NazwaTabeli; modul: NazwaModulu; etykieta: string; url: string; pola: string[] }
+interface ZrodloWyszukiwania { tabela: NazwaTabeli; modul: NazwaModulu; typ: string; url: string; pola: string[]; kontekst: string[] }
 
 const zrodla: ZrodloWyszukiwania[] = [
-  { tabela: 'zadania', modul: 'zadania', etykieta: 'Zadanie', url: '/zadania', pola: ['tytul', 'opis', 'kontekst', 'tagi'] },
-  { tabela: 'projekty', modul: 'projekty', etykieta: 'Projekt', url: '/projekty', pola: ['nazwa', 'opis', 'blokady', 'nastepneDzialanie'] },
-  { tabela: 'notatki', modul: 'notatki', etykieta: 'Notatka', url: '/notatki', pola: ['tytul', 'tresc', 'tagi'] },
-  { tabela: 'kontakty', modul: 'kontakty', etykieta: 'Kontakt', url: '/kontakty', pola: ['nazwa', 'rola', 'telefon', 'email'] },
-  { tabela: 'dokumenty', modul: 'dokumenty', etykieta: 'Dokument', url: '/dokumenty', pola: ['nazwa', 'nazwaPliku', 'typ'] },
-  { tabela: 'wizyty', modul: 'wizyty', etykieta: 'Zdrowie', url: '/zdrowie/wizyty', pola: ['nazwa', 'miejsce', 'lekarzPlacowka', 'notatka'] },
-  { tabela: 'leki', modul: 'leki', etykieta: 'Zdrowie', url: '/zdrowie/leki', pola: ['nazwa', 'dawkaInstrukcja', 'notatka'] },
-  { tabela: 'skierowania', modul: 'skierowania', etykieta: 'Zdrowie', url: '/zdrowie/skierowania', pola: ['nazwa', 'cel', 'notatka'] },
-  { tabela: 'rachunki', modul: 'rachunki', etykieta: 'Finanse', url: '/rachunki', pola: ['nazwa', 'kategoria', 'opis'] },
-  { tabela: 'wydatki', modul: 'finanse', etykieta: 'Finanse', url: '/finanse', pola: ['opis', 'kategoria'] },
-  { tabela: 'pojazdy', modul: 'samochod', etykieta: 'Samochód', url: '/samochod', pola: ['marka', 'model', 'rejestracja', 'vin'] },
-  { tabela: 'pomysly', modul: 'pomysly', etykieta: 'Pomysł', url: '/pomysly', pola: ['tytul', 'opis', 'tagi', 'wartosc', 'wysilek'] },
-  { tabela: 'skrzynka', modul: 'skrzynka', etykieta: 'Poczekalnia', url: '/skrzynka', pola: ['tresc', 'sugerowanyTyp'] },
-  { tabela: 'naPozniej', modul: 'na_pozniej', etykieta: 'Na później', url: '/na-pozniej', pola: ['tytul', 'opis', 'adres', 'tagi'] },
-  { tabela: 'listyZakupow', modul: 'zakupy', etykieta: 'Zakupy', url: '/zakupy', pola: ['nazwa', 'sklep', 'tagi'] },
-  { tabela: 'cele', modul: 'cele', etykieta: 'Cel', url: '/cele', pola: ['nazwa', 'opis'] },
-  { tabela: 'przypomnienia', modul: 'przypomnienia', etykieta: 'Przypomnienie', url: '/przypomnienia', pola: ['tytul', 'opis'] },
-  { tabela: 'miejsca', modul: 'miasto', etykieta: 'Miejsce', url: '/miasto', pola: ['nazwa', 'adres', 'typ', 'notatka'] },
-  { tabela: 'kontaFinansowe', modul: 'finanse', etykieta: 'Konto', url: '/finanse', pola: ['nazwa', 'typ'] },
+  { tabela: 'zadania', modul: 'zadania', typ: 'Zadanie', url: '/zadania', pola: ['tytul', 'opis', 'kontekst', 'tagi'], kontekst: ['status', 'termin', 'kontekst'] },
+  { tabela: 'projekty', modul: 'projekty', typ: 'Projekt', url: '/projekty', pola: ['nazwa', 'opis', 'blokady', 'nastepneDzialanie'], kontekst: ['status', 'termin', 'nastepneDzialanie'] },
+  { tabela: 'notatki', modul: 'notatki', typ: 'Notatka', url: '/notatki', pola: ['tytul', 'tresc', 'tagi'], kontekst: ['data', 'tagi'] },
+  { tabela: 'kontakty', modul: 'kontakty', typ: 'Kontakt', url: '/kontakty', pola: ['nazwa', 'rola', 'telefon', 'email'], kontekst: ['rola', 'email', 'telefon'] },
+  { tabela: 'dokumenty', modul: 'dokumenty', typ: 'Dokument', url: '/dokumenty', pola: ['nazwa', 'nazwaPliku', 'typ'], kontekst: ['typ', 'nazwaPliku', 'terminWaznosci'] },
+  { tabela: 'wizyty', modul: 'wizyty', typ: 'Wizyta', url: '/zdrowie/wizyty', pola: ['nazwa', 'miejsce', 'lekarzPlacowka', 'notatka'], kontekst: ['data', 'godzina', 'lekarzPlacowka', 'miejsce'] },
+  { tabela: 'leki', modul: 'leki', typ: 'Lek', url: '/zdrowie/leki', pola: ['nazwa', 'dawkaInstrukcja', 'notatka'], kontekst: ['dawkaInstrukcja', 'godziny'] },
+  { tabela: 'skierowania', modul: 'skierowania', typ: 'Skierowanie', url: '/zdrowie/skierowania', pola: ['nazwa', 'cel', 'notatka'], kontekst: ['status', 'cel', 'terminWaznosci'] },
+  { tabela: 'rachunki', modul: 'rachunki', typ: 'Rachunek', url: '/rachunki', pola: ['nazwa', 'kategoria', 'opis'], kontekst: ['status', 'termin', 'kategoria'] },
+  { tabela: 'wydatki', modul: 'finanse', typ: 'Wydatek', url: '/finanse', pola: ['opis', 'kategoria'], kontekst: ['data', 'kwota', 'kategoria'] },
+  { tabela: 'pojazdy', modul: 'samochod', typ: 'Pojazd', url: '/samochod', pola: ['nazwa', 'marka', 'model', 'numerRejestracyjny', 'vin'], kontekst: ['marka', 'model', 'numerRejestracyjny'] },
+  { tabela: 'pomysly', modul: 'pomysly', typ: 'Pomysł', url: '/pomysly', pola: ['tytul', 'opis', 'tagi', 'wartosc', 'wysilek'], kontekst: ['status', 'tagi'] },
+  { tabela: 'skrzynka', modul: 'skrzynka', typ: 'Inbox', url: '/skrzynka', pola: ['tresc', 'sugerowanyTyp'], kontekst: ['status', 'sugerowanyTyp'] },
+  { tabela: 'naPozniej', modul: 'na_pozniej', typ: 'Na później', url: '/na-pozniej', pola: ['tytul', 'opis', 'adres', 'tagi'], kontekst: ['typ', 'status', 'adres'] },
+  { tabela: 'listyZakupow', modul: 'zakupy', typ: 'Lista zakupów', url: '/zakupy', pola: ['nazwa', 'sklep', 'tagi'], kontekst: ['sklep', 'planowanaData'] },
+  { tabela: 'cele', modul: 'cele', typ: 'Cel', url: '/cele', pola: ['nazwa', 'opis'], kontekst: ['status', 'horyzont'] },
+  { tabela: 'przypomnienia', modul: 'przypomnienia', typ: 'Przypomnienie', url: '/przypomnienia', pola: ['tytul'], kontekst: ['stan', 'czas', 'priorytet'] },
+  { tabela: 'miejsca', modul: 'miasto', typ: 'Miejsce', url: '/miasto', pola: ['nazwa', 'adres', 'typ', 'notatka'], kontekst: ['typ', 'adres'] },
+  { tabela: 'kontaFinansowe', modul: 'finanse', typ: 'Konto', url: '/finanse', pola: ['nazwa', 'typ'], kontekst: ['typ', 'aktywne'] },
 ]
 
 function normalizuj(tekst: string): string {
@@ -40,6 +41,24 @@ function normalizuj(tekst: string): string {
 function pasuje(tekst: string, fraza: string): boolean {
   const znormalizowany = normalizuj(tekst)
   return normalizuj(fraza).split(/\s+/).filter(Boolean).every((slowo) => znormalizowany.includes(slowo))
+}
+
+const etykietyKontekstu: Record<string, string> = {
+  status: 'Status', termin: 'Termin', data: 'Data', godzina: 'Godzina', czas: 'Termin', priorytet: 'Priorytet',
+  kontekst: 'Kontekst', nastepneDzialanie: 'Następne', rola: 'Rola', email: 'E-mail', telefon: 'Telefon', typ: 'Rodzaj',
+  nazwaPliku: 'Plik', terminWaznosci: 'Ważne do', lekarzPlacowka: 'Lekarz / placówka', miejsce: 'Miejsce',
+  dawkaInstrukcja: 'Dawkowanie', godziny: 'Godziny', stan: 'Stan', cel: 'Cel', kategoria: 'Kategoria', kwota: 'Kwota',
+  marka: 'Marka', model: 'Model', numerRejestracyjny: 'Rejestracja', tagi: 'Tagi', sugerowanyTyp: 'Sugerowany typ',
+  adres: 'Adres', sklep: 'Sklep', planowanaData: 'Planowana data', horyzont: 'Horyzont', aktywne: 'Stan',
+}
+
+function wartoscKontekstu(pole: string, wartosc: unknown): string | undefined {
+  const etykieta = etykietyKontekstu[pole]
+  if (Array.isArray(wartosc)) return wartosc.length > 0 ? `${etykieta}: ${wartosc.join(', ')}` : undefined
+  if (typeof wartosc === 'boolean') return `${etykieta}: ${wartosc ? 'aktywne' : 'nieaktywne'}`
+  if (typeof wartosc === 'number') return `${etykieta}: ${wartosc}${pole === 'kwota' ? ' zł' : ''}`
+  if (typeof wartosc !== 'string' || !wartosc.trim()) return undefined
+  return `${etykieta}: ${wartosc.replaceAll('_', ' ')}`
 }
 
 export async function szukajGlobalnie(fraza: string): Promise<WynikWyszukiwania[]> {
@@ -54,12 +73,14 @@ export async function szukajGlobalnie(fraza: string): Promise<WynikWyszukiwania[
     if (!pasuje(tekst, szukana)) return []
     const etykieta = String(dane.tytul ?? dane.nazwa ?? dane.opis ?? dane.nazwaPliku ?? 'Element')
     const powiazania = Array.isArray(dane.powiazania) ? dane.powiazania as { typ?: string; id?: string }[] : []
-    const projektId = powiazania.find((x) => x.typ === 'projekt')?.id
+    const projektId = typeof dane.projektId === 'string' ? dane.projektId : powiazania.find((x) => x.typ === 'projekty')?.id
     const samochodId = powiazania.find((x) => x.typ === 'samochod')?.id
-    const kontekst = projektId && nazwaProjektu.get(projektId)
-      ? `${nazwaProjektu.get(projektId)} > ${zrodlo.etykieta}`
-      : samochodId && nazwaPojazdu.get(samochodId) ? `${nazwaPojazdu.get(samochodId)} > ${zrodlo.etykieta}` : zrodlo.etykieta
-    return [{ id: rekord.id, modul: zrodlo.modul, etykieta, opis: kontekst, url: `${zrodlo.url}?element=${rekord.id}` }]
+    const powiazanyKontekst = projektId && nazwaProjektu.get(projektId)
+      ? `Projekt: ${nazwaProjektu.get(projektId)}`
+      : samochodId && nazwaPojazdu.get(samochodId) ? `Samochód: ${nazwaPojazdu.get(samochodId)}` : undefined
+    const szczegoly = zrodlo.kontekst.map((pole) => wartoscKontekstu(pole, dane[pole])).filter((wartosc): wartosc is string => Boolean(wartosc)).slice(0, 2)
+    const opis = [powiazanyKontekst, ...szczegoly].filter(Boolean).join(' · ') || 'Bez dodatkowych szczegółów'
+    return [{ id: rekord.id, modul: zrodlo.modul, etykieta, typ: zrodlo.typ, opis, url: `${zrodlo.url}?element=${encodeURIComponent(rekord.id)}` }]
   })))).flat().sort((a, b) => a.etykieta.localeCompare(b.etykieta, 'pl') || a.id.localeCompare(b.id))
   return wyniki.slice(0, 30)
 }

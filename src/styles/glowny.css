@@ -214,9 +214,19 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .pole-wyszukiwania:focus-within { border-color: var(--akcent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--akcent) 18%, transparent); }
 .pole-wyszukiwania input { flex: 1; min-width: 0; min-height: 48px; color: var(--tekst); background: transparent; border: 0; outline: 0; font-size: 1rem; }
 .wyniki-wyszukiwania { display: grid; max-height: 52vh; gap: 4px; margin-top: 12px; overflow-y: auto; }
-.wyniki-wyszukiwania > button { display: flex; align-items: center; justify-content: space-between; padding: 10px 11px; color: var(--tekst); background: transparent; border: 1px solid transparent; border-radius: 7px; cursor: pointer; text-align: left; }
-.wyniki-wyszukiwania > button:hover { background: var(--panel-2); border-color: var(--obramowanie); }
-.wyniki-wyszukiwania > button span { color: var(--tekst-2); font-size: .76rem; text-transform: capitalize; }
+.wyniki-wyszukiwania > button { display: grid; grid-template-columns: 108px minmax(0, 1fr) auto; align-items: center; padding: 10px 11px; gap: 10px; color: var(--tekst); background: transparent; border: 1px solid transparent; border-left: 3px solid var(--obramowanie-mocne); border-radius: 7px; cursor: pointer; text-align: left; }
+.wyniki-wyszukiwania > button:hover, .wyniki-wyszukiwania > button.wynik-wyszukiwania--aktywny { background: var(--panel-2); border-color: var(--obramowanie); border-left-color: var(--akcent); }
+.wynik-wyszukiwania__typ { width: fit-content; padding: 3px 7px; color: var(--tekst-2); background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: 999px; font-size: .7rem; font-weight: 700; }
+.wynik-wyszukiwania__tresc { display: grid; min-width: 0; gap: 3px; }
+.wynik-wyszukiwania__tresc strong, .wynik-wyszukiwania__tresc small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wynik-wyszukiwania__tresc small { color: var(--tekst-2); font-size: .76rem; }
+.wynik-wyszukiwania__wejdz { color: var(--tekst-2); font-size: .68rem; opacity: 0; }
+.wynik-wyszukiwania--aktywny .wynik-wyszukiwania__wejdz { opacity: 1; }
+.wynik-wyszukiwania--praca .wynik-wyszukiwania__typ { color: var(--akcent); background: var(--akcent-jasny); border-color: color-mix(in srgb, var(--akcent) 35%, transparent); }
+.wynik-wyszukiwania--zdrowie .wynik-wyszukiwania__typ { color: var(--blad); background: var(--blad-tlo); border-color: color-mix(in srgb, var(--blad) 28%, transparent); }
+.wynik-wyszukiwania--finanse .wynik-wyszukiwania__typ { color: var(--sukces); background: var(--sukces-tlo); border-color: color-mix(in srgb, var(--sukces) 28%, transparent); }
+.wynik-wyszukiwania--wiedza .wynik-wyszukiwania__typ { color: var(--informacja); background: var(--informacja-tlo); border-color: color-mix(in srgb, var(--informacja) 28%, transparent); }
+.podpowiedz-klawiatury { align-self: center; margin-right: auto; color: var(--tekst-2); }
 
 .pasek-filtrow { display: flex; align-items: center; justify-content: space-between; padding: 10px; gap: 12px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: 10px; box-shadow: 0 1px 2px rgb(25 45 22 / 4%); }
 .segmenty { display: flex; gap: 4px; overflow-x: auto; }
@@ -2115,6 +2125,13 @@ input[type="radio"] {
 .paleta-polecen span { display: grid; min-width: 0; gap: 2px; }
 .paleta-polecen small { color: var(--tekst-2); font-size: .7rem; }
 @media (max-width: 520px) { .paleta-polecen { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+  .wyniki-wyszukiwania > button { grid-template-columns: 1fr auto; min-height: 64px; }
+  .wynik-wyszukiwania__typ { grid-column: 1; grid-row: 2; }
+  .wynik-wyszukiwania__tresc { grid-column: 1 / -1; grid-row: 1; }
+  .wynik-wyszukiwania__wejdz, .podpowiedz-klawiatury { display: none; }
+  .wyniki-wyszukiwania { max-height: 58dvh; }
+}
 
 .strefa-pulpitu--wymaga-uwagi { border-color: color-mix(in srgb, var(--ostrzezenie) 55%, var(--obramowanie)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ostrzezenie) 18%, transparent), var(--cien); }
 .centrum-dowodzenia__podsumowanie { display: block; margin-top: 8px; color: var(--tekst-2); }

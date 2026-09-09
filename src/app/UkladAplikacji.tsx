@@ -129,6 +129,7 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
   useEffect(() => ustawZwiniete(ustawienia.nawigacja.menuDomyslnieZwiniete), [ustawienia.nawigacja.menuDomyslnieZwiniete])
   useEffect(() => {
     const klawisze = (zdarzenie: KeyboardEvent) => {
+      if (document.querySelector('[role="dialog"]')) return
       if ((zdarzenie.ctrlKey || zdarzenie.metaKey) && zdarzenie.key.toLowerCase() === 'k') {
         zdarzenie.preventDefault(); otworzWyszukiwanie()
       }
