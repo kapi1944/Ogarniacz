@@ -6,7 +6,13 @@ import { SilnikPrzypomnien } from './SilnikPrzypomnien'
 
 const stan = vi.hoisted(() => ({
   dane: [] as Przypomnienie[],
+  nasluchujCykluZycia: vi.fn(),
   synchronizuj: vi.fn(),
+  ustawienia: {
+    updatedAt: '2026-09-10T10:00:00.000Z',
+    powiadomienia: true,
+    ukrywajSzczegolyZdrowotneWPowiadomieniach: false,
+  },
   zapisz: vi.fn(),
   zapiszWiele: vi.fn(),
 }))
@@ -21,17 +27,14 @@ vi.mock('../hooks/useRepozytorium', () => ({
 vi.mock('../platform/platforma', () => ({
   platforma: {
     natywna: true,
-    cyklZycia: { nasluchuj: vi.fn().mockResolvedValue(vi.fn()) },
+    cyklZycia: { nasluchuj: stan.nasluchujCykluZycia },
     powiadomienia: { synchronizuj: stan.synchronizuj },
   },
 }))
 
 vi.mock('./KontekstAplikacji', () => ({
   useAplikacja: () => ({
-    ustawienia: {
-      powiadomienia: true,
-      ukrywajSzczegolyZdrowotneWPowiadomieniach: false,
-    },
+    ustawienia: stan.ustawienia,
   }),
 }))
 
@@ -39,6 +42,12 @@ poKazdym(wyczysc)
 
 beforeEach(() => {
   vi.clearAllMocks()
+  stan.nasluchujCykluZycia.mockResolvedValue(vi.fn())
+  stan.ustawienia = {
+    updatedAt: '2026-09-10T10:00:00.000Z',
+    powiadomienia: true,
+    ukrywajSzczegolyZdrowotneWPowiadomieniach: false,
+  }
   stan.dane = [{
     ...utworzMetadane('przypomnienie-1'),
     tytul: 'Spotkanie',
@@ -59,5 +68,28 @@ describe('połączenie Reminder Engine z Androidem', () => {
     expect(stan.dane[0].stan).toBe('nowe')
     expect(stan.zapisz).not.toHaveBeenCalled()
     expect(stan.zapiszWiele).not.toHaveBeenCalled()
+  })
+
+  it('uzgadnia harmonogram po ponownym uruchomieniu aplikacji', async () => {
+    render(<SilnikPrzypomnien />)
+    await waitFor(() => expect(stan.synchronizuj).toHaveBeenCalledTimes(1))
+    const zmienStan = stan.nasluchujCykluZycia.mock.calls[0][0]
+
+    zmienStan('aktywny')
+
+    await waitFor(() => expect(stan.synchronizuj).toHaveBeenCalledTimes(2))
+  })
+
+  it('uzgadnia harmonogram po zapisaniu wyniku ponownego przyznania uprawnienia', async () => {
+    const widok = render(<SilnikPrzypomnien />)
+    await waitFor(() => expect(stan.synchronizuj).toHaveBeenCalledTimes(1))
+    stan.ustawienia = {
+      ...stan.ustawienia,
+      updatedAt: '2026-09-10T10:01:00.000Z',
+    }
+
+    widok.rerender(<SilnikPrzypomnien />)
+
+    await waitFor(() => expect(stan.synchronizuj).toHaveBeenCalledTimes(2))
   })
 })

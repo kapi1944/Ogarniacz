@@ -203,8 +203,6 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
       await harmonogram.anuluj(oczekujace.map((element) => element.id))
       return { zaplanowanePrzypomnieniaIds: [] }
     }
-    const stan = await sprawdzStan()
-    if (stan.zgoda !== 'przyznana' || !stan.systemoweWlaczone) return { zaplanowanePrzypomnieniaIds: [] }
 
     const oczekujacePoId = new Map(oczekujace.map((element) => [element.id, element]))
     const dostarczonePoId = new Map(dostarczone.map((element) => [element.id, element]))
@@ -233,6 +231,12 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
         dostarczoneDoZastapienia.push(powiadomienie.id)
         nowe.push(powiadomienie)
       }
+    }
+    const stan = await sprawdzStan()
+    if (stan.zgoda !== 'przyznana' || !stan.systemoweWlaczone) {
+      await harmonogram.anuluj(zmienione.map((element) => element.id))
+      await harmonogram.usunDostarczone(dostarczoneDoZastapienia)
+      return { zaplanowanePrzypomnieniaIds: [] }
     }
     await harmonogram.usunDostarczone(dostarczoneDoZastapienia)
     await harmonogram.zaplanuj(nowe)

@@ -147,6 +147,22 @@ describe('routing sourceRef', () => {
     })
   })
 
+  it('przekazuje bezpieczną akcję po zimnym starcie, gdy odbiorca dołącza później', async () => {
+    const usluga = utworzUslugePowiadomien(true)
+    await usluga.inicjalizuj()
+    const akcja = lokalnePowiadomienia.addListener.mock.calls[0][1]
+    akcja({ actionId: 'tap', notification: { extra: { przypomnienieId: 'przypomnienie-1', sciezka: '/przypomnienia?element=przypomnienie-1' } } })
+    const obsluga = vi.fn()
+
+    usluga.nasluchujAkcji(obsluga)
+
+    expect(obsluga).toHaveBeenCalledWith({
+      typ: 'otworz',
+      przypomnienieId: 'przypomnienie-1',
+      sciezka: '/przypomnienia?element=przypomnienie-1',
+    })
+  })
+
   it('rejestruje tylko dwie proste akcje przypomnienia', async () => {
     await utworzUslugePowiadomien(true).inicjalizuj()
 
@@ -188,6 +204,23 @@ describe('reconciliation natywnych powiadomień', () => {
     expect(lokalnePowiadomienia.update).not.toHaveBeenCalled()
   })
 
+  it('po aktualizacji zastępuje oczekujący alarm ze starym identyfikatorem', async () => {
+    const docelowe = mapujPrzypomnienieNaPowiadomienie(przypomnienie())!
+    const historycznyId = 1_097_629_924
+    expect(docelowe.id).not.toBe(historycznyId)
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{
+      id: historycznyId,
+      extra: { ogarniacz: true, przypomnienieId: 'przypomnienie-1', wersja: 'historyczna' },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([przypomnienie()], true)
+
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: historycznyId }] })
+    expect(lokalnePowiadomienia.schedule).toHaveBeenCalledWith(expect.objectContaining({
+      notifications: [expect.objectContaining({ id: docelowe.id })],
+    }))
+  })
+
   it('nie planuje ponownie alarmu, który Android już wyświetlił', async () => {
     const wyswietlonePrzypomnienie = przypomnienie({ czas: '2026-08-31T11:00:00.000Z' })
     const dostarczone = mapujPrzypomnienieNaPowiadomienie(wyswietlonePrzypomnienie)!
@@ -200,6 +233,20 @@ describe('reconciliation natywnych powiadomień', () => {
 
     expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
     expect(lokalnePowiadomienia.removeDeliveredNotificationsById).not.toHaveBeenCalled()
+  })
+
+  it('po aktualizacji usuwa historyczne wyświetlone powiadomienie bez ponownego alarmu', async () => {
+    const wyswietlonePrzypomnienie = przypomnienie({ czas: '2026-08-31T11:00:00.000Z' })
+    const historycznyId = 1_097_629_924
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [{
+      id: historycznyId,
+      extra: { ogarniacz: true, przypomnienieId: 'przypomnienie-1', wersja: 'historyczna' },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([wyswietlonePrzypomnienie], true)
+
+    expect(lokalnePowiadomienia.removeDeliveredNotificationsById).toHaveBeenCalledWith({ ids: [historycznyId] })
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
   })
 
   it('przy zmianie terminu anuluje poprzedni harmonogram i tworzy aktualny', async () => {
@@ -231,6 +278,45 @@ describe('reconciliation natywnych powiadomień', () => {
 
     expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: oczekujace.id }] })
     expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it('anuluje usunięte powiadomienie także po cofnięciu zgody', async () => {
+    const oczekujace = mapujPrzypomnienieNaPowiadomienie(przypomnienie())!
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{
+      id: oczekujace.id,
+      extra: { ogarniacz: true, wersja: oczekujace.wersja },
+    }] })
+    lokalnePowiadomienia.checkPermissions.mockResolvedValue({ display: 'denied' })
+
+    await utworzUslugePowiadomien(true).synchronizuj([
+      przypomnienie({ usunietoAt: '2026-09-01T11:00:00.000Z' }),
+    ], true)
+
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: oczekujace.id }] })
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it('usuwa stary termin bez zgody i planuje aktualny po jej ponownym przyznaniu', async () => {
+    const poprzednie = mapujPrzypomnienieNaPowiadomienie(przypomnienie())!
+    const zmienione = przypomnienie({ czas: '2026-09-01T11:00:00.000Z' })
+    let oczekujace: Array<{ id: number; extra?: Record<string, unknown> }> = [{
+      id: poprzednie.id,
+      extra: { ogarniacz: true, wersja: poprzednie.wersja },
+    }]
+    lokalnePowiadomienia.getPending.mockImplementation(async () => ({ notifications: oczekujace }))
+    lokalnePowiadomienia.cancel.mockImplementation(async ({ notifications }) => {
+      const anulowane = new Set(notifications.map(({ id }: { id: number }) => id))
+      oczekujace = oczekujace.filter(({ id }) => !anulowane.has(id))
+    })
+    lokalnePowiadomienia.checkPermissions.mockResolvedValueOnce({ display: 'denied' })
+    const usluga = utworzUslugePowiadomien(true)
+
+    await usluga.synchronizuj([zmienione], true)
+    await usluga.synchronizuj([zmienione], true)
+
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledTimes(1)
+    expect(lokalnePowiadomienia.schedule).toHaveBeenCalledTimes(1)
+    expect(lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0].schedule.at.toISOString()).toBe('2026-09-01T11:00:00.000Z')
   })
 
   it('snooze zastępuje alarm tego samego wystąpienia bez tworzenia drugiego identyfikatora', async () => {
@@ -350,5 +436,16 @@ describe('fallback dokładnych alarmów', () => {
 
     expect(wynik.zaplanowanePrzypomnieniaIds).toEqual([])
     expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it('po ponownym przyznaniu zgody planuje bieżące przypomnienie tylko raz', async () => {
+    lokalnePowiadomienia.checkPermissions.mockResolvedValueOnce({ display: 'denied' })
+    const usluga = utworzUslugePowiadomien(true)
+
+    await usluga.synchronizuj([przypomnienie()], true)
+    await usluga.synchronizuj([przypomnienie()], true)
+
+    expect(lokalnePowiadomienia.schedule).toHaveBeenCalledTimes(1)
+    expect(lokalnePowiadomienia.schedule.mock.calls[0][0].notifications).toHaveLength(1)
   })
 })

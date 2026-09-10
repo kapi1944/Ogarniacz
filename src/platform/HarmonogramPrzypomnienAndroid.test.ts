@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import manifestPowiadomienAndroid from '../../node_modules/@capacitor/local-notifications/android/src/main/AndroidManifest.xml?raw'
+import odbiornikOdtwarzaniaAndroid from '../../node_modules/@capacitor/local-notifications/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/LocalNotificationRestoreReceiver.kt?raw'
+import magazynPowiadomienAndroid from '../../node_modules/@capacitor/local-notifications/android/src/main/kotlin/com/capacitorjs/plugins/localnotifications/NotificationStorage.kt?raw'
 import type { PowiadomieniePlatformowe } from './typy'
 import {
   identyfikatorNatywnyWystapienia,
@@ -137,5 +139,8 @@ describe('natywny harmonogram przypomnień Androida', () => {
     expect(manifestPowiadomienAndroid).toContain('LocalNotificationRestoreReceiver')
     expect(manifestPowiadomienAndroid).toContain('android.intent.action.BOOT_COMPLETED')
     expect(manifestPowiadomienAndroid).toContain('android.permission.RECEIVE_BOOT_COMPLETED')
+    expect(magazynPowiadomienAndroid).toContain('SharedPreferences')
+    expect(odbiornikOdtwarzaniaAndroid).toContain('storage.getSavedNotificationIds()')
+    expect(odbiornikOdtwarzaniaAndroid).toContain('localNotificationManager.schedule(null, notifications)')
   })
 })
