@@ -55,7 +55,26 @@ export function przywrocZadanie(zadanie: Zadanie): Zadanie {
 }
 
 export function odroczZadanie(zadanie: Zadanie, nowyTermin: string): Zadanie {
-  return { ...zadanie, termin: nowyTermin, updatedAt: terazIso() }
+  return zmienTerminZadania(zadanie, nowyTermin)
+}
+
+export function zmienPriorytetZadania(zadanie: Zadanie, priorytet: Zadanie['priorytet']): Zadanie {
+  return { ...zadanie, priorytet, updatedAt: terazIso() }
+}
+
+export function zmienTerminZadania(zadanie: Zadanie, termin?: string): Zadanie {
+  return {
+    ...zadanie,
+    termin,
+    dataElementu: termin,
+    trybTerminuElementu: termin ? zadanie.trybTerminuElementu === 'o_godzinie' ? 'o_godzinie' : 'koniec_dnia' : 'bez_godziny',
+    ...(termin ? {} : { godzinaElementu: undefined }),
+    updatedAt: terazIso(),
+  }
+}
+
+export function przypiszZadanieDoProjektu(zadanie: Zadanie, projektId?: string): Zadanie {
+  return { ...zadanie, projektId, updatedAt: terazIso() }
 }
 
 export function czyZadanieZablokowane(zadanie: Zadanie, zadania: readonly Zadanie[]): boolean {

@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
-import { przeksztalcElementInbox, sugerujPewnyTypInbox, zapiszDoInbox, zapiszSzybkiZrzut } from './PoczekalniaService'
+import { cofnijPrzeksztalcenieInbox, przeksztalcElementInbox, sugerujPewnyTypInbox, zapiszDoInbox, zapiszSzybkiZrzut } from './PoczekalniaService'
 
 describe('uniwersalny Inbox', () => {
   beforeEach(async () => {
@@ -42,5 +42,15 @@ describe('uniwersalny Inbox', () => {
     const element = await zapiszDoInbox(tresc)
     const wynik = await przeksztalcElementInbox(element, 'notatka')
     expect((await pobierzRepozytorium('notatki').pobierz(wynik.id))?.tresc).toBe(tresc)
+  })
+
+  it('cofa konwersję do zadania bez utraty wpisu Inboxu', async () => {
+    const element = await zapiszDoInbox('Oddzwonić do administracji')
+    const wynik = await przeksztalcElementInbox(element, 'zadanie')
+
+    await cofnijPrzeksztalcenieInbox(element, wynik)
+
+    expect((await pobierzRepozytorium('skrzynka').pobierz(element.id))?.status).toBe('do_sklasyfikowania')
+    expect(await pobierzRepozytorium('zadania').pobierz(wynik.id)).toBeUndefined()
   })
 })

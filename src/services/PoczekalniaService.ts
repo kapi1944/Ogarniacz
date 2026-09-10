@@ -1,6 +1,6 @@
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { terazIso, utworzMetadane } from '../domain/fabryki'
-import type { ElementSkrzynki, ListaZakupow, NaPozniej, NazwaModulu, Notatka, PozycjaZakupow, Pomysl, Projekt, Przypomnienie, Wizyta } from '../domain/typy'
+import type { ElementSkrzynki, ListaZakupow, NaPozniej, NazwaModulu, NazwaTabeli, Notatka, PozycjaZakupow, Pomysl, Projekt, Przypomnienie, Wizyta } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 
 export interface PropozycjaPoczekalni {
@@ -81,6 +81,28 @@ export async function przeksztalcElementInbox(element: ElementSkrzynki, typ: Typ
       ...element, status: 'przetworzone', sugerowanyTyp: wynik.typ, przeksztalconoNa: wynik, updatedAt: terazIso(),
     })
   return wynik
+}
+
+function tabelaWynikuInbox(typ: NazwaModulu): NazwaTabeli {
+  if (typ === 'zadania') return 'zadania'
+  if (typ === 'notatki') return 'notatki'
+  if (typ === 'przypomnienia') return 'przypomnienia'
+  if (typ === 'projekty') return 'projekty'
+  if (typ === 'pomysly') return 'pomysly'
+  if (typ === 'na_pozniej') return 'naPozniej'
+  if (typ === 'wizyty') return 'wizyty'
+  if (typ === 'zakupy') return 'pozycjeZakupow'
+  throw new Error('Nie można cofnąć tej konwersji Inboxu.')
+}
+
+export async function cofnijPrzeksztalcenieInbox(element: ElementSkrzynki, wynik: { typ: NazwaModulu; id: string }): Promise<void> {
+  await pobierzRepozytorium('skrzynka').zapisz({
+    ...element,
+    status: 'do_sklasyfikowania',
+    przeksztalconoNa: undefined,
+    updatedAt: terazIso(),
+  })
+  await pobierzRepozytorium(tabelaWynikuInbox(wynik.typ)).usun(wynik.id)
 }
 
 export async function zapiszSzybkiZrzut(tresc: string, zrodlo: ElementSkrzynki['zrodlo'] = 'tekst'): Promise<{ element: ElementSkrzynki; wynik?: { typ: NazwaModulu; id: string } }> {

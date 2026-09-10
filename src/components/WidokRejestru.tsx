@@ -32,6 +32,7 @@ interface Wlasciwosci<T extends EncjaBazowa> {
   uzupelnijFormularz?: (element: T) => Record<string, string>
   wybranyElementId?: string
   poZapisie?: (element: T, poprzedni?: T) => Promise<void>
+  pustyStan?: { tytul: string; opis: string }
 }
 
 function wartoscTekstowa(wartosc: unknown): string {
@@ -85,7 +86,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
       />
       {wlasciwosci.filtr}
       {wlasciwosci.dane.length === 0 ? (
-        <PustyStan tytul="Na razie jest tu pusto" opis={`Wybierz „${wlasciwosci.etykietaDodawania}”, aby zacząć korzystać z tej części.`} akcja={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}>{wlasciwosci.etykietaDodawania}</button>} />
+        <PustyStan tytul={wlasciwosci.pustyStan?.tytul ?? 'Na razie jest tu pusto'} opis={wlasciwosci.pustyStan?.opis ?? `Wybierz „${wlasciwosci.etykietaDodawania}”, aby zacząć korzystać z tej części.`} akcja={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}>{wlasciwosci.etykietaDodawania}</button>} />
       ) : (
         <div className="lista-rekordow">
           {wlasciwosci.dane.map((element) => (

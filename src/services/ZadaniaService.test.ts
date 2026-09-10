@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { czyZadanieNaDzis, czyZadanieZalegle, ukonczZadanie, utworzZadanie } from './ZadaniaService'
+import { czyZadanieNaDzis, czyZadanieZalegle, przypiszZadanieDoProjektu, ukonczZadanie, utworzZadanie, zmienPriorytetZadania, zmienTerminZadania } from './ZadaniaService'
 
 describe('zadania', () => {
   it('tworzy zadanie z opcjonalnym terminem i bez wymaganej estymacji', () => {
@@ -26,5 +26,15 @@ describe('zadania', () => {
     const wynik = ukonczZadanie(zadanie)
     expect(wynik.nastepne?.termin).toBe('2026-08-21')
     expect(wynik.nastepne?.id).not.toBe(zadanie.id)
+  })
+
+  it('szybko zmienia priorytet, termin i projekt bez utraty pozostałych danych', () => {
+    const zadanie = utworzZadanie({ tytul: 'Telefon', opis: 'Notatka', priorytet: 'normalny' })
+    const zPriorytetem = zmienPriorytetZadania(zadanie, 'wysoki')
+    const zTerminem = zmienTerminZadania(zPriorytetem, '2026-09-12')
+    const zProjektem = przypiszZadanieDoProjektu(zTerminem, 'projekt-1')
+
+    expect(zProjektem).toMatchObject({ tytul: 'Telefon', opis: 'Notatka', priorytet: 'wysoki', termin: '2026-09-12', dataElementu: '2026-09-12', trybTerminuElementu: 'koniec_dnia', projektId: 'projekt-1' })
+    expect(zmienTerminZadania(zProjektem)).toMatchObject({ termin: undefined, dataElementu: undefined, trybTerminuElementu: 'bez_godziny' })
   })
 })
