@@ -1,6 +1,12 @@
-import { LocalNotifications, type LocalNotificationSchema, type PendingLocalNotificationSchema } from '@capacitor/local-notifications'
+import { LocalNotifications, type PendingLocalNotificationSchema } from '@capacitor/local-notifications'
 import type { Przypomnienie } from '../domain/typy'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
+import {
+  identyfikatorNatywnyWystapienia,
+  TYP_AKCJI_PRZYPOMNIENIA,
+  utworzHarmonogramPrzypomnienAndroid,
+  wersjaNatywnegoPowiadomienia,
+} from './HarmonogramPrzypomnienAndroid'
 import { normalizujSciezkePowiadomienia, poprawnePowiazanieEncji, sciezkaDlaSourceRef } from './trasy'
 import type {
   AkcjaPowiadomienia,
@@ -12,7 +18,6 @@ import type {
   WynikSynchronizacjiPowiadomien,
 } from './typy'
 
-const TYP_AKCJI_PRZYPOMNIENIA = 'ogarniacz-przypomnienie'
 const AKCJA_WYKONANE = 'wykonane'
 const AKCJA_ODROCZ = 'odrocz'
 
@@ -29,15 +34,6 @@ function stanZgody(wartosc: string): StanZgody {
   if (wartosc === 'granted') return 'przyznana'
   if (wartosc === 'denied') return 'odrzucona'
   return 'pytaj'
-}
-
-function identyfikatorPowiadomienia(tekst: string) {
-  let wynik = 2166136261
-  for (let indeks = 0; indeks < tekst.length; indeks += 1) {
-    wynik ^= tekst.charCodeAt(indeks)
-    wynik = Math.imul(wynik, 16777619)
-  }
-  return wynik & 0x7fffffff
 }
 
 function czyZdrowotne(przypomnienie: Przypomnienie): boolean {
@@ -60,9 +56,9 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
   const sciezka = sciezkaDlaSourceRef(przypomnienie.zrodlo, przypomnienie.id)
   const wymagaDokladnosci = przypomnienie.priorytet === 'krytyczny' && przypomnienie.typ === 'absolutne'
   const tresc = ukrywajSzczegolyZdrowotne && czyZdrowotne(przypomnienie) ? 'Przypomnienie dotyczące zdrowia' : przypomnienie.tytul
-  const wersja = [termin.toISOString(), tresc, kanal, sciezka, wymagaDokladnosci].join('|')
+  const wersja = wersjaNatywnegoPowiadomienia([termin.toISOString(), tresc, kanal, sciezka, String(wymagaDokladnosci)])
   return {
-    id: identyfikatorPowiadomienia(`ogarniacz:${przypomnienie.id}`),
+    id: identyfikatorNatywnyWystapienia('przypomnienie', przypomnienie.id),
     przypomnienieId: przypomnienie.id,
     tytul: 'Ogarniacz',
     tresc,
@@ -75,36 +71,6 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
   }
 }
 
-function daneDodatkowe(powiadomienie: PowiadomieniePlatformowe) {
-  return {
-    ogarniacz: true,
-    przypomnienieId: powiadomienie.przypomnienieId,
-    sourceRef: powiadomienie.sourceRef,
-    sciezka: powiadomienie.sciezka,
-    wersja: powiadomienie.wersja,
-  }
-}
-
-function schematNatywny(powiadomienie: PowiadomieniePlatformowe, exactAlarmsDostepne: boolean): LocalNotificationSchema {
-  const dokladne = powiadomienie.wymagaDokladnosci && exactAlarmsDostepne
-  return {
-    id: powiadomienie.id,
-    title: powiadomienie.tytul,
-    body: powiadomienie.tresc,
-    channelId: powiadomienie.kanal,
-    autoCancel: true,
-    group: 'ogarniacz-przypomnienia',
-    actionTypeId: TYP_AKCJI_PRZYPOMNIENIA,
-    extra: daneDodatkowe(powiadomienie),
-    isExactNotification: dokladne,
-    isExactMandatory: false,
-    schedule: {
-      at: new Date(Math.max(Date.parse(powiadomienie.termin), Date.now() + 500)),
-      allowWhileIdle: dokladne,
-    },
-  }
-}
-
 function czyOgarniacza(powiadomienie: PendingLocalNotificationSchema) {
   return powiadomienie.extra?.ogarniacz === true
 }
@@ -114,6 +80,7 @@ function wersjaOczekujacego(powiadomienie: PendingLocalNotificationSchema) {
 }
 
 export function utworzUslugePowiadomien(czyAndroid: boolean) {
+  const harmonogram = utworzHarmonogramPrzypomnienAndroid(czyAndroid)
   const obslugiAkcji = new Set<(akcja: AkcjaPowiadomienia) => void>()
   const ostatnieAkcje = new Map<string, number>()
   let oczekujacaAkcja: AkcjaPowiadomienia | undefined
@@ -223,38 +190,12 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     return true
   }
 
-  const czyExactAlarmsDostepne = async () => {
-    if (!czyAndroid) return false
-    try {
-      return (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'
-    } catch {
-      return false
-    }
-  }
-
-  const zaplanuj = async (powiadomienia: PowiadomieniePlatformowe[]) => {
-    if (!czyAndroid || powiadomienia.length === 0) return
-    const exactAlarmsDostepne = await czyExactAlarmsDostepne()
-    await LocalNotifications.schedule({ notifications: powiadomienia.map((element) => schematNatywny(element, exactAlarmsDostepne)) })
-  }
-
-  const anuluj = async (identyfikatory: number[]) => {
-    if (!czyAndroid || identyfikatory.length === 0) return
-    await LocalNotifications.cancel({ notifications: identyfikatory.map((id) => ({ id })) })
-  }
-
-  const przeplanuj = async (powiadomienia: PowiadomieniePlatformowe[]) => {
-    if (!czyAndroid || powiadomienia.length === 0) return
-    const exactAlarmsDostepne = await czyExactAlarmsDostepne()
-    await LocalNotifications.update({ notifications: powiadomienia.map((element) => schematNatywny(element, exactAlarmsDostepne)) })
-  }
-
   const wykonajSynchronizacje = async (przypomnienia: Przypomnienie[], wlaczone: boolean, ukrywajSzczegolyZdrowotne = false) => {
     if (!czyAndroid) return { zaplanowanePrzypomnieniaIds: [] }
     await inicjalizuj()
-    const oczekujace = (await LocalNotifications.getPending()).notifications.filter(czyOgarniacza)
+    const oczekujace = (await harmonogram.pobierzOczekujace()).filter(czyOgarniacza)
     if (!wlaczone) {
-      await anuluj(oczekujace.map((element) => element.id))
+      await harmonogram.anuluj(oczekujace.map((element) => element.id))
       return { zaplanowanePrzypomnieniaIds: [] }
     }
     const stan = await sprawdzStan()
@@ -269,7 +210,7 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
         przypomnienie.stan !== 'dostarczone' || Date.parse(powiadomienie.termin) > teraz || oczekujacePoId.has(powiadomienie.id),
       )
     const doceloweIds = new Set(docelowe.map(({ powiadomienie }) => powiadomienie.id))
-    await anuluj(oczekujace.filter((element) => !doceloweIds.has(element.id)).map((element) => element.id))
+    await harmonogram.anuluj(oczekujace.filter((element) => !doceloweIds.has(element.id)).map((element) => element.id))
 
     const nowe: PowiadomieniePlatformowe[] = []
     const zmienione: PowiadomieniePlatformowe[] = []
@@ -278,8 +219,8 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
       if (!istniejace) nowe.push(powiadomienie)
       else if (wersjaOczekujacego(istniejace) !== powiadomienie.wersja) zmienione.push(powiadomienie)
     }
-    await anuluj(zmienione.map((powiadomienie) => powiadomienie.id))
-    await zaplanuj([...nowe, ...zmienione])
+    await harmonogram.zaplanuj(nowe)
+    await harmonogram.przeplanuj(zmienione)
     return { zaplanowanePrzypomnieniaIds: docelowe.map(({ przypomnienie }) => przypomnienie.id) }
   }
 
@@ -289,9 +230,9 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     poprosOUprawnienie,
     sprawdzStan,
     pokaz,
-    zaplanuj,
-    anuluj,
-    przeplanuj,
+    zaplanuj: harmonogram.zaplanuj,
+    anuluj: harmonogram.anuluj,
+    przeplanuj: harmonogram.przeplanuj,
     synchronizuj(przypomnienia: Przypomnienie[], wlaczone: boolean, ukrywajSzczegolyZdrowotne = false) {
       kolejkaSynchronizacji = kolejkaSynchronizacji
         .then(() => wykonajSynchronizacje(przypomnienia, wlaczone, ukrywajSzczegolyZdrowotne))
