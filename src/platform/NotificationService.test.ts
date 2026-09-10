@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { utworzMetadane } from '../domain/fabryki'
 import type { Przypomnienie } from '../domain/typy'
+import { odroczPrzypomnienie, zakonczPrzypomnienie } from '../services/PrzypomnieniaService'
 import { mapujPrzypomnienieNaPowiadomienie, utworzUslugePowiadomien } from './NotificationService'
 import { sciezkaDlaSourceRef } from './trasy'
 
@@ -11,9 +12,11 @@ const lokalnePowiadomienia = vi.hoisted(() => ({
   checkExactNotificationSetting: vi.fn(),
   checkPermissions: vi.fn(),
   createChannel: vi.fn(),
+  getAll: vi.fn(),
   getPending: vi.fn(),
   listChannels: vi.fn(),
   registerActionTypes: vi.fn(),
+  removeDeliveredNotificationsById: vi.fn(),
   requestPermissions: vi.fn(),
   schedule: vi.fn(),
   update: vi.fn(),
@@ -22,6 +25,8 @@ const lokalnePowiadomienia = vi.hoisted(() => ({
 vi.mock('@capacitor/local-notifications', () => ({ LocalNotifications: lokalnePowiadomienia }))
 
 beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-08-31T12:00:00.000Z'))
   vi.clearAllMocks()
   lokalnePowiadomienia.addListener.mockResolvedValue({ remove: vi.fn() })
   lokalnePowiadomienia.areEnabled.mockResolvedValue({ value: true })
@@ -29,6 +34,7 @@ beforeEach(() => {
   lokalnePowiadomienia.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: 'granted' })
   lokalnePowiadomienia.checkPermissions.mockResolvedValue({ display: 'granted' })
   lokalnePowiadomienia.createChannel.mockResolvedValue(undefined)
+  lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [] })
   lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [] })
   lokalnePowiadomienia.listChannels.mockResolvedValue({ channels: [
     { id: 'ogarniacz-wazne', importance: 4 },
@@ -38,9 +44,12 @@ beforeEach(() => {
   ] })
   lokalnePowiadomienia.requestPermissions.mockResolvedValue({ display: 'granted' })
   lokalnePowiadomienia.registerActionTypes.mockResolvedValue(undefined)
+  lokalnePowiadomienia.removeDeliveredNotificationsById.mockResolvedValue(undefined)
   lokalnePowiadomienia.schedule.mockResolvedValue({ notifications: [] })
   lokalnePowiadomienia.update.mockResolvedValue(undefined)
 })
+
+afterEach(() => vi.useRealTimers())
 
 const przypomnienie = (zmiany: Partial<Przypomnienie> = {}): Przypomnienie => ({
   ...utworzMetadane('przypomnienie-1'),
@@ -154,6 +163,17 @@ describe('routing sourceRef', () => {
 })
 
 describe('reconciliation natywnych powiadomień', () => {
+  it('planuje alarm po utworzeniu przypomnienia', async () => {
+    const utworzone = przypomnienie()
+    const docelowe = mapujPrzypomnienieNaPowiadomienie(utworzone)!
+
+    await utworzUslugePowiadomien(true).synchronizuj([utworzone], true)
+
+    expect(lokalnePowiadomienia.schedule).toHaveBeenCalledWith(expect.objectContaining({
+      notifications: [expect.objectContaining({ id: docelowe.id })],
+    }))
+  })
+
   it('nie tworzy kolejnej kopii, gdy oczekujące powiadomienie ma tę samą wersję', async () => {
     const docelowe = mapujPrzypomnienieNaPowiadomienie(przypomnienie())!
     lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{
@@ -166,6 +186,20 @@ describe('reconciliation natywnych powiadomień', () => {
     expect(lokalnePowiadomienia.cancel).not.toHaveBeenCalled()
     expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
     expect(lokalnePowiadomienia.update).not.toHaveBeenCalled()
+  })
+
+  it('nie planuje ponownie alarmu, który Android już wyświetlił', async () => {
+    const wyswietlonePrzypomnienie = przypomnienie({ czas: '2026-08-31T11:00:00.000Z' })
+    const dostarczone = mapujPrzypomnienieNaPowiadomienie(wyswietlonePrzypomnienie)!
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [{
+      id: dostarczone.id,
+      extra: { ogarniacz: true, wersja: dostarczone.wersja },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([wyswietlonePrzypomnienie], true)
+
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+    expect(lokalnePowiadomienia.removeDeliveredNotificationsById).not.toHaveBeenCalled()
   })
 
   it('przy zmianie terminu anuluje poprzedni harmonogram i tworzy aktualny', async () => {
@@ -191,10 +225,88 @@ describe('reconciliation natywnych powiadomień', () => {
       extra: { ogarniacz: true, wersja: oczekujace.wersja },
     }] })
 
-    await utworzUslugePowiadomien(true).synchronizuj([], true)
+    await utworzUslugePowiadomien(true).synchronizuj([
+      przypomnienie({ usunietoAt: '2026-09-01T11:00:00.000Z' }),
+    ], true)
 
     expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: oczekujace.id }] })
     expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it('snooze zastępuje alarm tego samego wystąpienia bez tworzenia drugiego identyfikatora', async () => {
+    const bazowe = przypomnienie({ czas: '2026-08-31T11:00:00.000Z' })
+    const oczekujace = mapujPrzypomnienieNaPowiadomienie(bazowe)!
+    const odroczone = odroczPrzypomnienie(bazowe, 15, new Date('2026-08-31T12:00:00.000Z'))
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [{
+      id: oczekujace.id,
+      extra: { ogarniacz: true, wersja: oczekujace.wersja },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([odroczone], true)
+
+    const zaplanowane = lokalnePowiadomienia.schedule.mock.calls[0][0].notifications
+    expect(lokalnePowiadomienia.removeDeliveredNotificationsById).toHaveBeenCalledWith({ ids: [oczekujace.id] })
+    expect(zaplanowane).toHaveLength(1)
+    expect(zaplanowane[0]).toMatchObject({ id: oczekujace.id })
+    expect(zaplanowane[0].schedule.at.toISOString()).toBe('2026-08-31T12:15:00.000Z')
+  })
+
+  it('po wykonaniu cyklicznego wystąpienia anuluje je i planuje tylko następne', async () => {
+    const biezace = przypomnienie({ typ: 'cykliczne', powtarzanie: { typ: 'codziennie', coIle: 1 } })
+    const oczekujace = mapujPrzypomnienieNaPowiadomienie(biezace)!
+    const wynik = zakonczPrzypomnienie(biezace)
+    const nastepne = mapujPrzypomnienieNaPowiadomienie(wynik.nastepne!)!
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{
+      id: oczekujace.id,
+      extra: { ogarniacz: true, wersja: oczekujace.wersja },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([wynik.wykonane, wynik.nastepne!], true)
+
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: oczekujace.id }] })
+    expect(lokalnePowiadomienia.schedule).toHaveBeenCalledWith(expect.objectContaining({
+      notifications: [expect.objectContaining({ id: nastepne.id })],
+    }))
+  })
+
+  it('po wykonaniu jednorazowego przypomnienia anuluje aktywny alarm', async () => {
+    const biezace = przypomnienie()
+    const oczekujace = mapujPrzypomnienieNaPowiadomienie(biezace)!
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{
+      id: oczekujace.id,
+      extra: { ogarniacz: true, wersja: oczekujace.wersja },
+    }] })
+
+    await utworzUslugePowiadomien(true).synchronizuj([zakonczPrzypomnienie(biezace).wykonane], true)
+
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: oczekujace.id }] })
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it('uzgadnia kolejne stany z synchronizacji i nie duplikuje niezmienionego alarmu', async () => {
+    let oczekujace: Array<{ id: number; extra?: Record<string, unknown> }> = []
+    lokalnePowiadomienia.getPending.mockImplementation(async () => ({ notifications: oczekujace }))
+    lokalnePowiadomienia.schedule.mockImplementation(async ({ notifications }) => {
+      oczekujace = notifications.map(({ id, extra }: { id: number; extra?: Record<string, unknown> }) => ({ id, extra }))
+      return { notifications: [] }
+    })
+    lokalnePowiadomienia.cancel.mockImplementation(async ({ notifications }) => {
+      const anulowane = new Set(notifications.map(({ id }: { id: number }) => id))
+      oczekujace = oczekujace.filter(({ id }) => !anulowane.has(id))
+    })
+    const usluga = utworzUslugePowiadomien(true)
+    const zdalneNowe = przypomnienie()
+    const zdalneZmienione = przypomnienie({ czas: '2026-09-01T12:00:00.000Z' })
+    const zdalneUsuniete = przypomnienie({ czas: '2026-09-01T12:00:00.000Z', usunietoAt: '2026-09-01T12:05:00.000Z' })
+
+    await usluga.synchronizuj([zdalneNowe], true)
+    await usluga.synchronizuj([zdalneNowe], true)
+    await usluga.synchronizuj([zdalneZmienione], true)
+    await usluga.synchronizuj([zdalneUsuniete], true)
+
+    expect(lokalnePowiadomienia.schedule).toHaveBeenCalledTimes(2)
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledTimes(2)
+    expect(oczekujace).toEqual([])
   })
 })
 

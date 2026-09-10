@@ -12,7 +12,9 @@ const lokalnePowiadomienia = vi.hoisted(() => ({
   cancel: vi.fn(),
   checkExactNotificationSetting: vi.fn(),
   checkPermissions: vi.fn(),
+  getAll: vi.fn(),
   getPending: vi.fn(),
+  removeDeliveredNotificationsById: vi.fn(),
   schedule: vi.fn(),
 }))
 
@@ -38,7 +40,9 @@ beforeEach(() => {
   lokalnePowiadomienia.cancel.mockResolvedValue(undefined)
   lokalnePowiadomienia.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: 'granted' })
   lokalnePowiadomienia.checkPermissions.mockResolvedValue({ display: 'granted' })
+  lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [] })
   lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [] })
+  lokalnePowiadomienia.removeDeliveredNotificationsById.mockResolvedValue(undefined)
   lokalnePowiadomienia.schedule.mockResolvedValue({ notifications: [] })
 })
 
@@ -95,6 +99,18 @@ describe('natywny harmonogram przypomnień Androida', () => {
     await harmonogram.anuluj([id, id])
 
     expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id }] })
+  })
+
+  it('odczytuje i usuwa wyświetlone powiadomienie po identyfikatorze wystąpienia', async () => {
+    const harmonogram = utworzHarmonogramPrzypomnienAndroid(true)
+    const element = powiadomienie()
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [element] })
+
+    expect(await harmonogram.pobierzDostarczone()).toEqual([element])
+    await harmonogram.usunDostarczone([element.id, element.id])
+
+    expect(lokalnePowiadomienia.getAll).toHaveBeenCalledWith({ state: 'TRIGGERED' })
+    expect(lokalnePowiadomienia.removeDeliveredNotificationsById).toHaveBeenCalledWith({ ids: [element.id] })
   })
 
   it('nie próbuje planować po odmowie uprawnienia', async () => {

@@ -17,7 +17,23 @@ describe('reminder engine', () => {
 
   it('tworzy następne wystąpienie przypomnienia cyklicznego', () => {
     const przypomnienie = baza({ typ: 'cykliczne', powtarzanie: { typ: 'codziennie', coIle: 1 } })
-    expect(zakonczPrzypomnienie(przypomnienie).nastepne?.czas).toBe('2026-08-15T10:00:00.000Z')
+    const nastepne = zakonczPrzypomnienie(przypomnienie).nastepne
+
+    expect(nastepne?.czas).toBe('2026-08-15T10:00:00.000Z')
+    expect(nastepne?.id).toBe(`${przypomnienie.id}::wystapienie::2026-08-15T10:00:00.000Z`)
+  })
+
+  it('wyznacza to samo następne wystąpienie na różnych urządzeniach', () => {
+    const przypomnienie = baza({ id: 'seria-1', typ: 'cykliczne', powtarzanie: { typ: 'codziennie', coIle: 1 } })
+
+    expect(zakonczPrzypomnienie(przypomnienie).nastepne?.id)
+      .toBe(zakonczPrzypomnienie(przypomnienie).nastepne?.id)
+  })
+
+  it('nie tworzy kolejnego wystąpienia po ponownym zakończeniu wykonanego przypomnienia', () => {
+    const wykonane = baza({ typ: 'cykliczne', powtarzanie: { typ: 'codziennie', coIle: 1 }, stan: 'wykonane' })
+
+    expect(zakonczPrzypomnienie(wykonane)).toEqual({ wykonane })
   })
 
   it('snooze odracza przypomnienie o wskazaną liczbę minut', () => {

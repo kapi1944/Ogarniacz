@@ -1,8 +1,17 @@
 import { addMinutes, parseISO } from 'date-fns'
 import { terazIso } from '../domain/fabryki'
 import type { Przypomnienie } from '../domain/typy'
-import { utworzMetadane } from '../domain/fabryki'
 import { nastepnaData } from './PowtarzanieService'
+
+const SEPARATOR_WYSTAPIENIA = '::wystapienie::'
+
+function identyfikatorNastepnegoWystapienia(przypomnienie: Przypomnienie, czas: string) {
+  const indeksSeparatora = przypomnienie.id.lastIndexOf(SEPARATOR_WYSTAPIENIA)
+  const identyfikatorSerii = indeksSeparatora >= 0
+    ? przypomnienie.id.slice(0, indeksSeparatora)
+    : przypomnienie.id
+  return `${identyfikatorSerii}${SEPARATOR_WYSTAPIENIA}${czas}`
+}
 
 export function czasUruchomienia(przypomnienie: Przypomnienie): Date | undefined {
   if (przypomnienie.odroczoneDo) return parseISO(przypomnienie.odroczoneDo)
@@ -65,16 +74,20 @@ export function zamknijPrzypomnienie(przypomnienie: Przypomnienie): Przypomnieni
 }
 
 export function zakonczPrzypomnienie(przypomnienie: Przypomnienie): { wykonane: Przypomnienie; nastepne?: Przypomnienie } {
+  if (przypomnienie.stan === 'wykonane') return { wykonane: przypomnienie }
   const wykonane = zamknijPrzypomnienie(przypomnienie)
   if (!przypomnienie.czas || !przypomnienie.powtarzanie) return { wykonane }
   const kolejnaData = nastepnaData(przypomnienie.czas.slice(0, 10), przypomnienie.powtarzanie)
   if (!kolejnaData) return { wykonane }
+  const kolejnyCzas = `${kolejnaData}${przypomnienie.czas.slice(10)}`
   return {
     wykonane,
     nastepne: {
       ...przypomnienie,
-      ...utworzMetadane(),
-      czas: `${kolejnaData}${przypomnienie.czas.slice(10)}`,
+      id: identyfikatorNastepnegoWystapienia(przypomnienie, kolejnyCzas),
+      createdAt: przypomnienie.createdAt,
+      updatedAt: wykonane.updatedAt,
+      czas: kolejnyCzas,
       stan: 'nowe',
       odroczoneDo: undefined,
     },

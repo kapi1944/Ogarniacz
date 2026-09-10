@@ -111,5 +111,17 @@ export function utworzHarmonogramPrzypomnienAndroid(czyAndroid: boolean) {
     return (await LocalNotifications.getPending()).notifications
   }
 
-  return { zaplanuj, przeplanuj, anuluj, pobierzOczekujace }
+  const pobierzDostarczone = async (): Promise<LocalNotificationSchema[]> => {
+    if (!czyAndroid) return []
+    return (await LocalNotifications.getAll({ state: 'TRIGGERED' })).notifications
+  }
+
+  const usunDostarczone = async (identyfikatory: number[]) => {
+    if (!czyAndroid) return
+    const unikalne = [...new Set(identyfikatory)]
+    if (unikalne.length === 0) return
+    await LocalNotifications.removeDeliveredNotificationsById({ ids: unikalne })
+  }
+
+  return { zaplanuj, przeplanuj, anuluj, pobierzOczekujace, pobierzDostarczone, usunDostarczone }
 }

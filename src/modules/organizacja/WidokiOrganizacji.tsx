@@ -25,8 +25,8 @@ export function WidokPrzypomnien() {
   const nadchodzace = nadchodzacePrzypomnienia(dane).slice(0, 6)
   const zakoncz = async (element: Przypomnienie) => {
     const wynik = zakonczPrzypomnienie(element)
-    await repozytorium.zapisz(wynik.wykonane)
-    if (wynik.nastepne) await repozytorium.zapisz(wynik.nastepne)
+    if (wynik.nastepne) await repozytorium.zapiszWiele([wynik.wykonane, wynik.nastepne])
+    else await repozytorium.zapisz(wynik.wykonane)
   }
   return <div className="widok">
     <NaglowekWidoku tytul="Centrum przypomnień" opis="Wspólny system reakcji dla wszystkich modułów. Powiadomienie wewnątrz aplikacji działa niezależnie od Notification API." />

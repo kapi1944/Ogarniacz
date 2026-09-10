@@ -1,4 +1,4 @@
-import { LocalNotifications, type PendingLocalNotificationSchema } from '@capacitor/local-notifications'
+import { LocalNotifications } from '@capacitor/local-notifications'
 import type { Przypomnienie } from '../domain/typy'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
 import {
@@ -71,11 +71,11 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
   }
 }
 
-function czyOgarniacza(powiadomienie: PendingLocalNotificationSchema) {
+function czyOgarniacza(powiadomienie: { extra?: Record<string, unknown> }) {
   return powiadomienie.extra?.ogarniacz === true
 }
 
-function wersjaOczekujacego(powiadomienie: PendingLocalNotificationSchema) {
+function wersjaNatywnego(powiadomienie: { extra?: Record<string, unknown> }) {
   return typeof powiadomienie.extra?.wersja === 'string' ? powiadomienie.extra.wersja : ''
 }
 
@@ -193,7 +193,12 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
   const wykonajSynchronizacje = async (przypomnienia: Przypomnienie[], wlaczone: boolean, ukrywajSzczegolyZdrowotne = false) => {
     if (!czyAndroid) return { zaplanowanePrzypomnieniaIds: [] }
     await inicjalizuj()
-    const oczekujace = (await harmonogram.pobierzOczekujace()).filter(czyOgarniacza)
+    const [wszystkieOczekujace, wszystkieDostarczone] = await Promise.all([
+      harmonogram.pobierzOczekujace(),
+      harmonogram.pobierzDostarczone(),
+    ])
+    const oczekujace = wszystkieOczekujace.filter(czyOgarniacza)
+    const dostarczone = wszystkieDostarczone.filter(czyOgarniacza)
     if (!wlaczone) {
       await harmonogram.anuluj(oczekujace.map((element) => element.id))
       return { zaplanowanePrzypomnieniaIds: [] }
@@ -202,23 +207,34 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     if (stan.zgoda !== 'przyznana' || !stan.systemoweWlaczone) return { zaplanowanePrzypomnieniaIds: [] }
 
     const oczekujacePoId = new Map(oczekujace.map((element) => [element.id, element]))
+    const dostarczonePoId = new Map(dostarczone.map((element) => [element.id, element]))
     const teraz = Date.now()
     const docelowe = przypomnienia
       .map((przypomnienie) => ({ przypomnienie, powiadomienie: mapujPrzypomnienieNaPowiadomienie(przypomnienie, ukrywajSzczegolyZdrowotne) }))
       .filter((element): element is { przypomnienie: Przypomnienie; powiadomienie: PowiadomieniePlatformowe } => Boolean(element.powiadomienie))
-      .filter(({ przypomnienie, powiadomienie }) =>
-        przypomnienie.stan !== 'dostarczone' || Date.parse(powiadomienie.termin) > teraz || oczekujacePoId.has(powiadomienie.id),
-      )
+      .filter(({ powiadomienie }) => Date.parse(powiadomienie.termin) > teraz
+        || oczekujacePoId.has(powiadomienie.id)
+        || dostarczonePoId.has(powiadomienie.id))
     const doceloweIds = new Set(docelowe.map(({ powiadomienie }) => powiadomienie.id))
     await harmonogram.anuluj(oczekujace.filter((element) => !doceloweIds.has(element.id)).map((element) => element.id))
+    await harmonogram.usunDostarczone(dostarczone.filter((element) => !doceloweIds.has(element.id)).map((element) => element.id))
 
     const nowe: PowiadomieniePlatformowe[] = []
     const zmienione: PowiadomieniePlatformowe[] = []
+    const dostarczoneDoZastapienia: number[] = []
     for (const { powiadomienie } of docelowe) {
       const istniejace = oczekujacePoId.get(powiadomienie.id)
-      if (!istniejace) nowe.push(powiadomienie)
-      else if (wersjaOczekujacego(istniejace) !== powiadomienie.wersja) zmienione.push(powiadomienie)
+      const wyswietlone = dostarczonePoId.get(powiadomienie.id)
+      if (istniejace) {
+        if (wersjaNatywnego(istniejace) !== powiadomienie.wersja) zmienione.push(powiadomienie)
+      } else if (!wyswietlone) {
+        nowe.push(powiadomienie)
+      } else if (Date.parse(powiadomienie.termin) > teraz && wersjaNatywnego(wyswietlone) !== powiadomienie.wersja) {
+        dostarczoneDoZastapienia.push(powiadomienie.id)
+        nowe.push(powiadomienie)
+      }
     }
+    await harmonogram.usunDostarczone(dostarczoneDoZastapienia)
     await harmonogram.zaplanuj(nowe)
     await harmonogram.przeplanuj(zmienione)
     return { zaplanowanePrzypomnieniaIds: docelowe.map(({ przypomnienie }) => przypomnienie.id) }

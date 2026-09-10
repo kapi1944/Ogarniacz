@@ -49,8 +49,8 @@ export function NawigacjaPlatformy() {
         return
       }
       const wynik = zakonczPrzypomnienie(przypomnienie)
-      await repozytorium.zapisz(wynik.wykonane)
-      if (wynik.nastepne) await repozytorium.zapisz(wynik.nastepne)
+      if (wynik.nastepne) await repozytorium.zapiszWiele([wynik.wykonane, wynik.nastepne])
+      else await repozytorium.zapisz(wynik.wykonane)
     })().catch(() => undefined)
   }), [moze])
 

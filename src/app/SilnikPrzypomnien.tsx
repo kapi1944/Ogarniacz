@@ -36,13 +36,7 @@ export function SilnikPrzypomnien() {
     let anulowano = false
     const dostarcz = async () => {
       if (platforma.natywna) {
-        const wynik = await platforma.powiadomienia.synchronizuj(dane, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach)
-        if (anulowano || wynik.zaplanowanePrzypomnieniaIds.length === 0) return
-        const zaplanowane = new Set(wynik.zaplanowanePrzypomnieniaIds)
-        const doAktualizacji = dane
-          .filter((element) => zaplanowane.has(element.id) && element.stan !== 'dostarczone')
-          .map((element) => ({ ...element, stan: 'dostarczone' as const }))
-        if (doAktualizacji.length > 0) await repozytorium.zapiszWiele(doAktualizacji)
+        await platforma.powiadomienia.synchronizuj(dane, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach)
         return
       }
 
