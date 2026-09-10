@@ -63,8 +63,17 @@ const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
   ] },
 ]
 
-const wszystkiePozycje = grupy.flatMap((grupa) => grupa.pozycje)
 const glowneAdresyMobilne = new Set(['/', '/dzisiaj', '/echo'])
+
+function znajdzKontekstWidoku(pathname: string) {
+  for (const grupa of grupy) {
+    const pozycja = [...grupa.pozycje]
+      .sort((a, b) => b.adres.length - a.adres.length)
+      .find((element) => pathname === element.adres || element.adres !== '/' && pathname.startsWith(`${element.adres}/`))
+    if (pozycja) return { grupa: grupa.etykieta, pozycja }
+  }
+  return { grupa: 'Ogarniacz', pozycja: undefined }
+}
 
 export function DolnaNawigacjaMobilna({
   otworzSzybkieDodawanie,
@@ -74,46 +83,61 @@ export function DolnaNawigacjaMobilna({
   moze: (modul: NazwaModulu, operacja?: 'odczyt' | 'edycja', sekcja?: string) => boolean
 }) {
   const [wiecejOtwarte, ustawWiecejOtwarte] = useState(false)
+  const [frazaModulow, ustawFrazeModulow] = useState('')
   const { pathname } = useLocation()
   const wiecejAktywne = !glowneAdresyMobilne.has(pathname)
 
-  useEffect(() => ustawWiecejOtwarte(false), [pathname])
+  useEffect(() => { ustawWiecejOtwarte(false); ustawFrazeModulow('') }, [pathname])
   useEffect(() => {
     document.body.classList.toggle('mobilny-drawer-otwarty', wiecejOtwarte)
     return () => document.body.classList.remove('mobilny-drawer-otwarty')
   }, [wiecejOtwarte])
+  useEffect(() => {
+    if (!wiecejOtwarte) return
+    const zamknijPoEscape = (zdarzenie: KeyboardEvent) => {
+      if (zdarzenie.key === 'Escape') ustawWiecejOtwarte(false)
+    }
+    window.addEventListener('keydown', zamknijPoEscape)
+    return () => window.removeEventListener('keydown', zamknijPoEscape)
+  }, [wiecejOtwarte])
   useObslugaWstecz(wiecejOtwarte, () => ustawWiecejOtwarte(false), 80)
+  const zamknijWiecej = () => { ustawWiecejOtwarte(false); ustawFrazeModulow('') }
+  const szukanaFraza = frazaModulow.trim().toLocaleLowerCase('pl-PL')
+  const widoczneGrupy = grupy.map((grupa) => ({
+    ...grupa,
+    pozycje: grupa.pozycje.filter((pozycja) =>
+      !glowneAdresyMobilne.has(pozycja.adres)
+      && (!pozycja.modul || moze(pozycja.modul))
+      && (!szukanaFraza || `${grupa.etykieta} ${pozycja.etykieta}`.toLocaleLowerCase('pl-PL').includes(szukanaFraza)),
+    ),
+  })).filter((grupa) => grupa.pozycje.length > 0)
 
   return <>
     {wiecejOtwarte && <>
-      <button type="button" className="mobilny-drawer-tlo" aria-label="Zamknij więcej modułów" onClick={() => ustawWiecejOtwarte(false)} />
+      <div className="mobilny-drawer-tlo" aria-hidden="true" />
       <section className="mobilny-drawer" role="dialog" aria-modal="true" aria-labelledby="mobilny-drawer-tytul">
         <div className="mobilny-drawer__uchwyt" aria-hidden="true" />
         <header className="mobilny-drawer__naglowek">
           <div><strong id="mobilny-drawer-tytul">Więcej modułów</strong><small>Wszystkie dostępne obszary Ogarniacza</small></div>
-          <button type="button" className="przycisk-ikona" onClick={() => ustawWiecejOtwarte(false)} aria-label="Zamknij"><X aria-hidden="true" /></button>
+          <button type="button" className="przycisk-ikona" onClick={zamknijWiecej} aria-label="Zamknij listę modułów"><X aria-hidden="true" /></button>
         </header>
+        <label className="mobilny-drawer__wyszukiwanie"><Search aria-hidden="true" /><span className="sr-only">Znajdź moduł</span><input type="search" autoFocus value={frazaModulow} onChange={(zdarzenie) => ustawFrazeModulow(zdarzenie.target.value)} placeholder="Znajdź moduł…" /></label>
         <nav className="mobilny-drawer__nawigacja" aria-label="Pozostałe moduły">
-          {grupy.map((grupa) => {
-            const widoczne = grupa.pozycje.filter((pozycja) =>
-              !glowneAdresyMobilne.has(pozycja.adres) && (!pozycja.modul || moze(pozycja.modul)),
-            )
-            if (widoczne.length === 0) return null
-            return <div className="mobilny-drawer__grupa" key={grupa.etykieta}>
+          {widoczneGrupy.map((grupa) => <div className="mobilny-drawer__grupa" key={grupa.etykieta}>
               <span>{grupa.etykieta}</span>
-              <div>{widoczne.map((pozycja) => {
+              <div>{grupa.pozycje.map((pozycja) => {
                 const Ikona = pozycja.ikona
-                return <NavLink to={pozycja.adres} key={pozycja.adres}><Ikona aria-hidden="true" /><strong>{pozycja.etykieta}</strong></NavLink>
+                return <NavLink to={pozycja.adres} key={pozycja.adres} onClick={zamknijWiecej}><Ikona aria-hidden="true" /><strong>{pozycja.etykieta}</strong></NavLink>
               })}</div>
-            </div>
-          })}
+            </div>)}
+          {widoczneGrupy.length === 0 && <p className="mobilny-drawer__brak">Nie znaleziono takiego modułu.</p>}
         </nav>
       </section>
     </>}
     <nav className="dolna-nawigacja" aria-label="Dolna nawigacja">
       <NavLink end to="/" className="dolna-nawigacja__element"><LayoutDashboard aria-hidden="true" /><span>Pulpit</span></NavLink>
       <NavLink to="/dzisiaj" className="dolna-nawigacja__element"><CalendarDays aria-hidden="true" /><span>Dzisiaj</span></NavLink>
-      <button type="button" className="dolna-nawigacja__dodaj" onClick={otworzSzybkieDodawanie} aria-label="Szybko dodaj"><span><Plus aria-hidden="true" /></span><small>Dodaj</small></button>
+      <button type="button" className="dolna-nawigacja__dodaj" onClick={otworzSzybkieDodawanie} aria-label="Dodaj nowy element"><span><Plus aria-hidden="true" /></span><small>Dodaj</small></button>
       <NavLink to="/echo" className="dolna-nawigacja__element"><MessageCircle aria-hidden="true" /><span>Echo</span></NavLink>
       <button type="button" className={`dolna-nawigacja__element ${wiecejAktywne || wiecejOtwarte ? 'active' : ''}`} onClick={() => ustawWiecejOtwarte(true)} aria-haspopup="dialog" aria-expanded={wiecejOtwarte}><Ellipsis aria-hidden="true" /><span>Więcej</span></button>
     </nav>
@@ -124,7 +148,9 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
   const { otworzSzybkieDodawanie, otworzWyszukiwanie, ustawienia, zapiszUstawienia, moze } = useAplikacja()
   const [zwiniete, ustawZwiniete] = useState(ustawienia.nawigacja.menuDomyslnieZwiniete)
   const { pathname } = useLocation()
-  const nazwaWidoku = wszystkiePozycje.find((pozycja) => pozycja.adres === pathname)?.etykieta ?? 'Ogarniacz'
+  const kontekstWidoku = znajdzKontekstWidoku(pathname)
+  const nazwaWidoku = kontekstWidoku.pozycja?.etykieta ?? 'Nieznane miejsce'
+  const etykietaKontekstu = kontekstWidoku.grupa === nazwaWidoku ? 'Moduł' : kontekstWidoku.grupa
 
   useEffect(() => ustawZwiniete(ustawienia.nawigacja.menuDomyslnieZwiniete), [ustawienia.nawigacja.menuDomyslnieZwiniete])
   useEffect(() => {
@@ -162,7 +188,8 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
               {!zwiniete && <span className="grupa-menu__etykieta">{grupa.etykieta}</span>}
               {widoczne.map((pozycja) => {
                 const Ikona = pozycja.ikona
-                return <NavLink end={pozycja.adres === '/'} to={pozycja.adres} key={pozycja.adres} title={zwiniete ? pozycja.etykieta : undefined}><Ikona aria-hidden="true" />{!zwiniete && <span>{pozycja.etykieta}</span>}</NavLink>
+                const pelnaEtykieta = `${grupa.etykieta}: ${pozycja.etykieta}`
+                return <NavLink end={pozycja.adres === '/'} to={pozycja.adres} key={pozycja.adres} title={zwiniete ? pelnaEtykieta : undefined} aria-label={zwiniete ? pelnaEtykieta : undefined}><Ikona aria-hidden="true" />{!zwiniete && <span>{pozycja.etykieta}</span>}</NavLink>
               })}
             </div>
           )
@@ -180,12 +207,13 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
       <div className="obszar-glowny">
         {ustawienia.trybUzytkownika === 'edytor' && <div className="pasek-edytora"><span><Sparkles aria-hidden="true" />Lokalny podgląd jako Edytor — to nie jest zdalne, bezpieczne współdzielenie.</span><button type="button" onClick={() => zapiszUstawienia({ trybUzytkownika: 'wlasciciel', aktywnyEdytorId: undefined })}>Wróć do Właściciela</button></div>}
         <header className="pasek-gorny">
-          <strong>{nazwaWidoku}</strong>
+          {pathname !== '/' && <NavLink className="pasek-gorny__powrot" to="/" title="Wróć do Pulpitu"><ChevronLeft aria-hidden="true" /><span>Pulpit</span></NavLink>}
+          <div className="pasek-gorny__kontekst"><small>{etykietaKontekstu}</small><strong>{nazwaWidoku}</strong></div>
           <StanKlientaWeb />
           <div className="pasek-gorny__akcje">
             <button type="button" className="przycisk-szukaj" onClick={otworzWyszukiwanie}><Search aria-hidden="true" /><span>Szukaj</span><kbd>Ctrl K</kbd></button>
-            <button type="button" className="przycisk-ikona" onClick={() => zapiszUstawienia({ wyglad: { ...ustawienia.wyglad, motyw: ustawienia.wyglad.motyw === 'ciemny' ? 'jasny' : 'ciemny' } })} title="Przełącz motyw">{ustawienia.wyglad.motyw === 'ciemny' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
-            {moze('przypomnienia') && <NavLink to="/przypomnienia" className="przycisk-ikona" title="Centrum przypomnień"><AlarmClock aria-hidden="true" /></NavLink>}
+            <button type="button" className="przycisk-ikona pasek-gorny__motyw" onClick={() => zapiszUstawienia({ wyglad: { ...ustawienia.wyglad, motyw: ustawienia.wyglad.motyw === 'ciemny' ? 'jasny' : 'ciemny' } })} title="Przełącz motyw">{ustawienia.wyglad.motyw === 'ciemny' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</button>
+            {moze('przypomnienia') && <NavLink to="/przypomnienia" className="przycisk-ikona pasek-gorny__przypomnienia" title="Centrum przypomnień"><AlarmClock aria-hidden="true" /></NavLink>}
             <button type="button" className="przycisk-plus" onClick={otworzSzybkieDodawanie} title="Szybkie dodawanie (Ctrl+Enter)"><Plus aria-hidden="true" /><span>Dodaj</span></button>
           </div>
         </header>
