@@ -62,7 +62,9 @@ try {
   wynik('CORS headers', corsPoprawny ? 'OK' : 'BŁĄD', wymaganeNaglowki.join(', '))
 
   if (!kluczDostepu) {
-    wynik('Sync API', 'BŁĄD', 'brak VITE_SYNC_ACCESS_KEY; nie wykonano uwierzytelnionego GET')
+    const sesja = await pobierz(new URL('/api/auth/session', adres), { headers: { Accept: 'application/json' } })
+    wynik('Sesje kont', sesja.status === 401 ? 'OK' : 'BŁĄD', `HTTP ${sesja.status}; logowanie jest wykonywane interaktywnie w aplikacji`)
+    wynik('Sync API', 'POMINIĘTO', 'wymaga zalogowanej sesji HttpOnly')
   } else {
     const odpowiedzSync = await pobierz(new URL('/api/sync/changes?od=1970-01-01T00%3A00%3A00.000Z', adres), {
       headers: {

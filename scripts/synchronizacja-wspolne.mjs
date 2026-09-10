@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const pochodzenieCapacitor = 'https://localhost'
-const dozwoloneNaglowkiSynchronizacji = ['Authorization', 'Content-Type', 'X-Ogarniacz-Installation-Id']
+const dozwoloneNaglowkiSynchronizacji = ['Authorization', 'Content-Type', 'X-Ogarniacz-Installation-Id', 'X-Ogarniacz-CSRF']
 
 function odczytajWartoscEnv(nazwa, katalogRepozytorium, env) {
   if (env[nazwa]?.trim()) return env[nazwa].trim()

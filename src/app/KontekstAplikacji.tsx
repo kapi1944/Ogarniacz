@@ -9,6 +9,7 @@ import { platforma } from '../platform/platforma'
 import { SzybkieDodawanie } from './SzybkieDodawanie'
 import { WyszukiwanieGlobalne } from './WyszukiwanieGlobalne'
 import { SilnikPrzypomnien } from './SilnikPrzypomnien'
+import { useKonto } from './DostawcaKonta'
 
 interface WartoscKontekstu {
   ustawienia: Ustawienia
@@ -25,6 +26,7 @@ interface WartoscKontekstu {
 const KontekstAplikacji = createContext<WartoscKontekstu | null>(null)
 
 export function DostawcaAplikacji({ children }: { children: ReactNode }) {
+  const { konto } = useKonto()
   const zapisaneUstawienia = useLiveQuery(() => repozytoriumUstawien.wczytaj(), [], DOMYSLNE_USTAWIENIA)
   const { dane: uprawnienia } = useRepozytorium('uprawnienia')
   const [szybkieDodawanie, ustawSzybkieDodawanie] = useState<DaneSzybkiegoDodawania | null>(null)
@@ -102,8 +104,19 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
     zastosujBiezaceUstawienia(zapisane)
   }
 
-  const moze = (modul: NazwaModulu, operacja: 'odczyt' | 'edycja' = 'odczyt', sekcja?: string) =>
-    czyDozwolone(ustawienia.trybUzytkownika, uprawnienia, modul, operacja, ustawienia.aktywnyEdytorId, sekcja)
+  const moze = (modul: NazwaModulu, operacja: 'odczyt' | 'edycja' = 'odczyt', sekcja?: string) => {
+    if (konto?.rola === 'wlasciciel') return true
+    if (konto?.rola === 'edytor') {
+      if (modul === 'ustawienia' || modul === 'echo') return false
+      return konto.granty.some((grant) =>
+        grant.status === 'aktywne'
+        && grant.modul === modul
+        && (!grant.sekcja || grant.sekcja === sekcja)
+        && (operacja === 'odczyt' ? grant.odczyt : grant.edycja),
+      )
+    }
+    return czyDozwolone(ustawienia.trybUzytkownika, uprawnienia, modul, operacja, ustawienia.aktywnyEdytorId, sekcja)
+  }
 
   return (
     <KontekstAplikacji.Provider value={{

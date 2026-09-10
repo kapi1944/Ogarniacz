@@ -59,6 +59,60 @@ const migracje: Migracja[] = [
         ON rekordy_synchronizacji (uzytkownik_id, server_updated_at);
     `,
   },
+  {
+    wersja: 4,
+    sql: `
+      CREATE TABLE IF NOT EXISTS czlonkostwa (
+        wlasciciel_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        uzytkownik_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        rola TEXT NOT NULL CHECK (rola IN ('wlasciciel', 'edytor')),
+        status TEXT NOT NULL DEFAULT 'aktywne' CHECK (status IN ('aktywne', 'cofniete')),
+        utworzono_at TEXT NOT NULL,
+        zaktualizowano_at TEXT NOT NULL,
+        PRIMARY KEY (wlasciciel_id, uzytkownik_id)
+      );
+      CREATE TABLE IF NOT EXISTS sesje (
+        token_hash TEXT PRIMARY KEY NOT NULL,
+        uzytkownik_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        aktywny_wlasciciel_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        csrf_hash TEXT NOT NULL,
+        wygasa_at TEXT NOT NULL,
+        ostatnia_aktywnosc_at TEXT NOT NULL,
+        utworzono_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_sesje_uzytkownik ON sesje (uzytkownik_id, wygasa_at);
+      CREATE TABLE IF NOT EXISTS zaproszenia_edytorow (
+        id TEXT PRIMARY KEY NOT NULL,
+        wlasciciel_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        wygasa_at TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'oczekuje' CHECK (status IN ('oczekuje', 'przyjete', 'cofniete')),
+        utworzono_at TEXT NOT NULL,
+        przyjeto_at TEXT
+      );
+      CREATE TABLE IF NOT EXISTS granty_dostepu (
+        id TEXT PRIMARY KEY NOT NULL,
+        wlasciciel_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        edytor_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        modul TEXT NOT NULL,
+        sekcja TEXT NOT NULL DEFAULT '',
+        odczyt INTEGER NOT NULL DEFAULT 0,
+        edycja INTEGER NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'aktywne' CHECK (status IN ('aktywne', 'cofniete')),
+        utworzono_at TEXT NOT NULL,
+        zaktualizowano_at TEXT NOT NULL,
+        UNIQUE (wlasciciel_id, edytor_id, modul, sekcja)
+      );
+      CREATE TABLE IF NOT EXISTS kody_odzyskiwania (
+        uzytkownik_id TEXT NOT NULL REFERENCES uzytkownicy(id) ON DELETE CASCADE,
+        kod_hash TEXT NOT NULL,
+        uzyto_at TEXT,
+        utworzono_at TEXT NOT NULL,
+        PRIMARY KEY (uzytkownik_id, kod_hash)
+      );
+    `,
+  },
 ]
 
 export function uruchomMigracje(baza: DatabaseSync): number {

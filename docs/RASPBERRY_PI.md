@@ -1,21 +1,16 @@
-# Raspberry Pi — wdrożenie produkcyjne
+# Raspberry Pi — prywatne wdrożenie HTTPS
 
 ## Architektura
 
-Jeden proces Node.js obsługuje na porcie `8787` build Reacta z `dist/`, fallback tras SPA oraz istniejące API:
+Istniejący proces Node.js obsługuje build Reacta, konta, synchronizację, Echo i `GET /health` na `127.0.0.1:8787`. Port aplikacji nie jest dostępny z LAN ani Internetu. Tailscale Serve przekazuje prywatny adres `https://<urządzenie>.<tailnet>.ts.net` do loopbacku i automatycznie zapewnia certyfikat TLS. Dostęp mają tylko urządzenia dopuszczone do tailnetu; nie używamy publicznego Tailscale Funnel ani port forwardingu.
 
-- `GET /health` i `GET /api/health` — healthcheck;
-- `GET`/`POST /api/sync/changes` — trwała synchronizacja SQLite;
-- `POST /api/echo/message` — istniejący endpoint Echo;
-- pozostałe `GET`/`HEAD` — pliki `dist/`; nieistniejące trasy klienckie dostają `index.html`.
+Ten wariant pasuje do prywatnej aplikacji jednej osoby: telefon i komputer instalują klienta Tailscale, a konto Ogarniacza nadal niezależnie egzekwuje rolę Właściciela/Edytora. Konfiguracja Serve z `--bg` jest trwała po restarcie urządzenia i `tailscale up`. Szczegóły: [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve) oraz [instalacja na Linux/Raspberry Pi OS](https://tailscale.com/docs/install/linux).
 
-Serwer wiąże się z `0.0.0.0`. Port pozostaje `8787`, bo taki adres jest już centralnie zbudowany w Androidzie jako `VITE_SYNC_API_URL=http://192.168.0.116:8787`. Nie używaj Vite ani portu `5173` w produkcji.
+Własną domenę można później dodać przez osobny reverse proxy z prawidłowym TLS. Nie jest potrzebna do obecnego wdrożenia i nie należy w tym celu otwierać portu `8787`.
 
-Aktualizacje Androida nie są serwowane przez Raspberry Pi: build Androida odczytuje `VITE_ANDROID_UPDATE_MANIFEST_URL`, obecnie wskazujący HTTPS GitHub Releases. Ten mechanizm pozostaje bez zmian.
+## Jednorazowa instalacja
 
-## Jednorazowa instalacja na Raspberry Pi
-
-Wymagany jest Node.js 24 lub nowszy (`node:sqlite` jest używane przez API) oraz Git. Zaloguj się jako `kacper`, umieść repozytorium w `/home/kacper/apps/Ogarniacz`, a następnie wykonaj:
+Wymagany jest Node.js 24 lub nowszy, Git i Tailscale. Zaloguj się jako `kacper`, umieść repozytorium w `/home/kacper/apps/Ogarniacz`, a następnie:
 
 ```bash
 cd ~/apps/Ogarniacz
@@ -30,24 +25,31 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now ogarniacz
 ```
 
-W `/etc/ogarniacz/ogarniacz.env` ustaw prawdziwy, istniejący `SYNC_ACCESS_KEY`, identyczny z kluczem zbudowanym w aplikacji Android. Nie zapisuj tego sekretu w repozytorium. Domyślna usługa zakłada globalnie zainstalowany Node widoczny w `/usr/local/bin` albo `/usr/bin`; jeśli `command -v node` zwróci inną lokalizację, zainstaluj Node globalnie albo popraw wyłącznie `Environment=PATH` w jednostce przed jej instalacją.
+W `/etc/ogarniacz/ogarniacz.env` ustaw długi, losowy `OWNER_BOOTSTRAP_TOKEN`. Utwórz pierwsze konto Właściciela, zapisz jednorazowe kody odzyskiwania poza Raspberry Pi, potem usuń token z env i zrestartuj usługę. `SYNC_ACCESS_KEY` pozostaw pusty; jest potrzebny tylko przejściowo dla starego APK 1.0.7, dopóki urządzenie nie zaloguje się na konto. Sekretów nie zapisuj w repozytorium.
 
-Po zmianie adresu LAN zmień tylko centralne wartości: `VITE_SYNC_API_URL` przed kolejnym buildem Androida oraz `CORS_ALLOWED_ORIGINS` na Raspberry Pi. Obecnie oba zachowują `192.168.0.116:8787`.
-
-## Sterowanie i testy na Raspberry Pi
+Zainstaluj Tailscale z oficjalnego pakietu, dołącz Raspberry Pi, telefon i komputer do tego samego tailnetu, po czym uruchom:
 
 ```bash
-sudo systemctl start ogarniacz
-sudo systemctl stop ogarniacz
-sudo systemctl restart ogarniacz
-sudo systemctl status ogarniacz
-journalctl -u ogarniacz -f
-curl --fail http://127.0.0.1:8787/health
-curl --fail http://192.168.0.116:8787/health
-curl --fail http://192.168.0.116:8787/dzisiaj
+sudo tailscale up
+chmod +x scripts/configure-tailscale-rpi.sh
+./scripts/configure-tailscale-rpi.sh
 ```
 
-Test restartu procesu wykonaj bez rebootu: `sudo systemctl restart ogarniacz`, a potem oba healthchecki. Test po restarcie Raspberry: `sudo reboot`; po ponownym połączeniu sprawdź `systemctl is-active ogarniacz` i healthcheck. SQLite pozostaje w `data/ogarniacz.sqlite`; restart usługi nie usuwa danych.
+Skrypt sprawdza lokalny healthcheck, ustawia trwały prywatny reverse proxy HTTPS, odczytuje nazwę MagicDNS i sprawdza healthcheck przez TLS. Nie uruchamia Funnel. Dodaj zwrócony adres HTTPS do `CORS_ALLOWED_ORIGINS` obok `https://localhost` i ustaw go jako `VITE_SYNC_API_URL` dla Androida. Dla PWA używaj tego samego adresu HTTPS.
+
+## Start, healthcheck i logi
+
+Jednostka `ogarniacz.service` startuje automatycznie, czeka na sieć i Tailscale, zapisuje stdout/stderr do journald, restartuje proces po błędzie i ogranicza zapis do katalogu `data/`.
+
+```bash
+sudo systemctl status ogarniacz tailscaled
+sudo tailscale serve status
+journalctl -u ogarniacz -n 100 --no-pager
+curl --fail http://127.0.0.1:8787/health
+curl --fail https://NAZWA-URZADZENIA.TAILNET.ts.net/health
+```
+
+Po restarcie Raspberry Pi sprawdź `systemctl is-active ogarniacz tailscaled`, `tailscale serve status` oraz oba healthchecki. SQLite pozostaje w `data/ogarniacz.sqlite`; restart usług nie usuwa danych.
 
 ## Aktualizacja instancji
 
@@ -57,28 +59,8 @@ chmod +x scripts/deploy-rpi.sh
 ./scripts/deploy-rpi.sh
 ```
 
-Skrypt przerywa działanie przy błędzie lub lokalnych zmianach, używa wyłącznie `git pull --ff-only`, instaluje zależności, buduje frontend i serwer, restartuje usługę oraz sprawdza `/health`. Nie wykonuje resetu Git ani nie usuwa danych SQLite.
+Skrypt zatrzymuje się przy lokalnych zmianach, używa `git pull --ff-only`, instaluje zależności, buduje frontend i serwer, restartuje istniejącą usługę, sprawdza lokalny `/health` i pokazuje stan Serve. Nie wykonuje resetu Git ani nie usuwa danych.
 
-## LAN, firewall i stały adres
+## Router i firewall
 
-Najbezpieczniej utworzyć rezerwację DHCP w routerze. Na Raspberry odczytaj MAC Wi-Fi:
-
-```bash
-cat /sys/class/net/wlan0/address
-ip link show wlan0
-```
-
-W panelu routera dodaj rezerwację DHCP dla odczytanego MAC: adres `192.168.0.116`, nazwa np. `ogarniacz-rpi`. Router zwykle wymaga MAC, wybranego adresu, opcjonalnie nazwy urządzenia i zapisania konfiguracji. Nie ustawiaj ręcznie bramy, maski ani DNS bez uprzedniego rozpoznania zarządcy sieci.
-
-Najpierw rozpoznaj sieć i firewall, bez zmieniania konfiguracji:
-
-```bash
-systemctl is-active NetworkManager
-systemctl is-active dhcpcd
-systemctl is-active systemd-networkd
-sudo ufw status verbose
-sudo nft list ruleset
-sudo iptables -S
-```
-
-Jeśli aktywny firewall blokuje `8787`, otwórz wyłącznie LAN. Dla UFW przykładowo: `sudo ufw allow from 192.168.0.0/24 to any port 8787 proto tcp`. Dla innej maski dostosuj podsieć do faktycznej konfiguracji. Nie konfiguruj port forwarding ani dostępu WAN.
+Nie konfiguruj port forwardingu i nie otwieraj `8787` w UFW/routerze. `HOST=127.0.0.1` blokuje surowy port także wtedy, gdy reguła firewalla byłaby zbyt szeroka. Tailscale Serve oraz reguły dostępu tailnetu są jedyną zewnętrzną drogą do aplikacji.

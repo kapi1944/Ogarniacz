@@ -18,16 +18,16 @@ test('konfiguracja serwera domyślnie nasłuchuje w LAN i ogranicza CORS do orig
 
 test('migracje tworzą schemat centralnej bazy idempotentnie', () => {
   const baza = new DatabaseSync(':memory:')
-  assert.equal(uruchomMigracje(baza), 3)
-  assert.equal(uruchomMigracje(baza), 3)
+  assert.equal(uruchomMigracje(baza), 4)
+  assert.equal(uruchomMigracje(baza), 4)
   assert.equal(baza.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'rekordy_synchronizacji'").get()?.name, 'rekordy_synchronizacji')
   baza.close()
 })
 
 test('otwarcie bazy uruchamia migracje', () => {
   const otwartaBaza = otworzBaze(utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:' }))
-  assert.equal(otwartaBaza.liczbaMigracji, 3)
-  assert.equal(otwartaBaza.baza.prepare('SELECT COUNT(*) AS liczba FROM migracje').get()?.liczba, 3)
+  assert.equal(otwartaBaza.liczbaMigracji, 4)
+  assert.equal(otwartaBaza.baza.prepare('SELECT COUNT(*) AS liczba FROM migracje').get()?.liczba, 4)
   otwartaBaza.baza.close()
 })
 
@@ -41,6 +41,9 @@ test('healthcheck nie ujawnia konfiguracji ani sekretów', async () => {
   const dane = await odpowiedz.json() as Record<string, unknown>
   assert.equal(odpowiedz.status, 200)
   assert.deepEqual(dane, { status: 'ok', service: 'ogarniacz-api', database: 'connected' })
+  assert.equal(odpowiedz.headers.get('strict-transport-security'), 'max-age=31536000')
+  assert.equal(odpowiedz.headers.get('x-content-type-options'), 'nosniff')
+  assert.equal(odpowiedz.headers.get('x-frame-options'), 'DENY')
   await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
   baza.close()
 })
@@ -127,7 +130,8 @@ test('sync obsługuje preflight CORS wyłącznie dla aplikacji Capacitor', async
   assert.equal(preflight.status, 204)
   assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://localhost')
   assert.equal(preflight.headers.get('access-control-allow-methods'), 'GET, POST, OPTIONS')
-  assert.equal(preflight.headers.get('access-control-allow-headers'), 'Authorization, Content-Type, X-Ogarniacz-Installation-Id')
+  assert.equal(preflight.headers.get('access-control-allow-headers'), 'Authorization, Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF')
+  assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true')
 
   const obcePochodzenie = await fetch(url, { method: 'OPTIONS', headers: { origin: 'https://obca-strona.example' } })
   assert.equal(obcePochodzenie.status, 403)

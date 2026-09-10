@@ -2,6 +2,7 @@ import { CapacitorHttp, type HttpResponse } from '@capacitor/core'
 import { BladKonfliktuSynchronizacji, type RepozytoriumZdalne, type ZmianaSynchronizacji } from './DostawcaSynchronizacji'
 import { odtworzWartoscZTransportu, przygotujWartoscDoTransportu } from '../services/BackupService'
 import { pobierzInstallationId } from '../services/InstallationService'
+import { pobierzCsrfKonta } from '../services/KontaService'
 
 interface OdpowiedzZmian {
   zmiany: ZmianaSynchronizacji[]
@@ -18,7 +19,7 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
 
   constructor(
     private readonly adresApi: string,
-    private readonly kluczDostepu: string,
+    private readonly kluczDostepu?: string,
     private readonly installationId = pobierzInstallationId,
   ) {}
 
@@ -28,6 +29,7 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
       headers: this.naglowki(),
       connectTimeout: 15_000,
       readTimeout: 15_000,
+      webFetchExtra: { credentials: 'include' },
     }))
     const dane = await this.odczytajOdpowiedz(odpowiedz) as OdpowiedzZmian
     this.kursor = dane.synchronizowanoDo
@@ -45,13 +47,16 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
       data: await przygotujWartoscDoTransportu({ od, installationId: this.installationId(), zmiany }),
       connectTimeout: 15_000,
       readTimeout: 15_000,
+      webFetchExtra: { credentials: 'include' },
     }))
     await this.odczytajOdpowiedz(odpowiedz)
   }
 
   private naglowki(): Record<string, string> {
+    const csrf = pobierzCsrfKonta()
     return {
-      authorization: `Bearer ${this.kluczDostepu}`,
+      ...(this.kluczDostepu ? { authorization: `Bearer ${this.kluczDostepu}` } : {}),
+      ...(csrf ? { 'x-ogarniacz-csrf': csrf } : {}),
       'x-ogarniacz-installation-id': this.installationId(),
     }
   }

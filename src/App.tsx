@@ -6,6 +6,7 @@ import { StraznikModulu, UkladAplikacji } from './app/UkladAplikacji'
 import { WidokPulpitu } from './modules/pulpit/WidokPulpitu'
 import { NawigacjaPlatformy } from './platform/NawigacjaPlatformy'
 import type { NazwaModulu } from './domain/typy'
+import { DostawcaKonta } from './app/DostawcaKonta'
 
 const WidokSkrzynki = lazy(() => import('./modules/praca/WidokiPracy').then((modul) => ({ default: modul.WidokSkrzynki })))
 const WidokZadan = lazy(() => import('./modules/praca/WidokiPracy').then((modul) => ({ default: modul.WidokZadan })))
@@ -51,7 +52,7 @@ function LadowanieWidoku() {
 }
 
 export default function App() {
-  return <BrowserRouter><DostawcaAplikacji><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><Suspense fallback={<LadowanieWidoku />}><Routes>
+  return <BrowserRouter><DostawcaKonta><DostawcaAplikacji><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><Suspense fallback={<LadowanieWidoku />}><Routes>
     <Route path="/" element={<WidokPulpitu />} />
     <Route path="/skrzynka" element={chron('skrzynka', <WidokSkrzynki />)} />
     <Route path="/zadania" element={chron('zadania', <WidokZadan />)} />
@@ -86,5 +87,5 @@ export default function App() {
     <Route path="/ustawienia" element={chron('ustawienia', <WidokUstawien />)} />
     <Route path="/ustawienia/personalizacja" element={chron('ustawienia', <EdytorPersonalizacji />)} />
     <Route path="*" element={<NieZnaleziono />} />
-  </Routes></Suspense></UkladAplikacji></DostawcaSesjiEcho></DostawcaAplikacji></BrowserRouter>
+  </Routes></Suspense></UkladAplikacji></DostawcaSesjiEcho></DostawcaAplikacji></DostawcaKonta></BrowserRouter>
 }

@@ -16,4 +16,7 @@ sudo systemctl restart ogarniacz
 sudo systemctl --no-pager --full status ogarniacz
 curl --fail --silent --show-error http://127.0.0.1:8787/health
 echo
-echo "Ogarniacz odpowiada produkcyjnie na porcie 8787."
+if command -v tailscale >/dev/null 2>&1; then
+  sudo tailscale serve status
+fi
+echo "Ogarniacz odpowiada lokalnie; dostęp zdalny prowadzi przez HTTPS Tailscale Serve."

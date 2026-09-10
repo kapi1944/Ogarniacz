@@ -6,6 +6,8 @@ export interface KonfiguracjaSerwera {
   publicznyUrl?: string
   syncUserId?: string
   syncAccessKey?: string
+  ownerBootstrapToken?: string
+  czasSesjiDni: number
   dozwolonePochodzeniaCors: string[]
 }
 
@@ -31,6 +33,8 @@ export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env):
     publicznyUrl: env.PUBLIC_URL?.trim() || undefined,
     syncUserId: env.SYNC_USER_ID?.trim() || undefined,
     syncAccessKey: env.SYNC_ACCESS_KEY?.trim() || undefined,
+    ownerBootstrapToken: env.OWNER_BOOTSTRAP_TOKEN?.trim() || undefined,
+    czasSesjiDni: Math.min(90, Math.max(1, Number(env.SESSION_TTL_DAYS ?? 30) || 30)),
     dozwolonePochodzeniaCors,
   }
 }

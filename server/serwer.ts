@@ -4,10 +4,18 @@ import { extname, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { KonfiguracjaSerwera } from './config.ts'
 import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } from './echo.ts'
-import { czyDostepDoSynchronizacji, odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
+import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstSynchronizacji, sprawdzCsrf } from './konta.ts'
+import { odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
 
 const METODY_SYNCHRONIZACJI = 'GET, POST, OPTIONS'
-const NAGLOWKI_SYNCHRONIZACJI = 'Authorization, Content-Type, X-Ogarniacz-Installation-Id'
+const NAGLOWKI_SYNCHRONIZACJI = 'Authorization, Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF'
+
+function ustawNaglowkiBezpieczenstwa(odpowiedz: ServerResponse): void {
+  odpowiedz.setHeader('strict-transport-security', 'max-age=31536000')
+  odpowiedz.setHeader('x-content-type-options', 'nosniff')
+  odpowiedz.setHeader('x-frame-options', 'DENY')
+  odpowiedz.setHeader('referrer-policy', 'same-origin')
+}
 
 function ustawCorsSynchronizacji(zadanie: IncomingMessage, odpowiedz: ServerResponse, konfiguracja: KonfiguracjaSerwera): boolean {
   const pochodzenie = zadanie.headers.origin
@@ -15,6 +23,7 @@ function ustawCorsSynchronizacji(zadanie: IncomingMessage, odpowiedz: ServerResp
   odpowiedz.setHeader('access-control-allow-origin', pochodzenie)
   odpowiedz.setHeader('access-control-allow-methods', METODY_SYNCHRONIZACJI)
   odpowiedz.setHeader('access-control-allow-headers', NAGLOWKI_SYNCHRONIZACJI)
+  odpowiedz.setHeader('access-control-allow-credentials', 'true')
   odpowiedz.setHeader('vary', 'Origin')
   return true
 }
@@ -74,9 +83,22 @@ async function odpowiedzZasobemStatycznym(zadanie: IncomingMessage, odpowiedz: S
 }
 export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSync, obslugaEcho: ObslugaEchoApi = niedostepnaObslugaEcho) {
   return createServer(async (zadanie: IncomingMessage, odpowiedz: ServerResponse) => {
+    ustawNaglowkiBezpieczenstwa(odpowiedz)
     if (zadanie.method === 'GET' && (zadanie.url === '/health' || zadanie.url === '/api/health')) {
       odpowiedzJson(odpowiedz, 200, { status: 'ok', service: 'ogarniacz-api', database: 'connected' })
       return
+    }
+    if (zadanie.url?.startsWith('/api/auth/') || zadanie.url?.startsWith('/api/account')) {
+      const czyDozwolonePochodzenie = ustawCorsSynchronizacji(zadanie, odpowiedz, konfiguracja)
+      if (zadanie.method === 'OPTIONS') {
+        if (!czyDozwolonePochodzenie) odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
+        else {
+          odpowiedz.writeHead(204)
+          odpowiedz.end()
+        }
+        return
+      }
+      if (await obsluzKonta(zadanie, odpowiedz, baza, konfiguracja)) return
     }
     if (zadanie.url?.startsWith('/api/sync/')) {
       const czyDozwolonePochodzenie = ustawCorsSynchronizacji(zadanie, odpowiedz, konfiguracja)
@@ -89,12 +111,13 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
         odpowiedz.end()
         return
       }
-      if (!konfiguracja.syncUserId || !konfiguracja.syncAccessKey) {
-        odpowiedzJson(odpowiedz, 503, { error: 'Synchronizacja nie jest skonfigurowana na serwerze.' })
+      const kontekst = pobierzKontekstSynchronizacji(zadanie, baza, konfiguracja)
+      if (!kontekst) {
+        odpowiedzJson(odpowiedz, 401, { error: 'Brak dostępu do synchronizacji.' })
         return
       }
-      if (!czyDostepDoSynchronizacji(zadanie, konfiguracja)) {
-        odpowiedzJson(odpowiedz, 401, { error: 'Brak dostępu do synchronizacji.' })
+      if (zadanie.method === 'POST' && kontekst.csrfHash && !sprawdzCsrf(zadanie, kontekst)) {
+        odpowiedzJson(odpowiedz, 403, { error: 'Sesja wymaga odświeżenia.' })
         return
       }
       const installationId = pobierzInstallationIdZNaglowka(zadanie)
@@ -103,17 +126,23 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
         return
       }
       try {
-        zapewnijProfilSynchronizacji(baza, konfiguracja.syncUserId, installationId)
+        zapewnijProfilSynchronizacji(baza, kontekst.uzytkownikId, installationId)
         if (zadanie.method === 'GET' && zadanie.url.startsWith('/api/sync/changes')) {
           const od = new URL(zadanie.url, 'http://localhost').searchParams.get('od') ?? ''
           const synchronizowanoDo = new Date().toISOString()
-          odpowiedzJson(odpowiedz, 200, { zmiany: pobierzZmianySynchronizacji(baza, konfiguracja.syncUserId, od), synchronizowanoDo })
+          const zmiany = pobierzZmianySynchronizacji(baza, kontekst.wlascicielId, od)
+            .filter((zmiana) => czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'odczyt'))
+          odpowiedzJson(odpowiedz, 200, { zmiany, synchronizowanoDo })
           return
         }
         if (zadanie.method === 'POST' && zadanie.url === '/api/sync/changes') {
           const paczka = await odczytajPaczkeSynchronizacji(zadanie)
           if (paczka.installationId !== installationId) throw new Error('Niezgodny installationId.')
-          zapiszZmianySynchronizacji(baza, konfiguracja.syncUserId, paczka)
+          if (paczka.zmiany.some((zmiana) => !czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'edycja'))) {
+            odpowiedzJson(odpowiedz, 403, { error: 'Grant nie zezwala na zapis tych danych.' })
+            return
+          }
+          zapiszZmianySynchronizacji(baza, kontekst.wlascicielId, paczka)
           odpowiedzJson(odpowiedz, 200, { zapisano: paczka.zmiany.length })
           return
         }

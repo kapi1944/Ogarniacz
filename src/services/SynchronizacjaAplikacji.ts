@@ -12,7 +12,7 @@ let inicjalizacja: Promise<() => void> | undefined
 
 function utworzRepozytoriumZdalne(): RepozytoriumZdalne | undefined {
   const { adresApi, kluczDostepu } = pobierzKonfiguracjeSynchronizacji()
-  return adresApi && kluczDostepu ? new RepozytoriumZdalneHttp(adresApi, kluczDostepu) : undefined
+  return adresApi ? new RepozytoriumZdalneHttp(adresApi, kluczDostepu) : undefined
 }
 
 export function synchronizujTeraz() {
@@ -26,8 +26,7 @@ export function rozstrzygnijKonfliktSynchronizacji(id: string, wybor: 'lokalny' 
 }
 
 export function czySynchronizacjaSkonfigurowana(): boolean {
-  const { adresApi, kluczDostepu } = pobierzKonfiguracjeSynchronizacji()
-  return Boolean(adresApi && kluczDostepu)
+  return Boolean(pobierzKonfiguracjeSynchronizacji().adresApi)
 }
 
 export function inicjalizujSynchronizacjeAplikacji(): Promise<() => void> {
@@ -48,6 +47,7 @@ export function inicjalizujSynchronizacjeAplikacji(): Promise<() => void> {
     const poUtracieSieci = () => { void oznaczSynchronizacjeOffline() }
     window.addEventListener('online', poOdzyskaniuSieci)
     window.addEventListener('offline', poUtracieSieci)
+    window.addEventListener('ogarniacz:konto', poOdzyskaniuSieci)
     const zatrzymajCyklZycia = await platforma.cyklZycia.nasluchuj((stan) => {
       if (stan === 'aktywny') uruchomBezBlokowania()
     })
@@ -58,6 +58,7 @@ export function inicjalizujSynchronizacjeAplikacji(): Promise<() => void> {
       zatrzymajCyklZycia()
       window.removeEventListener('online', poOdzyskaniuSieci)
       window.removeEventListener('offline', poUtracieSieci)
+      window.removeEventListener('ogarniacz:konto', poOdzyskaniuSieci)
       if (opoznienie) clearTimeout(opoznienie)
     }
   })()

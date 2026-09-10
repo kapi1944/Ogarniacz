@@ -21,7 +21,7 @@ export function pobierzKonfiguracjeSynchronizacji(
   const kluczDostepu = zmienne.VITE_SYNC_ACCESS_KEY?.trim()
   if (!adresApi && !kluczDostepu) return {}
   const poprawnyAdres = adresApi ? sprawdzAdresApi(adresApi) : undefined
-  if (!poprawnyAdres || !kluczDostepu) {
+  if (!poprawnyAdres) {
     return { blad: 'Konfiguracja endpointu synchronizacji jest niepełna lub nieprawidłowa.' }
   }
   return { adresApi: poprawnyAdres, kluczDostepu }

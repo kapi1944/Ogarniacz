@@ -586,8 +586,8 @@ async function wykonajRelease(opcje) {
     throw new Error('Web OTA musi używać osobnego kanału i nie może korzystać z /releases/latest.')
   }
   const konfiguracjaSynchronizacji = pobierzKonfiguracjeSynchronizacji(katalogRepozytorium)
-  if (!konfiguracjaSynchronizacji.adresApi || !konfiguracjaSynchronizacji.kluczDostepu) {
-    throw new Error('Release wymaga kompletnej VITE_SYNC_API_URL i VITE_SYNC_ACCESS_KEY, aby nie opublikować APK bez synchronizacji.')
+  if (!konfiguracjaSynchronizacji.adresApi) {
+    throw new Error('Release wymaga VITE_SYNC_API_URL, aby nie opublikować APK bez połączenia z kontem i synchronizacją.')
   }
   sprawdzAdresSynchronizacji(konfiguracjaSynchronizacji.adresApi)
   const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu)

@@ -8,13 +8,13 @@
 
 UI zna wyłącznie `SyncEngine` i kontrakt `RepozytoriumZdalne`. `RepozytoriumZdalneHttp` łączy ten kontrakt z `/api/sync/changes`, a serwer zapisuje rekordy trwale w istniejącym SQLite. `RepozytoriumZdalneInMemory` pozostaje wyłącznie providerem testowym.
 
-Serwer mapuje poprawny `SYNC_ACCESS_KEY` na jeden skonfigurowany `SYNC_USER_ID`. Klient nie przesyła ani nie współdzieli identyfikatora użytkownika: każde urządzenie przekazuje wyłącznie własny `installationId`. Ten wariant jest przeznaczony do prywatnego wdrożenia jednego użytkownika za HTTPS albo w zaufanej sieci; publiczne wdrożenie nadal wymaga docelowych sesji `HttpOnly`.
+Serwer wyznacza właściciela danych z zalogowanej sesji `HttpOnly`, nie z danych przesłanych przez klienta. Każde urządzenie przekazuje wyłącznie własny `installationId`. Opcjonalne `SYNC_ACCESS_KEY` i `SYNC_USER_ID` pozostają tylko mostem migracyjnym dla już zainstalowanego APK; po zalogowaniu urządzeń klucz należy usunąć z serwera.
 
 ## Endpoint i diagnostyka
 
-Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL`, a klucza `VITE_SYNC_ACCESS_KEY`; oba są wstrzykiwane wyłącznie do prywatnego builda. Przy `http://` skrypt Androida generuje `network_security_config.xml` dla dokładnie tego prywatnego hosta (IPv4 prywatny, `localhost` albo `.local`). Nie ma globalnego zezwolenia cleartext. HTTPS nie wymaga wyjątku Androida.
+Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL`. Sesja jest losowym, hashowanym po stronie bazy tokenem w cookie `HttpOnly; Secure; SameSite=None`, a zapisy wymagają osobnego tokenu CSRF. Przy `http://` skrypt Androida generuje wyjątek wyłącznie dla dokładnego prywatnego hosta; wdrożenie internetowe używa HTTPS i nie wymaga wyjątku Androida.
 
-`npm run sync:doctor` wykonuje wyłącznie odczyty: waliduje URL, DNS/IP, `/health`, preflight CORS oraz uwierzytelniony `GET /api/sync/changes`. Nie wypisuje klucza. Na serwerze domyślne `HOST=0.0.0.0` udostępnia API w LAN, a `CORS_ALLOWED_ORIGINS` ogranicza originy (domyślnie rzeczywisty origin Capacitor: `https://localhost`).
+`npm run sync:doctor` wykonuje wyłącznie odczyty: waliduje URL, DNS/IP, `/health`, preflight CORS i dostępność endpointu sesji. Uwierzytelniony sync sprawdza tylko w trybie migracyjnym z lokalnym kluczem; zwykła sesja wymaga interaktywnego logowania. `CORS_ALLOWED_ORIGINS` ogranicza originy i zezwala na credentials wyłącznie dla wpisanych adresów.
 
 ## Konflikty
 
@@ -39,10 +39,19 @@ Po skonfigurowaniu klient synchronizuje przy starcie, po wznowieniu aplikacji, p
 
 `WidgetSnapshotService` tworzy ograniczony `TodayWidgetSnapshot`: datę, najbliższe elementy dnia, pilne lub zaległe zadania, najbliższe przypomnienie i `updatedAt`. Snapshot jest cache/projekcją, nie źródłem prawdy. Na Androidzie bridge zapisuje JSON w prywatnym katalogu danych aplikacji. Zmiany zadań, planera, leków, wizyt i przypomnień odświeżają projekcję bez zależności Reacta od Kotlin.
 
-## Konfiguracja
+## Konta i reguły dostępu
 
-Serwer wymaga `SYNC_USER_ID` i długiego losowego `SYNC_ACCESS_KEY`. Klient wymaga odpowiadających im `VITE_SYNC_API_URL` i `VITE_SYNC_ACCESS_KEY` podczas prywatnego buildu. Dane `Blob` korzystają z istniejącego kodowania transportowego backupu. Historia i pamięć Echo oraz lokalne tabele sterujące synchronizacją nie są wysyłane.
+Pierwsze konto Właściciela powstaje raz, po podaniu `OWNER_BOOTSTRAP_TOKEN` przechowywanego wyłącznie w env serwera. Hasła są hashowane przez `scrypt`, a endpointy logowania, odzyskiwania i przyjmowania zaproszeń mają limit prób na adres źródłowy. Odzyskanie dostępu wykorzystuje jednorazowe kody, unieważnia wszystkie sesje i wymaga ponownego logowania. Zaproszenie Edytora jest losowym, jednorazowym tokenem ważnym 7 dni.
 
-## Braki do publicznego wdrożenia
+W prostym języku:
 
-Przed wystawieniem API do Internetu potrzebne są docelowe logowanie i sesje `HttpOnly`, konfiguracja HTTPS/reverse proxy, limity per użytkownik, rotacja klucza oraz test wdrożeniowy na rzeczywistych urządzeniach. Klucz build-time nie powinien być traktowany jako sekret w publicznie dostępnym bundle.
+- Właściciel widzi i synchronizuje wyłącznie własny zbiór danych;
+- Edytor widzi moduł dopiero po jawnym grancie odczytu, a zmienia go dopiero po osobnym grancie edycji;
+- grant konkretnej sekcji nie otwiera całego modułu w ogólnym API synchronizacji;
+- ustawienia i dane Echo nie są udostępniane Edytorowi przez sync;
+- cofnięcie grantu działa od następnego żądania, a cofnięcie Edytora dodatkowo usuwa jego sesje dla tego Właściciela;
+- serwer zawsze wyznacza Właściciela i rolę z sesji, więc UI ani klient nie mogą podmienić identyfikatora konta.
+
+Urządzenie pozostające offline może nadal mieć wcześniej pobraną lokalną kopię — cofnięcie dostępu nie jest zdalnym kasowaniem pamięci urządzenia. Po odzyskaniu sieci serwer nie zwróci już danych ani nie przyjmie kolejnych zmian cofniętego Edytora.
+
+Klient wymaga `VITE_SYNC_API_URL`. `VITE_SYNC_ACCESS_KEY` nie jest wymagany i nie może być traktowany jako sekret w publicznym bundle. Dane `Blob` korzystają z istniejącego kodowania transportowego backupu. Historia i pamięć Echo oraz lokalne tabele sterujące synchronizacją nie są wysyłane.

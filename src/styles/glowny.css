@@ -138,6 +138,13 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .pasek-edytora span { display: flex; align-items: center; gap: 7px; }
 .pasek-edytora button { padding: 3px 8px; color: #3b2804; background: #fff3cf; border: 1px solid #8d691f; border-radius: 5px; cursor: pointer; }
 .pasek-edytora svg { width: 16px; }
+.ekran-konta { min-height: 100dvh; display: grid; place-items: center; padding: 24px; background: var(--tlo); }
+.ekran-konta__panel { width: min(520px, 100%); padding: 24px; }
+.ekran-konta__panel h1 { margin: 14px 0 6px; }
+.ekran-konta__tryby { flex-wrap: wrap; justify-content: center; }
+.przycisk-konta { position: fixed; right: 14px; bottom: max(14px, var(--bezpieczny-obszar-dol)); z-index: 40; display: flex; align-items: center; gap: 7px; padding: 8px 11px; color: var(--tekst); background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: 999px; box-shadow: var(--cien); cursor: pointer; }
+.przycisk-konta svg { width: 16px; height: 16px; }
+.wiersz-konta { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--obramowanie); }
 .zawartosc { width: 100%; max-width: 1760px; margin: 0 auto; padding: clamp(16px, 2.4vw, 30px); }
 .widok { display: grid; gap: 16px; min-width: 0; }
 .naglowek-widoku { display: flex; align-items: flex-start; justify-content: space-between; min-height: 50px; padding-bottom: 4px; gap: 20px; border-bottom: 1px solid color-mix(in srgb, var(--obramowanie) 72%, transparent); }
