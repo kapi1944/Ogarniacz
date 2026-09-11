@@ -31,6 +31,7 @@ export interface PreferencjePlanowania {
   preferowanaDlugoscBlokuMinuty: number
   minimalnaPrzerwaMinuty: number
   maksymalnieIntensywnychPodRzad: number
+  maksymalneWykorzystanieProcent: number
   godzinySkupieniaOd?: string
   godzinySkupieniaDo?: string
 }
@@ -53,6 +54,7 @@ export interface WynikPlanera {
   pozycje: PozycjaDraftu[]
   minutyDostepne: number
   minutyZaplanowane: number
+  limitWykorzystaniaMinuty: number
 }
 
 export interface WolneOknoPlanera {
@@ -65,6 +67,7 @@ export const DOMYSLNE_PREFERENCJE_PLANOWANIA: PreferencjePlanowania = {
   preferowanaDlugoscBlokuMinuty: 60,
   minimalnaPrzerwaMinuty: 10,
   maksymalnieIntensywnychPodRzad: 2,
+  maksymalneWykorzystanieProcent: 75,
   godzinySkupieniaOd: '08:00',
   godzinySkupieniaDo: '12:00',
 }
@@ -77,6 +80,14 @@ export interface WynikWalidacjiPozycji {
 }
 
 const wagiPriorytetu = { normalny: 0, pilny: 1, asap: 2 }
+const POCZATEK_DNIA_PLANERA = 7 * 60
+const KONIEC_DNIA_PLANERA = 22 * 60
+
+function bezpieczneWykorzystanieProcent(preferencje: PreferencjePlanowania): number {
+  return Number.isFinite(preferencje.maksymalneWykorzystanieProcent)
+    ? Math.min(100, Math.max(0, preferencje.maksymalneWykorzystanieProcent))
+    : DOMYSLNE_PREFERENCJE_PLANOWANIA.maksymalneWykorzystanieProcent
+}
 
 function naGodzine(minuty: number): string {
   return `${String(Math.floor(minuty / 60)).padStart(2, '0')}:${String(minuty % 60).padStart(2, '0')}`
@@ -96,12 +107,15 @@ function odejmijPrzedzial(zrodlo: readonly Przedzial[], zajety: Przedzial): Prze
   })
 }
 
-function przedzialyDostepne(dane: DanePlanera, preferencje: PreferencjePlanowania): Przedzial[] {
+function przedzialyGrafiku(dane: DanePlanera): Przedzial[] {
+  const zakresAktywny = dane.harmonogram.pracuje
+    ? { od: POCZATEK_DNIA_PLANERA, do: KONIEC_DNIA_PLANERA }
+    : { od: minutyDnia(dane.harmonogram.zakresAktywny.od), do: minutyDnia(dane.harmonogram.zakresAktywny.do) }
   const poczatek = Math.max(
-    minutyDnia(dane.harmonogram.zakresAktywny.od),
+    zakresAktywny.od,
     dane.odGodziny ? minutyDnia(dane.odGodziny) : 0,
   )
-  let przedzialy: Przedzial[] = [{ od: poczatek, do: minutyDnia(dane.harmonogram.zakresAktywny.do) }]
+  let przedzialy: Przedzial[] = poczatek < zakresAktywny.do ? [{ od: poczatek, do: zakresAktywny.do }] : []
 
   for (const przedzial of dane.harmonogram.przedzialy) {
     const niedozwolony = przedzial.id === 'praca' || przedzial.dostepnosc === 'czesciowa'
@@ -109,6 +123,12 @@ function przedzialyDostepne(dane: DanePlanera, preferencje: PreferencjePlanowani
       przedzialy = odejmijPrzedzial(przedzialy, { od: minutyDnia(przedzial.od), do: minutyDnia(przedzial.do) })
     }
   }
+
+  return przedzialy.filter((przedzial) => przedzial.do > przedzial.od)
+}
+
+function przedzialyDostepne(dane: DanePlanera, preferencje: PreferencjePlanowania): Przedzial[] {
+  let przedzialy = przedzialyGrafiku(dane)
 
   const twarde = dane.wydarzenia
     .filter((element) => element.data === dane.data && element.godzina && element.status !== 'anulowany')
@@ -128,7 +148,7 @@ function terminMinuty(element: ElementOgarniacza<'zadanie'>, data: string): numb
   const termin = element.terminGraniczny
   if (!termin) return undefined
   const dataTerminu = termin.slice(0, 10)
-  if (dataTerminu < data) return -1
+  if (dataTerminu < data) return undefined
   if (dataTerminu > data) return undefined
   const godzina = /T\d{2}:\d{2}/.test(termin) ? termin.slice(11, 16) : '24:00'
   return minutyDnia(godzina)
@@ -159,9 +179,14 @@ function kandydaci(dane: DanePlanera): ElementOgarniacza<'zadanie'>[] {
 }
 
 function znajdzSlot(przedzialy: readonly Przedzial[], czas: number, deadline?: number, preferujSkupienie?: Przedzial, nieWczesniejNiz?: number): Przedzial | undefined {
-  const dostepne = preferujSkupienie
-    ? [...przedzialy.filter((przedzial) => przedzial.od >= preferujSkupienie.od && przedzial.do <= preferujSkupienie.do), ...przedzialy]
-    : przedzialy
+  const skupienie = preferujSkupienie
+    ? przedzialy.flatMap((przedzial) => {
+        const od = Math.max(przedzial.od, preferujSkupienie.od)
+        const doMinuty = Math.min(przedzial.do, preferujSkupienie.do)
+        return doMinuty > od ? [{ od, do: doMinuty }] : []
+      })
+    : []
+  const dostepne = preferujSkupienie ? [...skupienie, ...przedzialy] : przedzialy
   return dostepne.map((przedzial) => ({ ...przedzial, od: Math.max(przedzial.od, nieWczesniejNiz ?? przedzial.od) })).find((przedzial) => {
     const koniec = przedzial.od + czas
     return koniec <= przedzial.do && (deadline === undefined || koniec <= deadline)
@@ -171,12 +196,16 @@ function znajdzSlot(przedzialy: readonly Przedzial[], czas: number, deadline?: n
 export function generujPlan(dane: DanePlanera): WynikPlanera {
   const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }
   let wolne = przedzialyDostepne(dane, preferencje)
+  const dostepneWedlugGrafiku = przedzialyGrafiku(dane)
   const minutyDostepne = wolne.reduce((suma, przedzial) => suma + przedzial.do - przedzial.od, 0)
+  const wykorzystanieProcent = bezpieczneWykorzystanieProcent(preferencje)
+  const limitWykorzystaniaMinuty = Math.floor(minutyDostepne * wykorzystanieProcent / 100)
   const pozycje: PozycjaDraftu[] = []
   const skupienie = preferencje.godzinySkupieniaOd && preferencje.godzinySkupieniaDo
     ? { od: minutyDnia(preferencje.godzinySkupieniaOd), do: minutyDnia(preferencje.godzinySkupieniaDo) }
     : undefined
   let intensywnePodRzad = 0
+  let minutyZaplanowane = 0
 
   for (const zadanie of kandydaci(dane)) {
     const czas = zadanie.czasTrwaniaMinuty
@@ -195,15 +224,32 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
     const niePozniejNiz = ograniczenie?.niePozniejNiz ? minutyDnia(ograniczenie.niePozniejNiz) : undefined
     const ostatecznyDeadline = deadline === undefined ? niePozniejNiz : niePozniejNiz === undefined ? deadline : Math.min(deadline, niePozniejNiz)
     const intensywne = zadanie.priorytet === 'asap' || zadanie.priorytet === 'pilny'
-    const slot = ostatecznyDeadline === -1 ? undefined : znajdzSlot(wolne, czas, ostatecznyDeadline, intensywne ? skupienie : undefined, ograniczenie?.nieWczesniejNiz ? minutyDnia(ograniczenie.nieWczesniejNiz) : undefined)
+    const nieWczesniejNiz = ograniczenie?.nieWczesniejNiz ? minutyDnia(ograniczenie.nieWczesniejNiz) : undefined
+    const slot = znajdzSlot(wolne, czas, ostatecznyDeadline, intensywne ? skupienie : undefined, nieWczesniejNiz)
     if (!slot) {
+      const miesciSieWGrafiku = Boolean(znajdzSlot(dostepneWedlugGrafiku, czas, ostatecznyDeadline, undefined, nieWczesniejNiz))
       pozycje.push({
         id: `draft:${zadanie.id}`,
         zadanieId: zadanie.id,
         tytul: zadanie.tytul,
         czasTrwaniaMinuty: czas,
         status: 'konflikt',
-        powod: ostatecznyDeadline === -1 ? 'Termin zadania już minął.' : 'Brak dostępnego slotu zgodnego z terminem i preferencjami.',
+        powod: miesciSieWGrafiku
+          ? 'Brak wystarczającego wolnego okna po uwzględnieniu twardych wydarzeń i bloków.'
+          : ostatecznyDeadline !== undefined
+            ? 'Zadanie nie mieści się w dostępnym grafiku przed terminem.'
+            : 'Zadanie wypada poza dostępnym grafikiem.',
+      })
+      continue
+    }
+    if (minutyZaplanowane + czas > limitWykorzystaniaMinuty) {
+      pozycje.push({
+        id: `draft:${zadanie.id}`,
+        zadanieId: zadanie.id,
+        tytul: zadanie.tytul,
+        czasTrwaniaMinuty: czas,
+        status: 'konflikt',
+        powod: `Przekroczony limit wykorzystania czasu (${wykorzystanieProcent}%).`,
       })
       continue
     }
@@ -220,6 +266,7 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
     const potrzebnaPrzerwa = intensywne && intensywnePodRzad + 1 >= preferencje.maksymalnieIntensywnychPodRzad
     const doZajecia = Math.min(slot.do, koniec + (potrzebnaPrzerwa ? preferencje.minimalnaPrzerwaMinuty : 0))
     wolne = odejmijPrzedzial(wolne, { od: slot.od, do: doZajecia })
+    minutyZaplanowane += czas
     intensywnePodRzad = intensywne ? (potrzebnaPrzerwa ? 0 : intensywnePodRzad + 1) : 0
   }
 
@@ -227,7 +274,8 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
     data: dane.data,
     pozycje,
     minutyDostepne,
-    minutyZaplanowane: pozycje.reduce((suma, pozycja) => suma + (pozycja.status === 'zaplanowana' ? pozycja.czasTrwaniaMinuty ?? 0 : 0), 0),
+    minutyZaplanowane,
+    limitWykorzystaniaMinuty,
   }
 }
 
@@ -252,11 +300,11 @@ export function generujPrzeplanowanie(dane: DanePlanera): WynikPlanera {
   const otwarteZaplanowane = dane.zadania
     .map(zadanieLegacyNaElement)
     .filter((zadanie) => zadanie.status === 'otwarty' && zadanie.data === dane.data && zadanie.godzina && zadanie.trybTerminu === 'o_godzinie')
-  const doPrzeplanowania = otwarteZaplanowane.filter((zadanie) => minutyDnia(zadanie.godzina!) < odMinuty)
-  const nieruchome = otwarteZaplanowane.filter((zadanie) => minutyDnia(zadanie.godzina!) >= odMinuty)
+  const doPrzeplanowania = otwarteZaplanowane.filter((zadanie) => minutyDnia(zadanie.godzina!) >= odMinuty)
+  const identyfikatory = new Set(doPrzeplanowania.map((zadanie) => zadanie.id))
   return generujPlan({
     ...dane,
-    wydarzenia: [...dane.wydarzenia, ...nieruchome],
+    wydarzenia: dane.wydarzenia.filter((wydarzenie) => wydarzenie.typ !== 'zadanie' || !identyfikatory.has(wydarzenie.id)),
     zadaniaDoPrzeplanowaniaIds: doPrzeplanowania.map((zadanie) => zadanie.id),
   })
 }
@@ -285,6 +333,10 @@ export function walidujPozycjeDraftu(
   }
   const miesciSie = wolne.some((przedzial) => od >= przedzial.od && doMinuty <= przedzial.do)
   if (!miesciSie) return { poprawna: false, powod: 'Slot koliduje albo wypada poza pełną dostępnością.' }
+  const minutyDostepne = przedzialyDostepne(dane, preferencje).reduce((suma, przedzial) => suma + przedzial.do - przedzial.od, 0)
+  const limitWykorzystaniaMinuty = Math.floor(minutyDostepne * bezpieczneWykorzystanieProcent(preferencje) / 100)
+  const minutyPozostalych = pozostale.reduce((suma, inna) => suma + (inna.id !== pozycja.id && inna.status === 'zaplanowana' ? inna.czasTrwaniaMinuty ?? 0 : 0), 0)
+  if (minutyPozostalych + czasTrwaniaMinuty > limitWykorzystaniaMinuty) return { poprawna: false, powod: 'Slot przekracza limit wykorzystania dostępnego czasu.' }
   return { poprawna: true, poczatek: isoDnia(dane.data, od), koniec: isoDnia(dane.data, doMinuty) }
 }
 
