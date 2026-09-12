@@ -33,6 +33,10 @@ function czyCicheZakonczenie(blad: unknown) {
   return kod === 'ANULOWANO' || kod === 'BRAK_MOWY' || kod === 'TIMEOUT' || /anulowano|nie usłyszałem|czas oczekiwania/i.test(komunikat)
 }
 
+function czyAnulowano(blad: unknown) {
+  return typeof blad === 'object' && blad && 'code' in blad && String(blad.code) === 'ANULOWANO'
+}
+
 export class KontrolerSesjiGlosowejEcho {
   private numerSesji = 0
   private aktywna = false
@@ -163,7 +167,7 @@ export class KontrolerSesjiGlosowejEcho {
             numerSesji: numer,
             kod: typeof blad === 'object' && blad && 'code' in blad ? String(blad.code) : 'BRAK_KODU',
           })
-          if (!czyCicheZakonczenie(blad) || !awaryjna) throw blad
+          if (czyAnulowano(blad) || !czyCicheZakonczenie(blad) || !awaryjna) throw blad
           wypowiedz = awaryjna
           zapiszDiagnostykeEcho('fallback-to-last-partial', { numerSesji: numer, dlugosc: wypowiedz.length })
         }

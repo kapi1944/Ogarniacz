@@ -122,7 +122,7 @@ describe('KontrolerSesjiGlosowejEcho', () => {
   })
 
   it('nie używa partiala po świadomym anulowaniu sesji', async () => {
-    const brakMowy = Object.assign(new Error('Nie usłyszałem wypowiedzi.'), { code: 'BRAK_MOWY' })
+    const anulowano = Object.assign(new Error('Nasłuchiwanie anulowano.'), { code: 'ANULOWANO' })
     const glos = przygotujGlos([])
     let odebranoCzesciowy: ((tekst: string) => void) | undefined
     let odrzucRozpoznawanie: ((blad: Error) => void) | undefined
@@ -142,7 +142,7 @@ describe('KontrolerSesjiGlosowejEcho', () => {
     await czekajNa(() => Boolean(odebranoCzesciowy && odrzucRozpoznawanie))
     odebranoCzesciowy?.('Polecenie przed anulowaniem')
     await kontroler.anuluj()
-    odrzucRozpoznawanie?.(brakMowy)
+    odrzucRozpoznawanie?.(anulowano)
     await new Promise((rozwiaz) => setTimeout(rozwiaz, 0))
 
     expect(echo.obsluz).not.toHaveBeenCalled()
