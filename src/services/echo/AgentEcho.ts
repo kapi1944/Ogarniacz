@@ -8,6 +8,7 @@ import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
 import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
 import { najwyzszeRyzykoPlanu, opisPlanuDlaUzytkownika, utworzPlanWykonaniaEcho } from './PlanWykonaniaEcho'
 import { RejestrNarzedziEcho, WykonawcaNarzedziEcho, utworzDomyslnyRejestrNarzedziEcho } from './NarzedziaEcho'
+import { zapiszDiagnostykeEcho } from './DiagnostykaEcho'
 import type { AkcjaDoPotwierdzeniaEcho, DecyzjaModeluEcho, KontekstCzasuEcho, KontekstPlanowaniaEcho, MagazynPamieciEcho, OdpowiedzEcho, ProviderModeluEcho, StanPracyEcho, TrybRozmowyEcho, ZadanieModeluEcho, ZrodloWejsciaEcho } from './typyEcho'
 
 const INSTRUKCJE_SYSTEMOWE = [
@@ -256,6 +257,9 @@ export class AgentEcho {
   }
 
   private async obsluzDecyzje(decyzja: DecyzjaModeluEcho): Promise<OdpowiedzEcho | undefined> {
+    zapiszDiagnostykeEcho('rozpoznana intencja', {
+      intencja: decyzja.aktualizacjaKontekstu?.ostatniaIntencja ?? decyzja.typ,
+    })
     this.kontekst.zastosujAktualizacje(decyzja.aktualizacjaKontekstu)
     if (decyzja.typ === 'odpowiedz' || decyzja.typ === 'pytanie') {
       const tresc = decyzja.tresc.trim() || 'Nie mam jeszcze wystarczających danych, żeby odpowiedzieć.'
@@ -284,6 +288,7 @@ export class AgentEcho {
     }
     for (const wywolanie of decyzja.wywolania) {
       this.onZmianaStanu?.('wykonuje')
+      zapiszDiagnostykeEcho('wywolane narzedzie', { nazwa: wywolanie.nazwa })
       const wynik = await this.wykonawca.wykonaj(wywolanie)
       this.wynikiBiezacejTury.push(wynik)
       this.kontekst.dodajWynikNarzedzia(wynik)

@@ -178,18 +178,22 @@ function rozpoznajCzas(
 ): RozpoznanyCzas {
   const daty: { indeks: number; data: string; etykieta: string }[] = [];
   for (const [indeks, slowo] of lista.entries()) {
-    if (["dzis", "dzisiaj", "jutro", "pojutrze"].includes(slowo.uproszczone)) {
-      const przesuniecie =
-        slowo.uproszczone === "jutro"
-          ? 1
-          : slowo.uproszczone === "pojutrze"
-            ? 2
-            : 0;
+    const okresleniaDzis = ["dzis", "dzisiaj", "dzisiejszy", "dzisiejsza", "dzisiejsze", "dzisiejszych"];
+    const okresleniaJutra = ["jutro", "jutrzejszy", "jutrzejsza", "jutrzejsze", "jutrzejszych"];
+    if (
+      okresleniaDzis.includes(slowo.uproszczone) ||
+      okresleniaJutra.includes(slowo.uproszczone) ||
+      slowo.uproszczone === "pojutrze"
+    ) {
+      const przesuniecie = okresleniaJutra.includes(slowo.uproszczone)
+        ? 1
+        : slowo.uproszczone === "pojutrze"
+          ? 2
+          : 0;
       daty.push({
         indeks,
         data: dataPoPrzesunieciu(dataLokalna, przesuniecie),
-        etykieta:
-          slowo.uproszczone === "dzisiaj" ? "dzisiaj" : slowo.uproszczone,
+        etykieta: przesuniecie === 0 ? "dzisiaj" : przesuniecie === 1 ? "jutro" : "pojutrze",
       });
     } else if (dniTygodnia.has(slowo.uproszczone)) {
       const docelowy = dniTygodnia.get(slowo.uproszczone)!;
@@ -1086,10 +1090,26 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       return { typ: "pytanie", tresc: "Które zadanie mam usunąć?" };
     }
 
-    const czyOdczyt =
-      tokeny.has("co") &&
-      tokeny.has("mam") &&
-      (tokeny.has("dzis") || tokeny.has("dzisiaj") || tokeny.has("jutro"));
+    const maTematZadan = lista.some(({ uproszczone: slowo }) =>
+      slowo.startsWith("zadani"),
+    ) || tokeny.has("zrobienia");
+    const maSygnalOdczytu = lista.some(({ uproszczone: slowo }) =>
+      slowo.startsWith("pokaz"),
+    ) || ["co", "czy", "jakie", "mam", "jest"].some((token) => tokeny.has(token));
+    const maOgolnePytanieODniu =
+      (tokeny.has("co") && tokeny.has("mam")) ||
+      (tokeny.has("czy") && tokeny.has("mam") && tokeny.has("cos"));
+    const kontynuacjaOdczytuZadan =
+      zadanie.kontekstRozmowy.temat === "zadania" ||
+      zadanie.kontekstRozmowy.ostatniaIntencja === "odczytaj_zadania";
+    const krotkaKontynuacjaCzasowa =
+      kontynuacjaOdczytuZadan &&
+      lista.every(({ uproszczone: slowo }) => ["a", "i", "na", "w", "co", "jutro", "pojutrze", "dzis", "dzisiaj"].includes(slowo));
+    const czyOdczyt = Boolean(czas.data) && (
+      (maTematZadan && maSygnalOdczytu) ||
+      maOgolnePytanieODniu ||
+      krotkaKontynuacjaCzasowa
+    );
     if (czyOdczyt && czas.data)
       return this.wywolajZadanie({
         typ: "odczytaj_zadania",

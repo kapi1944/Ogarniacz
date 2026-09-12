@@ -3,6 +3,7 @@ import type { OdpowiedzEcho } from './typyEcho'
 import type { UslugaGlosuEcho } from '../../platform/GlosEchoService'
 import type { PlatformaOgarniacza } from '../../platform/typy'
 import { KonfiguracjaRozmowyEcho } from './KonfiguracjaRozmowyEcho'
+import { zapiszDiagnostykeEcho } from './DiagnostykaEcho'
 
 export type StanSesjiGlosowejEcho = 'bezczynny' | 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'myslenie' | 'mowienie' | 'oczekiwanie' | 'oczekujeDoprecyzowania' | 'oczekujePotwierdzenia' | 'blad'
 
@@ -43,6 +44,7 @@ export class KontrolerSesjiGlosowejEcho {
   private aplikacjaAktywna = true
   private rozpoznawanieAktywne = false
   private przerwanoMowieniePrzezWtracenie = false
+  private ostatniaCzesciowa?: { numerSesji: number; tekst: string }
   private readonly obserwatorzyStanu = new Set<(stan: StanSesjiGlosowejEcho) => void>()
   private przygotujWejscie?: () => Promise<void>
 
@@ -64,7 +66,7 @@ export class KontrolerSesjiGlosowejEcho {
       if (!this.rozpoznawanieAktywne || !this.aktywna) return
       if (stan === 'mowiUzytkownik') this.ustawStan('mowiUzytkownik')
       if (stan === 'transkrypcja') this.ustawStan('transkrypcja')
-      if (tekst) this.ustawCzesciowaWypowiedz(tekst)
+      if (tekst) this.zarejestrujCzesciowaWypowiedz(this.numerSesji, tekst)
     })
     this.usunCyklZycia = await this.zaleznosci.cyklZycia.nasluchuj((stan) => {
       this.aplikacjaAktywna = stan === 'aktywny'
@@ -81,6 +83,7 @@ export class KontrolerSesjiGlosowejEcho {
     if (!this.aplikacjaAktywna) return
     const numer = ++this.numerSesji
     this.aktywna = true
+    this.ostatniaCzesciowa = undefined
     this.zaleznosci.obsluga.zglosBlad('')
     void this.prowadzRozmowe(numer)
   }
@@ -97,6 +100,7 @@ export class KontrolerSesjiGlosowejEcho {
     this.numerSesji += 1
     this.aktywna = false
     this.rozpoznawanieAktywne = false
+    this.ostatniaCzesciowa = undefined
     this.kontrolerOdpowiedzi?.abort()
     this.kontrolerOdpowiedzi = undefined
     await Promise.allSettled([
@@ -139,19 +143,36 @@ export class KontrolerSesjiGlosowejEcho {
         const parametry = this.zaleznosci.konfiguracjaRozmowy?.pobierzParametryGlosu() ?? { limitPierwszejWypowiedziMs: 30_000, limitKontynuacjiMs: 12_000, limitPauzyMs: 4_000 }
         this.ustawCzesciowaWypowiedz('')
         this.rozpoznawanieAktywne = true
-        const wypowiedz = await this.zaleznosci.glos.rozpoznaj(
-          kontynuacja ? parametry.limitKontynuacjiMs : parametry.limitPierwszejWypowiedziMs,
-          parametry.limitPauzyMs,
-          (tekst) => {
-            if (!this.czyAktualna(numer) || !this.rozpoznawanieAktywne) return
-            this.ustawStan('mowiUzytkownik')
-            this.ustawCzesciowaWypowiedz(tekst)
-          },
-        )
+        this.ostatniaCzesciowa = undefined
+        zapiszDiagnostykeEcho('STT started', { numerSesji: numer, kontynuacja })
+        let wypowiedz: string
+        try {
+          wypowiedz = await this.zaleznosci.glos.rozpoznaj(
+            kontynuacja ? parametry.limitKontynuacjiMs : parametry.limitPierwszejWypowiedziMs,
+            parametry.limitPauzyMs,
+            (tekst) => {
+              if (!this.czyAktualna(numer) || !this.rozpoznawanieAktywne) return
+              this.ustawStan('mowiUzytkownik')
+              this.zarejestrujCzesciowaWypowiedz(numer, tekst)
+            },
+          )
+          zapiszDiagnostykeEcho('final transcript', { numerSesji: numer, dlugosc: wypowiedz.trim().length })
+        } catch (blad) {
+          const awaryjna = this.pobierzCzesciowaWypowiedz(numer)
+          zapiszDiagnostykeEcho('STT error', {
+            numerSesji: numer,
+            kod: typeof blad === 'object' && blad && 'code' in blad ? String(blad.code) : 'BRAK_KODU',
+          })
+          if (!czyCicheZakonczenie(blad) || !awaryjna) throw blad
+          wypowiedz = awaryjna
+          zapiszDiagnostykeEcho('fallback-to-last-partial', { numerSesji: numer, dlugosc: wypowiedz.length })
+        }
         this.rozpoznawanieAktywne = false
         if (!this.czyAktualna(numer) || !wypowiedz.trim()) break
         this.ustawCzesciowaWypowiedz('')
+        this.ostatniaCzesciowa = undefined
         this.zaleznosci.obsluga.odebranoWypowiedz(wypowiedz)
+        zapiszDiagnostykeEcho('tekst przekazany do EchoService', { numerSesji: numer, dlugosc: wypowiedz.length })
         this.ustawStan('myslenie')
         this.kontrolerOdpowiedzi = new AbortController()
         const odpowiedz = await this.zaleznosci.echo.obsluz(wypowiedz, 'stt', this.kontrolerOdpowiedzi.signal)
@@ -180,12 +201,14 @@ export class KontrolerSesjiGlosowejEcho {
         this.ustawStan('blad')
         this.zaleznosci.obsluga.zglosBlad(komunikatBledu(blad))
         this.aktywna = false
+        this.ostatniaCzesciowa = undefined
         return
       }
     }
     if (this.czyAktualna(numer)) {
       this.aktywna = false
       this.rozpoznawanieAktywne = false
+      this.ostatniaCzesciowa = undefined
       this.ustawCzesciowaWypowiedz('')
       this.ustawStan('bezczynny')
     }
@@ -203,5 +226,18 @@ export class KontrolerSesjiGlosowejEcho {
 
   private ustawCzesciowaWypowiedz(tekst: string) {
     this.zaleznosci.obsluga.odebranoCzesciowaWypowiedz?.(tekst)
+  }
+
+  private zarejestrujCzesciowaWypowiedz(numerSesji: number, tekst: string) {
+    const sensowna = tekst.trim()
+    if (!this.czyAktualna(numerSesji) || !this.rozpoznawanieAktywne || !/[\p{L}\p{N}]/u.test(sensowna)) return
+    this.ostatniaCzesciowa = { numerSesji, tekst: sensowna }
+    this.ustawCzesciowaWypowiedz(sensowna)
+    zapiszDiagnostykeEcho('partial transcript', { numerSesji, dlugosc: sensowna.length })
+  }
+
+  private pobierzCzesciowaWypowiedz(numerSesji: number): string {
+    const czesciowa = this.ostatniaCzesciowa
+    return czesciowa?.numerSesji === numerSesji ? czesciowa.tekst : ''
   }
 }

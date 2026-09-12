@@ -8,6 +8,7 @@ import android.os.Looper;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.util.Log;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 import com.getcapacitor.JSObject;
@@ -27,7 +28,9 @@ import java.util.Locale;
 )
 public class EchoGlosPlugin extends Plugin {
     private static final String UPRAWNIENIE_MIKROFONU = "mikrofon";
+    private static final String TAG_ECHO = "OgarniaczEcho";
     private static final int DOMYSLNY_LIMIT_NASLUCHIWANIA_MS = 15000;
+    private static final long MAKSYMALNY_WIEK_CZESCIOWEJ_MS = 35000;
     private final Handler obslugaCzasu = new Handler(Looper.getMainLooper());
     private SpeechRecognizer rozpoznawanie;
     private SpeechRecognizer rozpoznawanieBargeIn;
@@ -42,6 +45,8 @@ public class EchoGlosPlugin extends Plugin {
     private String tekstBargeIn;
     private String tekstMowienia = "";
     private String identyfikatorMowienia;
+    private String ostatniaCzesciowaWypowiedz = "";
+    private long czasOstatniejCzesciowej;
 
     @Override
     public void load() {
@@ -139,6 +144,7 @@ public class EchoGlosPlugin extends Plugin {
                 wywolanie.reject("Trwa przechwytywanie wypowiedzi przerywającej Echo.", "SESJA_STT_AKTYWNA");
                 return;
             }
+            wyczyscCzesciowaWypowiedz();
             aktywneRozpoznawanie = wywolanie;
             long numerSesji = ++numerRozpoznawania;
             rozpoznawanie = SpeechRecognizer.createSpeechRecognizer(getContext());
@@ -156,10 +162,11 @@ public class EchoGlosPlugin extends Plugin {
             zamiar.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, limitPauzy);
             zamiar.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, limitPauzy);
             przekroczenieCzasu = () -> {
-                if (czyAktualneRozpoznawanie(numerSesji)) zakonczRozpoznawanie("Przekroczono czas oczekiwania na wypowiedź.", "TIMEOUT");
+                if (czyAktualneRozpoznawanie(numerSesji)) zakonczRozpoznawaniePoBledzie(numerSesji, "Przekroczono czas oczekiwania na wypowiedź.", "TIMEOUT", -1, true);
             };
             obslugaCzasu.postDelayed(przekroczenieCzasu, limit);
             rozpoznawanie.startListening(zamiar);
+            Log.i(TAG_ECHO, "STT started sesja=" + numerSesji);
             powiadomStan("sluchanie");
         });
     }
@@ -241,6 +248,7 @@ public class EchoGlosPlugin extends Plugin {
     }
 
     private void zakonczRozpoznawanie(String komunikat, String kod) {
+        wyczyscCzesciowaWypowiedz();
         if (przekroczenieCzasu != null) obslugaCzasu.removeCallbacks(przekroczenieCzasu);
         przekroczenieCzasu = null;
         if (rozpoznawanie != null) {
@@ -255,6 +263,7 @@ public class EchoGlosPlugin extends Plugin {
     }
 
     private void zakonczRozpoznawanieWynikiem(String tekst) {
+        wyczyscCzesciowaWypowiedz();
         if (przekroczenieCzasu != null) obslugaCzasu.removeCallbacks(przekroczenieCzasu);
         przekroczenieCzasu = null;
         if (rozpoznawanie != null) {
@@ -266,6 +275,40 @@ public class EchoGlosPlugin extends Plugin {
         aktywneRozpoznawanie = null;
         if (wywolanie == null) return;
         wywolanie.resolve(wynikRozpoznawania(tekst));
+    }
+
+    private void zapamietajCzesciowaWypowiedz(String tekst) {
+        String sensowna = tekst == null ? "" : tekst.trim();
+        if (sensowna.isEmpty() || !sensowna.matches(".*[\\p{L}\\p{N}].*")) return;
+        ostatniaCzesciowaWypowiedz = sensowna;
+        czasOstatniejCzesciowej = System.currentTimeMillis();
+    }
+
+    private void wyczyscCzesciowaWypowiedz() {
+        ostatniaCzesciowaWypowiedz = "";
+        czasOstatniejCzesciowej = 0;
+    }
+
+    private String pobierzSwiezaCzesciowaWypowiedz() {
+        if (ostatniaCzesciowaWypowiedz.isEmpty()) return "";
+        if (System.currentTimeMillis() - czasOstatniejCzesciowej > MAKSYMALNY_WIEK_CZESCIOWEJ_MS) return "";
+        return ostatniaCzesciowaWypowiedz;
+    }
+
+    private void zakonczRozpoznawaniePoBledzie(long numerSesji, String komunikat, String kod, int kodAndroida, boolean moznaUzycCzesciowej) {
+        if (!czyAktualneRozpoznawanie(numerSesji)) return;
+        Log.w(TAG_ECHO, "STT error sesja=" + numerSesji + " kodAndroida=" + kodAndroida + " kod=" + kod);
+        if (!moznaUzycCzesciowej) {
+            zakonczRozpoznawanie(komunikat, kod);
+            return;
+        }
+        String awaryjna = pobierzSwiezaCzesciowaWypowiedz();
+        if (awaryjna.isEmpty()) {
+            zakonczRozpoznawanie(komunikat, kod);
+            return;
+        }
+        Log.i(TAG_ECHO, "fallback-to-last-partial sesja=" + numerSesji + " dlugosc=" + awaryjna.length());
+        zakonczRozpoznawanieWynikiem(awaryjna);
     }
 
     private void uruchomWykrywanieBargeIn() {
@@ -392,14 +435,21 @@ public class EchoGlosPlugin extends Plugin {
         }
 
         @Override public void onReadyForSpeech(Bundle parametry) { if (czyAktualneRozpoznawanie(numerSesji)) powiadomStan("sluchanie"); }
-        @Override public void onBeginningOfSpeech() { if (czyAktualneRozpoznawanie(numerSesji)) powiadomStan("mowiUzytkownik"); }
+        @Override public void onBeginningOfSpeech() {
+            if (!czyAktualneRozpoznawanie(numerSesji)) return;
+            Log.i(TAG_ECHO, "speech detected sesja=" + numerSesji);
+            powiadomStan("mowiUzytkownik");
+        }
         @Override public void onRmsChanged(float poziom) {}
         @Override public void onBufferReceived(byte[] bufor) {}
         @Override public void onEndOfSpeech() { if (czyAktualneRozpoznawanie(numerSesji)) powiadomStan("transkrypcja"); }
         @Override public void onPartialResults(Bundle wyniki) {
             if (!czyAktualneRozpoznawanie(numerSesji)) return;
             String tekst = tekstRozpoznania(wyniki);
-            if (!tekst.isEmpty()) powiadomStan("mowiUzytkownik", tekst);
+            if (tekst.isEmpty()) return;
+            zapamietajCzesciowaWypowiedz(tekst);
+            Log.i(TAG_ECHO, "partial transcript sesja=" + numerSesji + " dlugosc=" + tekst.length());
+            powiadomStan("mowiUzytkownik", tekst);
         }
         @Override public void onEvent(int typ, Bundle parametry) {}
 
@@ -407,6 +457,7 @@ public class EchoGlosPlugin extends Plugin {
         public void onResults(Bundle wyniki) {
             if (!czyAktualneRozpoznawanie(numerSesji)) return;
             String tekst = tekstRozpoznania(wyniki);
+            Log.i(TAG_ECHO, "final transcript sesja=" + numerSesji + " dlugosc=" + tekst.length());
             if (tekst.isEmpty()) zakonczRozpoznawanie("Nie rozpoznano wypowiedzi.", "BRAK_MOWY");
             else zakonczRozpoznawanieWynikiem(tekst);
         }
@@ -415,15 +466,15 @@ public class EchoGlosPlugin extends Plugin {
         public void onError(int blad) {
             if (!czyAktualneRozpoznawanie(numerSesji)) return;
             if (blad == SpeechRecognizer.ERROR_NO_MATCH || blad == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
-                zakonczRozpoznawanie("Nie usłyszałem wypowiedzi.", "BRAK_MOWY");
+                zakonczRozpoznawaniePoBledzie(numerSesji, "Nie usłyszałem wypowiedzi.", "BRAK_MOWY", blad, true);
             } else if (blad == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-                zakonczRozpoznawanie("Brak zgody na użycie mikrofonu.", "BRAK_ZGODY");
+                zakonczRozpoznawaniePoBledzie(numerSesji, "Brak zgody na użycie mikrofonu.", "BRAK_ZGODY", blad, false);
             } else if (blad == SpeechRecognizer.ERROR_AUDIO) {
-                zakonczRozpoznawanie("Nie udało się odczytać dźwięku z mikrofonu.", "BLAD_MIKROFONU");
+                zakonczRozpoznawaniePoBledzie(numerSesji, "Nie udało się odczytać dźwięku z mikrofonu.", "BLAD_MIKROFONU", blad, false);
             } else if (blad == SpeechRecognizer.ERROR_RECOGNIZER_BUSY) {
-                zakonczRozpoznawanie("Usługa rozpoznawania mowy jest zajęta.", "USLUGA_ZAJETA");
+                zakonczRozpoznawaniePoBledzie(numerSesji, "Usługa rozpoznawania mowy jest zajęta.", "USLUGA_ZAJETA", blad, false);
             } else {
-                zakonczRozpoznawanie("Usługa rozpoznawania mowy zgłosiła błąd.", "BLAD_STT");
+                zakonczRozpoznawaniePoBledzie(numerSesji, "Usługa rozpoznawania mowy zgłosiła błąd.", "BLAD_STT", blad, false);
             }
         }
     }

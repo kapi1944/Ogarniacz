@@ -1,6 +1,7 @@
 package pl.ogarniacz.app;
 
 import android.Manifest;
+import android.util.Log;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -20,6 +21,7 @@ import java.io.IOException;
 public class WakeWordEchoPlugin extends Plugin {
     private static final String UPRAWNIENIE_MIKROFONU = "mikrofon";
     private static final String PLIK_FRAZY = "echo/hej_echo_android.ppn";
+    private static final String TAG_ECHO = "OgarniaczEcho";
     private PorcupineManager silnik;
     private boolean nasluchAktywny;
 
@@ -92,10 +94,12 @@ public class WakeWordEchoPlugin extends Plugin {
             try {
                 if (silnik != null && nasluchAktywny) silnik.stop();
                 nasluchAktywny = false;
+                Log.i(TAG_ECHO, "wake word detected");
                 powiadomStan("zatrzymany", null);
                 notifyListeners("wykrytoFraze", new JSObject());
             } catch (PorcupineException blad) {
                 nasluchAktywny = false;
+                Log.w(TAG_ECHO, "wake word microphone release failed", blad);
                 powiadomStan("blad", "Nie udało się zwolnić mikrofonu po wykryciu frazy.");
             }
         });
@@ -156,6 +160,7 @@ public class WakeWordEchoPlugin extends Plugin {
     }
 
     private void powiadomStan(String stan, String komunikat) {
+        Log.i(TAG_ECHO, "wake word state=" + stan);
         notifyListeners("stanWakeWord", informacjaOStanie(stan, komunikat));
     }
 

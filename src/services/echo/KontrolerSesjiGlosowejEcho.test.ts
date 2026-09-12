@@ -90,6 +90,114 @@ describe('KontrolerSesjiGlosowejEcho', () => {
     expect(czesciowe.at(-1)).toBe('')
   })
 
+  it('przekazuje ostatni partial do rozmowy, gdy Android nie zwróci finalnego wyniku', async () => {
+    const brakMowy = Object.assign(new Error('Nie usłyszałem wypowiedzi.'), { code: 'BRAK_MOWY' })
+    const glos = przygotujGlos([])
+    let odebranoCzesciowy: ((tekst: string) => void) | undefined
+    let odrzucRozpoznawanie: ((blad: Error) => void) | undefined
+    let numerWywolania = 0
+    glos.rozpoznaj = vi.fn((_limit, _pauza, obslugaCzesciowa) => {
+      numerWywolania += 1
+      if (numerWywolania > 1) return Promise.reject(brakMowy)
+      odebranoCzesciowy = obslugaCzesciowa
+      return new Promise<string>((_rozwiaz, odrzuc) => { odrzucRozpoznawanie = odrzuc })
+    })
+    const echo = { obsluz: vi.fn(async () => odpowiedz) }
+    const wypowiedzi: string[] = []
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo,
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: (tekst) => wypowiedzi.push(tekst), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.rozpocznij()
+    await czekajNa(() => Boolean(odebranoCzesciowy && odrzucRozpoznawanie))
+    odebranoCzesciowy?.('Pokaż zadania na dzisiaj')
+    odrzucRozpoznawanie?.(brakMowy)
+    await czekajNa(() => kontroler.pobierzStan() === 'bezczynny')
+
+    expect(wypowiedzi).toEqual(['Pokaż zadania na dzisiaj'])
+    expect(echo.obsluz).toHaveBeenCalledOnce()
+  })
+
+  it('nie używa partiala po świadomym anulowaniu sesji', async () => {
+    const brakMowy = Object.assign(new Error('Nie usłyszałem wypowiedzi.'), { code: 'BRAK_MOWY' })
+    const glos = przygotujGlos([])
+    let odebranoCzesciowy: ((tekst: string) => void) | undefined
+    let odrzucRozpoznawanie: ((blad: Error) => void) | undefined
+    glos.rozpoznaj = vi.fn((_limit, _pauza, obslugaCzesciowa) => {
+      odebranoCzesciowy = obslugaCzesciowa
+      return new Promise<string>((_rozwiaz, odrzuc) => { odrzucRozpoznawanie = odrzuc })
+    })
+    const echo = { obsluz: vi.fn(async () => odpowiedz) }
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo,
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.rozpocznij()
+    await czekajNa(() => Boolean(odebranoCzesciowy && odrzucRozpoznawanie))
+    odebranoCzesciowy?.('Polecenie przed anulowaniem')
+    await kontroler.anuluj()
+    odrzucRozpoznawanie?.(brakMowy)
+    await new Promise((rozwiaz) => setTimeout(rozwiaz, 0))
+
+    expect(echo.obsluz).not.toHaveBeenCalled()
+  })
+
+  it('po partialu i finalnym wyniku przekazuje final tylko raz', async () => {
+    const brakMowy = Object.assign(new Error('Nie usłyszałem wypowiedzi.'), { code: 'BRAK_MOWY' })
+    const glos = przygotujGlos([])
+    let odebranoCzesciowy: ((tekst: string) => void) | undefined
+    let rozwiazRozpoznawanie: ((tekst: string) => void) | undefined
+    let numerWywolania = 0
+    glos.rozpoznaj = vi.fn((_limit, _pauza, obslugaCzesciowa) => {
+      numerWywolania += 1
+      if (numerWywolania > 1) return Promise.reject(brakMowy)
+      odebranoCzesciowy = obslugaCzesciowa
+      return new Promise<string>((rozwiaz) => { rozwiazRozpoznawanie = rozwiaz })
+    })
+    const echo = { obsluz: vi.fn(async () => odpowiedz) }
+    const wypowiedzi: string[] = []
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo,
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz: (tekst) => wypowiedzi.push(tekst), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.rozpocznij()
+    await czekajNa(() => Boolean(odebranoCzesciowy && rozwiazRozpoznawanie))
+    odebranoCzesciowy?.('Pokaż zadania')
+    rozwiazRozpoznawanie?.('Pokaż zadania na jutro')
+    await czekajNa(() => kontroler.pobierzStan() === 'bezczynny')
+
+    expect(wypowiedzi).toEqual(['Pokaż zadania na jutro'])
+    expect(echo.obsluz).toHaveBeenCalledOnce()
+  })
+
+  it('nie przekazuje ciszy do rozmowy', async () => {
+    const brakMowy = Object.assign(new Error('Nie usłyszałem wypowiedzi.'), { code: 'BRAK_MOWY' })
+    const glos = przygotujGlos([brakMowy])
+    const echo = { obsluz: vi.fn(async () => odpowiedz) }
+    const odebranoWypowiedz = vi.fn()
+    const kontroler = new KontrolerSesjiGlosowejEcho({
+      glos,
+      echo,
+      cyklZycia: przygotujCyklZycia().usluga,
+      obsluga: { zmienStan: vi.fn(), odebranoWypowiedz, odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
+    })
+
+    await kontroler.rozpocznij()
+    await czekajNa(() => kontroler.pobierzStan() === 'bezczynny')
+
+    expect(odebranoWypowiedz).not.toHaveBeenCalled()
+    expect(echo.obsluz).not.toHaveBeenCalled()
+  })
+
   it('nie uruchamia STT podczas inicjalizacji ani powrotu aplikacji na pierwszy plan', async () => {
     const glos = przygotujGlos([])
     const cykl = przygotujCyklZycia()
@@ -134,9 +242,10 @@ describe('KontrolerSesjiGlosowejEcho', () => {
       obslugiCzesciowe.push(odebranoCzesciowy)
       return new Promise<string>(() => undefined)
     })
+    const echo = { obsluz: vi.fn(async () => odpowiedz) }
     const kontroler = new KontrolerSesjiGlosowejEcho({
       glos,
-      echo: { obsluz: vi.fn(async () => odpowiedz) },
+      echo,
       cyklZycia: przygotujCyklZycia().usluga,
       obsluga: { zmienStan: vi.fn(), odebranoCzesciowaWypowiedz: (tekst) => czesciowe.push(tekst), odebranoWypowiedz: vi.fn(), odebranoOdpowiedz: vi.fn(), zglosBlad: vi.fn() },
     })
@@ -148,6 +257,7 @@ describe('KontrolerSesjiGlosowejEcho', () => {
     obslugiCzesciowe[0]('Stary fragment')
 
     expect(czesciowe.at(-1)).toBe('')
+    expect(echo.obsluz).not.toHaveBeenCalled()
     await kontroler.anuluj()
   })
 
