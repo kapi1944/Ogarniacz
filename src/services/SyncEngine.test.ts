@@ -4,6 +4,8 @@ import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { RepozytoriumZdalneInMemory } from '../data/RepozytoriumZdalneInMemory'
 import { BladKonfliktuSynchronizacji, type RepozytoriumZdalne, type ZmianaSynchronizacji } from '../data/DostawcaSynchronizacji'
 import { pobierzRepozytorium } from '../data/Repozytorium'
+import type { KontoFinansowe, Miejsce } from '../domain/typy'
+import { utworzMetadane } from '../domain/fabryki'
 import { utworzZadanie } from './ZadaniaService'
 import { nazwyTabelSynchronizowanych, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
 
@@ -26,6 +28,24 @@ function zadanie(id: string, tytul: string, updatedAt: string, usunietoAt?: stri
     updatedAt,
     usunietoAt,
   }
+}
+
+type TabelaDwochUrzadzen = 'kontaFinansowe' | 'miejsca'
+
+async function zapiszEncjeDwochUrzadzen(tabela: TabelaDwochUrzadzen, rekord: KontoFinansowe | Miejsce): Promise<void> {
+  if (tabela === 'kontaFinansowe') {
+    await pobierzRepozytorium('kontaFinansowe').zapisz(rekord as KontoFinansowe)
+    return
+  }
+  await pobierzRepozytorium('miejsca').zapisz(rekord as Miejsce)
+}
+
+async function usunEncjeDwochUrzadzen(tabela: TabelaDwochUrzadzen, id: string): Promise<void> {
+  if (tabela === 'kontaFinansowe') {
+    await pobierzRepozytorium('kontaFinansowe').usun(id)
+    return
+  }
+  await pobierzRepozytorium('miejsca').usun(id)
 }
 
 describe.sequential('SyncEngine', () => {
@@ -328,5 +348,39 @@ describe.sequential('SyncEngine', () => {
     await urzadzenieAOffline.synchronizuj(zdalne)
     expect((await zdalne.pobierzWszystkie()).find(({ rekord }) => rekord.id === 'dwa-klienty')?.rekord)
       .toMatchObject({ tytul: 'Offline na A' })
+  })
+
+  it.each([
+    { tabela: 'kontaFinansowe' as const, rekord: { ...utworzMetadane('konto-a'), nazwa: 'Konto główne', typ: 'konto' as const, aktywne: true } },
+    { tabela: 'miejsca' as const, rekord: { ...utworzMetadane('miejsce-a'), nazwa: 'Apteka', adres: 'ul. Zdrowa 1', typ: 'apteka' } },
+  ])('przenosi $tabela przez outbox między urządzeniami wraz z aktualizacją i tombstone', async ({ tabela, rekord }) => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const urzadzenieA = new SyncEngine({ czyOnline: () => true, installationId: () => 'instalacja-a', opoznieniePonowieniaMs: 0 })
+    const urzadzenieB = new SyncEngine({ czyOnline: () => true, installationId: () => 'instalacja-b', opoznieniePonowieniaMs: 0 })
+
+    await zapiszEncjeDwochUrzadzen(tabela, rekord)
+    expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toMatchObject([{ tabela, rekordId: rekord.id, operacja: 'utworzenie' }])
+    await expect(urzadzenieA.synchronizuj(zdalne)).resolves.toMatchObject({ wyslane: 1 })
+    expect((await zdalne.pobierzWszystkie()).find((zmiana) => zmiana.tabela === tabela)?.rekord).toMatchObject({ id: rekord.id, nazwa: rekord.nazwa })
+
+    await baza.tabela(tabela).clear()
+    await baza.tabela('stanSynchronizacji').clear()
+    await baza.tabela('kolejkaSynchronizacji').clear()
+    await expect(urzadzenieB.synchronizuj(zdalne)).resolves.toMatchObject({ pobrane: 1 })
+    expect(await baza.tabela(tabela).get(rekord.id)).toMatchObject({ id: rekord.id, nazwa: rekord.nazwa, usunietoAt: undefined })
+
+    const zaktualizowany = { ...(await baza.tabela(tabela).get(rekord.id))!, nazwa: `${rekord.nazwa} po aktualizacji` }
+    await zapiszEncjeDwochUrzadzen(tabela, zaktualizowany)
+    await expect(urzadzenieB.synchronizuj(zdalne)).resolves.toMatchObject({ wyslane: 1 })
+    await expect(urzadzenieB.synchronizuj(zdalne)).resolves.toMatchObject({ wyslane: 0 })
+    expect((await zdalne.pobierzWszystkie()).filter((zmiana) => zmiana.tabela === tabela)).toHaveLength(1)
+
+    await usunEncjeDwochUrzadzen(tabela, rekord.id)
+    await expect(urzadzenieB.synchronizuj(zdalne)).resolves.toMatchObject({ wyslane: 1 })
+    await baza.tabela(tabela).clear()
+    await baza.tabela('stanSynchronizacji').clear()
+    await baza.tabela('kolejkaSynchronizacji').clear()
+    await expect(urzadzenieA.synchronizuj(zdalne)).resolves.toMatchObject({ pobrane: 1 })
+    expect(await baza.tabela(tabela).get(rekord.id)).toMatchObject({ id: rekord.id, usunietoAt: expect.any(String) })
   })
 })

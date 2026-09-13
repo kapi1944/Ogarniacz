@@ -112,6 +112,72 @@ test('sync przenosi rekord z instalacji A do instalacji B', async () => {
   baza.close()
 })
 
+test('sync przenosi konta finansowe i miejsca przez serwer między urządzeniami wraz z aktualizacją i tombstone', async () => {
+  const baza = new DatabaseSync(':memory:')
+  uruchomMigracje(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({
+    PORT: '8788',
+    DATABASE_PATH: ':memory:',
+    SYNC_USER_ID: 'wlasciciel',
+    SYNC_ACCESS_KEY: 'sekretny-klucz-testowy',
+  })
+  const serwer = utworzSerwer(konfiguracja, baza)
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const url = `http://127.0.0.1:${adres.port}/api/sync/changes`
+  const naglowki = (instalacja: string) => ({
+    authorization: 'Bearer sekretny-klucz-testowy',
+    'x-ogarniacz-installation-id': instalacja,
+    'content-type': 'application/json',
+  })
+  const wyslij = async (instalacja: string, tabela: string, rekord: Record<string, unknown>, zmianaId: string, bazowyUpdatedAt?: string) => {
+    const odpowiedz = await fetch(url, {
+      method: 'POST',
+      headers: naglowki(instalacja),
+      body: JSON.stringify({
+        od: '1970-01-01T00:00:00.000Z',
+        installationId: instalacja,
+        zmiany: [{ zmianaId, bazowyUpdatedAt, tabela, rekord, installationId: instalacja }],
+      }),
+    })
+    assert.equal(odpowiedz.status, 200)
+  }
+
+  try {
+    for (const { tabela, rekord } of [
+      { tabela: 'kontaFinansowe', rekord: { id: 'konto-a', nazwa: 'Konto główne', typ: 'konto', aktywne: true } },
+      { tabela: 'miejsca', rekord: { id: 'miejsce-a', nazwa: 'Apteka', adres: 'ul. Zdrowa 1', typ: 'apteka' } },
+    ]) {
+      const utworzony = { ...rekord, createdAt: '2026-09-10T08:00:00.000Z', updatedAt: '2026-09-10T08:00:00.000Z' }
+      await wyslij('instalacja-a', tabela, utworzony, `utworzenie-${tabela}`)
+
+      const pobranieB = await fetch(`${url}?od=1970-01-01T00%3A00%3A00.000Z`, { headers: naglowki('instalacja-b') })
+      assert.equal(pobranieB.status, 200)
+      assert.deepEqual((await pobranieB.json() as { zmiany: { tabela: string; rekord: Record<string, unknown> }[] }).zmiany, [{ tabela, rekord: utworzony, installationId: 'instalacja-a' }])
+
+      const zaktualizowany = { ...utworzony, nazwa: `${rekord.nazwa} po aktualizacji`, updatedAt: '2026-09-10T09:00:00.000Z' }
+      await wyslij('instalacja-b', tabela, zaktualizowany, `aktualizacja-${tabela}`, utworzony.updatedAt)
+      await wyslij('instalacja-b', tabela, zaktualizowany, `aktualizacja-${tabela}`, utworzony.updatedAt)
+      assert.equal(baza.prepare('SELECT version FROM rekordy_synchronizacji WHERE tabela = ? AND rekord_id = ?').get(tabela, rekord.id)?.version, 2)
+
+      const tombstone = { ...zaktualizowany, updatedAt: '2026-09-10T10:00:00.000Z', usunietoAt: '2026-09-10T10:00:00.000Z' }
+      await wyslij('instalacja-b', tabela, tombstone, `usuniecie-${tabela}`, zaktualizowany.updatedAt)
+      const pobranieA = await fetch(`${url}?od=1970-01-01T00%3A00%3A00.000Z`, { headers: naglowki('instalacja-a') })
+      assert.equal(pobranieA.status, 200)
+      const zmianaTombstone = (await pobranieA.json() as { zmiany: { tabela: string; rekord: Record<string, unknown>; installationId: string }[] }).zmiany
+        .find((zmiana) => zmiana.tabela === tabela && zmiana.rekord.id === rekord.id)
+      assert.deepEqual(zmianaTombstone, { tabela, rekord: tombstone, installationId: 'instalacja-b' })
+      const zapisany = baza.prepare('SELECT deleted_at, server_updated_at FROM rekordy_synchronizacji WHERE tabela = ? AND rekord_id = ?').get(tabela, rekord.id)
+      assert.equal(zapisany?.deleted_at, tombstone.usunietoAt)
+      assert.ok(!Number.isNaN(Date.parse(String(zapisany?.server_updated_at))))
+    }
+  } finally {
+    await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+    baza.close()
+  }
+})
+
 test('sync obsługuje preflight CORS wyłącznie dla aplikacji Capacitor', async () => {
   const baza = new DatabaseSync(':memory:')
   const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:' }), baza)

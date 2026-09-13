@@ -9,7 +9,7 @@ const TABELE_SYNCHRONIZOWANE = new Set([
   'zadania', 'projekty', 'skrzynka', 'blokiCzasu', 'grafikPracy', 'wyjatkiGrafiku', 'urlopy',
   'nawyki', 'dziennikNawykow', 'leki', 'dziennikLekow', 'wizyty', 'przypomnienia', 'listyZakupow',
   'pozycjeZakupow', 'rachunki', 'platnosciRachunkow', 'notatki', 'pomysly', 'naPozniej', 'cele',
-  'kontakty', 'dokumenty', 'wydatki', 'budzety', 'pojazdy', 'terminyWaznosci', 'uprawnienia',
+  'kontakty', 'dokumenty', 'wydatki', 'budzety', 'kontaFinansowe', 'miejsca', 'pojazdy', 'terminyWaznosci', 'uprawnienia',
   'edytorzy', 'ustawienia', 'skierowania', 'recepty', 'terapie', 'wpisyTerapii',
   'platnosciStale', 'planyRat', 'raty',
 ])

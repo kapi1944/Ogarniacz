@@ -21,6 +21,7 @@ const MODUL_TABELI: Record<string, string> = {
   przypomnienia: 'przypomnienia', listyZakupow: 'zakupy', pozycjeZakupow: 'zakupy', rachunki: 'rachunki',
   platnosciRachunkow: 'rachunki', notatki: 'notatki', pomysly: 'pomysly', naPozniej: 'na_pozniej',
   cele: 'cele', kontakty: 'kontakty', dokumenty: 'dokumenty', wydatki: 'finanse', budzety: 'finanse',
+  kontaFinansowe: 'finanse', miejsca: 'miasto',
   pojazdy: 'samochod', terminyWaznosci: 'terminy', skierowania: 'skierowania', recepty: 'zdrowie',
   terapie: 'zdrowie', wpisyTerapii: 'zdrowie', platnosciStale: 'finanse', planyRat: 'finanse', raty: 'finanse',
   uprawnienia: 'ustawienia', edytorzy: 'ustawienia', ustawienia: 'ustawienia',
