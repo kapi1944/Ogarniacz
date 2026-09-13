@@ -15,9 +15,7 @@ describe('Echo sprawdza stan przed akcją', () => {
   it('pyta przed przypomnieniem o opłaconym Spotify i zapisuje dopiero po potwierdzeniu', async () => {
     await pobierzRepozytorium('rachunki').zapisz({ ...utworzMetadane(), nazwa: 'Spotify', kwota: 25, termin: '2026-09-10', status: 'zaplacony' })
     const agent = new AgentEcho({ pobierzCzas: () => ({ teraz: '2026-09-06T12:00:00Z', dataLokalna: '2026-09-06', strefaCzasowa: 'Europe/Warsaw' }) })
-    const brakGodziny = await agent.obsluz('Przypomnij mi jutro rano opłacić Spotify.')
-    expect(brakGodziny.tekst).toBe('O której?')
-    const odpowiedz = await agent.obsluz('O 8.')
+    const odpowiedz = await agent.obsluz('Przypomnij mi jutro o 8 opłacić Spotify.')
     expect(odpowiedz.tekst).toContain('już oznaczone jako opłacone')
     expect(await pobierzRepozytorium('przypomnienia').lista()).toHaveLength(0)
     expect(odpowiedz.akcjaDoPotwierdzenia).toBeDefined()

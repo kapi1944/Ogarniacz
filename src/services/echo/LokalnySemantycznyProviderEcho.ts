@@ -208,15 +208,14 @@ function rozpoznajCzas(
 
   const godziny: {
     indeksy: number[];
-    godzina: string;
+    godzina?: string;
     etykieta: string;
     domyslna?: WartoscDomyslnaEcho;
   }[] = [];
   for (const [indeks, slowo] of lista.entries()) {
     if (slowo.uproszczone === "rano") {
       godziny.push({
-        indeksy: [indeks], godzina: DOMYSLNA_GODZINA_RANO, etykieta: 'rano',
-        domyslna: { pole: 'godzina', wartosc: DOMYSLNA_GODZINA_RANO, opis: 'Domyślna pora rano.', pochodzenie: 'zalozenie' },
+        indeksy: [indeks], etykieta: 'rano',
       });
       continue;
     } else if (
