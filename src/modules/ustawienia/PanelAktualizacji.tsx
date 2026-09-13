@@ -5,7 +5,7 @@ import { platforma } from '../../platform/platforma'
 import type { PobranaAktualizacja, WynikSprawdzeniaAktualizacji } from '../../platform/typy'
 import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 
-type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'gotowe' | 'zgoda' | 'blad'
+type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'blad_instalatora' | 'blad'
 
 const etykietyEtapu: Record<EtapAktualizacji, string> = {
   gotowy: 'gotowe',
@@ -14,9 +14,16 @@ const etykietyEtapu: Record<EtapAktualizacji, string> = {
   dostepna: 'dostępna',
   pobieranie: 'pobieranie',
   weryfikacja: 'weryfikacja',
+  brak_miejsca: 'za mało miejsca',
   gotowe: 'instalacja',
   zgoda: 'wymaga zgody',
+  uruchamianie: 'uruchamianie instalatora',
+  blad_instalatora: 'błąd instalatora',
   blad: 'błąd',
+}
+
+function kodBledu(blad: unknown) {
+  return typeof blad === 'object' && blad !== null && 'code' in blad ? String(blad.code) : ''
 }
 
 export function PanelAktualizacji() {
@@ -56,6 +63,8 @@ export function PanelAktualizacji() {
   }
 
   const uruchomInstalator = async (aktualizacja: PobranaAktualizacja) => {
+    ustawEtap('uruchamianie')
+    ustawKomunikat('Przekazywanie APK do systemowego instalatora…')
     try {
       const wynik = await platforma.aktualizacje.uruchomInstalator(aktualizacja)
       if (wynik.wymagaZgody) {
@@ -63,10 +72,12 @@ export function PanelAktualizacji() {
         ustawKomunikat('Android otworzył zgodę „Instaluj nieznane aplikacje”. Włącz ją dla Ogarniacza, wróć tutaj i ponów instalację.')
       } else {
         ustawEtap('gotowe')
-        ustawKomunikat('Instalator Androida został uruchomiony. Potwierdź aktualizację systemową.')
+        ustawKomunikat(wynik.przekazanoDoSystemu
+          ? 'APK przekazano do systemowego instalatora. Potwierdź aktualizację na ekranie Androida.'
+          : 'Nie udało się przekazać APK do systemowego instalatora.')
       }
     } catch (blad) {
-      ustawEtap('blad')
+      ustawEtap(kodBledu(blad) === 'BRAK_MIEJSCA' ? 'brak_miejsca' : 'blad_instalatora')
       ustawKomunikat(blad instanceof Error ? blad.message : 'Nie udało się uruchomić instalatora Androida.')
     }
   }
@@ -92,13 +103,13 @@ export function PanelAktualizacji() {
       ustawKomunikat('APK pobrano i zweryfikowano. Uruchamianie instalatora…')
       await uruchomInstalator(aktualizacja)
     } catch (blad) {
-      ustawEtap('blad')
+      ustawEtap(kodBledu(blad) === 'BRAK_MIEJSCA' ? 'brak_miejsca' : 'blad')
       ustawKomunikat(blad instanceof Error ? blad.message : 'Nie udało się pobrać lub zweryfikować APK.')
     }
   }
 
-  const zajete = etap === 'sprawdzanie' || etap === 'pobieranie' || etap === 'weryfikacja'
-  const wariant = etap === 'blad' ? 'blad' : etap === 'dostepna' || etap === 'zgoda' ? 'ostrzezenie' : etap === 'brak' || etap === 'gotowe' ? 'sukces' : 'neutralny'
+  const zajete = etap === 'sprawdzanie' || etap === 'pobieranie' || etap === 'weryfikacja' || etap === 'uruchamianie'
+  const wariant = etap === 'blad' || etap === 'brak_miejsca' || etap === 'blad_instalatora' ? 'blad' : etap === 'dostepna' || etap === 'zgoda' ? 'ostrzezenie' : etap === 'brak' || etap === 'gotowe' ? 'sukces' : 'neutralny'
 
   return <><Karta>
     <div className="naglowek-karty"><div><h2>Aktualizacja aplikacji</h2><p>Warstwa natywna Android · OTA APK</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
@@ -115,6 +126,7 @@ export function PanelAktualizacji() {
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={!skonfigurowane || zajete} onClick={sprawdzAktualizacje}><RefreshCw aria-hidden="true" />Sprawdź aktualizacje</button>
       {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Pobierz i zainstaluj</button>}
       {etap === 'zgoda' && pobrana && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana)}>Uruchom instalator</button>}
+      {(etap === 'brak_miejsca' || etap === 'blad_instalatora') && pobrana && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana)}>Ponów instalację</button>}
     </div>
   </Karta><PanelAktualizacjiWeb /></>
 }

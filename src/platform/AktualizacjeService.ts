@@ -10,7 +10,7 @@ import type {
 } from './typy'
 
 interface WtyczkaAktualizacji {
-  pobierzApk: (dane: { adres: string; sha256: string; nazwaPliku: string }) => Promise<PobranaAktualizacja>
+  pobierzApk: (dane: { adres: string; sha256: string; nazwaPliku: string; rozmiar?: number }) => Promise<PobranaAktualizacja>
   uruchomInstalator: (dane: { nazwaPliku: string }) => Promise<WynikUruchomieniaInstalatora>
   addListener: (
     nazwa: 'stanAktualizacji',
@@ -119,6 +119,7 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
           adres: sprawdzAdresHttps(adresApk, 'Adres APK'),
           sha256: manifest.sha256,
           nazwaPliku: nazwaApk(manifest),
+          rozmiar: manifest.size,
         })
       } finally {
         await nasluchiwanie.remove()

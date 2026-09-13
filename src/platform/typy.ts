@@ -79,7 +79,7 @@ export interface PobranaAktualizacja {
 }
 
 export interface WynikUruchomieniaInstalatora {
-  uruchomiono: boolean
+  przekazanoDoSystemu: boolean
   wymagaZgody: boolean
 }
 

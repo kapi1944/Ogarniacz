@@ -1,8 +1,13 @@
 package pl.ogarniacz.app;
 
+import android.app.Activity;
+import android.content.ClipData;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
+import android.os.StatFs;
 import android.provider.Settings;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
@@ -22,14 +27,18 @@ import java.util.Locale;
 @CapacitorPlugin(name = "Aktualizacje")
 public class AktualizacjePlugin extends Plugin {
     private static final long MAKSYMALNY_ROZMIAR_APK = 250L * 1024L * 1024L;
+    private static final long MINIMALNY_ZAPAS_INSTALACJI = 32L * 1024L * 1024L;
     private static final int LIMIT_PRZEKIEROWAN = 5;
     private static final String KATALOG_AKTUALIZACJI = "aktualizacje";
+    private static final String KOD_BRAK_MIEJSCA = "BRAK_MIEJSCA";
+    private static final String KOD_BRAK_INSTALATORA = "BRAK_INSTALATORA";
 
     @PluginMethod
     public void pobierzApk(PluginCall wywolanie) {
         String adres = wywolanie.getString("adres");
         String oczekiwanySkrot = wywolanie.getString("sha256");
         String nazwaPliku = wywolanie.getString("nazwaPliku");
+        Long deklarowanyRozmiar = wywolanie.getLong("rozmiar");
         if (!poprawnyAdresHttps(adres)) {
             wywolanie.reject("Adres APK musi używać HTTPS.");
             return;
@@ -42,12 +51,17 @@ public class AktualizacjePlugin extends Plugin {
             wywolanie.reject("Nieprawidłowa nazwa pliku APK.");
             return;
         }
+        if (deklarowanyRozmiar != null && (deklarowanyRozmiar <= 0 || deklarowanyRozmiar > MAKSYMALNY_ROZMIAR_APK)) {
+            wywolanie.reject("Manifest zawiera nieprawidłowy rozmiar APK.");
+            return;
+        }
 
         execute(() -> {
             File plikTymczasowy = null;
             try {
                 File katalog = new File(getContext().getCacheDir(), KATALOG_AKTUALIZACJI);
                 if (!katalog.exists() && !katalog.mkdirs()) throw new Exception("Nie udało się przygotować katalogu aktualizacji.");
+                sprawdzMiejscePrzedPobraniem(katalog, deklarowanyRozmiar);
                 File plikDocelowy = bezpiecznyPlik(katalog, nazwaPliku);
                 plikTymczasowy = bezpiecznyPlik(katalog, nazwaPliku + ".part");
                 usunJesliIstnieje(plikTymczasowy);
@@ -74,7 +88,11 @@ public class AktualizacjePlugin extends Plugin {
                         // Plik tymczasowy zostanie później usunięty razem z pamięcią podręczną aplikacji.
                     }
                 }
-                wywolanie.reject(bezpiecznyKomunikat(blad, "Nie udało się pobrać aktualizacji."));
+                if (blad instanceof BrakMiejscaException) {
+                    wywolanie.reject(blad.getMessage(), KOD_BRAK_MIEJSCA);
+                } else {
+                    wywolanie.reject(bezpiecznyKomunikat(blad, "Nie udało się pobrać aktualizacji."));
+                }
             }
         });
     }
@@ -92,21 +110,31 @@ public class AktualizacjePlugin extends Plugin {
 
     private void uruchomInstalatorNaWatkuGlownym(PluginCall wywolanie, String nazwaPliku) {
         try {
+            Activity aktywnosc = getActivity();
+            if (aktywnosc == null) {
+                wywolanie.reject("Nie można teraz otworzyć ekranu systemowego. Wróć do aplikacji i spróbuj ponownie.", KOD_BRAK_INSTALATORA);
+                return;
+            }
             File katalog = new File(getContext().getCacheDir(), KATALOG_AKTUALIZACJI);
             File plikApk = bezpiecznyPlik(katalog, nazwaPliku);
             if (!plikApk.isFile()) {
                 wywolanie.reject("Zweryfikowany plik APK nie jest już dostępny. Pobierz go ponownie.");
                 return;
             }
+            sprawdzMiejscePrzedInstalacja(katalog, plikApk.length());
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getContext().getPackageManager().canRequestPackageInstalls()) {
                 Intent ustawienia = new Intent(
                     Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                    Uri.parse("package:" + getContext().getPackageName())
+                    Uri.parse("package:pl.ogarniacz.app")
                 );
-                getActivity().startActivity(ustawienia);
+                if (ustawienia.resolveActivity(aktywnosc.getPackageManager()) == null) {
+                    wywolanie.reject("Android nie udostępnia ustawień instalowania nieznanych aplikacji dla Ogarniacza.", KOD_BRAK_INSTALATORA);
+                    return;
+                }
+                aktywnosc.startActivity(ustawienia);
                 JSObject wynik = new JSObject();
-                wynik.put("uruchomiono", false);
+                wynik.put("przekazanoDoSystemu", false);
                 wynik.put("wymagaZgody", true);
                 wywolanie.resolve(wynik);
                 return;
@@ -119,15 +147,29 @@ public class AktualizacjePlugin extends Plugin {
             );
             Intent instalator = new Intent(Intent.ACTION_VIEW);
             instalator.setDataAndType(uriApk, "application/vnd.android.package-archive");
-            instalator.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
-            getContext().startActivity(instalator);
+            instalator.setClipData(ClipData.newRawUri("APK Ogarniacza", uriApk));
+            instalator.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            PackageManager menedzerPakietow = aktywnosc.getPackageManager();
+            ResolveInfo odbiorca = menedzerPakietow.resolveActivity(instalator, PackageManager.MATCH_DEFAULT_ONLY);
+            if (odbiorca == null || odbiorca.activityInfo == null) {
+                wywolanie.reject("Na urządzeniu nie ma dostępnego systemowego instalatora APK. Sprawdź ustawienia Androida i spróbuj ponownie.", KOD_BRAK_INSTALATORA);
+                return;
+            }
+            instalator.setPackage(odbiorca.activityInfo.packageName);
+            aktywnosc.grantUriPermission(odbiorca.activityInfo.packageName, uriApk, Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            aktywnosc.startActivity(instalator);
 
             JSObject wynik = new JSObject();
-            wynik.put("uruchomiono", true);
+            wynik.put("przekazanoDoSystemu", true);
             wynik.put("wymagaZgody", false);
             wywolanie.resolve(wynik);
+        } catch (BrakMiejscaException blad) {
+            wywolanie.reject(blad.getMessage(), KOD_BRAK_MIEJSCA);
         } catch (Exception blad) {
-            wywolanie.reject(bezpiecznyKomunikat(blad, "Nie udało się uruchomić instalatora Androida."));
+            wywolanie.reject(
+                bezpiecznyKomunikat(blad, "Nie udało się uruchomić instalatora Androida. Spróbuj ponownie."),
+                KOD_BRAK_INSTALATORA
+            );
         }
     }
 
@@ -160,6 +202,7 @@ public class AktualizacjePlugin extends Plugin {
                 polaczenie.disconnect();
                 throw new Exception("Plik APK przekracza dozwolony rozmiar 250 MB.");
             }
+            if (rozmiar > 0) sprawdzMiejscePrzedPobraniem(plikDocelowy.getParentFile(), rozmiar);
             MessageDigest skrot = MessageDigest.getInstance("SHA-256");
             long pobrano = 0;
             int ostatniProcent = -1;
@@ -169,6 +212,9 @@ public class AktualizacjePlugin extends Plugin {
                 while ((liczba = wejscie.read(bufor)) != -1) {
                     pobrano += liczba;
                     if (pobrano > MAKSYMALNY_ROZMIAR_APK) throw new Exception("Plik APK przekracza dozwolony rozmiar 250 MB.");
+                    if (rozmiar <= 0 && pobrano % (1024L * 1024L) < liczba) {
+                        sprawdzMiejscePodczasPobierania(plikDocelowy.getParentFile(), pobrano);
+                    }
                     wyjscie.write(bufor, 0, liczba);
                     skrot.update(bufor, 0, liczba);
                     if (rozmiar > 0) {
@@ -207,6 +253,32 @@ public class AktualizacjePlugin extends Plugin {
         if (plik.exists() && !plik.delete()) throw new Exception("Nie udało się usunąć poprzedniego pliku aktualizacji.");
     }
 
+    private void sprawdzMiejscePrzedPobraniem(File katalog, Long rozmiarApk) throws BrakMiejscaException {
+        long wolneBajty = new StatFs(katalog.getAbsolutePath()).getAvailableBytes();
+        long wymaganeBajty = rozmiarApk == null
+            ? MINIMALNY_ZAPAS_INSTALACJI
+            : obliczWymaganeMiejscePrzedPobraniem(rozmiarApk);
+        if (wolneBajty < wymaganeBajty) throw new BrakMiejscaException();
+    }
+
+    private void sprawdzMiejscePodczasPobierania(File katalog, long pobraneBajty) throws BrakMiejscaException {
+        long wolneBajty = new StatFs(katalog.getAbsolutePath()).getAvailableBytes();
+        if (wolneBajty < obliczZapasInstalacji(pobraneBajty)) throw new BrakMiejscaException();
+    }
+
+    private void sprawdzMiejscePrzedInstalacja(File katalog, long rozmiarApk) throws BrakMiejscaException {
+        long wolneBajty = new StatFs(katalog.getAbsolutePath()).getAvailableBytes();
+        if (wolneBajty < obliczZapasInstalacji(rozmiarApk)) throw new BrakMiejscaException();
+    }
+
+    static long obliczZapasInstalacji(long rozmiarApk) {
+        return Math.max(MINIMALNY_ZAPAS_INSTALACJI, rozmiarApk);
+    }
+
+    static long obliczWymaganeMiejscePrzedPobraniem(long rozmiarApk) {
+        return rozmiarApk + obliczZapasInstalacji(rozmiarApk);
+    }
+
     static boolean zweryfikujSkrotLubUsunPlik(File plik, String obliczonySkrot, String oczekiwanySkrot) throws Exception {
         if (obliczonySkrot.equalsIgnoreCase(oczekiwanySkrot)) return true;
         if (plik.exists() && !plik.delete()) throw new Exception("Nie udało się usunąć błędnego pliku aktualizacji.");
@@ -229,5 +301,11 @@ public class AktualizacjePlugin extends Plugin {
     private String bezpiecznyKomunikat(Exception blad, String domyslny) {
         String komunikat = blad.getMessage();
         return komunikat == null || komunikat.isBlank() ? domyslny : komunikat;
+    }
+
+    private static final class BrakMiejscaException extends Exception {
+        BrakMiejscaException() {
+            super("Za mało wolnego miejsca na aktualizację. Zwolnij miejsce w pamięci urządzenia i spróbuj ponownie.");
+        }
     }
 }
