@@ -23,7 +23,7 @@ describe('Kontrolowana autonomia Echo', () => {
   it('nie wymyśla daty, godziny ani deadline’u zadania', async () => {
     const zapisz = vi.fn(async (dane: { tytul: string }) => ({ id: 'z-1', ...dane }))
     const rejestr = new RejestrNarzedziEcho().zarejestruj({ nazwa: 'create_task', opis: 'Utworzę zadanie', schematArgumentow: z.object({ tytul: z.string(), termin: z.string().optional() }), ryzyko: 'niskie', wykonaj: zapisz })
-    const provider: ProviderModeluEcho = { nazwa: 'test', tryb: 'pelny_agent', odpowiedz: async (zadanie) => zadanie.wynikiBiezacejTury.length
+    const provider: ProviderModeluEcho = { nazwa: 'test', tryb: 'pelny_agent', odpowiedz: async (zadanie) => (zadanie.wynikiBiezacejTury ?? []).length
       ? { typ: 'odpowiedz', tresc: 'Gotowe.' }
       : { typ: 'narzedzia', wywolania: [{ id: 'z', nazwa: 'create_task', argumenty: { tytul: 'ABC' } }] } }
     const agent = new AgentEcho({ provider, rejestr, wykonawca: new WykonawcaNarzedziEcho(rejestr, undefined, async () => undefined) })
@@ -37,7 +37,7 @@ describe('Kontrolowana autonomia Echo', () => {
   it('aktualizuje oczekującą akcję po korekcie „nie, deadline na sobotę”', async () => {
     const zapisz = vi.fn(async (dane: { tytul: string; termin?: string }) => ({ id: 'z-1', ...dane }))
     const rejestr = new RejestrNarzedziEcho().zarejestruj({ nazwa: 'create_task', opis: 'Utworzę zadanie', schematArgumentow: z.object({ tytul: z.string(), termin: z.string().optional() }), ryzyko: 'umiarkowane', wykonaj: zapisz })
-    const provider: ProviderModeluEcho = { nazwa: 'test', tryb: 'pelny_agent', odpowiedz: async (zadanie) => zadanie.wynikiBiezacejTury.length
+    const provider: ProviderModeluEcho = { nazwa: 'test', tryb: 'pelny_agent', odpowiedz: async (zadanie) => (zadanie.wynikiBiezacejTury ?? []).length
       ? { typ: 'odpowiedz', tresc: 'Gotowe.' }
       : { typ: 'narzedzia', wywolania: [{ id: 'z', nazwa: 'create_task', argumenty: { tytul: 'ABC' } }] } }
     const agent = new AgentEcho({ provider, rejestr, wykonawca: new WykonawcaNarzedziEcho(rejestr, undefined, async () => undefined), pobierzCzas: () => ({ teraz: '2026-09-06T12:00:00Z', dataLokalna: '2026-09-06', strefaCzasowa: 'Europe/Warsaw' }) })

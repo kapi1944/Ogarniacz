@@ -1520,6 +1520,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
   });
   rejestr.zarejestruj({
     nazwa: "find_free_slots",
+    rodzaj: "odczyt",
     opis: "Wyznacza wolne okna o podanej długości bez zapisu.",
     schematArgumentow: z.object({ data: dataIso, minuty: z.number().int().positive().max(720), odGodziny: godzina.optional() }),
     ryzyko: "niskie",
@@ -1572,6 +1573,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
   });
   rejestr.zarejestruj({
     nazwa: "daily_briefing",
+    rodzaj: "odczyt",
     opis: "Tworzy poranny albo wieczorny briefing wyłącznie z danych Ogarniacza.",
     schematArgumentow: z.object({ data: dataIso, rodzaj: z.enum(["poranny", "wieczorny"]), tryb: z.enum(["szybki", "swobodny"]) }),
     ryzyko: "niskie",

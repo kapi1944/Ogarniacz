@@ -48,7 +48,7 @@ type ZamiarZadaniaEcho =
   | { typ: "wyszukaj_zadania"; fraza: string }
   | { typ: "znajdz_do_edycji"; fraza: string; data: string; okreslenie: string }
   | { typ: "znajdz_do_wykonania"; fraza: string }
-  | { typ: "wykonaj_zadanie"; id: string; tytul: string }
+  | { typ: "wykonaj_zadanie"; id: string; tytul: string; opisPotwierdzenia?: string }
   | { typ: "znajdz_do_usuniecia"; fraza: string }
   | {
       typ: "edytuj_zadanie";
@@ -132,6 +132,10 @@ function uprosc(tekst: string): string {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/ł/g, "l");
+}
+
+function czyDokladneDopasowanieNazwyZadania(fraza: string, tytul: string): boolean {
+  return uprosc(fraza.trim()) === uprosc(tytul.trim());
 }
 
 function slowa(tekst: string): SlowoWypowiedzi[] {
@@ -1581,7 +1585,12 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
                   argumenty: { id: zamiar.id, zmiany: { termin: zamiar.data } },
                 }
               : zamiar.typ === "wykonaj_zadanie"
-                ? { id, nazwa: "complete_task", argumenty: { id: zamiar.id } }
+                ? {
+                    id,
+                    nazwa: "complete_task",
+                    argumenty: { id: zamiar.id },
+                    ...(zamiar.opisPotwierdzenia ? { opisPotwierdzenia: zamiar.opisPotwierdzenia } : {}),
+                  }
                 : zamiar.typ === "usun_zadanie"
                   ? { id, nazwa: "delete_task", argumenty: { id: zamiar.id } }
                   : {
@@ -1965,6 +1974,9 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
             typ: zamiar.typ === 'znajdz_do_wykonania' ? 'wykonaj_zadanie' : "usun_zadanie",
             id: znalezione[0].id,
             tytul: znalezione[0].tytul,
+            ...(zamiar.typ === 'znajdz_do_wykonania' && !czyDokladneDopasowanieNazwyZadania(zamiar.fraza, znalezione[0].tytul)
+              ? { opisPotwierdzenia: `Znalazłem „${znalezione[0].tytul}”. Oznaczyć jako wykonane?` }
+              : {}),
           });
     }
     if (zamiar.typ === "utworz_zadanie")

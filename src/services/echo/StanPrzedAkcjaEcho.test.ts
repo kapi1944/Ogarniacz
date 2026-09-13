@@ -46,11 +46,71 @@ describe('Echo sprawdza stan przed akcją', () => {
     const zadanie = utworzZadanie({ tytul: 'Raport kwartalny', opis: '', priorytet: 'normalny', szacowanyCzasMin: 30 })
     await pobierzRepozytorium('zadania').zapisz(zadanie)
     const agent = new AgentEcho()
-    const przed = await agent.obsluz('Oznacz raport kwartalny jako wykonane.')
-    expect(przed.wymagaPotwierdzenia).toBe(true)
-    const wynik = await agent.potwierdz(przed.akcjaDoPotwierdzenia!)
+    const wynik = await agent.obsluz('Oznacz raport kwartalny jako wykonane.')
+    expect(wynik.wymagaPotwierdzenia).not.toBe(true)
     expect(wynik.wyniki?.some((element) => element.nazwa === 'complete_task')).toBe(true)
     expect(await pobierzRepozytorium('zadania').pobierz(zadanie.id)).toMatchObject({ status: 'wykonane' })
+  })
+
+  it('wymaga potwierdzenia dla jednego fleksyjnego dopasowania i zapisuje dopiero po potwierdzeniu', async () => {
+    const zadanie = utworzZadanie({ tytul: 'Raport miesięczny', opis: '', priorytet: 'normalny', szacowanyCzasMin: 30 })
+    await pobierzRepozytorium('zadania').zapisz(zadanie)
+    const agent = new AgentEcho()
+
+    const przed = await agent.obsluz('Oznacz raportu miesięcznego jako wykonane.')
+
+    expect(przed.wymagaPotwierdzenia).toBe(true)
+    expect(przed.tekst).toContain('Raport miesięczny')
+    expect(przed.wyniki?.some((element) => element.nazwa === 'complete_task')).not.toBe(true)
+    expect(await pobierzRepozytorium('zadania').pobierz(zadanie.id)).toMatchObject({ status: 'otwarte' })
+
+    const po = await agent.potwierdz(przed.akcjaDoPotwierdzenia!)
+    expect(po.wyniki?.some((element) => element.nazwa === 'complete_task')).toBe(true)
+    expect(await pobierzRepozytorium('zadania').pobierz(zadanie.id)).toMatchObject({ status: 'wykonane' })
+  })
+
+  it('przy wielu wynikach czeka na wskazanie właściwego zadania', async () => {
+    const pierwszy = utworzZadanie({ tytul: 'Raport miesięczny', opis: '', priorytet: 'normalny', szacowanyCzasMin: 30 })
+    const drugi = utworzZadanie({ tytul: 'Raport kwartalny', opis: '', priorytet: 'normalny', szacowanyCzasMin: 30 })
+    await Promise.all([pobierzRepozytorium('zadania').zapisz(pierwszy), pobierzRepozytorium('zadania').zapisz(drugi)])
+    const agent = new AgentEcho()
+
+    const pytanie = await agent.obsluz('Oznacz raport jako wykonane.')
+
+    expect(pytanie.oczekujeDoprecyzowania).toBe(true)
+    expect(pytanie.wyniki?.some((element) => element.nazwa === 'complete_task')).not.toBe(true)
+    expect(await pobierzRepozytorium('zadania').pobierz(pierwszy.id)).toMatchObject({ status: 'otwarte' })
+    expect(await pobierzRepozytorium('zadania').pobierz(drugi.id)).toMatchObject({ status: 'otwarte' })
+
+    const numerKwartalnego = pytanie.tekst
+      .split('\n')
+      .find((linia) => linia.includes('Raport kwartalny'))
+      ?.match(/^(\d+)\./)?.[1]
+    expect(numerKwartalnego).toBeDefined()
+    const wynik = await agent.obsluz(numerKwartalnego!)
+    expect(wynik.wymagaPotwierdzenia).not.toBe(true)
+    expect(await pobierzRepozytorium('zadania').pobierz(pierwszy.id)).toMatchObject({ status: 'otwarte' })
+    expect(await pobierzRepozytorium('zadania').pobierz(drugi.id)).toMatchObject({ status: 'wykonane' })
+  })
+
+  it('automatycznie kończy zadanie wskazane wcześniej jednoznacznie w kontekście', async () => {
+    const zadanie = utworzZadanie({ tytul: 'Raport miesięczny', opis: '', priorytet: 'normalny', szacowanyCzasMin: 30 })
+    await pobierzRepozytorium('zadania').zapisz(zadanie)
+    const agent = new AgentEcho()
+    await agent.obsluz('Znajdź zadanie Raport miesięczny.')
+
+    const wynik = await agent.obsluz('Oznacz to jako wykonane.')
+
+    expect(wynik.wymagaPotwierdzenia).not.toBe(true)
+    expect(wynik.wyniki?.some((element) => element.nazwa === 'complete_task')).toBe(true)
+    expect(await pobierzRepozytorium('zadania').pobierz(zadanie.id)).toMatchObject({ status: 'wykonane' })
+  })
+
+  it('nie wywołuje complete_task, gdy wyszukiwanie nie zwraca wyników', async () => {
+    const wynik = await new AgentEcho().obsluz('Oznacz nieistniejący raport jako wykonane.')
+
+    expect(wynik.tekst).toContain('Nie znalazłem zadania')
+    expect(wynik.wyniki?.some((element) => element.nazwa === 'complete_task')).not.toBe(true)
   })
 
   it('przechowuje ograniczoną historię intencji i nie udostępnia jej do modyfikacji', () => {

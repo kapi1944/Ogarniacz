@@ -287,6 +287,12 @@ export class AgentEcho {
       return this.wykonajPlan(plan, false)
     }
     for (const wywolanie of decyzja.wywolania) {
+      if (wywolanie.opisPotwierdzenia) {
+        const narzedzie = this.rejestr.pobierz(wywolanie.nazwa)
+        const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie, ryzyko: narzedzie?.ryzyko ?? 'wysokie', opis: wywolanie.opisPotwierdzenia }
+        this.oczekujacaAkcja = structuredClone(akcja)
+        return { tekst: podsumujAkcje(akcja), ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
+      }
       this.onZmianaStanu?.('wykonuje')
       zapiszDiagnostykeEcho('wywolane narzedzie', { nazwa: wywolanie.nazwa })
       const wynik = await this.wykonawca.wykonaj(wywolanie)

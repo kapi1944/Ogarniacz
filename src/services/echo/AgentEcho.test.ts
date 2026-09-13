@@ -161,6 +161,11 @@ describe("Agent Echo", () => {
     );
   });
 
+  it.each(["daily_briefing", "find_free_slots"])("jawnie klasyfikuje %s jako odczyt", (nazwa) => {
+    const narzedzie = utworzDomyslnyRejestrNarzedziEcho().definicje().find((element) => element.nazwa === nazwa);
+    expect(narzedzie?.rodzaj).toBe("odczyt");
+  });
+
   it("lokalnie dodaje dwie pozycje zakupów i przypomnienie w jednej intencji", async () => {
     await Promise.all([
       baza.tabela("listyZakupow").clear(),
