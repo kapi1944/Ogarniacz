@@ -2,7 +2,9 @@
 
 ## Architektura
 
-Istniejący proces Node.js obsługuje build Reacta, konta, synchronizację, Echo i `GET /health` na `127.0.0.1:8787`. Port aplikacji nie jest dostępny z LAN ani Internetu. Tailscale Serve przekazuje prywatny adres `https://<urządzenie>.<tailnet>.ts.net` do loopbacku i automatycznie zapewnia certyfikat TLS. Dostęp mają tylko urządzenia dopuszczone do tailnetu; nie używamy publicznego Tailscale Funnel ani port forwardingu.
+Istniejący proces Node.js obsługuje build Reacta, konta, synchronizację, Echo i `GET /health` na porcie `8787`. Docelowo `HOST=127.0.0.1` ogranicza proces do loopbacku, a Tailscale Serve przekazuje prywatny adres `https://<urządzenie>.<tailnet>.ts.net` i automatycznie zapewnia certyfikat TLS. Dostęp mają tylko urządzenia dopuszczone do tailnetu; nie używamy publicznego Tailscale Funnel ani port forwardingu.
+
+Przejściowo, dopóki APK 1.0.8 używa `http://192.168.0.116:8787`, działająca instancja zachowuje `HOST=0.0.0.0` i dostęp z zaufanego LAN. Aktualizacja skryptem nie zmienia tej wartości. Migracja telefonu do Tailscale/HTTPS i późniejsze przełączenie na loopback są osobnym etapem.
 
 Ten wariant pasuje do prywatnej aplikacji jednej osoby: telefon i komputer instalują klienta Tailscale, a konto Ogarniacza nadal niezależnie egzekwuje rolę Właściciela/Edytora. Konfiguracja Serve z `--bg` jest trwała po restarcie urządzenia i `tailscale up`. Szczegóły: [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve) oraz [instalacja na Linux/Raspberry Pi OS](https://tailscale.com/docs/install/linux).
 
@@ -59,8 +61,14 @@ chmod +x scripts/deploy-rpi.sh
 ./scripts/deploy-rpi.sh
 ```
 
-Skrypt zatrzymuje się przy lokalnych zmianach, używa `git pull --ff-only`, instaluje zależności, buduje frontend i serwer, restartuje istniejącą usługę, sprawdza lokalny `/health` i pokazuje stan Serve. Nie wykonuje resetu Git ani nie usuwa danych.
+Skrypt zatrzymuje się wyłącznie przy zmianach w śledzonych plikach Git; ignorowane dane lokalne, w tym `data/`, nie blokują aktualizacji. Następnie używa `git pull --ff-only`, wykonuje `npm ci` i produkcyjny build frontendu oraz serwera.
+
+Przed restartem porównuje `deploy/rpi/ogarniacz.service` z `/etc/systemd/system/ogarniacz.service`. Zmienioną jednostkę instaluje z trybem `0644`, wykonuje `systemctl daemon-reload`, zapewnia `systemctl enable ogarniacz` i restartuje usługę. Healthcheck jest ponawiany maksymalnie 15 razy co sekundę. Sukces wymaga HTTP 200 oraz JSON-u z `status: ok`, `service: ogarniacz-api` i `database: connected`; po niepowodzeniu skrypt pokazuje ostatnie 100 wpisów `journalctl -u ogarniacz`.
+
+`/etc/ogarniacz/ogarniacz.env` nigdy nie jest tworzony ani nadpisywany podczas aktualizacji. Skrypt porównuje jedynie nazwy wymaganych wpisów z plikiem przykładowym i ostrzega o brakujących nazwach bez wypisywania wartości. `OWNER_BOOTSTRAP_TOKEN`, `SYNC_USER_ID` i `SYNC_ACCESS_KEY` pozostają opcjonalne i nie wywołują ostrzeżenia. Nowe wymagane wartości trzeba uzupełnić ręcznie. Skrypt nie wykonuje resetu Git, nie usuwa `data/ogarniacz.sqlite`, konfiguracji kont ani Tailscale.
+
+Obecne APK 1.0.8 łączy się bezpośrednio z `http://192.168.0.116:8787`, dlatego na działającej instancji pozostaw dotychczasowe `HOST=0.0.0.0`, dopóki telefon nie zostanie osobno zmigrowany do Tailscale/HTTPS. `deploy-rpi.sh` nie zmienia `HOST` ani żadnej innej wartości w live env. Wartość `HOST=127.0.0.1` z przykładu dotyczy docelowej konfiguracji dostępnej wyłącznie przez Tailscale Serve.
 
 ## Router i firewall
 
-Nie konfiguruj port forwardingu i nie otwieraj `8787` w UFW/routerze. `HOST=127.0.0.1` blokuje surowy port także wtedy, gdy reguła firewalla byłaby zbyt szeroka. Tailscale Serve oraz reguły dostępu tailnetu są jedyną zewnętrzną drogą do aplikacji.
+Nie konfiguruj port forwardingu i nie udostępniaj `8787` poza zaufanym LAN. Podczas przejściowego `HOST=0.0.0.0` ogranicz port regułami firewalla do sieci lokalnej wymaganej przez APK 1.0.8. Po migracji telefonu ustawienie `HOST=127.0.0.1` zablokuje surowy port, a Tailscale Serve oraz reguły dostępu tailnetu staną się jedyną zewnętrzną drogą do aplikacji.
