@@ -1,21 +1,22 @@
 # Otwarte decyzje
 
-Poniższe decyzje celowo nie zostały zamknięte. Obecne rozwiązania są lokalne i wymienne.
+Poniższe decyzje pozostają otwarte po wdrożeniu backendu, kont, synchronizacji, Androida oraz OTA.
 
-1. **Finalny układ „Dzisiaj”** — v1 stosuje kolejność: Teraz → Oś dnia → Reakcje → Echo. Układ może zostać zmieniony bez zmiany modeli.
-2. **Konflikty synchronizacji** — istnieją `updatedAt` i tombstones; polityka merge nie została arbitralnie wybrana.
-3. **Finalny backend** — brak backendu; granicę wyznaczają `DostawcaSynchronizacji` i `RepozytoriumZdalne`.
-4. **Logowanie i odzyskiwanie dostępu** — brak konta w local-first v1.
-5. **Energia i bufory planera** — v1 używa deterministycznego limitu 75%, 10-minutowych odstępów i domyślnych 30 minut bez estymacji.
-6. **Automatyczne kategorie pamięci Echo** — v1 pozwala wyłącznie na wpis ręczny lub jawnie zaproponowany.
-7. **Poziomy proaktywności i cisza nocna** — v1 ma przełącznik proaktywności i pełne wyciszenie.
-8. **Finalne STT/TTS i słowo wybudzające** — v1 używa opcjonalnych Web Speech API z fallbackiem tekstowym.
-9. **Platforma Smart Home** — nie wybrano i nie dodano zależności.
-10. **Poczta, kalendarz, mapy i inne integracje** — brak integracji i kluczy API.
-11. **Ewentualna rola tylko do odczytu** — v1 ma wyłącznie Właściciela i Edytora. Odczyt bez edycji jest zakresem grantu, nie trzecią rolą.
+1. **Finalny układ „Dzisiaj”** — obecny układ może być dalej strojony bez zmiany modeli.
+2. **UX konfliktów synchronizacji** — serwer wykrywa konflikt wersji i klient zachowuje obie wersje; otwarty pozostaje docelowy sposób prezentacji i ręcznego scalania.
+3. **Docelowa infrastruktura backendu** — obecnie działa Node.js + SQLite na Raspberry Pi przez prywatny HTTPS/Tailscale. Przyszła migracja nie powinna zmieniać kontraktów domenowych.
+4. **Dalsza polityka kont i współdzielenia** — Właściciel, Edytor, zaproszenia, odzyskiwanie dostępu i granty są wdrożone; otwarta pozostaje potrzeba dodatkowych ról lub dokładniejszych grantów.
+5. **Energia i bufory planera** — obecnie używany jest deterministyczny limit 75%, odstępy oraz wartości domyślne bez pełnego modelu energii.
+6. **Automatyczne kategorie pamięci Echo** — docelowa automatyzacja pamięci nie została jeszcze ustalona.
+7. **Poziomy proaktywności i cisza nocna** — istnieją podstawowe mechanizmy, ale ich finalna polityka pozostaje otwarta.
+8. **Finalne STT/TTS i słowo wybudzające** — mechanizmy głosowe działają warstwowo; docelowy wake word wymaga prywatnej konfiguracji Picovoice.
+9. **Platforma Smart Home** — nie wybrano docelowej platformy.
+10. **Poczta, kalendarz, mapy i inne integracje** — pozostają późniejszym zakresem.
+11. **Rola tylko do odczytu** — obecnie odczyt bez edycji realizowany jest przez zakres grantu, a nie osobną trzecią rolę.
 
 ## Ograniczenia platformowe
 
 - Notification API w PWA nie gwarantuje alarmu po całkowitym zamknięciu przeglądarki.
-- Lokalny podgląd Edytora nie jest uwierzytelnieniem ani bezpiecznym współdzieleniem.
-- Synchronizacja, Android i Tauri wymagają przyszłej warstwy platformowej.
+- Zachowanie alarmów i pracy w tle może zależeć od producenta i konfiguracji Androida.
+- Wake word wymaga poprawnej natywnej konfiguracji i prywatnych danych Picovoice.
+- Tauri nie jest obecnie wdrożone.
