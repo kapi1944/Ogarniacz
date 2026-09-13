@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { utworzMetadane } from '../domain/fabryki'
 import type { DziennikLeku, Lek } from '../domain/typy'
-import { dawkiZaplanowaneNaDzien, generujDawkiDnia, graniceLokalnegoDnia, proponujGodzinyDawek, przewidywanaDataWyczerpania, zapiszStatusDawki } from './LekiService'
+import { dawkiZaplanowaneNaDzien, generujDawkiDnia, graniceLokalnegoDnia, idWystapieniaDawki, proponujGodzinyDawek, przewidywanaDataWyczerpania, zapiszStatusDawki } from './LekiService'
 
 const lek: Lek = {
   ...utworzMetadane('lek-1'),
@@ -66,6 +66,38 @@ describe('leki', () => {
 
       const interwalowy: Lek = { ...lek, id: 'lek-zmiana-czasu', trybDawkowania: 'co_x_godzin', dataOd: '2026-03-29', interwalGodzin: 6, pierwszaGodzina: '00:00', dawki: [{ id: 'interwal-zmiana-czasu', godzina: '00:00', ilosc: 1 }] }
       expect(dawkiZaplanowaneNaDzien(interwalowy, '2026-03-29').map((dawka) => dawka.godzina)).toEqual(['00:00', '07:00', '13:00', '19:00'])
+    } finally {
+      if (poprzedniaStrefa === undefined) delete srodowisko.TZ
+      else srodowisko.TZ = poprzedniaStrefa
+    }
+  })
+
+  it('rozdziela dwie dawki 02:00 podczas jesiennej zmiany czasu', () => {
+    const srodowisko = (globalThis as typeof globalThis & { process: { env: Record<string, string | undefined> } }).process.env
+    const poprzedniaStrefa = srodowisko.TZ
+    srodowisko.TZ = 'Europe/Warsaw'
+    try {
+      const interwalowy: Lek = { ...lek, id: 'lek-jesienna-zmiana-czasu', trybDawkowania: 'co_x_godzin', dataOd: '2026-10-25', interwalGodzin: 1, pierwszaGodzina: '00:00', dawki: [{ id: 'interwal-jesien', godzina: '00:00', ilosc: 1 }] }
+      const dawki = generujDawkiDnia([interwalowy], [], '2026-10-25')
+      const dawki0200 = dawki.filter((dawka) => dawka.planowanaGodzina === '02:00')
+      expect(dawki).toHaveLength(25)
+      expect(dawki0200).toHaveLength(2)
+      expect(dawki0200[0]!.idWystapienia).not.toBe(dawki0200[1]!.idWystapienia)
+
+      const wpisPierwszej0200 = zapiszStatusDawki(dawki0200[0]!, 'zazyte')
+      const poPierwszymZapisie = generujDawkiDnia([interwalowy], [wpisPierwszej0200], '2026-10-25').filter((dawka) => dawka.planowanaGodzina === '02:00')
+      expect(poPierwszymZapisie.map((dawka) => dawka.status)).toEqual(['zazyte', 'oczekuje'])
+
+      const wpisDrugiej0200 = zapiszStatusDawki(poPierwszymZapisie[1]!, 'pominiete')
+      const statusy = (wpisy: DziennikLeku[]) => generujDawkiDnia([interwalowy], wpisy, '2026-10-25').filter((dawka) => dawka.planowanaGodzina === '02:00').map((dawka) => dawka.status)
+      expect(statusy([wpisPierwszej0200, wpisDrugiej0200])).toEqual(['zazyte', 'pominiete'])
+      expect(statusy([wpisDrugiej0200, wpisPierwszej0200])).toEqual(['zazyte', 'pominiete'])
+
+      const wpisLegacy: DziennikLeku = { ...utworzMetadane('legacy-0200'), lekId: interwalowy.id, data: '2026-10-25', planowanaGodzina: '02:00', status: 'zazyte' }
+      expect(statusy([wpisLegacy]).filter((status) => status === 'zazyte')).toHaveLength(1)
+
+      const wpisWadliwegoModelu: DziennikLeku = { ...utworzMetadane(idWystapieniaDawki(interwalowy.id, '2026-10-25', 'interwal-jesien')), lekId: interwalowy.id, dawkaId: 'interwal-jesien', data: '2026-10-25', planowanaGodzina: '02:00', status: 'pominiete' }
+      expect(statusy([wpisWadliwegoModelu]).filter((status) => status === 'pominiete')).toHaveLength(1)
     } finally {
       if (poprzedniaStrefa === undefined) delete srodowisko.TZ
       else srodowisko.TZ = poprzedniaStrefa

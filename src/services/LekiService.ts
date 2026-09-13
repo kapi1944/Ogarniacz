@@ -17,6 +17,10 @@ interface ZaplanowanaDawka {
   kluczWystapienia?: string
 }
 
+interface ZaplanowaneWystapienie extends ZaplanowanaDawka {
+  idWystapienia: string
+}
+
 function poprawnaGodzina(godzina: string): boolean {
   return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(godzina)
 }
@@ -123,21 +127,50 @@ export function przewidywanaDataWyczerpania(lek: Lek, odDnia: string): string | 
   return undefined
 }
 
+function dopasujWpisyDziennika(
+  lek: Lek,
+  data: string,
+  wystapienia: readonly ZaplanowaneWystapienie[],
+  wpisy: readonly DziennikLeku[],
+): Map<string, DziennikLeku> {
+  const niewykorzystane = new Set(wpisy.filter((wpis) => wpis.lekId === lek.id && wpis.data === data))
+  const dopasowane = new Map<string, DziennikLeku>()
+
+  for (const wystapienie of wystapienia) {
+    const wpis = [...niewykorzystane].find((element) => element.id === wystapienie.idWystapienia)
+    if (!wpis) continue
+    dopasowane.set(wystapienie.idWystapienia, wpis)
+    niewykorzystane.delete(wpis)
+  }
+
+  for (const wystapienie of wystapienia) {
+    if (dopasowane.has(wystapienie.idWystapienia)) continue
+    const { dawka, kluczWystapienia } = wystapienie
+    const wadliweIdInterwalowe = idWystapieniaDawki(lek.id, data, dawka.id)
+    const wpis = [...niewykorzystane].find((element) => {
+      if (element.planowanaGodzina !== dawka.godzina) return false
+      if (!element.dawkaId) return true
+      return Boolean(kluczWystapienia) && element.dawkaId === dawka.id && element.id === wadliweIdInterwalowe
+    })
+    if (!wpis) continue
+    dopasowane.set(wystapienie.idWystapienia, wpis)
+    niewykorzystane.delete(wpis)
+  }
+
+  return dopasowane
+}
+
 export function generujDawkiDnia(leki: Lek[], wpisy: DziennikLeku[], data: string): DawkaDnia[] {
-  const wpisyDnia = wpisy.filter((wpis) => wpis.data === data)
   return leki
     .filter((lek) => lek.aktywny && !lek.usunietoAt && czyLekZaplanowanyNaDzien(lek, data))
-    .flatMap((lek) => zaplanowaneDawki(lek, data).map(({ dawka, kluczWystapienia }) => {
-      const idWystapienia = idWystapieniaDawki(lek.id, data, dawka.id, kluczWystapienia)
-      const interwalowa = Boolean(kluczWystapienia)
-      const wpis = wpisyDnia.find((element) => element.lekId === lek.id && (
-        element.id === idWystapienia
-        || (!element.dawkaId && element.planowanaGodzina === dawka.godzina)
-        || (interwalowa && element.dawkaId === dawka.id && element.planowanaGodzina === dawka.godzina)
-        || (!interwalowa && element.dawkaId === dawka.id)
-      ))
-      return { idWystapienia, lek, dawka, data, planowanaGodzina: dawka.godzina, status: wpis?.status ?? 'oczekuje', wpis }
-    }))
+    .flatMap((lek) => {
+      const wystapienia = zaplanowaneDawki(lek, data).map(({ dawka, kluczWystapienia }) => ({ dawka, kluczWystapienia, idWystapienia: idWystapieniaDawki(lek.id, data, dawka.id, kluczWystapienia) }))
+      const dopasowane = dopasujWpisyDziennika(lek, data, wystapienia, wpisy)
+      return wystapienia.map(({ dawka, idWystapienia }) => {
+        const wpis = dopasowane.get(idWystapienia)
+        return { idWystapienia, lek, dawka, data, planowanaGodzina: dawka.godzina, status: wpis?.status ?? 'oczekuje', wpis }
+      })
+    })
     .sort((a, b) => a.planowanaGodzina.localeCompare(b.planowanaGodzina) || a.idWystapienia.localeCompare(b.idWystapienia))
 }
 

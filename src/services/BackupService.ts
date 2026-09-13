@@ -342,6 +342,24 @@ export function odtworzWartoscZTransportu(wartosc: unknown): unknown {
   return wartosc
 }
 
+function normalizujLekZBackupu(rekord: RekordBackupu): RekordBackupu {
+  if (!Array.isArray(rekord.dawki)) return rekord
+  return {
+    ...rekord,
+    dawki: rekord.dawki.map((dawka) => {
+      if (!dawka || typeof dawka !== 'object' || Array.isArray(dawka)) return dawka
+      const znormalizowana = { ...dawka } as RekordBackupu
+      if (znormalizowana.ilosc === 0) delete znormalizowana.ilosc
+      return znormalizowana
+    }),
+  }
+}
+
+function normalizujRekordDoPrzywrocenia(tabela: NazwaTabeli, rekord: RekordBackupu): RekordBackupu {
+  const odtworzony = odtworzWartoscZTransportu(rekord) as RekordBackupu
+  return tabela === 'leki' ? normalizujLekZBackupu(odtworzony) : odtworzony
+}
+
 function kanonizuj(wartosc: unknown): string {
   if (wartosc === null || typeof wartosc !== 'object') return JSON.stringify(wartosc) ?? 'null'
   if (Array.isArray(wartosc)) return `[${wartosc.map(kanonizuj).join(',')}]`
@@ -660,7 +678,7 @@ export async function przywrocBackup(
       const rekordy = daneSekcji[tabela]
       daneDoZapisu.set(tabela, tabela === 'ustawienia'
         ? rekordy.map((rekord) => normalizujUstawienia(rekord) as unknown as RekordBackupu)
-        : rekordy.map((rekord) => odtworzWartoscZTransportu(rekord) as RekordBackupu))
+        : rekordy.map((rekord) => normalizujRekordDoPrzywrocenia(tabela, rekord)))
     }
   }
 

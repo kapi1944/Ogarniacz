@@ -288,6 +288,29 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     expect(await baza.tabela('wizyty').get(wizyta.id)).toMatchObject({ data: wizyta.data, godzina: wizyta.godzina })
   })
 
+  it('usuwa sztuczną ilość zero ze starego backupu leku', async () => {
+    const lek: Lek = {
+      ...utworzMetadane('lek-backup-v12'),
+      nazwa: 'Lek ze starego backupu',
+      dawkaInstrukcja: 'Uzupełnij ilość',
+      godziny: ['08:00', '20:00'],
+      dawki: [
+        { id: 'dawka-bez-ilosci', godzina: '08:00', ilosc: 0 },
+        { id: 'dawka-z-iloscia', godzina: '20:00', ilosc: 2 },
+      ],
+      aktywny: true,
+    }
+    await pobierzRepozytorium('leki').zapisz(lek)
+    const backup = await przygotuj(await utworzBackup(['leki'], () => STALA_DATA))
+    await baza.tabela('leki').clear()
+
+    await przywrocBackup(backup, ['leki'])
+
+    const przywrocony = await baza.tabela('leki').get(lek.id)
+    expect(przywrocony?.dawki?.[0]).not.toHaveProperty('ilosc')
+    expect(przywrocony?.dawki?.[1]?.ilosc).toBe(2)
+  })
+
   it('przenosi dokumenty, Bloby i pełne metadane encji bez zapisu Base64 w IndexedDB', async () => {
     const dokument: Dokument = {
       id: 'dokument-1',
