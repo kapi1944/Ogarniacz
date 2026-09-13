@@ -34,3 +34,5 @@ artifacts/
 
 # Lokalne kopie tworzone przez patche Ogarniacza
 .patch-backups/
+
+*.bak
