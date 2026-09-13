@@ -279,8 +279,6 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
   }
 }
 
-export const zaproponujPlan = generujPlan
-
 export function znajdzWolneOkna(dane: DanePlanera, wymaganeMinuty: number, limit = 3): WolneOknoPlanera[] {
   if (!Number.isFinite(wymaganeMinuty) || wymaganeMinuty <= 0) return []
   const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }

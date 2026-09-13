@@ -1,6 +1,6 @@
 import type { TrybTerminuElementu } from './elementyOgarniacza'
 
-export function poprawnaGodzinaDeadline(wartosc: unknown): wartosc is string {
+function poprawnaGodzinaDeadline(wartosc: unknown): wartosc is string {
   return typeof wartosc === 'string'
     && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(wartosc)
 }
