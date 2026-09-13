@@ -173,50 +173,13 @@ jobs:
             --bundle-version "$WEB_OTA_BUNDLE_VERSION"
           )
           node scripts/web-ota-manifest.mjs "${argumenty[@]}"
-      - name: DIAGNOSTYKA uprawnien (tymczasowe)
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -uo pipefail
-          echo "===== 1. gh auth status ====="
-          gh auth status 2>&1 || true
-          echo ""
-          echo "===== 2. Jakie uprawnienia widzi API? ====="
-          gh api "repos/${{ github.repository }}" --jq '.permissions' 2>&1 || true
-          echo ""
-          echo "===== 3. TEST A: utworz draft release przez gh api ====="
-          TEST_TAG="diag-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          if gh api "repos/${{ github.repository }}/releases" -X POST \
-              -f "tag_name=$TEST_TAG" \
-              -f "name=DIAG test" \
-              -f "body=test" \
-              -f "draft=true" 2>&1; then
-            echo ">>> SUKCES A: gh api utworzyl draft release."
-            gh api "repos/${{ github.repository }}/releases/tags/$TEST_TAG" -X DELETE 2>&1 || true
-          else
-            echo ">>> PORAZKA A: gh api NIE utworzyl release."
-          fi
-          echo ""
-          echo "===== 4. TEST B: utworz release przez gh release create ====="
-          TEST_TAG2="diag2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          if gh release create "$TEST_TAG2" --draft --title "DIAG2" --notes "test" 2>&1; then
-            echo ">>> SUKCES B: gh release create zadzialal."
-            gh release delete "$TEST_TAG2" --yes 2>&1 || true
-          else
-            echo ">>> PORAZKA B: gh release create zwrocil blad (jak w produkcji)."
-          fi
-          echo ""
-          echo "===== 5. Zmienne srodowiskowe ====="
-          echo "GITHUB_TOKEN: $([ -n "${GITHUB_TOKEN:-}" ] && echo obecny || echo BRAK)"
-          echo "GH_TOKEN: $([ -n "${GH_TOKEN:-}" ] && echo obecny || echo BRAK)"
 
       - name: Opublikuj ZIP
         shell: bash
         run: |
           set -euo pipefail
           if ! gh release view web-ota >/dev/null 2>&1; then
-            gh release create web-ota --target "${{ needs.ocena.outputs.commit_bundla }}" --title "Web OTA" --notes "Staly kanal podpisanych szybkich aktualizacji Ogarniacza."
+            gh release create web-ota --draft --target "${{ needs.ocena.outputs.commit_bundla }}" --title "Web OTA" --notes "Staly kanal podpisanych szybkich aktualizacji Ogarniacza."
           fi
           gh release upload web-ota artifacts/web-ota/web-ota.zip --clobber
 
@@ -231,6 +194,19 @@ jobs:
           gh release download web-ota --pattern web-ota.zip --pattern web-ota.json --dir artifacts/weryfikacja --clobber
           cmp artifacts/web-ota/web-ota.zip artifacts/weryfikacja/web-ota.zip
           cmp artifacts/web-ota/web-ota.json artifacts/weryfikacja/web-ota.json
+      - name: Opublikuj release (draft -> publiczny)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$(gh release view web-ota --json isDraft --jq .isDraft)" = "true" ]; then
+            RELEASE_ID=$(gh release view web-ota --json id --jq .id)
+            gh api "repos/${{ github.repository }}/releases/$RELEASE_ID" -X PATCH -F draft=false
+            echo "Release web-ota opublikowany (draft=false)."
+          else
+            echo "Release web-ota nie jest draftem - nic nie zmieniam."
+          fi
 
       - name: Zachowaj kopie diagnostyczna
         uses: actions/upload-artifact@v4
