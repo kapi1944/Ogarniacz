@@ -179,7 +179,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh release view web-ota >/dev/null 2>&1; then
-            gh release create web-ota --draft --target "${{ needs.ocena.outputs.commit_bundla }}" --title "Web OTA" --notes "Staly kanal podpisanych szybkich aktualizacji Ogarniacza."
+            gh release create web-ota --draft --title "Web OTA" --notes "Staly kanal podpisanych szybkich aktualizacji Ogarniacza."
           fi
           gh release upload web-ota artifacts/web-ota/web-ota.zip --clobber
 
