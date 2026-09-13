@@ -173,6 +173,43 @@ jobs:
             --bundle-version "$WEB_OTA_BUNDLE_VERSION"
           )
           node scripts/web-ota-manifest.mjs "${argumenty[@]}"
+      - name: DIAGNOSTYKA uprawnien (tymczasowe)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          echo "===== 1. gh auth status ====="
+          gh auth status 2>&1 || true
+          echo ""
+          echo "===== 2. Jakie uprawnienia widzi API? ====="
+          gh api "repos/${{ github.repository }}" --jq '.permissions' 2>&1 || true
+          echo ""
+          echo "===== 3. TEST A: utworz draft release przez gh api ====="
+          TEST_TAG="diag-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if gh api "repos/${{ github.repository }}/releases" -X POST \
+              -f "tag_name=$TEST_TAG" \
+              -f "name=DIAG test" \
+              -f "body=test" \
+              -f "draft=true" 2>&1; then
+            echo ">>> SUKCES A: gh api utworzyl draft release."
+            gh api "repos/${{ github.repository }}/releases/tags/$TEST_TAG" -X DELETE 2>&1 || true
+          else
+            echo ">>> PORAZKA A: gh api NIE utworzyl release."
+          fi
+          echo ""
+          echo "===== 4. TEST B: utworz release przez gh release create ====="
+          TEST_TAG2="diag2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if gh release create "$TEST_TAG2" --draft --title "DIAG2" --notes "test" 2>&1; then
+            echo ">>> SUKCES B: gh release create zadzialal."
+            gh release delete "$TEST_TAG2" --yes 2>&1 || true
+          else
+            echo ">>> PORAZKA B: gh release create zwrocil blad (jak w produkcji)."
+          fi
+          echo ""
+          echo "===== 5. Zmienne srodowiskowe ====="
+          echo "GITHUB_TOKEN: $([ -n "${GITHUB_TOKEN:-}" ] && echo obecny || echo BRAK)"
+          echo "GH_TOKEN: $([ -n "${GH_TOKEN:-}" ] && echo obecny || echo BRAK)"
 
       - name: Opublikuj ZIP
         shell: bash
