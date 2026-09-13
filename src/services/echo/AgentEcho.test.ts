@@ -736,8 +736,11 @@ describe("Agent Echo", () => {
         }),
       });
 
-      const odpowiedz = await agent.obsluz(wypowiedz);
+      const pytanie = await agent.obsluz(wypowiedz);
 
+      expect(pytanie.tekst).toBe("O której?");
+      expect(utworz).not.toHaveBeenCalled();
+      const odpowiedz = await agent.obsluz("O 8.");
       expect(utworz).toHaveBeenCalledOnce();
       const argumenty = utworz.mock.calls[0][0];
       expect(argumenty.tytul.toLocaleLowerCase("pl-PL")).toContain("mechanika");
@@ -761,7 +764,7 @@ describe("Agent Echo", () => {
       }),
     });
 
-    await agent.obsluz("Przypomnij mi jutro rano zadzwonić do mechanika.");
+    await agent.obsluz("Przypomnij mi jutro o 8 zadzwonić do mechanika.");
     const odpowiedz = await agent.obsluz("Jednak przełóż to na czwartek.");
 
     const zapisane = await pobierzRepozytorium("przypomnienia").lista();
@@ -791,28 +794,33 @@ describe("Agent Echo", () => {
     ).toBe("Telefon do mechanika");
 
     const trzecia = await agent.obsluz("Jutro rano.");
-    expect(trzecia.tekst).toMatch(/^Jasne, dodałem/);
+    expect(trzecia.tekst).toBe("O której?");
+    expect(utworz).not.toHaveBeenCalled();
+
+    const czwarta = await agent.obsluz("O 8.");
+    expect(czwarta.tekst).toMatch(/^Jasne, dodałem/);
     expect(utworz).toHaveBeenCalledOnce();
     expect(agent.kontekst.migawka().oczekujaceDoprecyzowanie).toBeUndefined();
-    expect(agent.kontekst.migawka().tury).toHaveLength(6);
+    expect(agent.kontekst.migawka().tury).toHaveLength(8);
   });
 
   it("wybiera ostatnią korektę czasu z tej samej wypowiedzi", async () => {
     const { agent, utworz } = utworzAgentaRozmowy();
 
     await agent.obsluz(
-      "Dodaj to na jutro rano… nie, czekaj, na czwartek: telefon do mechanika.",
+      "Dodaj to na jutro rano… nie, czekaj, na czwartek o 9: telefon do mechanika.",
     );
 
     const czas = new Date(utworz.mock.calls[0][0].czas);
     expect(czas.getMonth()).toBe(8);
     expect(czas.getDate()).toBe(3);
+    expect(czas.getHours()).toBe(9);
     expect(utworz.mock.calls[0][0].tytul).toBe("Telefon do mechanika");
   });
 
   it("rozumie „godzinę później” i przywraca poprzedni termin korektą", async () => {
     const { agent, przeloz } = utworzAgentaRozmowy();
-    await agent.obsluz("Dodaj mi jutro rano telefon do mechanika.");
+    await agent.obsluz("Dodaj mi jutro o 8 telefon do mechanika.");
     await agent.obsluz("Właściwie przełóż to na czwartek.");
     await agent.obsluz("Godzinę później.");
 

@@ -20,27 +20,31 @@ describe('Kontrolowana autonomia Echo', () => {
     expect((await agent.obsluz('Jutro rano.')).tekst).toBe('O której?')
   })
 
-  it('nie wymyśla daty, godziny ani deadline’u zadania i wymaga potwierdzenia zapisu', async () => {
+  it('nie wymyśla daty, godziny ani deadline’u zadania', async () => {
     const zapisz = vi.fn(async (dane: { tytul: string }) => ({ id: 'z-1', ...dane }))
     const rejestr = new RejestrNarzedziEcho().zarejestruj({ nazwa: 'create_task', opis: 'Utworzę zadanie', schematArgumentow: z.object({ tytul: z.string(), termin: z.string().optional() }), ryzyko: 'niskie', wykonaj: zapisz })
-    const provider: ProviderModeluEcho = { nazwa: 'test', tryb: 'pelny_agent', odpowiedz: async () => ({ typ: 'narzedzia', wywolania: [{ id: 'z', nazwa: 'create_task', argumenty: { tytul: 'ABC' } }] }) }
+    const provider: ProviderModeluEcho = { nazwa: 'test', tryb: 'pelny_agent', odpowiedz: async (zadanie) => zadanie.wynikiBiezacejTury.length
+      ? { typ: 'odpowiedz', tresc: 'Gotowe.' }
+      : { typ: 'narzedzia', wywolania: [{ id: 'z', nazwa: 'create_task', argumenty: { tytul: 'ABC' } }] } }
     const agent = new AgentEcho({ provider, rejestr, wykonawca: new WykonawcaNarzedziEcho(rejestr, undefined, async () => undefined) })
-    const przed = await agent.obsluz('Dodaj zadanie ABC.')
-    expect(przed.tekst).toContain('Zapisać?')
-    expect(przed.tekst).not.toContain('termin:')
-    expect(zapisz).not.toHaveBeenCalled()
-    await agent.obsluz('Tak.')
+    const odpowiedz = await agent.obsluz('Dodaj zadanie ABC.')
+    expect(odpowiedz.tekst).toBe('Gotowe.')
+    expect(odpowiedz.wymagaPotwierdzenia).toBeUndefined()
+    expect(zapisz).toHaveBeenCalledOnce()
     expect(zapisz).toHaveBeenCalledWith({ tytul: 'ABC' })
   })
 
   it('aktualizuje oczekującą akcję po korekcie „nie, deadline na sobotę”', async () => {
     const zapisz = vi.fn(async (dane: { tytul: string; termin?: string }) => ({ id: 'z-1', ...dane }))
-    const rejestr = new RejestrNarzedziEcho().zarejestruj({ nazwa: 'create_task', opis: 'Utworzę zadanie', schematArgumentow: z.object({ tytul: z.string(), termin: z.string().optional() }), ryzyko: 'niskie', wykonaj: zapisz })
-    const provider: ProviderModeluEcho = { nazwa: 'test', tryb: 'pelny_agent', odpowiedz: async () => ({ typ: 'narzedzia', wywolania: [{ id: 'z', nazwa: 'create_task', argumenty: { tytul: 'ABC' } }] }) }
+    const rejestr = new RejestrNarzedziEcho().zarejestruj({ nazwa: 'create_task', opis: 'Utworzę zadanie', schematArgumentow: z.object({ tytul: z.string(), termin: z.string().optional() }), ryzyko: 'umiarkowane', wykonaj: zapisz })
+    const provider: ProviderModeluEcho = { nazwa: 'test', tryb: 'pelny_agent', odpowiedz: async (zadanie) => zadanie.wynikiBiezacejTury.length
+      ? { typ: 'odpowiedz', tresc: 'Gotowe.' }
+      : { typ: 'narzedzia', wywolania: [{ id: 'z', nazwa: 'create_task', argumenty: { tytul: 'ABC' } }] } }
     const agent = new AgentEcho({ provider, rejestr, wykonawca: new WykonawcaNarzedziEcho(rejestr, undefined, async () => undefined), pobierzCzas: () => ({ teraz: '2026-09-06T12:00:00Z', dataLokalna: '2026-09-06', strefaCzasowa: 'Europe/Warsaw' }) })
     await agent.obsluz('Dodaj ABC')
     const poprawiona = await agent.obsluz('Nie, ustaw deadline na sobotę.')
     expect(poprawiona.tekst).toContain('2026-09-12')
+    expect(zapisz).not.toHaveBeenCalled()
     await agent.obsluz('Tak')
     expect(zapisz).toHaveBeenCalledWith({ tytul: 'ABC', termin: '2026-09-12' })
   })
