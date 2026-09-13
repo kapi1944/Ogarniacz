@@ -7,13 +7,13 @@ import {
   utworzTagApkDlaKoduWersji,
 } from './web-ota-zgodnosc.mjs'
 
-test('konfiguracja bootstrapowa wymaga APK 1.0.7', async () => {
+test('konfiguracja bootstrapowa wymaga APK 1.0.8', async () => {
   const tresc = await readFile(SCIEZKA_ZGODNOSCI_WEB_OTA, 'utf8')
-  assert.equal(odczytajMinNativeVersionCode(tresc), 1_000_007)
+  assert.equal(odczytajMinNativeVersionCode(tresc), 1_000_008)
 })
 
 test('punkt zgodnosci wskazuje tag wydanego APK', () => {
-  assert.equal(utworzTagApkDlaKoduWersji(1_000_007), 'v1.0.7')
+  assert.equal(utworzTagApkDlaKoduWersji(1_000_008), 'v1.0.8')
 })
 
 test('generator i workflow nie maja drugiego zrodla minNativeVersionCode', async () => {
@@ -26,6 +26,8 @@ test('generator i workflow nie maja drugiego zrodla minNativeVersionCode', async
   assert.match(workflow, /config\/web-ota-compatibility\.json/)
   assert.doesNotMatch(workflow, /min_native_version_code|github\.event\.before/)
   assert.match(workflow, /git diff --name-only -z "\$tag_zgodnego_apk" "\$GITHUB_SHA"/)
+  assert.match(workflow, /commit_bundla="\$\(git rev-list -n 1 "\$tag_zgodnego_apk"\)"/)
+  assert.match(workflow, /--commit-sha "\$\{\{ needs\.ocena\.outputs\.commit_bundla \}\}"/)
   assert.ok(
     workflow.indexOf('refs/tags/$tag_zgodnego_apk') < workflow.indexOf('--wymuszenie'),
     'force_web_ota nie moze omijac wymaganego tagu APK',
