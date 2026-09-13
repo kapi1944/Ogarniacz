@@ -36,3 +36,5 @@ artifacts/
 .patch-backups/
 
 *.bak
+
+.env.production
