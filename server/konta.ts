@@ -116,10 +116,14 @@ function normalizujEmail(wartosc: unknown): string {
 }
 
 function hashujHaslo(haslo: string): string {
-  if (haslo.length < 12 || haslo.length > 200) throw new Error('Hasło musi mieć od 12 do 200 znaków.')
+  if (haslo.length < 8 || haslo.length > 200) throw new Error('Hasło musi mieć od 8 do 200 znaków.')
   const sol = randomBytes(16)
   const hash = scryptSync(haslo, sol, 64, { N: 16_384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 })
   return `scrypt$16384$8$1$${sol.toString('base64url')}$${hash.toString('base64url')}`
+}
+
+function czyIstniejeKontoWlasciciela(baza: DatabaseSync): boolean {
+  return Boolean(baza.prepare("SELECT 1 FROM czlonkostwa WHERE rola = 'wlasciciel' LIMIT 1").get())
 }
 
 function sprawdzHaslo(haslo: string, zapisanyHash: string): boolean {
@@ -277,7 +281,18 @@ export async function obsluzKonta(
       return true
     }
 
+    if (zadanie.method === 'GET' && sciezka === '/api/auth/bootstrap/status') {
+      odpowiedzJson(odpowiedz, 200, {
+        dostepny: Boolean(konfiguracja.ownerBootstrapToken) && !czyIstniejeKontoWlasciciela(baza),
+      })
+      return true
+    }
+
     if (zadanie.method === 'POST' && sciezka === '/api/auth/bootstrap') {
+      if (czyIstniejeKontoWlasciciela(baza)) {
+        odpowiedzJson(odpowiedz, 409, { error: 'Konto Właściciela już istnieje.' })
+        return true
+      }
       if (czyZablokowaneLogowanie(zadanie)) {
         odpowiedzLimitu(odpowiedz)
         return true
@@ -290,11 +305,6 @@ export async function obsluzKonta(
       }
       const email = normalizujEmail(dane.email)
       const hasloHash = hashujHaslo(tekst(dane.haslo))
-      const prawdziweKonta = Number(baza.prepare("SELECT COUNT(*) AS liczba FROM uzytkownicy WHERE haslo_hash <> 'dostep-przez-klucz-serwera'").get()?.liczba ?? 0)
-      if (prawdziweKonta > 0) {
-        odpowiedzJson(odpowiedz, 409, { error: 'Konto Właściciela już istnieje.' })
-        return true
-      }
       const teraz = new Date().toISOString()
       const istniejacyId = konfiguracja.syncUserId && baza.prepare('SELECT id FROM uzytkownicy WHERE id = ?').get(konfiguracja.syncUserId)
       const uzytkownikId = istniejacyId ? konfiguracja.syncUserId! : konfiguracja.syncUserId ?? randomUUID()
@@ -508,8 +518,11 @@ export async function obsluzKonta(
     }
     odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu konta.' })
     return true
-  } catch {
-    odpowiedzJson(odpowiedz, 400, { error: 'Nie udało się wykonać operacji konta.' })
+  } catch (blad) {
+    const komunikat = blad instanceof Error && blad.message === 'Hasło musi mieć od 8 do 200 znaków.'
+      ? blad.message
+      : 'Nie udało się wykonać operacji konta.'
+    odpowiedzJson(odpowiedz, 400, { error: komunikat })
     return true
   }
 }

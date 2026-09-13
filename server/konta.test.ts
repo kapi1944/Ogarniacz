@@ -71,6 +71,37 @@ function tokenZCookie(odpowiedz: Response): string {
   return decodeURIComponent(token)
 }
 
+test('bootstrap przyjmuje hasło od 8 znaków i pozostaje jednorazowy', async () => {
+  await zSerwerem(async (adres, baza) => {
+    const statusPrzed = await fetch(`${adres}/api/auth/bootstrap/status`)
+    assert.equal(statusPrzed.status, 200)
+    assert.deepEqual(await statusPrzed.json(), { dostepny: true })
+
+    const zaKrotkieHaslo = await fetch(`${adres}/api/auth/bootstrap`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'owner@example.test', haslo: '1234567', token: 'token-bootstrapu-testowy' }),
+    })
+    assert.equal(zaKrotkieHaslo.status, 400)
+    assert.deepEqual(await zaKrotkieHaslo.json(), { error: 'Hasło musi mieć od 8 do 200 znaków.' })
+
+    const pierwszyBootstrap = await fetch(`${adres}/api/auth/bootstrap`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'owner@example.test', haslo: '12345678', token: 'token-bootstrapu-testowy' }),
+    })
+    assert.equal(pierwszyBootstrap.status, 201)
+
+    const drugiBootstrap = await fetch(`${adres}/api/auth/bootstrap`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'drugi@example.test', haslo: '87654321', token: 'token-bootstrapu-testowy' }),
+    })
+    assert.equal(drugiBootstrap.status, 409)
+    assert.equal(Number(baza.prepare("SELECT COUNT(*) AS liczba FROM czlonkostwa WHERE rola = 'wlasciciel'").get()?.liczba), 1)
+
+    const statusPo = await fetch(`${adres}/api/auth/bootstrap/status`)
+    assert.deepEqual(await statusPo.json(), { dostepny: false })
+  }, { DATABASE_PATH: ':memory:', OWNER_BOOTSTRAP_TOKEN: 'token-bootstrapu-testowy' })
+})
+
 test('bootstrap, logowanie, zaproszenie i jednorazowy kod odzyskiwania tworzą bezpieczne sesje', async () => {
   await zSerwerem(async (adres) => {
     const bootstrap = await fetch(`${adres}/api/auth/bootstrap`, {

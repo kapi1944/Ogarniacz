@@ -36,6 +36,10 @@ interface OdpowiedzBledu {
   error?: string
 }
 
+interface StatusBootstrapu {
+  dostepny: boolean
+}
+
 export class BladKonta extends Error {
   constructor(public readonly status: number, komunikat: string) {
     super(komunikat)
@@ -53,6 +57,11 @@ function zapiszKonto(konto: KontoUzytkownika): KontoUzytkownika {
   if (konto.csrf) sessionStorage.setItem(KLUCZ_CSRF, konto.csrf)
   localStorage.setItem(KLUCZ_KONTA_OFFLINE, JSON.stringify({ ...konto, csrf: undefined, kodyOdzyskiwania: undefined }))
   return konto
+}
+
+export function wyczyscKontoLokalne(): void {
+  sessionStorage.removeItem(KLUCZ_CSRF)
+  localStorage.removeItem(KLUCZ_KONTA_OFFLINE)
 }
 
 async function wykonaj<T>(metoda: 'GET' | 'POST' | 'PUT', sciezka: string, dane?: unknown, csrf = false): Promise<T> {
@@ -94,6 +103,11 @@ export async function pobierzSesjeKonta(): Promise<KontoUzytkownika> {
   return zapiszKonto(await wykonaj<KontoUzytkownika>('GET', '/api/auth/session'))
 }
 
+export async function czyBootstrapDostepny(): Promise<boolean> {
+  const status = await wykonaj<StatusBootstrapu>('GET', '/api/auth/bootstrap/status')
+  return status.dostepny === true
+}
+
 export async function zaloguj(email: string, haslo: string): Promise<KontoUzytkownika> {
   return zapiszKonto(await wykonaj<KontoUzytkownika>('POST', '/api/auth/login', { email, haslo }))
 }
@@ -112,8 +126,7 @@ export async function odzyskajDostep(email: string, kod: string, noweHaslo: stri
 
 export async function wyloguj(): Promise<void> {
   await wykonaj('POST', '/api/auth/logout', {}, true)
-  sessionStorage.removeItem(KLUCZ_CSRF)
-  localStorage.removeItem(KLUCZ_KONTA_OFFLINE)
+  wyczyscKontoLokalne()
 }
 
 export async function zaprosEdytora(email: string): Promise<{ token: string; wygasaAt: string }> {

@@ -4,6 +4,7 @@ import { Komunikat, Modal } from '../components/Interfejs'
 import { pobierzKonfiguracjeSynchronizacji } from '../services/KonfiguracjaSynchronizacji'
 import {
   BladKonta,
+  czyBootstrapDostepny,
   cofnijEdytora,
   cofnijGrant,
   odzyskajDostep,
@@ -11,6 +12,7 @@ import {
   pobierzSesjeKonta,
   przyjmijZaproszenie,
   utworzKontoWlasciciela,
+  wyczyscKontoLokalne,
   wyloguj,
   zaloguj,
   zapiszGrant,
@@ -30,9 +32,9 @@ function powiadomOSesji(): void {
   window.dispatchEvent(new Event('ogarniacz:konto'))
 }
 
-function EkranLogowania({ poZalogowaniu, pracujLokalnie }: { poZalogowaniu: (konto: KontoUzytkownika) => void; pracujLokalnie: () => void }) {
+function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { bootstrapDostepny: boolean; poZalogowaniu: (konto: KontoUzytkownika) => void; pracujLokalnie: () => void }) {
   const tokenZaproszenia = new URLSearchParams(window.location.search).get('invite') ?? ''
-  const [tryb, ustawTryb] = useState<'logowanie' | 'bootstrap' | 'odzyskiwanie' | 'zaproszenie'>(tokenZaproszenia ? 'zaproszenie' : 'logowanie')
+  const [tryb, ustawTryb] = useState<'logowanie' | 'bootstrap' | 'odzyskiwanie' | 'zaproszenie'>(tokenZaproszenia ? 'zaproszenie' : bootstrapDostepny ? 'bootstrap' : 'logowanie')
   const [email, ustawEmail] = useState('')
   const [haslo, ustawHaslo] = useState('')
   const [token, ustawToken] = useState(tokenZaproszenia)
@@ -75,13 +77,13 @@ function EkranLogowania({ poZalogowaniu, pracujLokalnie }: { poZalogowaniu: (kon
       {tryb !== 'zaproszenie' && <label className="pole pole--pelne"><span>E-mail</span><input type="email" autoComplete="email" required value={email} onChange={(e) => ustawEmail(e.target.value)} /></label>}
       {(tryb === 'bootstrap' || tryb === 'zaproszenie') && <label className="pole pole--pelne"><span>{tryb === 'bootstrap' ? 'Token bootstrapu' : 'Token zaproszenia'}</span><input required value={token} onChange={(e) => ustawToken(e.target.value)} /></label>}
       {tryb === 'odzyskiwanie' && <label className="pole pole--pelne"><span>Kod odzyskiwania</span><input required value={kod} onChange={(e) => ustawKod(e.target.value)} /></label>}
-      <label className="pole pole--pelne"><span>{tryb === 'odzyskiwanie' ? 'Nowe hasło' : 'Hasło'}</span><input type="password" autoComplete={tryb === 'logowanie' ? 'current-password' : 'new-password'} minLength={12} required value={haslo} onChange={(e) => ustawHaslo(e.target.value)} /></label>
+      <label className="pole pole--pelne"><span>{tryb === 'odzyskiwanie' ? 'Nowe hasło' : 'Hasło'}</span><input type="password" autoComplete={tryb === 'logowanie' ? 'current-password' : 'new-password'} minLength={8} required value={haslo} onChange={(e) => ustawHaslo(e.target.value)} /><small className="tekst-pomocniczy">Minimum 8 znaków.</small></label>
       <button className="przycisk przycisk--glowny pole--pelne" disabled={zajety} type="submit">{zajety ? 'Proszę czekać…' : tryb === 'odzyskiwanie' ? 'Ustaw nowe hasło' : tryb === 'zaproszenie' ? 'Przyjmij zaproszenie' : tryb === 'bootstrap' ? 'Utwórz konto' : 'Zaloguj'}</button>
     </form>
     <div className="akcje-formularza ekran-konta__tryby">
       {tryb !== 'logowanie' && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawTryb('logowanie')}>Logowanie</button>}
       {tryb !== 'odzyskiwanie' && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawTryb('odzyskiwanie')}>Odzyskaj dostęp</button>}
-      {tryb !== 'bootstrap' && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawTryb('bootstrap')}>Pierwsze uruchomienie</button>}
+      {bootstrapDostepny && tryb !== 'bootstrap' && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawTryb('bootstrap')}>Pierwsze uruchomienie</button>}
       <button type="button" className="przycisk przycisk--tekstowy" onClick={pracujLokalnie}>Pracuj lokalnie bez synchronizacji</button>
     </div>
   </section></main>
@@ -122,20 +124,30 @@ export function DostawcaKonta({ children }: { children: ReactNode }) {
   const [konto, ustawKonto] = useState<KontoUzytkownika | undefined>(() => wymagaKonta ? pobierzKontoOffline() : undefined)
   const [ladowanie, ustawLadowanie] = useState(wymagaKonta)
   const [offline, ustawOffline] = useState(false)
+  const [bootstrapDostepny, ustawBootstrapDostepny] = useState(false)
   const [panel, ustawPanel] = useState(false)
 
   const odswiez = async () => { ustawKonto(await pobierzSesjeKonta()) }
   useEffect(() => {
     if (!wymagaKonta) return
     void pobierzSesjeKonta()
-      .then((sesja) => { ustawKonto(sesja); ustawOffline(false) })
-      .catch((przyczyna) => ustawOffline(!(przyczyna instanceof BladKonta && przyczyna.status === 401)))
+      .then((sesja) => { ustawKonto(sesja); ustawOffline(false); ustawBootstrapDostepny(false) })
+      .catch(async (przyczyna) => {
+        if (przyczyna instanceof BladKonta && przyczyna.status === 401) {
+          wyczyscKontoLokalne()
+          ustawKonto(undefined)
+          ustawOffline(false)
+          ustawBootstrapDostepny(await czyBootstrapDostepny().catch(() => false))
+        } else {
+          ustawOffline(true)
+        }
+      })
       .finally(() => ustawLadowanie(false))
   }, [wymagaKonta])
 
   if (!wymagaKonta) return children
   if (ladowanie && !konto) return <main className="ekran-konta"><div role="status">Sprawdzam sesję…</div></main>
-  if (!konto && !offline) return <EkranLogowania poZalogowaniu={(sesja) => { ustawKonto(sesja); ustawOffline(false) }} pracujLokalnie={() => ustawOffline(true)} />
+  if (!konto && !offline) return <EkranLogowania bootstrapDostepny={bootstrapDostepny} poZalogowaniu={(sesja) => { ustawKonto(sesja); ustawOffline(false); ustawBootstrapDostepny(false) }} pracujLokalnie={() => ustawOffline(true)} />
   if (!konto) return <KontekstKonta.Provider value={{ offline: true }}>
     {children}
     <button type="button" className="przycisk-konta" onClick={() => ustawOffline(false)} title="Połącz konto i synchronizację"><ShieldCheck aria-hidden="true" /><span>Tryb lokalny</span></button>
