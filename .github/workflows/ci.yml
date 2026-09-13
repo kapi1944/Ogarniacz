@@ -36,7 +36,7 @@ jobs:
         run: npm run typecheck
 
       - name: Unit tests (vitest)
-        run: npx vitest run --exclude '**/AutonomiaEcho.test.ts' --exclude '**/StanPrzedAkcjaEcho.test.ts'
+        run: npx vitest run --exclude '**/AutonomiaEcho.test.ts' --exclude '**/StanPrzedAkcjaEcho.test.ts' --pool=forks --no-file-parallelism --maxWorkers=1
 
       - name: Server tests
         run: npm run server:test
