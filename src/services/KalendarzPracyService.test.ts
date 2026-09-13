@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { utworzMetadane } from '../domain/fabryki'
 import type { Urlop } from '../domain/typy'
 import { czyPolskieSwieto, dataWielkanocy, pobierzPolskieSwieto } from './PolskieSwietaService'
+import { ustalDostepnoscDniaPracy } from './KalendarzPracyService'
 import { czyDataWUrlopie, czyZakresySieNakladaja } from './UrlopyService'
 
 describe('polskie święta', () => {
@@ -44,5 +45,39 @@ describe('urlopy', () => {
   it('wykrywa nakładające się zakresy', () => {
     expect(czyZakresySieNakladaja(urlop, { dataOd: '2026-08-21', dataDo: '2026-08-25' })).toBe(true)
     expect(czyZakresySieNakladaja(urlop, { dataOd: '2026-08-22', dataDo: '2026-08-25' })).toBe(false)
+  })
+})
+
+describe('dostępność dnia pracy', () => {
+  const urlop: Urlop = {
+    ...utworzMetadane('urlop-l4'),
+    dataOd: '2026-09-14',
+    dataDo: '2026-09-16',
+    typ: 'chorobowe',
+    status: 'potwierdzony',
+  }
+
+  it('pozostawia standardowy dzień pracy bez wolnego', () => {
+    expect(ustalDostepnoscDniaPracy('2026-09-14', true, undefined, [])).toMatchObject({ pracuje: true, powod: 'grafik' })
+  })
+
+  it('wyłącza pracę przez potwierdzone L4 także w środku zakresu', () => {
+    expect(ustalDostepnoscDniaPracy('2026-09-15', true, undefined, [urlop])).toMatchObject({ pracuje: false, powod: 'urlop' })
+  })
+
+  it('wyłącza pracę przez urlop wypoczynkowy, ale ignoruje anulowany', () => {
+    expect(ustalDostepnoscDniaPracy('2026-09-14', true, undefined, [{ ...urlop, typ: 'wypoczynkowy' }]).pracuje).toBe(false)
+    expect(ustalDostepnoscDniaPracy('2026-09-14', true, undefined, [{ ...urlop, status: 'anulowany' }]).pracuje).toBe(true)
+  })
+
+  it('wyłącza pracę w polskie święto', () => {
+    expect(ustalDostepnoscDniaPracy('2026-11-11', true, undefined, [])).toMatchObject({ pracuje: false, powod: 'swieto' })
+  })
+
+  it('nadaje jawnej zmianie grafiku najwyższy priorytet', () => {
+    const wyjatek = { ...utworzMetadane('wyjatek-praca'), data: '2026-09-14', pracuje: true }
+    expect(ustalDostepnoscDniaPracy('2026-09-14', false, wyjatek, [urlop])).toMatchObject({ pracuje: true, powod: 'wyjatek' })
+    expect(ustalDostepnoscDniaPracy('2026-11-11', false, { ...wyjatek, data: '2026-11-11' }, [])).toMatchObject({ pracuje: true, powod: 'wyjatek' })
+    expect(ustalDostepnoscDniaPracy('2026-09-14', true, { ...wyjatek, pracuje: false }, [])).toMatchObject({ pracuje: false, powod: 'wyjatek' })
   })
 })

@@ -19,9 +19,9 @@ import { DostawcaSamochoduPulpitu } from '../../providers/DostawcaSamochoduPulpi
 import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
 import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
 import { anulujPlan, DOMYSLNE_PREFERENCJE_PLANOWANIA, generujPlan, generujPrzeplanowanie, walidujPozycjeDraftu, zatwierdzPlan, type PreferencjePlanowania, type WynikPlanera } from '../../services/PlanerService'
+import { ustalDostepnoscDniaPracy } from '../../services/KalendarzPracyService'
 import { utworzHarmonogramDnia } from '../pulpit/logikaOsiCzasu'
-import { pobierzPolskieSwieto } from '../../services/PolskieSwietaService'
-import { czyZakresySieNakladaja, ETYKIETY_STATUSOW_URLOPU, ETYKIETY_TYPOW_URLOPU, urlopyDnia } from '../../services/UrlopyService'
+import { czyZakresySieNakladaja, ETYKIETY_STATUSOW_URLOPU, ETYKIETY_TYPOW_URLOPU } from '../../services/UrlopyService'
 
 const dni = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota']
 
@@ -62,10 +62,11 @@ export function WidokPlanera() {
   const { dane: zadania } = useRepozytorium('zadania')
   const { dane: bloki, repozytorium } = useRepozytorium('blokiCzasu')
   const { dane: wyjatki } = useRepozytorium('wyjatkiGrafiku')
+  const { dane: urlopy } = useRepozytorium('urlopy')
   const blokiDnia = bloki.filter((blok) => blok.poczatek.startsWith(data)).sort((a, b) => a.poczatek.localeCompare(b.poczatek))
   const wydarzeniaZrodlowe = useLiveQuery(() => pobierzTwardeWydarzenia(data), [data], [])
   const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
-  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia), [data, ustawienia.harmonogram, wyjatekDnia])
+  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia, urlopy), [data, ustawienia.harmonogram, urlopy, wyjatekDnia])
   const wydarzenia = useMemo<ElementOgarniacza[]>(() => [
     ...wydarzeniaZrodlowe,
     ...blokiDnia.filter((blok) => blok.status !== 'odrzucony').map((blok) => ({
@@ -273,12 +274,10 @@ function SekcjaKalendarzaGrafiku() {
         <div className="kalendarz-grafiku__siatka">
           {datyKalendarza.map((dzien) => {
             const data = format(dzien, 'yyyy-MM-dd')
-            const swieto = pobierzPolskieSwieto(data)
-            const urlopyTegoDnia = urlopyDnia(urlopy, data)
             const wyjatek = wyjatki.find((element) => element.data === data)
             const standard = grafik.find((element) => element.dzienTygodnia === getDay(dzien) && element.aktywny)
-            const wolneSystemowo = !wyjatek && (Boolean(swieto) || urlopyTegoDnia.length > 0)
-            const pracuje = wyjatek ? wyjatek.pracuje : !wolneSystemowo && Boolean(standard)
+            const dostepnosc = ustalDostepnoscDniaPracy(data, Boolean(standard), wyjatek, urlopy)
+            const { pracuje, swieto, urlopy: urlopyTegoDnia } = dostepnosc
             const godziny = wyjatek
               ? (wyjatek.pracuje ? `${wyjatek.od ?? ''}–${wyjatek.do ?? ''}` : 'Wolne')
               : (pracuje && standard ? `${standard.od}–${standard.do}` : 'Wolne')

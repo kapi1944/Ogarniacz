@@ -153,6 +153,7 @@ export function WidokPulpitu() {
   const nawiguj = useNavigate()
   const { ustawienia, zapiszUstawienia, otworzSzybkieDodawanie, otworzSzybkieDodawanieZDanymi } = useAplikacja()
   const { dane: wyjatki, repozytorium: repozytoriumWyjatkow } = useRepozytorium('wyjatkiGrafiku')
+  const { dane: urlopy } = useRepozytorium('urlopy')
   const { dane: cele } = useRepozytorium('cele')
   const { dane: terminyWaznosci } = useRepozytorium('terminyWaznosci')
   const { dane: platnosciStale } = useRepozytorium('platnosciStale')
@@ -254,7 +255,7 @@ export function WidokPulpitu() {
   const alertyWCentrum = pokazWiecejAlertow ? widoczneAlerty : widoczneAlerty.slice(0, 2)
   const kafelki = useMemo(() => sortujKafelki(ustawienia.pulpit.kafelki).filter((kafelek) => filtrKafelkow === 'wszystkie' || kafelek.typ === filtrKafelkow), [ustawienia.pulpit.kafelki, filtrKafelkow])
   const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
-  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia), [data, ustawienia.harmonogram, wyjatekDnia])
+  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia, urlopy), [data, ustawienia.harmonogram, urlopy, wyjatekDnia])
   const elementyOsi = elementyDnia
     .filter((element) => element.trybTerminu === 'o_godzinie' && poprawnaGodzinaTerminu(element.godzina))
     .filter((element) => element.typ === 'lek' || element.status !== 'wykonany')

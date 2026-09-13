@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DOMYSLNE_USTAWIENIA } from '../../domain/ustawienia'
-import type { WyjatekGrafiku } from '../../domain/typy'
+import type { Urlop, WyjatekGrafiku } from '../../domain/typy'
 import { utworzHarmonogramDnia } from './logikaOsiCzasu'
 
 describe('oś czasu Pulpitu', () => {
@@ -20,6 +20,18 @@ describe('oś czasu Pulpitu', () => {
     expect(harmonogram.pracuje).toBe(false)
     expect(harmonogram.przedzialy).toEqual([])
     expect(harmonogram.zakresAktywny).toEqual({ od: '07:00', do: '22:00' })
+  })
+
+  it('nie tworzy pracy ani dojazdów podczas L4', () => {
+    const urlop: Urlop = {
+      id: 'l4-1', dataOd: '2026-09-14', dataDo: '2026-09-14', typ: 'chorobowe', status: 'potwierdzony',
+      createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
+    }
+
+    const harmonogram = utworzHarmonogramDnia('2026-09-14', DOMYSLNE_USTAWIENIA.harmonogram, undefined, [urlop])
+
+    expect(harmonogram.pracuje).toBe(false)
+    expect(harmonogram.przedzialy).toEqual([])
   })
 
   it('stosuje wyjątek tylko do wskazanego dnia bez zmiany reguły globalnej', () => {

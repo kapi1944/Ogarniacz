@@ -50,6 +50,7 @@ export function WidokPulpitu() {
   const [ostatniaZmiana, ustawOstatniaZmiane] = useState<{ tytul: string; cofnij: () => Promise<void> }>()
   const { moze, otworzSzybkieDodawanie, ustawienia } = useAplikacja()
   const { dane: wyjatki } = useRepozytorium('wyjatkiGrafiku')
+  const { dane: urlopy } = useRepozytorium('urlopy')
 
   useEffect(() => {
     const identyfikator = window.setInterval(() => ustawTeraz(new Date()), 60_000)
@@ -57,7 +58,7 @@ export function WidokPulpitu() {
   }, [])
 
   const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
-  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia), [data, ustawienia.harmonogram, wyjatekDnia])
+  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia, urlopy), [data, ustawienia.harmonogram, urlopy, wyjatekDnia])
   const elementyDnia = useLiveQuery(async () => {
     const zakres = { od: data, do: data }
     const [zadania, leki, wizyty, finanse, samochod, zakupy, notatki] = await Promise.all([

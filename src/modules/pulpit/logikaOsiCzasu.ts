@@ -1,8 +1,10 @@
 import type {
   DostepnoscPlanistyczna,
   UstawieniaHarmonogramu,
+  Urlop,
   WyjatekGrafiku,
 } from '../../domain/typy'
+import { ustalDostepnoscDniaPracy } from '../../services/KalendarzPracyService'
 
 export interface ZakresAktywnegoDnia {
   od: string
@@ -165,8 +167,14 @@ export function utworzHarmonogramDnia(
   data: string,
   ustawienia: UstawieniaHarmonogramu,
   wyjatek?: WyjatekGrafiku,
+  urlopy: Urlop[] = [],
 ): HarmonogramDnia {
-  const pracuje = wyjatek?.pracuje ?? ustawienia.dniPracy.includes(dzienTygodnia(data))
+  const pracuje = ustalDostepnoscDniaPracy(
+    data,
+    ustawienia.dniPracy.includes(dzienTygodnia(data)),
+    wyjatek,
+    urlopy,
+  ).pracuje
   const odPracy = poprawnaGodzina(wyjatek?.od) ? wyjatek.od : ustawienia.godzinaRozpoczecia
   const doPracy = poprawnaGodzina(wyjatek?.do) ? wyjatek.do : ustawienia.godzinaZakonczenia
   const dojazdDoPracyMinuty = ograniczMinuty(wyjatek?.dojazdDoPracyMinuty ?? ustawienia.dojazdDoPracyMinuty)
