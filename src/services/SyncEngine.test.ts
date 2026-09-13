@@ -251,6 +251,27 @@ describe.sequential('SyncEngine', () => {
     expect((await pobierzStanSynchronizacji()).stan).toBe('offline')
   })
 
+  it('odblokowuje trwały stan synchronizacja po restarcie i zachowuje pending', async () => {
+    await baza.tabela('stanSynchronizacji').update('glowny', {
+      stan: 'synchronizacja',
+      ostatniSync: '2026-08-26T10:00:00.000Z',
+    })
+    await baza.tabela('zadania').put(zadanie(
+      'pending-stale-sync',
+      'Czeka po przerwanym sync',
+      '2026-08-27T10:00:00.000Z',
+    ))
+
+    baza.close()
+    await baza.open()
+
+    expect(await odtworzOczekujacaSynchronizacje(true)).toBe(true)
+    expect(await pobierzStanSynchronizacji()).toMatchObject({
+      stan: 'oczekuje',
+      liczbaOczekujacych: 1,
+    })
+  })
+
   it('łączy równoległe żądania resume i reconnect w jeden sync', async () => {
     const zdalne = new RepozytoriumZdalneInMemory()
     let zwolnijPobieranie: (() => void) | undefined

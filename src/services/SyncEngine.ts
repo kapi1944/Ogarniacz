@@ -129,9 +129,22 @@ export async function oznaczSynchronizacjeOffline(): Promise<void> {
 
 export async function odtworzOczekujacaSynchronizacje(online = typeof navigator === 'undefined' || navigator.onLine): Promise<boolean> {
   const obecny = await pobierzStanSynchronizacji()
-  if (obecny.stan === 'synchronizacja' || obecny.stan === 'konflikt') return false
+  if (obecny.stan === 'konflikt') return false
   await uzupelnijKolejkePoMigracji()
-  if (await tabelaKolejki().count() === 0) return false
+  const liczbaOczekujacych = await tabelaKolejki().count()
+
+  if (obecny.stan === 'synchronizacja') {
+    await baza.tabela('stanSynchronizacji').put({
+      ...obecny,
+      stan: liczbaOczekujacych > 0 ? (online ? 'oczekuje' : 'offline') : 'zsynchronizowano',
+      ostatniBlad: undefined,
+      liczbaOczekujacych,
+      updatedAt: new Date().toISOString(),
+    })
+    return liczbaOczekujacych > 0
+  }
+
+  if (liczbaOczekujacych === 0) return false
   await oznaczOczekujacaSynchronizacje(online)
   return true
 }
