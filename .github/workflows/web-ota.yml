@@ -195,19 +195,33 @@ jobs:
           cmp artifacts/web-ota/web-ota.zip artifacts/weryfikacja/web-ota.zip
           cmp artifacts/web-ota/web-ota.json artifacts/weryfikacja/web-ota.json
       - name: Opublikuj release (draft -> publiczny)
+        if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          if [ "$(gh release view web-ota --json isDraft --jq .isDraft)" = "true" ]; then
-            RELEASE_ID=$(gh release view web-ota --json id --jq .id)
-            gh api "repos/${{ github.repository }}/releases/$RELEASE_ID" -X PATCH -F draft=false
-            echo "Release web-ota opublikowany (draft=false)."
+          set -uo pipefail
+          echo "=== 1. Lista release'ow (limit 20) ==="
+          gh release list --limit 20 2>&1 || true
+          echo ""
+          echo "=== 2. gh release view web-ota (raw JSON) ==="
+          gh release view web-ota --json tagName,name,isDraft,isPrerelease,id,url 2>&1 || true
+          echo ""
+          echo "=== 3. Wartosci pomocnicze ==="
+          is_draft=$(gh release view web-ota --json isDraft --jq .isDraft 2>/dev/null || echo "ERROR")
+          release_id=$(gh release view web-ota --json id --jq .id 2>/dev/null || echo "ERROR")
+          echo "isDraft='$is_draft'"
+          echo "id='$release_id'"
+          echo ""
+          if [ "$is_draft" = "true" ]; then
+            echo "=== 4. Publikuje przez gh release edit ==="
+            gh release edit web-ota --draft=false 2>&1
+            echo ""
+            echo "=== 5. Stan po publikacji ==="
+            gh release view web-ota --json tagName,isDraft,isPrerelease,url 2>&1 || true
           else
-            echo "Release web-ota nie jest draftem - nic nie zmieniam."
+            echo "Release nie jest draftem lub nie istnieje (isDraft='$is_draft')."
           fi
-
       - name: Zachowaj kopie diagnostyczna
         uses: actions/upload-artifact@v4
         with:
