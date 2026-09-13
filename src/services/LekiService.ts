@@ -12,6 +12,11 @@ export interface DawkaDnia {
   wpis?: DziennikLeku
 }
 
+interface ZaplanowanaDawka {
+  dawka: DawkaLeku
+  kluczWystapienia?: string
+}
+
 function poprawnaGodzina(godzina: string): boolean {
   return /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(godzina)
 }
@@ -35,7 +40,7 @@ export function dawkiLeku(lek: Lek): DawkaLeku[] {
   if (lek.dawki?.length) return lek.dawki.filter((dawka) => poprawnaGodzina(dawka.godzina)).sort((a, b) => a.godzina.localeCompare(b.godzina))
   return lek.godziny
     .filter(poprawnaGodzina)
-    .map((godzina) => ({ id: `starsza-dawka:${lek.id}:${godzina}`, godzina, ilosc: lek.zuzycieNaDawke ?? 0, instrukcja: lek.dawkaInstrukcja || undefined }))
+    .map((godzina) => ({ id: `starsza-dawka:${lek.id}:${godzina}`, godzina, ilosc: lek.zuzycieNaDawke, instrukcja: lek.dawkaInstrukcja || undefined }))
 }
 
 export function proponujGodzinyDawek(liczbaDawek: number, od: string, doGodziny: string): string[] {
@@ -47,10 +52,10 @@ export function proponujGodzinyDawek(liczbaDawek: number, od: string, doGodziny:
   return Array.from({ length: liczbaDawek }, (_, indeks) => godzinaZMinut(Math.round(poczatek + (koniec - poczatek) * indeks / (liczbaDawek - 1))))
 }
 
-export function idWystapieniaDawki(lekId: string, data: string, dawkaId: string): string {
+export function idWystapieniaDawki(lekId: string, data: string, dawkaId: string, kluczWystapienia?: string): string {
   const prefiksStarszejDawki = `starsza-dawka:${lekId}:`
-  if (dawkaId.startsWith(prefiksStarszejDawki)) return `${lekId}:${data}:${dawkaId.slice(prefiksStarszejDawki.length)}`
-  return `${lekId}:${data}:${dawkaId}`
+  const idBazowy = dawkaId.startsWith(prefiksStarszejDawki) ? `${lekId}:${data}:${dawkaId.slice(prefiksStarszejDawki.length)}` : `${lekId}:${data}:${dawkaId}`
+  return kluczWystapienia ? `${idBazowy}:${kluczWystapienia}` : idBazowy
 }
 
 export function czyLekZaplanowanyNaDzien(lek: Lek, data: string): boolean {
@@ -63,31 +68,43 @@ export function czyLekZaplanowanyNaDzien(lek: Lek, data: string): boolean {
   return true
 }
 
-function dawkiInterwalowe(lek: Lek, data: string): DawkaLeku[] {
+export function graniceLokalnegoDnia(data: string): { od: Date; do: Date } | undefined {
+  const od = parseISO(data)
+  if (Number.isNaN(od.getTime())) return undefined
+  return { od, do: addDays(od, 1) }
+}
+
+function dawkiInterwalowe(lek: Lek, data: string): ZaplanowanaDawka[] {
   const definicja = dawkiLeku(lek)[0]
   const interwal = lek.interwalGodzin
   const pierwszaGodzina = lek.pierwszaGodzina ?? definicja?.godzina
   if (!definicja || !interwal || interwal < 1 || !pierwszaGodzina || !poprawnaGodzina(pierwszaGodzina)) return []
   const poczatek = new Date(`${lek.dataOd ?? data}T${pierwszaGodzina}:00`).getTime()
-  const dzienOd = new Date(`${data}T00:00:00`).getTime()
-  const dzienDo = dzienOd + 24 * 60 * 60_000
+  const graniceDnia = graniceLokalnegoDnia(data)
+  if (!graniceDnia) return []
+  const dzienOd = graniceDnia.od.getTime()
+  const dzienDo = graniceDnia.do.getTime()
   const krok = interwal * 60 * 60_000
   const pierwszyIndeks = Math.max(0, Math.ceil((dzienOd - poczatek) / krok))
-  const wynik: DawkaLeku[] = []
+  const wynik: ZaplanowanaDawka[] = []
   for (let indeks = pierwszyIndeks; poczatek + indeks * krok < dzienDo; indeks += 1) {
     const czas = poczatek + indeks * krok
-    if (czas >= dzienOd) wynik.push({ ...definicja, godzina: format(new Date(czas), 'HH:mm') })
+    if (czas >= dzienOd) wynik.push({ dawka: { ...definicja, godzina: format(new Date(czas), 'HH:mm') }, kluczWystapienia: `interwal-${indeks}` })
   }
   return wynik
 }
 
+function zaplanowaneDawki(lek: Lek, data: string): ZaplanowanaDawka[] {
+  return trybDawkowania(lek) === 'co_x_godzin' ? dawkiInterwalowe(lek, data) : dawkiLeku(lek).map((dawka) => ({ dawka }))
+}
+
 export function dawkiZaplanowaneNaDzien(lek: Lek, data: string): DawkaLeku[] {
-  return trybDawkowania(lek) === 'co_x_godzin' ? dawkiInterwalowe(lek, data) : dawkiLeku(lek)
+  return zaplanowaneDawki(lek, data).map(({ dawka }) => dawka)
 }
 
 function zuzycieDnia(lek: Lek, data: string): number {
   if (!czyLekZaplanowanyNaDzien(lek, data)) return 0
-  return dawkiZaplanowaneNaDzien(lek, data).reduce((suma, dawka) => suma + (dawka.ilosc > 0 ? dawka.ilosc : 0), 0)
+  return dawkiZaplanowaneNaDzien(lek, data).reduce((suma, dawka) => suma + (typeof dawka.ilosc === 'number' && dawka.ilosc > 0 ? dawka.ilosc : 0), 0)
 }
 
 export function przewidywanaDataWyczerpania(lek: Lek, odDnia: string): string | undefined {
@@ -110,9 +127,15 @@ export function generujDawkiDnia(leki: Lek[], wpisy: DziennikLeku[], data: strin
   const wpisyDnia = wpisy.filter((wpis) => wpis.data === data)
   return leki
     .filter((lek) => lek.aktywny && !lek.usunietoAt && czyLekZaplanowanyNaDzien(lek, data))
-    .flatMap((lek) => dawkiZaplanowaneNaDzien(lek, data).map((dawka) => {
-      const idWystapienia = idWystapieniaDawki(lek.id, data, dawka.id)
-      const wpis = wpisyDnia.find((element) => element.lekId === lek.id && (element.dawkaId === dawka.id || (!element.dawkaId && element.planowanaGodzina === dawka.godzina)))
+    .flatMap((lek) => zaplanowaneDawki(lek, data).map(({ dawka, kluczWystapienia }) => {
+      const idWystapienia = idWystapieniaDawki(lek.id, data, dawka.id, kluczWystapienia)
+      const interwalowa = Boolean(kluczWystapienia)
+      const wpis = wpisyDnia.find((element) => element.lekId === lek.id && (
+        element.id === idWystapienia
+        || (!element.dawkaId && element.planowanaGodzina === dawka.godzina)
+        || (interwalowa && element.dawkaId === dawka.id && element.planowanaGodzina === dawka.godzina)
+        || (!interwalowa && element.dawkaId === dawka.id)
+      ))
       return { idWystapienia, lek, dawka, data, planowanaGodzina: dawka.godzina, status: wpis?.status ?? 'oczekuje', wpis }
     }))
     .sort((a, b) => a.planowanaGodzina.localeCompare(b.planowanaGodzina) || a.idWystapienia.localeCompare(b.idWystapienia))

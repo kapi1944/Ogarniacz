@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { utworzMetadane } from '../domain/fabryki'
 import type { DziennikLeku, Lek } from '../domain/typy'
-import { dawkiZaplanowaneNaDzien, generujDawkiDnia, proponujGodzinyDawek, przewidywanaDataWyczerpania, zapiszStatusDawki } from './LekiService'
+import { dawkiZaplanowaneNaDzien, generujDawkiDnia, graniceLokalnegoDnia, proponujGodzinyDawek, przewidywanaDataWyczerpania, zapiszStatusDawki } from './LekiService'
 
 const lek: Lek = {
   ...utworzMetadane('lek-1'),
@@ -28,7 +28,7 @@ describe('leki', () => {
     expect(godziny).not.toContain('00:00')
   })
 
-  it('generuje dawkowanie co X godzin również przez noc', () => {
+  it('tworzy i zapisuje niezależne wystąpienia dawkowania co X godzin', () => {
     const interwalowy: Lek = {
       ...lek,
       id: 'lek-interwalowy',
@@ -38,7 +38,38 @@ describe('leki', () => {
       pierwszaGodzina: '20:00',
       dawki: [{ id: 'interwal', godzina: '20:00', ilosc: 1 }],
     }
-    expect(dawkiZaplanowaneNaDzien(interwalowy, '2026-08-15').map((dawka) => dawka.godzina)).toEqual(['02:00', '08:00', '14:00', '20:00'])
+    const dawki = generujDawkiDnia([interwalowy], [], '2026-08-15')
+    expect(dawki.map((dawka) => dawka.planowanaGodzina)).toEqual(['02:00', '08:00', '14:00', '20:00'])
+    expect(dawki).toHaveLength(4)
+    expect(new Set(dawki.map((dawka) => dawka.idWystapienia)).size).toBe(4)
+
+    const wpis0800 = zapiszStatusDawki(dawki.find((dawka) => dawka.planowanaGodzina === '08:00')!, 'zazyte')
+    const poPierwszymZapisie = generujDawkiDnia([interwalowy], [wpis0800], '2026-08-15')
+    expect(poPierwszymZapisie.map((dawka) => [dawka.planowanaGodzina, dawka.status])).toEqual([
+      ['02:00', 'oczekuje'], ['08:00', 'zazyte'], ['14:00', 'oczekuje'], ['20:00', 'oczekuje'],
+    ])
+
+    const wpis1400 = zapiszStatusDawki(poPierwszymZapisie.find((dawka) => dawka.planowanaGodzina === '14:00')!, 'pominiete')
+    expect(wpis1400.id).not.toBe(wpis0800.id)
+    expect(generujDawkiDnia([interwalowy], [wpis0800, wpis1400], '2026-08-15').map((dawka) => dawka.status)).toEqual(['oczekuje', 'zazyte', 'pominiete', 'oczekuje'])
+  })
+
+  it('wyznacza lokalne granice dnia kalendarzowo podczas zmiany czasu', () => {
+    const srodowisko = (globalThis as typeof globalThis & { process: { env: Record<string, string | undefined> } }).process.env
+    const poprzedniaStrefa = srodowisko.TZ
+    srodowisko.TZ = 'Europe/Warsaw'
+    try {
+      const granice = graniceLokalnegoDnia('2026-03-29')!
+      expect(granice.od.getHours()).toBe(0)
+      expect(granice.do.getHours()).toBe(0)
+      expect((granice.do.getTime() - granice.od.getTime()) / 3_600_000).toBe(23)
+
+      const interwalowy: Lek = { ...lek, id: 'lek-zmiana-czasu', trybDawkowania: 'co_x_godzin', dataOd: '2026-03-29', interwalGodzin: 6, pierwszaGodzina: '00:00', dawki: [{ id: 'interwal-zmiana-czasu', godzina: '00:00', ilosc: 1 }] }
+      expect(dawkiZaplanowaneNaDzien(interwalowy, '2026-03-29').map((dawka) => dawka.godzina)).toEqual(['00:00', '07:00', '13:00', '19:00'])
+    } finally {
+      if (poprzedniaStrefa === undefined) delete srodowisko.TZ
+      else srodowisko.TZ = poprzedniaStrefa
+    }
   })
 
   it('liczy zapas z sumy rzeczywistych ilości dawek dnia', () => {
@@ -51,6 +82,10 @@ describe('leki', () => {
     const dawki = generujDawkiDnia([stary], [wpis], '2026-08-14')
     expect(dawki.map((dawka) => dawka.status)).toEqual(['zazyte', 'oczekuje'])
     expect(przewidywanaDataWyczerpania({ ...stary, zapasJednostek: 4 }, '2026-08-14')).toBe('2026-08-15')
+
+    const bezIlosci = { ...stary, id: 'lek-bez-ilosci', zuzycieNaDawke: undefined }
+    expect(generujDawkiDnia([bezIlosci], [], '2026-08-14')[0]?.dawka.ilosc).toBeUndefined()
+    expect(przewidywanaDataWyczerpania({ ...bezIlosci, zapasJednostek: 4 }, '2026-08-14')).toBeUndefined()
   })
 
   it('wiąże historię ze stabilnym id dawki po zmianie przyszłej godziny', () => {

@@ -150,7 +150,7 @@ export type TrybDawkowaniaLeku = 'konkretne_godziny' | 'razy_dziennie' | 'co_x_g
 export interface DawkaLeku {
   id: Id
   godzina: string
-  ilosc: number
+  ilosc?: number
   instrukcja?: string
 }
 

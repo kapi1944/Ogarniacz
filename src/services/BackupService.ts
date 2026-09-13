@@ -133,7 +133,7 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     nazwa: z.string(),
     dawkaInstrukcja: z.string(),
     godziny: z.array(z.string()),
-    dawki: z.array(z.object({ id: z.string(), godzina: z.string(), ilosc: z.number(), instrukcja: z.string().optional() })).optional(),
+    dawki: z.array(z.object({ id: z.string(), godzina: z.string(), ilosc: z.number().optional(), instrukcja: z.string().optional() })).optional(),
     trybDawkowania: z.enum(['konkretne_godziny', 'razy_dziennie', 'co_x_godzin']).optional(),
     liczbaDawekDziennie: z.number().optional(),
     oknoAktywnosciOd: z.string().optional(),

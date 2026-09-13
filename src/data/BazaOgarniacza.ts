@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 12
+export const WERSJA_SCHEMATU_BAZY = 13
 
 export const nazwyTabel: NazwaTabeli[] = [
   'zadania',
@@ -132,10 +132,15 @@ class BazaOgarniacza extends Dexie {
       kolejkaSynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, operacja, createdAt, updatedAt',
     }).upgrade(async (transakcja) => {
       await transakcja.table('leki').toCollection().modify((lek) => {
-        if (Array.isArray(lek.dawki) && lek.dawki.length > 0) return
+        if (Array.isArray(lek.dawki) && lek.dawki.length > 0) {
+          lek.dawki.forEach((dawka: { ilosc?: number }) => {
+            if (dawka.ilosc === 0) delete dawka.ilosc
+          })
+          return
+        }
         lek.dawki = (Array.isArray(lek.godziny) ? lek.godziny : [])
           .filter((godzina: unknown) => typeof godzina === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(godzina))
-          .map((godzina: string) => ({ id: `starsza-dawka:${lek.id}:${godzina}`, godzina, ilosc: typeof lek.zuzycieNaDawke === 'number' ? lek.zuzycieNaDawke : 0, instrukcja: lek.dawkaInstrukcja || undefined }))
+          .map((godzina: string) => ({ id: `starsza-dawka:${lek.id}:${godzina}`, godzina, ilosc: typeof lek.zuzycieNaDawke === 'number' && lek.zuzycieNaDawke > 0 ? lek.zuzycieNaDawke : undefined, instrukcja: lek.dawkaInstrukcja || undefined }))
         lek.trybDawkowania ??= 'konkretne_godziny'
       })
     })

@@ -46,7 +46,7 @@ export class DostawcaLekowPulpitu implements DostawcaElementowPulpitu {
       id: `lek:${dawka.idWystapienia}`,
       typ: 'lek' as const,
       tytul: dawka.lek.nazwa,
-      opis: dawka.dawka.instrukcja || `${dawka.dawka.ilosc}${dawka.lek.jednostkaLubPostac ? ` ${dawka.lek.jednostkaLubPostac}` : ''}` || dawka.lek.dawkaInstrukcja,
+      opis: dawka.dawka.instrukcja || (dawka.dawka.ilosc !== undefined ? `${dawka.dawka.ilosc}${dawka.lek.jednostkaLubPostac ? ` ${dawka.lek.jednostkaLubPostac}` : ''}` : 'Uzupełnij ilość dawki'),
       referencjaZrodla: {
         modul: 'leki' as const,
         encjaId: dawka.lek.id,
