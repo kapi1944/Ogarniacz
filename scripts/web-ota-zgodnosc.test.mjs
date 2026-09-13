@@ -7,9 +7,9 @@ import {
   utworzTagApkDlaKoduWersji,
 } from './web-ota-zgodnosc.mjs'
 
-test('konfiguracja bootstrapowa wymaga APK 1.0.8', async () => {
+test('konfiguracja zgodnosci wymaga APK 1.0.9', async () => {
   const tresc = await readFile(SCIEZKA_ZGODNOSCI_WEB_OTA, 'utf8')
-  assert.equal(odczytajMinNativeVersionCode(tresc), 1_000_008)
+  assert.equal(odczytajMinNativeVersionCode(tresc), 1_000_009)
 })
 
 test('punkt zgodnosci wskazuje tag wydanego APK', () => {
