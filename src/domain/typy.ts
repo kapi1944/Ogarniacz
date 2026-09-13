@@ -145,10 +145,28 @@ export interface DziennikNawyku extends EncjaBazowa {
   powodPominiecia?: string
 }
 
+export type TrybDawkowaniaLeku = 'konkretne_godziny' | 'razy_dziennie' | 'co_x_godzin'
+
+export interface DawkaLeku {
+  id: Id
+  godzina: string
+  ilosc: number
+  instrukcja?: string
+}
+
 export interface Lek extends EncjaBazowa {
   nazwa: string
+  /** Pola historyczne; nowe zapisy utrzymują je jako projekcję dawek. */
   dawkaInstrukcja: string
   godziny: string[]
+  dawki?: DawkaLeku[]
+  trybDawkowania?: TrybDawkowaniaLeku
+  liczbaDawekDziennie?: number
+  oknoAktywnosciOd?: string
+  oknoAktywnosciDo?: string
+  interwalGodzin?: number
+  pierwszaGodzina?: string
+  jednostkaLubPostac?: string
   dniTygodnia?: number[]
   coIleDni?: number
   dataOd?: string
@@ -162,6 +180,7 @@ export interface Lek extends EncjaBazowa {
 
 export interface DziennikLeku extends EncjaBazowa {
   lekId: Id
+  dawkaId?: Id
   data: string
   planowanaGodzina: string
   status: 'oczekuje' | 'zazyte' | 'odroczone' | 'pominiete'

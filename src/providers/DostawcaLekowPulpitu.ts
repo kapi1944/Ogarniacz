@@ -46,7 +46,7 @@ export class DostawcaLekowPulpitu implements DostawcaElementowPulpitu {
       id: `lek:${dawka.idWystapienia}`,
       typ: 'lek' as const,
       tytul: dawka.lek.nazwa,
-      opis: dawka.lek.dawkaInstrukcja,
+      opis: dawka.dawka.instrukcja || `${dawka.dawka.ilosc}${dawka.lek.jednostkaLubPostac ? ` ${dawka.lek.jednostkaLubPostac}` : ''}` || dawka.lek.dawkaInstrukcja,
       referencjaZrodla: {
         modul: 'leki' as const,
         encjaId: dawka.lek.id,
@@ -59,6 +59,7 @@ export class DostawcaLekowPulpitu implements DostawcaElementowPulpitu {
       przypomnienia: przypomnieniaDawki(przypomnienia, dawka.lek.id, dawka.data, dawka.planowanaGodzina),
       dane: {
         lekId: dawka.lek.id,
+        dawkaId: dawka.dawka.id,
         idWystapienia: dawka.idWystapienia,
         statusDawki: dawka.status,
         odroczoneDo: dawka.wpis?.odroczoneDo,

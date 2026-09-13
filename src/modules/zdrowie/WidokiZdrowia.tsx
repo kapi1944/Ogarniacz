@@ -1,15 +1,17 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { BellPlus, CalendarClock, ClipboardList, FileText, History, Pill, ShieldAlert, Stethoscope } from 'lucide-react'
+import { BellPlus, CalendarClock, ClipboardList, Edit3, FileText, History, Pill, Plus, ShieldAlert, Stethoscope, Trash2 } from 'lucide-react'
 import { WidokRejestru } from '../../components/WidokRejestru'
-import { Karta, Komunikat, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
+import { Karta, Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
+import type { Repozytorium } from '../../data/Repozytorium'
 import { dzisiajIso, noweId, terazIso, utworzMetadane } from '../../domain/fabryki'
-import type { Lek, PozycjaRecepty, Przypomnienie, Recepta, Skierowanie, Terapia, Wizyta } from '../../domain/typy'
+import type { DawkaLeku, Lek, PozycjaRecepty, Przypomnienie, Recepta, Skierowanie, Terapia, UstawieniaHarmonogramu, Wizyta } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { generujDawkiDnia, przewidywanaDataWyczerpania, zapiszStatusDawki } from '../../services/LekiService'
+import { dawkiLeku, dawkiZaplanowaneNaDzien, generujDawkiDnia, proponujGodzinyDawek, przewidywanaDataWyczerpania, zapiszStatusDawki } from '../../services/LekiService'
 import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
 import { utworzZadanie } from '../../services/ZadaniaService'
+import { useAplikacja } from '../../app/KontekstAplikacji'
 
 const formatowanieDaty = new Intl.DateTimeFormat('pl-PL', { dateStyle: 'medium' })
 
@@ -118,8 +120,130 @@ export function WidokDziennikaTerapii() {
   </div>
 }
 
+interface SzkicLeku {
+  nazwa: string
+  jednostkaLubPostac: string
+  zapasJednostek: string
+  dataOtwarcia: string
+  dataOd: string
+  dataDo: string
+  trybHarmonogramu: 'codziennie' | 'wybrane_dni' | 'co_x_dni'
+  dniTygodnia: string
+  coIleDni: string
+  dodatkoweInstrukcje: string
+  aktywny: boolean
+  trybDawkowania: 'konkretne_godziny' | 'razy_dziennie' | 'co_x_godzin'
+  liczbaDawekDziennie: string
+  oknoAktywnosciOd: string
+  oknoAktywnosciDo: string
+  interwalGodzin: string
+  pierwszaGodzina: string
+  dawki: DawkaLeku[]
+}
+
+function nowaDawka(godzina = '08:00'): DawkaLeku {
+  return { id: noweId(), godzina, ilosc: 1, instrukcja: '' }
+}
+
+function utworzSzkicLeku(lek: Lek | undefined, harmonogram: UstawieniaHarmonogramu): SzkicLeku {
+  const dawki = lek ? dawkiLeku(lek).map((dawka) => ({ ...dawka })) : [nowaDawka()]
+  return {
+    nazwa: lek?.nazwa ?? '',
+    jednostkaLubPostac: lek?.jednostkaLubPostac ?? '',
+    zapasJednostek: lek?.zapasJednostek === undefined ? '' : String(lek.zapasJednostek),
+    dataOtwarcia: lek?.dataOtwarcia ?? '',
+    dataOd: lek?.dataOd ?? '',
+    dataDo: lek?.dataDo ?? '',
+    trybHarmonogramu: lek?.coIleDni ? 'co_x_dni' : lek?.dniTygodnia?.length ? 'wybrane_dni' : 'codziennie',
+    dniTygodnia: lek?.dniTygodnia?.join(', ') ?? '',
+    coIleDni: lek?.coIleDni ? String(lek.coIleDni) : '',
+    dodatkoweInstrukcje: lek?.dodatkoweInstrukcje ?? '',
+    aktywny: lek?.aktywny ?? true,
+    trybDawkowania: lek?.trybDawkowania ?? 'konkretne_godziny',
+    liczbaDawekDziennie: lek?.liczbaDawekDziennie ? String(lek.liczbaDawekDziennie) : String(dawki.length),
+    oknoAktywnosciOd: lek?.oknoAktywnosciOd ?? harmonogram.koniecSnu,
+    oknoAktywnosciDo: lek?.oknoAktywnosciDo ?? harmonogram.poczatekSnu,
+    interwalGodzin: lek?.interwalGodzin ? String(lek.interwalGodzin) : '8',
+    pierwszaGodzina: lek?.pierwszaGodzina ?? dawki[0]?.godzina ?? '08:00',
+    dawki,
+  }
+}
+
+function zapisanyLek(szkic: SzkicLeku, istniejacy?: Lek): Lek {
+  const dawki = szkic.dawki
+    .filter((dawka) => /^\d{2}:\d{2}$/.test(dawka.godzina) && dawka.ilosc > 0)
+    .sort((a, b) => a.godzina.localeCompare(b.godzina))
+  if (!szkic.nazwa.trim()) throw new Error('Podaj nazwę leku.')
+  if (szkic.trybDawkowania !== 'co_x_godzin' && dawki.length === 0) throw new Error('Dodaj co najmniej jedną dawkę.')
+  if (szkic.trybDawkowania === 'co_x_godzin' && (!Number(szkic.interwalGodzin) || !/^\d{2}:\d{2}$/.test(szkic.pierwszaGodzina) || dawki.length === 0)) throw new Error('Podaj interwał, godzinę pierwszej dawki i jej ilość.')
+  const dawkaGlowna = dawki[0] ?? nowaDawka(szkic.pierwszaGodzina)
+  const dawkiDoZapisu = szkic.trybDawkowania === 'co_x_godzin' ? [{ ...dawkaGlowna, godzina: szkic.pierwszaGodzina }] : dawki
+  return {
+    ...(istniejacy ?? utworzMetadane()),
+    nazwa: szkic.nazwa.trim(),
+    dawkaInstrukcja: dawkiDoZapisu[0]?.instrukcja?.trim() || istniejacy?.dawkaInstrukcja || 'Instrukcja wpisana przez użytkownika',
+    godziny: dawkiDoZapisu.map((dawka) => dawka.godzina),
+    dawki: dawkiDoZapisu,
+    trybDawkowania: szkic.trybDawkowania,
+    liczbaDawekDziennie: szkic.trybDawkowania === 'razy_dziennie' ? Math.max(1, Number(szkic.liczbaDawekDziennie)) : undefined,
+    oknoAktywnosciOd: szkic.trybDawkowania === 'razy_dziennie' ? szkic.oknoAktywnosciOd : undefined,
+    oknoAktywnosciDo: szkic.trybDawkowania === 'razy_dziennie' ? szkic.oknoAktywnosciDo : undefined,
+    interwalGodzin: szkic.trybDawkowania === 'co_x_godzin' ? Math.max(1, Number(szkic.interwalGodzin)) : undefined,
+    pierwszaGodzina: szkic.trybDawkowania === 'co_x_godzin' ? szkic.pierwszaGodzina : undefined,
+    jednostkaLubPostac: szkic.jednostkaLubPostac.trim() || undefined,
+    dniTygodnia: szkic.trybHarmonogramu === 'wybrane_dni' ? szkic.dniTygodnia.split(',').map(Number).filter((dzien) => Number.isInteger(dzien) && dzien >= 0 && dzien <= 6) : undefined,
+    coIleDni: szkic.trybHarmonogramu === 'co_x_dni' ? Math.max(1, Number(szkic.coIleDni)) : undefined,
+    dataOd: szkic.dataOd || (szkic.trybDawkowania === 'co_x_godzin' ? dzisiajIso() : undefined),
+    dataDo: szkic.dataDo || undefined,
+    zapasJednostek: szkic.zapasJednostek === '' ? undefined : Math.max(0, Number(szkic.zapasJednostek)),
+    zuzycieNaDawke: dawkiDoZapisu[0]?.ilosc,
+    dataOtwarcia: szkic.dataOtwarcia || undefined,
+    dodatkoweInstrukcje: szkic.dodatkoweInstrukcje.trim() || undefined,
+    aktywny: szkic.aktywny,
+    updatedAt: terazIso(),
+  }
+}
+
+function FormularzDawkowania({ szkic, ustawSzkic }: { szkic: SzkicLeku; ustawSzkic: (szkic: SzkicLeku) => void }) {
+  const aktualizujDawke = (id: string, zmiany: Partial<DawkaLeku>) => ustawSzkic({ ...szkic, dawki: szkic.dawki.map((dawka) => dawka.id === id ? { ...dawka, ...zmiany } : dawka) })
+  const dawkaInterwalowa = szkic.dawki[0] ?? nowaDawka(szkic.pierwszaGodzina)
+  const pokazListe = szkic.trybDawkowania !== 'co_x_godzin'
+  const wynikInterwalu = Number(szkic.interwalGodzin) > 0 && /^\d{2}:\d{2}$/.test(szkic.pierwszaGodzina)
+    ? Array.from({ length: Math.ceil(24 / Number(szkic.interwalGodzin)) }, (_, indeks) => {
+      const [godziny, minuty] = szkic.pierwszaGodzina.split(':').map(Number)
+      const razem = godziny * 60 + minuty + indeks * Number(szkic.interwalGodzin) * 60
+      return `${String(Math.floor((razem % 1440) / 60)).padStart(2, '0')}:${String(razem % 60).padStart(2, '0')}`
+    })
+    : []
+  return <fieldset className="pole--pelne"><legend>Dawkowanie</legend>
+    <label className="pole"><span>Tryb</span><select value={szkic.trybDawkowania} onChange={(e) => ustawSzkic({ ...szkic, trybDawkowania: e.target.value as SzkicLeku['trybDawkowania'] })}><option value="konkretne_godziny">Konkretne godziny</option><option value="razy_dziennie">X razy dziennie</option><option value="co_x_godzin">Co X godzin</option></select></label>
+    {szkic.trybDawkowania === 'razy_dziennie' && <div className="formularz"><label className="pole"><span>Liczba dawek dziennie</span><input type="number" min="1" value={szkic.liczbaDawekDziennie} onChange={(e) => ustawSzkic({ ...szkic, liczbaDawekDziennie: e.target.value })} /></label><label className="pole"><span>Aktywność od</span><input type="time" value={szkic.oknoAktywnosciOd} onChange={(e) => ustawSzkic({ ...szkic, oknoAktywnosciOd: e.target.value })} /></label><label className="pole"><span>do</span><input type="time" value={szkic.oknoAktywnosciDo} onChange={(e) => ustawSzkic({ ...szkic, oknoAktywnosciDo: e.target.value })} /></label><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { const godziny = proponujGodzinyDawek(Number(szkic.liczbaDawekDziennie), szkic.oknoAktywnosciOd, szkic.oknoAktywnosciDo); ustawSzkic({ ...szkic, dawki: godziny.map((godzina, indeks) => ({ id: szkic.dawki[indeks]?.id ?? noweId(), godzina, ilosc: szkic.dawki[indeks]?.ilosc ?? 1, instrukcja: szkic.dawki[indeks]?.instrukcja ?? '' })) }) }}>Wygeneruj propozycję godzin</button><p className="tekst-pomocniczy">To tylko edytowalna pomoc w rozłożeniu godzin, nie zalecenie medyczne.</p></div>}
+    {szkic.trybDawkowania === 'co_x_godzin' && <div className="formularz"><label className="pole"><span>Co ile godzin</span><input type="number" min="1" value={szkic.interwalGodzin} onChange={(e) => ustawSzkic({ ...szkic, interwalGodzin: e.target.value })} /></label><label className="pole"><span>Pierwsza dawka</span><input type="time" value={szkic.pierwszaGodzina} onChange={(e) => ustawSzkic({ ...szkic, pierwszaGodzina: e.target.value, dawki: [{ ...dawkaInterwalowa, godzina: e.target.value }] })} /></label><label className="pole"><span>Ilość / zużycie</span><input type="number" min="0.01" step="0.01" value={dawkaInterwalowa.ilosc} onChange={(e) => ustawSzkic({ ...szkic, dawki: [{ ...dawkaInterwalowa, ilosc: Number(e.target.value) }] })} /></label><label className="pole pole--pelne"><span>Instrukcja dawki (opcjonalna)</span><input value={dawkaInterwalowa.instrukcja ?? ''} onChange={(e) => ustawSzkic({ ...szkic, dawki: [{ ...dawkaInterwalowa, instrukcja: e.target.value }] })} /></label><p className="tekst-pomocniczy">Wynik w pierwszych 24 godzinach: {wynikInterwalu.join(', ') || 'uzupełnij interwał'}. Kolejne wystąpienia są liczone według interwału, także w nocy, jeśli z niego wynikają.</p></div>}
+    {pokazListe && <div className="lista-dawek">{szkic.dawki.map((dawka) => <div key={dawka.id}><input aria-label="Godzina dawki" type="time" value={dawka.godzina} onChange={(e) => aktualizujDawke(dawka.id, { godzina: e.target.value })} /><input aria-label="Ilość dawki" type="number" min="0.01" step="0.01" value={dawka.ilosc} onChange={(e) => aktualizujDawke(dawka.id, { ilosc: Number(e.target.value) })} /><input aria-label="Instrukcja dawki" placeholder="Instrukcja (opcjonalna)" value={dawka.instrukcja ?? ''} onChange={(e) => aktualizujDawke(dawka.id, { instrukcja: e.target.value })} /><button type="button" className="przycisk-ikona przycisk-ikona--niebezpieczny" title="Usuń dawkę" onClick={() => ustawSzkic({ ...szkic, dawki: szkic.dawki.filter((element) => element.id !== dawka.id) })}><Trash2 aria-hidden="true" /></button></div>)}</div>}
+    {pokazListe && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawSzkic({ ...szkic, dawki: [...szkic.dawki, nowaDawka()] })}><Plus aria-hidden="true" />Dodaj dawkę</button>}
+  </fieldset>
+}
+
+function RejestrLekow({ leki, repozytorium, wybranyElementId, harmonogram }: { leki: Lek[]; repozytorium: Repozytorium<Lek>; wybranyElementId?: string; harmonogram: UstawieniaHarmonogramu }) {
+  const [edytowany, ustawEdytowany] = useState<Lek>()
+  const [szkic, ustawSzkic] = useState(() => utworzSzkicLeku(undefined, harmonogram))
+  const [otwarty, ustawOtwarty] = useState(false)
+  const [blad, ustawBlad] = useState('')
+  const [doUsuniecia, ustawDoUsuniecia] = useState<Lek>()
+  const otworz = (lek?: Lek) => { ustawEdytowany(lek); ustawSzkic(utworzSzkicLeku(lek, harmonogram)); ustawBlad(''); ustawOtwarty(true) }
+  useEffect(() => { const lek = leki.find((element) => element.id === wybranyElementId); if (lek && !otwarty) otworz(lek) }, [wybranyElementId, leki, otwarty])
+  const data = dzisiajIso()
+  return <section className="widok"><NaglowekWidoku tytul="Harmonogramy leków" opis="Jeden lek może zawierać wiele dawek. Dezaktywacja zachowuje historię." akcje={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}><Plus aria-hidden="true" />Dodaj lek</button>} />
+    {leki.length === 0 ? <PustyStan tytul="Brak leków" opis="Dodaj lek i jego dawkowanie." akcja={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}>Dodaj lek</button>} /> : <div className="lista-rekordow">{leki.map((lek) => <article className="rekord" key={lek.id} data-element-id={lek.id}><div className="rekord__tresc"><h3>{lek.nazwa}</h3><div className="rekord__szczegoly"><Znacznik wariant={lek.aktywny ? 'sukces' : 'neutralny'}>{lek.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{dawkiZaplanowaneNaDzien(lek, data).map((dawka) => `${dawka.godzina} — ${dawka.ilosc}${lek.jednostkaLubPostac ? ` ${lek.jednostkaLubPostac}` : ''}`).join(', ') || 'brak dawek'}</span>{lek.zapasJednostek !== undefined && <span>Zapas: {lek.zapasJednostek}; przewidywane wyczerpanie: {przewidywanaDataWyczerpania(lek, data) ?? 'uzupełnij zużycie'}</span>}{lek.dodatkoweInstrukcje && <p>{lek.dodatkoweInstrukcje}</p>}</div></div><div className="rekord__akcje"><button type="button" className="przycisk-ikona" title="Edytuj" onClick={() => otworz(lek)}><Edit3 aria-hidden="true" /></button><button type="button" className="przycisk-ikona przycisk-ikona--niebezpieczny" title="Usuń" onClick={() => ustawDoUsuniecia(lek)}><Trash2 aria-hidden="true" /></button></div></article>)}</div>}
+    {otwarty && <Modal tytul={edytowany ? 'Edytuj lek' : 'Dodaj lek'} zamknij={() => ustawOtwarty(false)}><form className="formularz" onSubmit={async (e) => { e.preventDefault(); try { await repozytorium.zapisz(zapisanyLek(szkic, edytowany)); ustawOtwarty(false) } catch (przyczyna) { ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać leku.') } }}>
+      {blad && <Komunikat typ="blad">{blad}</Komunikat>}<fieldset className="pole--pelne"><legend>Dane leku</legend><label className="pole"><span>Nazwa *</span><input required value={szkic.nazwa} onChange={(e) => ustawSzkic({ ...szkic, nazwa: e.target.value })} /></label><label className="pole"><span>Jednostka / postać</span><input placeholder="np. tabletka" value={szkic.jednostkaLubPostac} onChange={(e) => ustawSzkic({ ...szkic, jednostkaLubPostac: e.target.value })} /></label><label className="pole"><span>Zapas</span><input type="number" min="0" value={szkic.zapasJednostek} onChange={(e) => ustawSzkic({ ...szkic, zapasJednostek: e.target.value })} /></label><label className="pole"><span>Data otwarcia</span><input type="date" value={szkic.dataOtwarcia} onChange={(e) => ustawSzkic({ ...szkic, dataOtwarcia: e.target.value })} /></label><label className="pole"><span>Okres od</span><input type="date" value={szkic.dataOd} onChange={(e) => ustawSzkic({ ...szkic, dataOd: e.target.value })} /></label><label className="pole"><span>do</span><input type="date" value={szkic.dataDo} onChange={(e) => ustawSzkic({ ...szkic, dataDo: e.target.value })} /></label><label className="pole"><span>Harmonogram dni</span><select value={szkic.trybHarmonogramu} onChange={(e) => ustawSzkic({ ...szkic, trybHarmonogramu: e.target.value as SzkicLeku['trybHarmonogramu'] })}><option value="codziennie">Codziennie</option><option value="wybrane_dni">Wybrane dni</option><option value="co_x_dni">Co X dni</option></select></label>{szkic.trybHarmonogramu === 'wybrane_dni' && <label className="pole"><span>Dni tygodnia (0–6)</span><input placeholder="np. 1, 3, 5" value={szkic.dniTygodnia} onChange={(e) => ustawSzkic({ ...szkic, dniTygodnia: e.target.value })} /></label>}{szkic.trybHarmonogramu === 'co_x_dni' && <label className="pole"><span>Co ile dni</span><input type="number" min="1" value={szkic.coIleDni} onChange={(e) => ustawSzkic({ ...szkic, coIleDni: e.target.value })} /></label>}<label className="pole pole--pelne"><span>Dodatkowe instrukcje</span><textarea value={szkic.dodatkoweInstrukcje} onChange={(e) => ustawSzkic({ ...szkic, dodatkoweInstrukcje: e.target.value })} /></label><label className="pole"><span>Stan</span><select value={String(szkic.aktywny)} onChange={(e) => ustawSzkic({ ...szkic, aktywny: e.target.value === 'true' })}><option value="true">Aktywny</option><option value="false">Nieaktywny</option></select></label></fieldset><FormularzDawkowania szkic={szkic} ustawSzkic={ustawSzkic} /><div className="akcje-formularza pole--pelne"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawOtwarty(false)}>Anuluj</button><button type="submit" className="przycisk przycisk--glowny">Zapisz</button></div></form></Modal>}
+    {doUsuniecia && <ModalPotwierdzenia tytul="Usunąć lek?" opis={`Lek „${doUsuniecia.nazwa}” zniknie z bieżących danych, a historia pozostanie lokalnie zachowana.`} etykietaAkcji="Usuń" niebezpieczne anuluj={() => ustawDoUsuniecia(undefined)} potwierdz={async () => { await repozytorium.usun(doUsuniecia.id); ustawDoUsuniecia(undefined) }} />}
+  </section>
+}
+
 export function WidokLekow() {
   const [parametryAdresu] = useSearchParams()
+  const { ustawienia } = useAplikacja()
   const { dane: leki, repozytorium } = useRepozytorium('leki')
   const { dane: wpisy, repozytorium: repoWpisow } = useRepozytorium('dziennikLekow')
   const [historia, ustawHistorie] = useState(false)
@@ -131,36 +255,10 @@ export function WidokLekow() {
     <Karta klasa="karta-bezpieczenstwa"><ShieldAlert aria-hidden="true" /><div><strong>Ogarniacz nie udziela porad medycznych.</strong><p>Nie dobiera leków ani dawek i nie zmienia zaleceń. Przechowuje wyłącznie informacje wpisane przez użytkownika.</p></div></Karta>
     <Karta>
       <h2>Dzisiejsze dawki</h2>
-      {dawki.length === 0 ? <PustyStan tytul="Brak aktywnych dawek" opis="Dodaj lek i co najmniej jedną godzinę." /> : <div className="lista-dawek lista-dawek--duza">{dawki.map((dawka) => <div key={dawka.idWystapienia}><time>{dawka.planowanaGodzina}</time><div><strong>{dawka.lek.nazwa}</strong><small>{dawka.lek.dawkaInstrukcja}</small></div><select aria-label={`Status ${dawka.lek.nazwa} ${dawka.planowanaGodzina}`} value={dawka.status} onChange={(e) => repoWpisow.zapisz(zapiszStatusDawki(dawka, e.target.value as typeof dawka.status))}><option value="oczekuje">Oczekuje</option><option value="zazyte">Zażyte</option><option value="odroczone">Odroczone</option><option value="pominiete">Pominięte</option></select></div>)}</div>}
+      {dawki.length === 0 ? <PustyStan tytul="Brak aktywnych dawek" opis="Dodaj lek i co najmniej jedną dawkę." /> : <div className="lista-dawek lista-dawek--duza">{dawki.map((dawka) => <div key={dawka.idWystapienia}><time>{dawka.planowanaGodzina}</time><div><strong>{dawka.lek.nazwa}</strong><small>{dawka.dawka.instrukcja || `${dawka.dawka.ilosc}${dawka.lek.jednostkaLubPostac ? ` ${dawka.lek.jednostkaLubPostac}` : ''}` || dawka.lek.dawkaInstrukcja}</small></div><select aria-label={`Status ${dawka.lek.nazwa} ${dawka.planowanaGodzina}`} value={dawka.status} onChange={(e) => repoWpisow.zapisz(zapiszStatusDawki(dawka, e.target.value as typeof dawka.status))}><option value="oczekuje">Oczekuje</option><option value="zazyte">Zażyte</option><option value="odroczone">Odroczone</option><option value="pominiete">Pominięte</option></select></div>)}</div>}
     </Karta>
     {historia && <Karta><h2>Historia reakcji</h2>{wpisy.length === 0 ? <p className="tekst-pomocniczy">Brak zapisanych reakcji.</p> : <div className="tabela-przewijana"><table><thead><tr><th>Data</th><th>Godzina</th><th>Lek</th><th>Status</th><th>Reakcja</th></tr></thead><tbody>{[...wpisy].sort((a, b) => b.data.localeCompare(a.data)).map((wpis) => <tr key={wpis.id}><td>{wpis.data}</td><td>{wpis.planowanaGodzina}</td><td>{leki.find((lek) => lek.id === wpis.lekId)?.nazwa ?? 'Usunięty lek'}</td><td><Znacznik wariant={wpis.status === 'zazyte' ? 'sukces' : wpis.status === 'pominiete' ? 'blad' : 'ostrzezenie'}>{wpis.status}</Znacznik></td><td>{wpis.reakcjaAt ? new Date(wpis.reakcjaAt).toLocaleString('pl-PL') : '—'}</td></tr>)}</tbody></table></div>}</Karta>}
-    <WidokRejestru
-      tytul="Harmonogramy leków"
-      opis="Każdy lek może mieć kilka godzin dziennie. Dezaktywacja zachowuje historię."
-      etykietaDodawania="Dodaj lek"
-      dane={leki}
-      repozytorium={repozytorium}
-      pola={[
-        { klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true },
-        { klucz: 'dawkaInstrukcja', etykieta: 'Dawka / instrukcja użytkownika', wymagane: true },
-        { klucz: 'godziny', etykieta: 'Godziny', wymagane: true, podpowiedz: 'np. 08:00, 14:00, 21:00' },
-        { klucz: 'trybHarmonogramu', etykieta: 'Harmonogram', typ: 'select', wymagane: true, domyslnaWartosc: 'codziennie', opcje: [{ wartosc: 'codziennie', etykieta: 'Codziennie' }, { wartosc: 'wybrane_dni', etykieta: 'Wybrane dni' }, { wartosc: 'co_x_dni', etykieta: 'Co X dni' }] },
-        { klucz: 'dniTygodnia', etykieta: 'Dni tygodnia (0–6)', podpowiedz: 'np. 1, 3, 5; 0 oznacza niedzielę', widoczne: (f) => f.trybHarmonogramu === 'wybrane_dni' },
-        { klucz: 'coIleDni', etykieta: 'Co ile dni', typ: 'number', min: 1, widoczne: (f) => f.trybHarmonogramu === 'co_x_dni' },
-        { klucz: 'dataOd', etykieta: 'Okres od', typ: 'date' },
-        { klucz: 'dataDo', etykieta: 'Okres do', typ: 'date' },
-        { klucz: 'zapasJednostek', etykieta: 'Zapas (tabletki / jednostki)', typ: 'number', min: 0 },
-        { klucz: 'zuzycieNaDawke', etykieta: 'Zużycie na dawkę', typ: 'number', min: 0 },
-        { klucz: 'dataOtwarcia', etykieta: 'Data otwarcia', typ: 'date' },
-        { klucz: 'dodatkoweInstrukcje', etykieta: 'Dodatkowe instrukcje', typ: 'textarea' },
-        { klucz: 'aktywny', etykieta: 'Stan', typ: 'select', wymagane: true, opcje: [{ wartosc: 'true', etykieta: 'Aktywny' }, { wartosc: 'false', etykieta: 'Nieaktywny' }] },
-      ]}
-      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), dawkaInstrukcja: formularz.dawkaInstrukcja.trim(), godziny: formularz.godziny.split(',').map((x) => x.trim()).filter((x) => /^\d{2}:\d{2}$/.test(x)).sort(), dniTygodnia: formularz.trybHarmonogramu === 'wybrane_dni' ? formularz.dniTygodnia.split(',').map((x) => Number(x.trim())).filter((dzien) => Number.isInteger(dzien) && dzien >= 0 && dzien <= 6) : undefined, coIleDni: formularz.trybHarmonogramu === 'co_x_dni' && formularz.coIleDni ? Math.max(1, Number(formularz.coIleDni)) : undefined, dataOd: formularz.dataOd || undefined, dataDo: formularz.dataDo || undefined, zapasJednostek: formularz.zapasJednostek ? Number(formularz.zapasJednostek) : undefined, zuzycieNaDawke: formularz.zuzycieNaDawke ? Number(formularz.zuzycieNaDawke) : undefined, dataOtwarcia: formularz.dataOtwarcia || undefined, dodatkoweInstrukcje: formularz.dodatkoweInstrukcje || undefined, aktywny: formularz.aktywny !== 'false', updatedAt: terazIso() } as Lek)}
-      uzupelnijFormularz={(lek) => ({ trybHarmonogramu: lek.coIleDni ? 'co_x_dni' : lek.dniTygodnia?.length ? 'wybrane_dni' : 'codziennie' })}
-      etykieta={(lek) => lek.nazwa}
-      wybranyElementId={parametryAdresu.get('element') ?? undefined}
-      szczegoly={(lek) => <><Znacznik wariant={lek.aktywny ? 'sukces' : 'neutralny'}>{lek.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{lek.dawkaInstrukcja}</span><span>Godziny: {lek.godziny.join(', ') || 'brak — uzupełnij'}</span>{lek.dataOd && <span>Okres: {lek.dataOd}{lek.dataDo ? ` – ${lek.dataDo}` : ''}</span>}{lek.zapasJednostek !== undefined && <span>Zapas: {lek.zapasJednostek}; przewidywane wyczerpanie: {przewidywanaDataWyczerpania(lek, data) ?? 'uzupełnij zużycie'}</span>}{lek.dodatkoweInstrukcje && <p>{lek.dodatkoweInstrukcje}</p>}</>}
-    />
+    <RejestrLekow leki={leki} repozytorium={repozytorium} wybranyElementId={parametryAdresu.get('element') ?? undefined} harmonogram={ustawienia.harmonogram} />
   </div>
 }
 
