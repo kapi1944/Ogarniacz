@@ -179,7 +179,7 @@ jobs:
         run: |
           set -euo pipefail
           if ! gh release view web-ota >/dev/null 2>&1; then
-            gh release create web-ota --draft --title "Web OTA" --notes "Staly kanal podpisanych szybkich aktualizacji Ogarniacza."
+            gh release create web-ota --draft --prerelease --title "Web OTA" --notes "Staly kanal podpisanych szybkich aktualizacji Ogarniacza."
           fi
           gh release upload web-ota artifacts/web-ota/web-ota.zip --clobber
 
@@ -206,7 +206,7 @@ jobs:
           # a endpoint PATCH oczekuje numerycznego ID -> 404.
           # 'gh release edit' sam konwertuje node ID -> numeric ID.
           if [ "$(gh release view web-ota --json isDraft --jq .isDraft 2>/dev/null || echo 'missing')" = "true" ]; then
-            gh release edit web-ota --draft=false
+            gh release edit web-ota --draft=false --prerelease
             echo "Release web-ota opublikowany (draft=false)."
           else
             echo "Release web-ota nie jest draftem lub nie istnieje - nic nie zmieniam."
