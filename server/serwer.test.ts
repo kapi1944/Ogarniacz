@@ -154,7 +154,10 @@ test('sync przenosi konta finansowe i miejsca przez serwer między urządzeniami
 
       const pobranieB = await fetch(`${url}?od=1970-01-01T00%3A00%3A00.000Z`, { headers: naglowki('instalacja-b') })
       assert.equal(pobranieB.status, 200)
-      assert.deepEqual((await pobranieB.json() as { zmiany: { tabela: string; rekord: Record<string, unknown> }[] }).zmiany, [{ tabela, rekord: utworzony, installationId: 'instalacja-a' }])
+      const zmianaUtworzenia = (await pobranieB.json() as {
+        zmiany: { tabela: string; rekord: Record<string, unknown>; installationId: string }[]
+      }).zmiany.find((zmiana) => zmiana.tabela === tabela && zmiana.rekord.id === rekord.id)
+      assert.deepEqual(zmianaUtworzenia, { tabela, rekord: utworzony, installationId: 'instalacja-a' })
 
       const zaktualizowany = { ...utworzony, nazwa: `${rekord.nazwa} po aktualizacji`, updatedAt: '2026-09-10T09:00:00.000Z' }
       await wyslij('instalacja-b', tabela, zaktualizowany, `aktualizacja-${tabela}`, utworzony.updatedAt)

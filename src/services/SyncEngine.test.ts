@@ -367,7 +367,9 @@ describe.sequential('SyncEngine', () => {
     await baza.tabela('stanSynchronizacji').clear()
     await baza.tabela('kolejkaSynchronizacji').clear()
     await expect(urzadzenieB.synchronizuj(zdalne)).resolves.toMatchObject({ pobrane: 1 })
-    expect(await baza.tabela(tabela).get(rekord.id)).toMatchObject({ id: rekord.id, nazwa: rekord.nazwa, usunietoAt: undefined })
+    const pobrany = await baza.tabela(tabela).get(rekord.id)
+    expect(pobrany).toMatchObject({ id: rekord.id, nazwa: rekord.nazwa })
+    expect(pobrany?.usunietoAt).toBeUndefined()
 
     const zaktualizowany = { ...(await baza.tabela(tabela).get(rekord.id))!, nazwa: `${rekord.nazwa} po aktualizacji` }
     await zapiszEncjeDwochUrzadzen(tabela, zaktualizowany)
