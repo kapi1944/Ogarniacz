@@ -79,8 +79,19 @@ export interface PobranaAktualizacja {
 }
 
 export interface WynikUruchomieniaInstalatora {
-  przekazanoDoSystemu: boolean
+  status: StatusInstalacjiAktualizacji
+  statusAndroida?: number
+  komunikatAndroida?: string
+  wersjaDocelowa?: string
+  versionCodeDocelowy?: number
+  sessionId?: number
   wymagaZgody: boolean
+}
+
+export type StatusInstalacjiAktualizacji = 'OCZEKUJE_NA_UZYTKOWNIKA' | 'INSTALOWANIE' | 'SUKCES' | 'ANULOWANO' | 'BRAK_MIEJSCA' | 'NIEZGODNY_PODPIS' | 'NIEPRAWIDLOWY_APK' | 'KONFLIKT_PAKIETU' | 'BLOKADA_SYSTEMOWA' | 'NIEZNANY_BLAD'
+
+export interface StanInstalacjiAktualizacji extends WynikUruchomieniaInstalatora {
+  czasRozpoczecia?: number
 }
 
 export interface ManifestAktualizacjiWeb {
@@ -168,7 +179,9 @@ export interface PlatformaOgarniacza {
       adresApk: string,
       obslugaStanu: (stan: 'pobieranie' | 'weryfikacja', procent: number) => void,
     ) => Promise<PobranaAktualizacja>
-    uruchomInstalator: (aktualizacja: PobranaAktualizacja) => Promise<WynikUruchomieniaInstalatora>
+    uruchomInstalator: (aktualizacja: PobranaAktualizacja, manifest: ManifestAktualizacji) => Promise<WynikUruchomieniaInstalatora>
+    pobierzStanInstalacji: () => Promise<StanInstalacjiAktualizacji>
+    nasluchujStanuInstalacji: (obsluga: (stan: StanInstalacjiAktualizacji) => void) => Promise<() => void>
   }
   aktualizacjeWeb: {
     skonfigurowane: () => boolean

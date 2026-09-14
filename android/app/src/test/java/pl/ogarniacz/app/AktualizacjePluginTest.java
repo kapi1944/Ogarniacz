@@ -8,6 +8,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.security.MessageDigest;
+import android.content.pm.PackageInstaller;
 import org.junit.Test;
 
 public class AktualizacjePluginTest {
@@ -15,6 +16,15 @@ public class AktualizacjePluginTest {
 
     @Test public void malaIloscMiejscaBlokujePobieranie() {
         assertFalse(AktualizacjePlugin.czyJestWystarczajacoMiejsca(495L * 1024L * 1024L, 30L * 1024L * 1024L));
+    }
+
+    @Test public void mapujeStatusyPackageInstalleraNaStabilneRezultaty() {
+        assertEquals(StanInstalacjiApk.OCZEKUJE_NA_UZYTKOWNIKA, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null));
+        assertEquals(StanInstalacjiApk.SUKCES, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_SUCCESS, null));
+        assertEquals(StanInstalacjiApk.BRAK_MIEJSCA, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_STORAGE, null));
+        assertEquals(StanInstalacjiApk.NIEZGODNY_PODPIS, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_CONFLICT, "signature mismatch"));
+        assertEquals(StanInstalacjiApk.NIEPRAWIDLOWY_APK, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_INVALID, null));
+        assertEquals(StanInstalacjiApk.ANULOWANO, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_ABORTED, null));
     }
 
     @Test public void konserwatywnyZapasPozwalaKontynuowac() {

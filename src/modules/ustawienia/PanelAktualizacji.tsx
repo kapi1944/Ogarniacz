@@ -4,7 +4,7 @@ import { Karta, Znacznik } from '../../components/Interfejs'
 import { platforma } from '../../platform/platforma'
 import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
 import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeApk } from '../../services/KontrolaAktualizacjiAplikacji'
-import type { PobranaAktualizacja, WynikSprawdzeniaAktualizacji } from '../../platform/typy'
+import type { PobranaAktualizacja, StatusInstalacjiAktualizacji, WynikSprawdzeniaAktualizacji } from '../../platform/typy'
 import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 
 type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'blad_instalatora' | 'blad_pobierania' | 'bledny_sha' | 'blad_finalizacji' | 'blad'
@@ -66,6 +66,17 @@ function etapBleduPobierania(blad: unknown): EtapAktualizacji {
   return kod === 'BLAD_POBIERANIA' ? 'blad_pobierania' : 'blad'
 }
 
+function opisStatusuInstalacji(status: StatusInstalacjiAktualizacji): [EtapAktualizacji, string] {
+  const opisy: Record<StatusInstalacjiAktualizacji, [EtapAktualizacji, string]> = {
+    OCZEKUJE_NA_UZYTKOWNIKA: ['zgoda', 'Czeka na potwierdzenie Androida.'], INSTALOWANIE: ['uruchamianie', 'Instalowanie aktualizacji…'],
+    SUKCES: ['gotowe', 'Aktualizacja zakończona.'], ANULOWANO: ['blad_instalatora', 'Instalacja została anulowana.'],
+    BRAK_MIEJSCA: ['brak_miejsca', 'Za mało wolnego miejsca na aktualizację.'], NIEZGODNY_PODPIS: ['blad_instalatora', 'APK jest podpisane innym kluczem.'],
+    NIEPRAWIDLOWY_APK: ['blad_instalatora', 'Pakiet aktualizacji jest nieprawidłowy.'], KONFLIKT_PAKIETU: ['blad_instalatora', 'Wystąpił konflikt pakietu aktualizacji.'],
+    BLOKADA_SYSTEMOWA: ['blad_instalatora', 'Android zablokował instalację.'], NIEZNANY_BLAD: ['blad_instalatora', 'Android nie mógł zainstalować aktualizacji.'],
+  }
+  return opisy[status]
+}
+
 export function PanelAktualizacji() {
   const [wersja, ustawWersje] = useState('—')
   const [etap, ustawEtap] = useState<EtapAktualizacji>('gotowy')
@@ -80,6 +91,18 @@ export function PanelAktualizacji() {
     platforma.aktualizacje.pobierzInformacje()
       .then((informacje) => ustawWersje(`${informacje.wersja} (${informacje.kod})`))
       .catch(() => ustawWersje(__WERSJA_APLIKACJI__))
+  }, [])
+
+  useEffect(() => {
+    const zastosuj = (stan: { status?: StatusInstalacjiAktualizacji, komunikatAndroida?: string }) => {
+      if (!stan.status) return
+      const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(stan.status)
+      ustawEtap(nowyEtap); ustawKomunikat(stan.komunikatAndroida || nowyKomunikat)
+    }
+    void platforma.aktualizacje.pobierzStanInstalacji().then(zastosuj)
+    let usun: () => void = () => undefined
+    void platforma.aktualizacje.nasluchujStanuInstalacji(zastosuj).then((odsubskrybuj) => { usun = odsubskrybuj })
+    return () => usun()
   }, [])
 
   useEffect(() => {
@@ -119,19 +142,18 @@ export function PanelAktualizacji() {
     }
   }
 
-  const uruchomInstalator = async (aktualizacja: PobranaAktualizacja) => {
+  const uruchomInstalator = async (aktualizacja: PobranaAktualizacja, manifest: WynikSprawdzeniaAktualizacji['manifest']) => {
     ustawEtap('uruchamianie')
     ustawKomunikat('Przekazywanie APK do systemowego instalatora…')
     try {
-      const wynik = await platforma.aktualizacje.uruchomInstalator(aktualizacja)
+      const wynik = await platforma.aktualizacje.uruchomInstalator(aktualizacja, manifest)
       if (wynik.wymagaZgody) {
         ustawEtap('zgoda')
         ustawKomunikat('Android otworzył zgodę „Instaluj nieznane aplikacje”. Włącz ją dla Ogarniacza, wróć tutaj i ponów instalację.')
-      } else {
-        ustawEtap('gotowe')
-        ustawKomunikat(wynik.przekazanoDoSystemu
-          ? 'APK przekazano do systemowego instalatora. Potwierdź aktualizację na ekranie Androida.'
-          : 'Nie udało się przekazać APK do systemowego instalatora.')
+      } else if (wynik.status) {
+        const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(wynik.status)
+        ustawEtap(nowyEtap)
+        ustawKomunikat(wynik.komunikatAndroida || nowyKomunikat)
       }
     } catch (blad) {
       ustawEtap(kodBledu(blad) === 'BRAK_MIEJSCA' ? 'brak_miejsca' : 'blad_instalatora')
@@ -158,7 +180,7 @@ export function PanelAktualizacji() {
       ustawEtap('gotowe')
       ustawPostep(100)
       ustawKomunikat('APK pobrano i zweryfikowano. Uruchamianie instalatora…')
-      await uruchomInstalator(aktualizacja)
+      await uruchomInstalator(aktualizacja, dostepna.manifest)
     } catch (blad) {
       ustawEtap(etapBleduPobierania(blad))
       ustawKomunikat(komunikatBleduAktualizacji(blad, 'Nie udało się pobrać lub zweryfikować APK.'))
@@ -183,8 +205,8 @@ export function PanelAktualizacji() {
     <div className="akcje-formularza">
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={!skonfigurowane || zajete} onClick={sprawdzAktualizacje}><RefreshCw aria-hidden="true" />Sprawdź aktualizacje</button>
       {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Pobierz i zainstaluj</button>}
-      {etap === 'zgoda' && pobrana && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana)}>Uruchom instalator</button>}
-      {(etap === 'brak_miejsca' || etap === 'blad_instalatora') && pobrana && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana)}>Ponów instalację</button>}
+      {etap === 'zgoda' && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Uruchom instalator</button>}
+      {(etap === 'brak_miejsca' || etap === 'blad_instalatora') && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Ponów instalację</button>}
     </div>
   </Karta><PanelAktualizacjiWeb /></>
 }

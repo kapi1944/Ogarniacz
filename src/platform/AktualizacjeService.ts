@@ -6,16 +6,18 @@ import type {
   InformacjeOWersjiAplikacji,
   ManifestAktualizacji,
   PobranaAktualizacja,
+  StanInstalacjiAktualizacji,
   WynikSprawdzeniaAktualizacji,
   WynikUruchomieniaInstalatora,
 } from './typy'
 
 interface WtyczkaAktualizacji {
   pobierzApk: (dane: { adres: string; sha256: string; nazwaPliku: string; rozmiar?: number }) => Promise<PobranaAktualizacja>
-  uruchomInstalator: (dane: { nazwaPliku: string }) => Promise<WynikUruchomieniaInstalatora>
+  uruchomInstalator: (dane: { nazwaPliku: string; wersjaDocelowa: string; versionCodeDocelowy: number }) => Promise<WynikUruchomieniaInstalatora>
+  pobierzStanInstalacji: () => Promise<StanInstalacjiAktualizacji>
   addListener: (
-    nazwa: 'stanAktualizacji',
-    obsluga: (dane: { stan: 'pobieranie' | 'weryfikacja'; procent: number }) => void,
+    nazwa: 'stanAktualizacji' | 'stanInstalacji',
+    obsluga: (dane: { stan: 'pobieranie' | 'weryfikacja'; procent: number } | StanInstalacjiAktualizacji) => void,
   ) => Promise<PluginListenerHandle>
 }
 
@@ -113,7 +115,8 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
     ) => {
       if (!czyAndroid) throw new Error('Pobieranie APK jest dostępne tylko w aplikacji Android.')
       const nasluchiwanie = await wtyczkaAktualizacji.addListener('stanAktualizacji', (dane) => {
-        obslugaStanu(dane.stan, dane.procent)
+        const stanPobierania = dane as { stan: 'pobieranie' | 'weryfikacja'; procent: number }
+        obslugaStanu(stanPobierania.stan, stanPobierania.procent)
       })
       try {
         return await wtyczkaAktualizacji.pobierzApk({
@@ -126,9 +129,18 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
         await nasluchiwanie.remove()
       }
     },
-    uruchomInstalator: async (aktualizacja: PobranaAktualizacja) => {
+    uruchomInstalator: async (aktualizacja: PobranaAktualizacja, manifest: ManifestAktualizacji) => {
       if (!czyAndroid) throw new Error('Instalator APK jest dostępny tylko w aplikacji Android.')
-      return wtyczkaAktualizacji.uruchomInstalator({ nazwaPliku: aktualizacja.nazwaPliku })
+      return wtyczkaAktualizacji.uruchomInstalator({ nazwaPliku: aktualizacja.nazwaPliku, wersjaDocelowa: manifest.versionName, versionCodeDocelowy: manifest.versionCode })
+    },
+    pobierzStanInstalacji: async () => {
+      if (!czyAndroid) return { status: 'NIEZNANY_BLAD' as const, wymagaZgody: false }
+      return wtyczkaAktualizacji.pobierzStanInstalacji()
+    },
+    nasluchujStanuInstalacji: async (obsluga: (stan: StanInstalacjiAktualizacji) => void) => {
+      if (!czyAndroid) return () => undefined
+      const nasluchiwanie = await wtyczkaAktualizacji.addListener('stanInstalacji', (dane) => obsluga(dane as StanInstalacjiAktualizacji))
+      return () => void nasluchiwanie.remove()
     },
   }
 }

@@ -10,7 +10,7 @@ const { pobierzStan } = vi.hoisted(() => ({ pobierzStan: vi.fn() }))
 vi.mock('../../platform/platforma', () => ({
   platforma: {
     natywna: true,
-    aktualizacje: { skonfigurowane: () => true, sprawdz: vi.fn(), pobierzInformacje: vi.fn().mockResolvedValue({ wersja: '1.0.9', kod: 1_000_009 }) },
+    aktualizacje: { skonfigurowane: () => true, sprawdz: vi.fn(), pobierzInformacje: vi.fn().mockResolvedValue({ wersja: '1.0.9', kod: 1_000_009 }), pobierzStanInstalacji: vi.fn().mockResolvedValue({}), nasluchujStanuInstalacji: vi.fn().mockResolvedValue(() => undefined) },
     aktualizacjeWeb: {
       skonfigurowane: () => true,
       pobierzStan,

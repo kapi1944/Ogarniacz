@@ -1,15 +1,13 @@
 package pl.ogarniacz.app;
 
 import android.app.Activity;
-import android.content.ClipData;
+import android.app.PendingIntent;
 import android.content.Intent;
-import android.content.pm.PackageManager;
-import android.content.pm.ResolveInfo;
+import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
 import android.os.StatFs;
 import android.provider.Settings;
-import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -19,6 +17,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
@@ -79,13 +78,18 @@ public class AktualizacjePlugin extends Plugin {
         });
     }
 
+    private static volatile AktualizacjePlugin aktywnaWtyczka;
+
     @PluginMethod public void uruchomInstalator(PluginCall wywolanie) {
         String nazwa = wywolanie.getString("nazwaPliku");
+        String wersjaDocelowa = wywolanie.getString("wersjaDocelowa");
+        Long versionCodeDocelowy = wywolanie.getLong("versionCodeDocelowy");
         if (nazwa == null || !nazwa.matches("^[A-Za-z0-9._-]+\\.apk$")) { wywolanie.reject("Nieprawidłowa nazwa pliku APK.", KOD_BRAK_INSTALATORA); return; }
-        getBridge().executeOnMainThread(() -> uruchomInstalatorNaWatkuGlownym(wywolanie, nazwa));
+        if (wersjaDocelowa == null || versionCodeDocelowy == null || versionCodeDocelowy <= 0) { wywolanie.reject("Brakuje danych zweryfikowanej aktualizacji.", KOD_BRAK_INSTALATORA); return; }
+        getBridge().executeOnMainThread(() -> uruchomInstalatorNaWatkuGlownym(wywolanie, nazwa, wersjaDocelowa, versionCodeDocelowy));
     }
 
-    private void uruchomInstalatorNaWatkuGlownym(PluginCall wywolanie, String nazwa) {
+    private void uruchomInstalatorNaWatkuGlownym(PluginCall wywolanie, String nazwa, String wersjaDocelowa, long versionCodeDocelowy) {
         try {
             Activity aktywnosc = getActivity();
             if (aktywnosc == null) { wywolanie.reject("Nie można teraz otworzyć ekranu systemowego. Wróć do aplikacji i spróbuj ponownie.", KOD_BRAK_INSTALATORA); return; }
@@ -97,15 +101,39 @@ public class AktualizacjePlugin extends Plugin {
                 if (ustawienia.resolveActivity(aktywnosc.getPackageManager()) == null) { wywolanie.reject("Android nie udostępnia ustawień instalowania nieznanych aplikacji dla Ogarniacza.", KOD_BRAK_INSTALATORA); return; }
                 aktywnosc.startActivity(ustawienia); JSObject wynik = new JSObject(); wynik.put("przekazanoDoSystemu", false); wynik.put("wymagaZgody", true); wywolanie.resolve(wynik); return;
             }
-            Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", plik);
-            Intent instalator = new Intent(Intent.ACTION_VIEW); instalator.setDataAndType(uri, "application/vnd.android.package-archive"); instalator.setClipData(ClipData.newRawUri("APK Ogarniacza", uri)); instalator.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            PackageManager pakiety = aktywnosc.getPackageManager(); ResolveInfo odbiorca = pakiety.resolveActivity(instalator, PackageManager.MATCH_DEFAULT_ONLY);
-            if (odbiorca == null || odbiorca.activityInfo == null) { wywolanie.reject("Na urządzeniu nie ma dostępnego systemowego instalatora APK. Sprawdź ustawienia Androida i spróbuj ponownie.", KOD_BRAK_INSTALATORA); return; }
-            instalator.setPackage(odbiorca.activityInfo.packageName); aktywnosc.grantUriPermission(odbiorca.activityInfo.packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); aktywnosc.startActivity(instalator);
-            JSObject wynik = new JSObject(); wynik.put("przekazanoDoSystemu", true); wynik.put("wymagaZgody", false); wywolanie.resolve(wynik);
+            PackageInstaller.SessionParams parametry = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            parametry.setSize(plik.length());
+            PackageInstaller instalator = getContext().getPackageManager().getPackageInstaller();
+            int sesja = instalator.createSession(parametry);
+            StanInstalacjiApk.zapisz(getContext(), wersjaDocelowa, versionCodeDocelowy, sesja, StanInstalacjiApk.INSTALOWANIE, null, null);
+            try (PackageInstaller.Session otwartaSesja = instalator.openSession(sesja); InputStream wejscie = new FileInputStream(plik); OutputStream wyjscie = otwartaSesja.openWrite("base.apk", 0, plik.length())) {
+                byte[] bufor = new byte[64 * 1024]; int liczba;
+                while ((liczba = wejscie.read(bufor)) != -1) wyjscie.write(bufor, 0, liczba);
+                otwartaSesja.fsync(wyjscie);
+                Intent wynikSesji = new Intent(getContext(), WynikInstalacjiApkReceiver.class).setAction("pl.ogarniacz.app.WYNIK_INSTALACJI_APK");
+                wynikSesji.putExtra("wersjaDocelowa", wersjaDocelowa).putExtra("versionCodeDocelowy", versionCodeDocelowy).putExtra("sessionId", sesja);
+                int flagi = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
+                otwartaSesja.commit(PendingIntent.getBroadcast(getContext(), sesja, wynikSesji, flagi).getIntentSender());
+            }
+            JSObject wynik = StanInstalacjiApk.odczytaj(getContext()); wynik.put("wymagaZgody", false); wywolanie.resolve(wynik);
         } catch (BrakMiejscaException blad) { odrzucBrakMiejsca(wywolanie, blad); }
         catch (Exception blad) { wywolanie.reject(bezpiecznyKomunikat(blad, "Nie udało się uruchomić instalatora Androida. Spróbuj ponownie."), KOD_BRAK_INSTALATORA); }
     }
+
+    @PluginMethod public void pobierzStanInstalacji(PluginCall wywolanie) {
+        potwierdzSukcesPoRestarcie();
+        wywolanie.resolve(StanInstalacjiApk.odczytaj(getContext()));
+    }
+
+    @Override public void handleOnStart() { super.handleOnStart(); aktywnaWtyczka = this; potwierdzSukcesPoRestarcie(); }
+    @Override public void handleOnDestroy() { if (aktywnaWtyczka == this) aktywnaWtyczka = null; super.handleOnDestroy(); }
+    private void potwierdzSukcesPoRestarcie() {
+        long oczekiwanyKod = StanInstalacjiApk.kodDocelowy(getContext());
+        if (oczekiwanyKod > 0 && oczekiwanyKod == BuildConfig.VERSION_CODE && !StanInstalacjiApk.SUKCES.equals(StanInstalacjiApk.status(getContext()))) {
+            StanInstalacjiApk.zapisz(getContext(), BuildConfig.VERSION_NAME, oczekiwanyKod, -1, StanInstalacjiApk.SUKCES, PackageInstaller.STATUS_SUCCESS, null);
+        }
+    }
+    static void powiadomOStatusieInstalacji(android.content.Context kontekst) { AktualizacjePlugin wtyczka = aktywnaWtyczka; if (wtyczka != null) wtyczka.notifyListeners("stanInstalacji", StanInstalacjiApk.odczytaj(kontekst)); }
 
     private void odrzucBrakMiejsca(PluginCall wywolanie, BrakMiejscaException blad) {
         JSObject dane = new JSObject(); dane.put("wolneBajty", blad.wolneBajty); dane.put("wymaganeBajty", blad.wymaganeBajty); dane.put("brakujaceBajty", blad.brakujaceBajty);
