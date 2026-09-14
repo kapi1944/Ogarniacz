@@ -96,8 +96,8 @@ jobs:
           test -s android/web-ota-public-key.pem || { echo 'Publiczny klucz Web OTA jest pusty.' >&2; exit 1; }
           grep -q 'BEGIN PUBLIC KEY' android/web-ota-public-key.pem || { echo 'Publiczny klucz Web OTA nie zawiera BEGIN PUBLIC KEY.' >&2; exit 1; }
           grep -q 'END PUBLIC KEY' android/web-ota-public-key.pem || { echo 'Publiczny klucz Web OTA nie zawiera END PUBLIC KEY.' >&2; exit 1; }
-          oczekiwany="$(node -p "require('./config/android-release.json').sha256Certyfikatu")"
-          faktyczny="$(keytool -list -v -keystore "$klucz" -alias "$ANDROID_RELEASE_KEY_ALIAS" -storepass "$ANDROID_RELEASE_STORE_PASSWORD" | awk -F': ' '/SHA256:/{print tolower($2); exit}')"
+          oczekiwany="$(node -p "require('./config/android-release.json').sha256Certyfikatu" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          faktyczny="$(keytool -list -v -keystore "$klucz" -alias "$ANDROID_RELEASE_KEY_ALIAS" -storepass "$ANDROID_RELEASE_STORE_PASSWORD" | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
           [[ "$faktyczny" == "$oczekiwany" ]] || { echo 'Fingerprint produkcyjnego keystore nie zgadza się z config/android-release.json.' >&2; exit 1; }
 
       - name: Odczytaj ostatnią opublikowaną wersję

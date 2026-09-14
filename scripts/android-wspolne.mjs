@@ -20,6 +20,10 @@ export function obliczKodWersji(wersja) {
   return kod
 }
 
+export function normalizujFingerprintCertyfikatu(fingerprint) {
+  return String(fingerprint).replace(/[:\s]/g, '').toLowerCase()
+}
+
 export function czyZgodnyJdk(wersja, wymaganaWersja) {
   return Number.isInteger(wersja) && wersja === wymaganaWersja
 }

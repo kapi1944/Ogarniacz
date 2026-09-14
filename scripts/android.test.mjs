@@ -8,6 +8,7 @@ import {
   obliczKodWersji,
   obliczSha256,
   czyZgodnyJdk,
+  normalizujFingerprintCertyfikatu,
   parsujUrzadzeniaAdb,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
@@ -25,6 +26,12 @@ test('akceptuje dokładnie JDK wymagane przez toolchain Capacitor', () => {
   assert.equal(czyZgodnyJdk(21, 21), true)
   assert.equal(czyZgodnyJdk(17, 21), false)
   assert.equal(czyZgodnyJdk(25, 21), false)
+})
+
+test('normalizuje fingerprint certyfikatu i odrzuca inny', () => {
+  const oczekiwany = normalizujFingerprintCertyfikatu('83cba311')
+  assert.equal(normalizujFingerprintCertyfikatu(' 83:CB:A3:11\n'), oczekiwany)
+  assert.notEqual(normalizujFingerprintCertyfikatu('83cba312'), oczekiwany)
 })
 
 test('zachowuje globalną blokadę HTTP i wyjątek wyłącznie dla endpointu LAN synchronizacji', () => {

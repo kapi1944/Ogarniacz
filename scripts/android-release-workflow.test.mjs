@@ -19,6 +19,8 @@ test('workflow wydania wymaga Environment, buduje APK raz i publikuje gotowy art
   assert.match(workflow, /test -s android\/web-ota-public-key\.pem/)
   assert.match(workflow, /grep -q 'BEGIN PUBLIC KEY' android\/web-ota-public-key\.pem/)
   assert.match(workflow, /grep -q 'END PUBLIC KEY' android\/web-ota-public-key\.pem/)
+  assert.match(workflow, /tr -d '\[:space:\]:'/)
+  assert.match(workflow, /tr '\[:upper:\]' '\[:lower:\]'/)
   assert.match(workflow, /android-release-przygotowanie\.mjs --version-bump/)
   assert.match(workflow, /git diff --cached --quiet/)
   assert.match(workflow, /test -x android\/gradlew \|\| chmod \+x android\/gradlew/)

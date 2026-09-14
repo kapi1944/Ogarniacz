@@ -15,6 +15,7 @@ import {
   obliczKodWersji,
   obliczSha256,
   czyZgodnyJdk,
+  normalizujFingerprintCertyfikatu,
   parsujUrzadzeniaAdb,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
@@ -446,8 +447,8 @@ function sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko) {
   const tekst = `${wynik.stdout ?? ''}\n${wynik.stderr ?? ''}`.trim()
   if (tekst) console.log(`\n→ Weryfikacja podpisu release APK\n${tekst}`)
   if (wynik.status !== 0) throw new Error('Weryfikacja podpisu release APK nie powiodła się.')
-  const faktyczny = /certificate SHA-256 digest:\s*([0-9a-f:]+)/i.exec(tekst)?.[1].replaceAll(':', '').toLowerCase()
-  const oczekiwany = String(JSON.parse(readFileSync(join(katalogRepozytorium, 'config', 'android-release.json'), 'utf8')).sha256Certyfikatu).toLowerCase()
+  const faktyczny = normalizujFingerprintCertyfikatu(/certificate SHA-256 digest:\s*([0-9a-f:\s]+)/i.exec(tekst)?.[1] ?? '')
+  const oczekiwany = normalizujFingerprintCertyfikatu(JSON.parse(readFileSync(join(katalogRepozytorium, 'config', 'android-release.json'), 'utf8')).sha256Certyfikatu)
   if (faktyczny !== oczekiwany) throw new Error('SHA-256 certyfikatu finalnego APK nie zgadza się z config/android-release.json.')
 }
 
