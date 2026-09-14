@@ -31,6 +31,25 @@ def kluczWebOta = plikKluczaWebOta.exists()
     ? plikKluczaWebOta.text.replaceAll('-----BEGIN PUBLIC KEY-----|-----END PUBLIC KEY-----|\\s', '')
     : ''
 def literalKluczaWebOta = '"' + kluczWebOta.replace('\\', '\\\\').replace('"', '\\"') + '"'
+def odczytajZmiennaRuntime = { nazwa ->
+    def zeSrodowiska = System.getenv(nazwa)?.trim()
+    if (zeSrodowiska) return zeSrodowiska
+    def wartosc = ''
+    ['.env', '.env.local', '.env.production', '.env.production.local'].each { nazwaPliku ->
+        def plik = rootProject.file("../${nazwaPliku}")
+        if (!plik.exists()) return
+        plik.eachLine { linia ->
+            def dopasowanie = (linia =~ /^\s*${java.util.regex.Pattern.quote(nazwa)}\s*=\s*(.*)$/)
+            if (dopasowanie.matches()) {
+                wartosc = dopasowanie[0][1].trim().replaceAll(/^(['"])(.*)\1$/, '\\$2').trim()
+            }
+        }
+    }
+    return wartosc
+}
+def literalKonfiguracjiRuntime = { nazwa ->
+    '"' + odczytajZmiennaRuntime(nazwa).replace('\\', '\\\\').replace('"', '\\"') + '"'
+}
 def commitShaBundle = System.getenv('GITHUB_SHA')?.trim()
 if (!commitShaBundle?.matches('(?i)^[a-f0-9]{40}$')) {
     try {
@@ -57,6 +76,9 @@ android {
         buildConfigField "String", "WEB_OTA_PUBLIC_KEY", literalKluczaWebOta
         buildConfigField "String", "WEB_BUNDLE_VERSION", '"' + wersjaBundle + '"'
         buildConfigField "String", "WEB_BUNDLE_COMMIT_SHA", '"' + commitShaBundle.toLowerCase() + '"'
+        buildConfigField "String", "SYNC_API_URL", literalKonfiguracjiRuntime('VITE_SYNC_API_URL')
+        buildConfigField "String", "ANDROID_UPDATE_MANIFEST_URL", literalKonfiguracjiRuntime('VITE_ANDROID_UPDATE_MANIFEST_URL')
+        buildConfigField "String", "ANDROID_WEB_UPDATE_MANIFEST_URL", literalKonfiguracjiRuntime('VITE_ANDROID_WEB_UPDATE_MANIFEST_URL')
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61

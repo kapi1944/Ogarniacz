@@ -8,11 +8,13 @@ import { inicjalizujPlatforme } from './platform/platforma'
 import { PotwierdzenieGotowosciBundle } from './app/PotwierdzenieGotowosciBundle'
 import { inicjalizujWidgetSnapshotService } from './services/WidgetSnapshotService'
 import { inicjalizujSynchronizacjeAplikacji } from './services/SynchronizacjaAplikacji'
+import { inicjalizujRuntimeConfig } from './services/RuntimeConfigService'
 import { AktualizacjaPwa } from './app/AktualizacjaPwa'
 import './styles/glowny.css'
 
 await inicjalizujBaze()
 await inicjalizujPlatforme()
+await inicjalizujRuntimeConfig()
 zastosujUstawieniaInterfejsu(
   await repozytoriumUstawien.wczytaj(),
   window.matchMedia('(prefers-color-scheme: dark)').matches,

@@ -15,10 +15,10 @@ function sprawdzAdresApi(adresApi: string): string | undefined {
 }
 
 export function pobierzKonfiguracjeSynchronizacji(
-  zmienne: Record<string, string | undefined> = import.meta.env,
+  zmienne?: Record<string, string | undefined>,
 ): KonfiguracjaSynchronizacji {
-  const adresApi = zmienne.VITE_SYNC_API_URL?.trim()
-  const kluczDostepu = zmienne.VITE_SYNC_ACCESS_KEY?.trim()
+  const adresApi = (zmienne?.VITE_SYNC_API_URL ?? pobierzKonfiguracjeRuntime().syncApiUrl)?.trim()
+  const kluczDostepu = zmienne?.VITE_SYNC_ACCESS_KEY?.trim()
   if (!adresApi && !kluczDostepu) return {}
   const poprawnyAdres = adresApi ? sprawdzAdresApi(adresApi) : undefined
   if (!poprawnyAdres) {
@@ -26,3 +26,4 @@ export function pobierzKonfiguracjeSynchronizacji(
   }
   return { adresApi: poprawnyAdres, kluczDostepu }
 }
+import { pobierzKonfiguracjeRuntime } from './RuntimeConfigService'

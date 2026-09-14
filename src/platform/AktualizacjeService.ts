@@ -1,6 +1,7 @@
 import { App } from '@capacitor/app'
 import { CapacitorHttp, registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 import { z } from 'zod'
+import { pobierzDiagnostykeRuntime, pobierzKonfiguracjeRuntime } from '../services/RuntimeConfigService'
 import type {
   InformacjeOWersjiAplikacji,
   ManifestAktualizacji,
@@ -19,7 +20,6 @@ interface WtyczkaAktualizacji {
 }
 
 const wtyczkaAktualizacji = registerPlugin<WtyczkaAktualizacji>('Aktualizacje')
-const adresManifestu = (import.meta.env.VITE_ANDROID_UPDATE_MANIFEST_URL ?? '').trim()
 
 const schematManifestu = z.object({
   versionName: z.string().regex(/^\d+\.\d+\.\d+$/),
@@ -83,11 +83,12 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
   }
 
   return {
-    skonfigurowane: () => czyAndroid && adresManifestu !== '',
+    skonfigurowane: () => czyAndroid && Boolean(pobierzKonfiguracjeRuntime().androidUpdateManifestUrl),
     pobierzInformacje,
     sprawdz: async (): Promise<WynikSprawdzeniaAktualizacji> => {
       if (!czyAndroid) throw new Error('Aktualizacje APK są dostępne tylko w aplikacji Android.')
-      if (!adresManifestu) throw new Error('Źródło aktualizacji nie jest skonfigurowane w tym buildzie.')
+      const adresManifestu = pobierzKonfiguracjeRuntime().androidUpdateManifestUrl
+      if (!adresManifestu) throw new Error(pobierzDiagnostykeRuntime() || 'Źródło aktualizacji nie jest skonfigurowane w tym buildzie.')
       const bezpiecznyAdresManifestu = sprawdzAdresHttps(adresManifestu, 'Adres manifestu aktualizacji')
       const odpowiedz = await CapacitorHttp.get({
         url: bezpiecznyAdresManifestu,

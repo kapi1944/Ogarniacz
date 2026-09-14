@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Download, RefreshCw, RotateCcw } from 'lucide-react'
 import { Karta, Znacznik } from '../../components/Interfejs'
 import { platforma } from '../../platform/platforma'
+import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
 import type { StanAktualizacjiWeb, WynikSprawdzeniaAktualizacjiWeb } from '../../platform/typy'
 
 type EtapWeb = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'odrzucona' | 'wymaga-apk' | 'blad'
@@ -113,7 +114,7 @@ export function PanelAktualizacjiWeb() {
     {komunikat && <p className="tekst-pomocniczy" role={etap === 'blad' ? 'alert' : 'status'}>{komunikat}</p>}
     {postep !== undefined && etap === 'pobieranie' && <progress value={postep} max="100" aria-label="Postęp szybkiej aktualizacji" />}
     {!platforma.natywna && <p className="tekst-pomocniczy">Szybkie aktualizacje są dostępne w aplikacji Android.</p>}
-    {platforma.natywna && !skonfigurowane && <p className="tekst-pomocniczy">Osobny kanał Web OTA nie jest skonfigurowany w tym buildzie.</p>}
+    {platforma.natywna && !skonfigurowane && <p className="tekst-pomocniczy">{pobierzDiagnostykeRuntime() || 'Osobny kanał Web OTA nie jest skonfigurowany w tym APK.'}</p>}
     <div className="akcje-formularza">
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={!skonfigurowane || zajete} onClick={sprawdz}><RefreshCw aria-hidden="true" />Sprawdź szybką aktualizację</button>
       {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={() => void zainstaluj(false)}><Download aria-hidden="true" />Pobierz i zastosuj</button>}

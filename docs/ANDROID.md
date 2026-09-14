@@ -47,7 +47,7 @@ npm run version:major
 
 ### Signed release i manifest
 
-Build aplikacji przeznaczonej do aktualizacji musi znać pełny adres HTTPS manifestu. Jedynym punktem konfiguracji klienta jest `VITE_ANDROID_UPDATE_MANIFEST_URL` (odpowiednik `UPDATE_MANIFEST_URL` dla Vite). Repozytorium ma obecnie ustawione w `.env.production` źródło GitHub Releases:
+Build aplikacji przeznaczonej do aktualizacji musi znać pełne adresy HTTPS manifestów APK, Web OTA oraz serwera synchronizacji. Gradle zapisuje je w `BuildConfig` APK, a `RuntimeConfig` przekazuje je frontendowi przez natywny bridge. Dzięki temu aktywacja Web OTA nie może zmienić konfiguracji infrastrukturalnej Androida. Wersja webowa może dostarczyć równoważne wartości przez `window.__OGARNIACZ_RUNTIME_CONFIG__`; zmienne `VITE_*` pozostają fallbackiem developmentu.
 
 ```powershell
 VITE_ANDROID_UPDATE_MANIFEST_URL=https://github.com/kapi1944/Ogarniacz/releases/latest/download/latest.json

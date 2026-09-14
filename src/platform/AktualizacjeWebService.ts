@@ -1,6 +1,7 @@
 import { App } from '@capacitor/app'
 import { CapacitorHttp, registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 import { z } from 'zod'
+import { pobierzDiagnostykeRuntime, pobierzKonfiguracjeRuntime } from '../services/RuntimeConfigService'
 import type {
   ManifestAktualizacjiWeb,
   StanAktualizacjiWeb,
@@ -22,7 +23,6 @@ interface WtyczkaAktualizacjiWeb {
 }
 
 const wtyczkaAktualizacjiWeb = registerPlugin<WtyczkaAktualizacjiWeb>('AktualizacjeWeb')
-const adresManifestuWeb = (import.meta.env.VITE_ANDROID_WEB_UPDATE_MANIFEST_URL ?? '').trim()
 
 const schematManifestuWeb = z.object({
   bundleVersion: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
@@ -94,11 +94,12 @@ export function utworzUslugeAktualizacjiWeb(czyAndroid: boolean) {
   }
 
   return {
-    skonfigurowane: () => czyAndroid && adresManifestuWeb !== '',
+    skonfigurowane: () => czyAndroid && Boolean(pobierzKonfiguracjeRuntime().androidWebUpdateManifestUrl),
     pobierzStan,
     sprawdz: async (): Promise<WynikSprawdzeniaAktualizacjiWeb> => {
       if (!czyAndroid) throw new Error('Szybkie aktualizacje są dostępne tylko w aplikacji Android.')
-      if (!adresManifestuWeb) throw new Error('Źródło szybkich aktualizacji nie jest skonfigurowane w tym buildzie.')
+      const adresManifestuWeb = pobierzKonfiguracjeRuntime().androidWebUpdateManifestUrl
+      if (!adresManifestuWeb) throw new Error(pobierzDiagnostykeRuntime() || 'Źródło szybkich aktualizacji nie jest skonfigurowane w tym buildzie.')
       const bezpiecznyAdres = sprawdzAdresManifestu(adresManifestuWeb)
       const odpowiedz = await CapacitorHttp.get({
         url: bezpiecznyAdres,

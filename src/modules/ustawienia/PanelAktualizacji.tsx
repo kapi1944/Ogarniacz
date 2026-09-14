@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import { Karta, Znacznik } from '../../components/Interfejs'
 import { platforma } from '../../platform/platforma'
+import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
 import type { PobranaAktualizacja, WynikSprawdzeniaAktualizacji } from '../../platform/typy'
 import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 
@@ -121,7 +122,7 @@ export function PanelAktualizacji() {
     {komunikat && <p className="tekst-pomocniczy" role={etap === 'blad' ? 'alert' : 'status'}>{komunikat}</p>}
     {postep !== undefined && (etap === 'pobieranie' || etap === 'weryfikacja') && <progress value={postep} max="100" aria-label="Postęp pobierania aktualizacji" />}
     {!platforma.natywna && <p className="tekst-pomocniczy">Aktualizacje APK są dostępne w aplikacji Android.</p>}
-    {platforma.natywna && !skonfigurowane && <p className="tekst-pomocniczy">Źródło aktualizacji nie jest skonfigurowane w tym buildzie.</p>}
+    {platforma.natywna && !skonfigurowane && <p className="tekst-pomocniczy">{pobierzDiagnostykeRuntime() || 'Źródło aktualizacji nie jest skonfigurowane w tym APK.'}</p>}
     <div className="akcje-formularza">
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={!skonfigurowane || zajete} onClick={sprawdzAktualizacje}><RefreshCw aria-hidden="true" />Sprawdź aktualizacje</button>
       {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Pobierz i zainstaluj</button>}

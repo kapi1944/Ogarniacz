@@ -3,6 +3,7 @@ import { RepozytoriumZdalneHttp } from '../data/RepozytoriumZdalneHttp'
 import type { RepozytoriumZdalne } from '../data/DostawcaSynchronizacji'
 import { platforma } from '../platform/platforma'
 import { pobierzKonfiguracjeSynchronizacji } from './KonfiguracjaSynchronizacji'
+import { pobierzDiagnostykeRuntime } from './RuntimeConfigService'
 import { nazwyTabelSynchronizowanych, oznaczOczekujacaSynchronizacje, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, SyncEngine } from './SyncEngine'
 
 const syncEngine = new SyncEngine()
@@ -17,7 +18,7 @@ function utworzRepozytoriumZdalne(): RepozytoriumZdalne | undefined {
 
 export function synchronizujTeraz() {
   repozytoriumZdalne ??= utworzRepozytoriumZdalne()
-  if (!repozytoriumZdalne) throw new Error('Synchronizacja zdalna nie jest skonfigurowana na tym urządzeniu.')
+  if (!repozytoriumZdalne) throw new Error(pobierzDiagnostykeRuntime() || 'Synchronizacja zdalna nie jest skonfigurowana na tym urządzeniu.')
   return syncEngine.synchronizuj(repozytoriumZdalne)
 }
 
