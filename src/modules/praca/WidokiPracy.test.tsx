@@ -57,7 +57,7 @@ describe('codzienny przepływ pracy', () => {
     expect(screen.getByRole('link', { name: /Otwórz utworzony element/ })).toHaveAttribute('href', '/zadania?element=zadanie-1')
     fireEvent.click(screen.getByRole('button', { name: 'Cofnij' }))
     await waitFor(() => expect(cofnijPrzeksztalcenieInbox).toHaveBeenCalledWith(element, { typ: 'zadania', id: 'zadanie-1' }))
-    expect(screen.getByText(/Wpis znowu czeka w Inboxie/)).toBeInTheDocument()
+    expect(screen.getByText(/Wpis znowu czeka w poczekalni/)).toBeInTheDocument()
   })
 
   it('zmienia priorytet, termin i projekt zadania bez otwierania formularza', async () => {

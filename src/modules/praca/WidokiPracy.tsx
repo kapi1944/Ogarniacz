@@ -152,7 +152,7 @@ export function WidokZadan() {
     : filtr === 'dzisiaj' ? { tytul: 'Brak zadań na dziś', opis: 'Dzisiejsza lista jest wolna. Dodaj zadanie tylko wtedy, gdy naprawdę ma być wykonane dziś.' }
       : filtr === 'wykonane' ? { tytul: 'Brak wykonanych zadań', opis: 'Ukończone zadania pojawią się tutaj.' }
         : filtr === 'nadchodzace' ? { tytul: 'Brak nadchodzących terminów', opis: 'Nie ma otwartych zadań z późniejszym terminem.' }
-          : { tytul: 'Lista zadań jest pusta', opis: 'Dodaj pierwsze konkretne działanie albo przekształć wpis z Inboxu.' }
+          : { tytul: 'Lista zadań jest pusta', opis: 'Dodaj pierwsze konkretne działanie albo przekształć wpis z poczekalni.' }
 
   return <WidokRejestru
     tytul="Zadania"
@@ -301,10 +301,10 @@ export function WidokSkrzynki() {
     ustawPrzetwarzanyId(element.id)
     try {
       const wynik = await przeksztalcElementInbox(element, typ, pokazRezultat)
-      if (pokazRezultat) ustawKomunikat({ typ: 'sukces', tresc: `Utworzono ${etykietyWynikowInbox[wynik.typ as keyof typeof etykietyWynikowInbox]}. Wpis pozostał w historii Inboxu.`, element, wynik: wynik as { typ: keyof typeof sciezkiWynikowInbox; id: string } })
+      if (pokazRezultat) ustawKomunikat({ typ: 'sukces', tresc: `Utworzono ${etykietyWynikowInbox[wynik.typ as keyof typeof etykietyWynikowInbox]}. Wpis pozostał w historii poczekalni.`, element, wynik: wynik as { typ: keyof typeof sciezkiWynikowInbox; id: string } })
       return wynik
     } catch (przyczyna) {
-      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się przekształcić wpisu. Pozostał w Inboxie.' })
+      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się przekształcić wpisu. Pozostał w poczekalni.' })
       if (!pokazRezultat) throw przyczyna
     } finally {
       ustawPrzetwarzanyId(undefined)
@@ -321,7 +321,7 @@ export function WidokSkrzynki() {
       await repozytorium.zapisz({ ...element, status: 'przetworzone', updatedAt: terazIso() })
       ustawKomunikat({ typ: 'sukces', tresc: `Podzielono wpis na ${propozycje.length} elementy. Oryginał pozostał w historii.` })
     } catch {
-      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się dokończyć podziału. Oryginalny wpis pozostał w Inboxie.' })
+      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się dokończyć podziału. Oryginalny wpis pozostał w poczekalni.' })
     }
   }
 
@@ -329,27 +329,27 @@ export function WidokSkrzynki() {
     if (!komunikat?.element || !komunikat.wynik) return
     try {
       await cofnijPrzeksztalcenieInbox(komunikat.element, komunikat.wynik)
-      ustawKomunikat({ typ: 'sukces', tresc: 'Cofnięto konwersję. Wpis znowu czeka w Inboxie.' })
+      ustawKomunikat({ typ: 'sukces', tresc: 'Cofnięto konwersję. Wpis znowu czeka w poczekalni.' })
     } catch {
-      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się w pełni cofnąć konwersji. Wpis pozostaje widoczny w Inboxie.' })
+      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się w pełni cofnąć konwersji. Wpis pozostaje widoczny w poczekalni.' })
     }
   }
 
   return <div className="widok">
-    <NaglowekWidoku tytul="Inbox" opis={`${oczekujace.length} ${oczekujace.length === 1 ? 'sprawa czeka' : 'spraw czeka'} na uporządkowanie. Najpierw zapisz, sklasyfikuj później.`} />
+    <NaglowekWidoku tytul="Poczekalnia" opis={`${oczekujace.length} ${oczekujace.length === 1 ? 'sprawa czeka' : 'spraw czeka'} na uporządkowanie. Najpierw zapisz, sklasyfikuj później.`} />
     {komunikat && <Komunikat typ={komunikat.typ}>{komunikat.tresc}{komunikat.wynik && <><Link className="przycisk przycisk--tekstowy" to={adresWynikuInbox(komunikat.wynik)}><ArrowRight aria-hidden="true" />Otwórz utworzony element</Link><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijKonwersje()}><Undo2 aria-hidden="true" />Cofnij</button></>}</Komunikat>}
     <Karta>
-      <form className="szybki-wpis" onSubmit={async (e) => { e.preventDefault(); const pole = e.currentTarget.elements.namedItem('tresc') as HTMLInputElement; if (!pole.value.trim()) return; await zapiszDoInbox(pole.value, 'tekst'); ustawKomunikat({ typ: 'sukces', tresc: 'Zapisano w Inboxie. Wpis czeka poniżej na uporządkowanie.' }); pole.value = ''; pole.focus() }}>
-        <input name="tresc" aria-label="Treść do skrzynki" placeholder="Co chcesz zapamiętać?" />
-        <button className="przycisk przycisk--glowny" type="submit">Zapisz do skrzynki</button>
+      <form className="szybki-wpis" onSubmit={async (e) => { e.preventDefault(); const pole = e.currentTarget.elements.namedItem('tresc') as HTMLInputElement; if (!pole.value.trim()) return; await zapiszDoInbox(pole.value, 'tekst'); ustawKomunikat({ typ: 'sukces', tresc: 'Dodano do poczekalni. Wpis czeka poniżej na uporządkowanie.' }); pole.value = ''; pole.focus() }}>
+        <input name="tresc" aria-label="Treść do poczekalni" placeholder="Co chcesz zapamiętać?" />
+        <button className="przycisk przycisk--glowny" type="submit">Dodaj do poczekalni</button>
       </form>
     </Karta>
     {historia.length > 0 && <div className="pasek-filtrow"><span>{historia.length} {historia.length === 1 ? 'wpis w historii' : 'wpisów w historii'}</span><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPokazHistorie((wartosc) => !wartosc)}>{pokazHistorie ? 'Ukryj historię' : 'Pokaż historię'}</button></div>}
-    {oczekujace.length === 0 && !pokazHistorie ? <PustyStan tytul="Inbox jest uporządkowany" opis={historia.length > 0 ? 'Żaden wpis nie czeka na decyzję. Przetworzone elementy są bezpiecznie zachowane w historii.' : 'Nic nie czeka na uporządkowanie. Nową rzecz możesz zapisać w polu powyżej.'} /> : <div className="lista-rekordow">{widoczne.map((element) => <article className={`rekord ${czyElementInboxDoKlasyfikacji(element) ? 'rekord--inbox-oczekuje' : 'rekord--inbox-historia'}`} data-element-id={element.id} key={element.id}>
+    {oczekujace.length === 0 && !pokazHistorie ? <PustyStan tytul="Poczekalnia jest uporządkowana" opis={historia.length > 0 ? 'Żaden wpis nie czeka na decyzję. Przetworzone elementy są bezpiecznie zachowane w historii.' : 'Nic nie czeka na uporządkowanie. Nową rzecz możesz zapisać w polu powyżej.'} /> : <div className="lista-rekordow">{widoczne.map((element) => <article className={`rekord ${czyElementInboxDoKlasyfikacji(element) ? 'rekord--inbox-oczekuje' : 'rekord--inbox-historia'}`} data-element-id={element.id} key={element.id}>
       <div className="rekord__tresc"><h3>{element.tresc}</h3><div className="rekord__szczegoly"><Znacznik wariant={element.status === 'przetworzone' ? 'sukces' : 'ostrzezenie'}>{czyElementInboxDoKlasyfikacji(element) ? 'do sklasyfikowania' : 'przetworzone'}</Znacznik><span>{new Date(element.createdAt).toLocaleString('pl-PL')}</span>{element.sugerowanyTyp && <span>Sugerowany typ: {element.sugerowanyTyp}</span>}</div></div>
       <div className="rekord__akcje">
         {czyElementInboxDoKlasyfikacji(element) ? <><button type="button" className="przycisk przycisk--maly" disabled={przetwarzanyId === element.id} onClick={() => void przetworz(element, 'zadanie')}>Zadanie</button><button type="button" className="przycisk przycisk--maly" disabled={przetwarzanyId === element.id} onClick={() => void przetworz(element, 'projekt')}>Projekt</button><select aria-label={`Inny typ dla ${element.tresc}`} value="" disabled={przetwarzanyId === element.id} onChange={(e) => { if (e.target.value) void przetworz(element, e.target.value as TypKonwersjiInbox) }}><option value="">Inny typ…</option><option value="notatka">Notatka</option><option value="przypomnienie">Przypomnienie</option><option value="zakup">Zakup</option><option value="pomysl">Pomysł</option><option value="wizyta">Do umówienia</option><option value="na_pozniej">Na później</option></select>{zaproponujPodzialPoczekalni(element.tresc).length > 1 && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPodgladPodzialu(element.id)}>Podziel</button>}</> : element.przeksztalconoNa && element.przeksztalconoNa.typ in sciezkiWynikowInbox && <Link className="przycisk przycisk--tekstowy" to={adresWynikuInbox(element.przeksztalconoNa as { typ: keyof typeof sciezkiWynikowInbox; id: string })}>Otwórz element</Link>}
-        <button type="button" className="przycisk przycisk--tekstowy" onClick={async () => { if (!window.confirm(`Usunąć wpis „${element.tresc}”?`)) return; await repozytorium.usun(element.id); ustawKomunikat({ typ: 'sukces', tresc: 'Usunięto wpis z Inboxu.' }) }}>Usuń</button>
+        <button type="button" className="przycisk przycisk--tekstowy" onClick={async () => { if (!window.confirm(`Usunąć wpis „${element.tresc}”?`)) return; await repozytorium.usun(element.id); ustawKomunikat({ typ: 'sukces', tresc: 'Usunięto wpis z poczekalni.' }) }}>Usuń</button>
       </div>
       {podgladPodzialu === element.id && <div className="rekord__szczegoly"><span>{zaproponujPodzialPoczekalni(element.tresc).map((propozycja) => `${propozycja.typ}: ${propozycja.tresc}`).join(' · ')}</span><button type="button" className="przycisk przycisk--maly" onClick={() => { void przetworzPodzial(element); ustawPodgladPodzialu(undefined) }}>Przetwórz propozycje</button><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPodgladPodzialu(undefined)}>Anuluj</button></div>}
     </article>)}</div>}

@@ -25,7 +25,7 @@ const zrodla: ZrodloWyszukiwania[] = [
   { tabela: 'wydatki', modul: 'finanse', typ: 'Wydatek', url: '/finanse', pola: ['opis', 'kategoria'], kontekst: ['data', 'kwota', 'kategoria'] },
   { tabela: 'pojazdy', modul: 'samochod', typ: 'Pojazd', url: '/samochod', pola: ['nazwa', 'marka', 'model', 'numerRejestracyjny', 'vin'], kontekst: ['marka', 'model', 'numerRejestracyjny'] },
   { tabela: 'pomysly', modul: 'pomysly', typ: 'Pomysł', url: '/pomysly', pola: ['tytul', 'opis', 'tagi', 'wartosc', 'wysilek'], kontekst: ['status', 'tagi'] },
-  { tabela: 'skrzynka', modul: 'skrzynka', typ: 'Inbox', url: '/skrzynka', pola: ['tresc', 'sugerowanyTyp'], kontekst: ['status', 'sugerowanyTyp'] },
+  { tabela: 'skrzynka', modul: 'skrzynka', typ: 'Poczekalnia', url: '/skrzynka', pola: ['tresc', 'sugerowanyTyp'], kontekst: ['status', 'sugerowanyTyp'] },
   { tabela: 'naPozniej', modul: 'na_pozniej', typ: 'Na później', url: '/na-pozniej', pola: ['tytul', 'opis', 'adres', 'tagi'], kontekst: ['typ', 'status', 'adres'] },
   { tabela: 'listyZakupow', modul: 'zakupy', typ: 'Lista zakupów', url: '/zakupy', pola: ['nazwa', 'sklep', 'tagi'], kontekst: ['sklep', 'planowanaData'] },
   { tabela: 'cele', modul: 'cele', typ: 'Cel', url: '/cele', pola: ['nazwa', 'opis'], kontekst: ['status', 'horyzont'] },

@@ -14,7 +14,7 @@ import type {
 
 export const WERSJA_USTAWIEN = 1 as const
 export const DOMYSLNE_KAFELKI_PULPITU: KonfiguracjaKafelkaPulpitu[] = [
-  ['pilne', 'large', '7d'], ['zadania', 'large', '7d'], ['wizyty', 'medium', '30d'], ['leki', 'medium', 'today'], ['finanse', 'medium', '30d'], ['samochod', 'medium', '30d'], ['zakupy', 'small', '7d'], ['poczekalnia', 'small', '7d'], ['notatki', 'small', '7d'],
+  ['pilne', 'large', '7d'], ['zadania', 'large', '7d'], ['wizyty', 'medium', '30d'], ['leki', 'medium', 'today'], ['finanse', 'medium', '30d'], ['samochod', 'medium', '30d'], ['zakupy', 'small', '7d'], ['notatki', 'small', '7d'],
 ].map(([typ, rozmiar, zakresCzasu], kolejnosc) => ({ id: `pulpit-${typ}`, typ: typ as KonfiguracjaKafelkaPulpitu['typ'], widoczny: true, kolejnosc, rozmiar: rozmiar as KonfiguracjaKafelkaPulpitu['rozmiar'], zakresCzasu: zakresCzasu as KonfiguracjaKafelkaPulpitu['zakresCzasu'], limit: 4 }))
 
 

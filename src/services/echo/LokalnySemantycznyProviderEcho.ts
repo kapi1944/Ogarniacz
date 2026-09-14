@@ -588,7 +588,7 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
           decyzja === 'usun' ? 'delete_inbox_item' : 'convert_inbox_item',
           decyzja === 'usun' ? { id: element.id } : { id: element.id, typ },
         )
-        if (decyzja === 'usun' && wynik.typ === 'narzedzia') wynik.wywolania[0].opisPotwierdzenia = `Usunąć z Inboxu „${element.tytul}”?`
+        if (decyzja === 'usun' && wynik.typ === 'narzedzia') wynik.wywolania[0].opisPotwierdzenia = `Usunąć z poczekalni „${element.tytul}”?`
         return wynik
       }
     }
@@ -1827,14 +1827,14 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     }
     if (zamiar.typ === 'szybki_zrzut') {
       const dane = wynik.dane as { typ?: unknown }
-      return { typ: 'odpowiedz', tresc: dane.typ === 'zakupy' ? 'Dodałem to do zakupów.' : 'Zapisałem to w Inboxie do późniejszego uporządkowania.', aktualizacjaKontekstu }
+      return { typ: 'odpowiedz', tresc: dane.typ === 'zakupy' ? 'Dodałem to do zakupów.' : 'Zapisałem to w poczekalni do późniejszego uporządkowania.', aktualizacjaKontekstu }
     }
     if (zamiar.typ === 'porzadkuj_inbox') {
       if (!zamiar.elementy.length) {
         const elementy = Array.isArray(wynik.dane) ? wynik.dane.filter((element): element is ElementPorzadkowaniaInbox => Boolean(element && typeof element === 'object' && typeof (element as { id?: unknown }).id === 'string' && typeof (element as { tytul?: unknown }).tytul === 'string')) : []
         return elementy.length
-          ? pokazElementPorzadkowaniaInbox(elementy, 0, `Masz ${elementy.length} ${elementy.length === 1 ? 'rzecz' : 'rzeczy'} w Inboxie.`)
-          : { typ: 'odpowiedz', tresc: 'Inbox jest pusty.', aktualizacjaKontekstu }
+          ? pokazElementPorzadkowaniaInbox(elementy, 0, `Masz ${elementy.length} ${elementy.length === 1 ? 'rzecz' : 'rzeczy'} w poczekalni.`)
+          : { typ: 'odpowiedz', tresc: 'Poczekalnia jest pusta.', aktualizacjaKontekstu }
       }
       return pokazElementPorzadkowaniaInbox(zamiar.elementy, zamiar.nastepnyIndeks, zamiar.komunikat)
     }

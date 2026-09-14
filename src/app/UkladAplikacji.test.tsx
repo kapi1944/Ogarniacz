@@ -47,7 +47,7 @@ describe('dolna nawigacja mobilna', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Więcej' }))
 
     expect(screen.getByRole('dialog', { name: 'Więcej modułów' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Inbox' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Poczekalnia' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Planer dnia' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Samochód' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Wydatki i budżet' })).not.toBeInTheDocument()

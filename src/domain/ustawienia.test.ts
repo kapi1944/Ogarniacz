@@ -114,6 +114,20 @@ describe.sequential('ustawienia aplikacji', () => {
     expect(wynik.pulpit.kafelki.at(-1)?.typ).toBe('pilne')
   })
 
+  it('usuwa kafelek poczekalni z zapisanej konfiguracji Pulpitu', () => {
+    const wynik = normalizujUstawienia({
+      pulpit: {
+        kafelki: [
+          { typ: 'poczekalnia', widoczny: true, kolejnosc: 0, rozmiar: 'small', zakresCzasu: '7d', limit: 4 },
+          { typ: 'zadania', widoczny: true, kolejnosc: 1, rozmiar: 'large', zakresCzasu: '7d', limit: 4 },
+        ],
+      },
+    })
+
+    expect(wynik.pulpit.kafelki.map((kafelek) => kafelek.typ)).not.toContain('poczekalnia')
+    expect(wynik.pulpit.kafelki.find((kafelek) => kafelek.typ === 'zadania')).toMatchObject({ widoczny: true })
+  })
+
   it('normalizuje zakres, limity i rozmiar kafelków', () => {
     const wynik = normalizujUstawienia({
       pulpit: {

@@ -1372,7 +1372,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
   });
   rejestr.zarejestruj({
     nazwa: "convert_inbox_item",
-    opis: "Konwertuje wskazany element Inbox do istniejącego typu bez utraty treści.",
+    opis: "Konwertuje wskazany element poczekalni do istniejącego typu bez utraty treści.",
     schematArgumentow: z.object({ id: z.string().min(1), typ: z.enum(["zadanie", "notatka", "przypomnienie", "zakup", "projekt", "pomysl", "na_pozniej", "wizyta"]) }),
     ryzyko: "niskie",
     wykonaj: async ({ id, typ }) => {
@@ -1383,7 +1383,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
   });
   rejestr.zarejestruj({
     nazwa: "delete_inbox_item",
-    opis: "Usuwa wskazany element Inbox po świadomej decyzji użytkownika.",
+    opis: "Usuwa wskazany element poczekalni po świadomej decyzji użytkownika.",
     schematArgumentow: z.object({ id: z.string().min(1) }),
     ryzyko: "umiarkowane",
     wykonaj: async ({ id }) => {

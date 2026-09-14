@@ -22,7 +22,7 @@ import { PanelUstawienAplikacji } from './PanelUstawienAplikacji'
 import { PanelAktualizacji } from './PanelAktualizacji'
 
 const modulyUprawnien: { wartosc: NazwaModulu; etykieta: string }[] = [
-  ['zadania', 'Zadania'], ['projekty', 'Projekty'], ['skrzynka', 'Skrzynka'], ['planer', 'Planer'], ['grafik', 'Grafik'], ['nawyki', 'Nawyki'], ['leki', 'Leki'], ['wizyty', 'Wizyty'], ['przypomnienia', 'Przypomnienia'], ['zakupy', 'Zakupy'], ['rachunki', 'Rachunki'], ['miasto', 'Sprawy na mieście'], ['cele', 'Cele'], ['notatki', 'Notatki'], ['pomysly', 'Pomysły'], ['na_pozniej', 'Na później'], ['kontakty', 'Kontakty'], ['dokumenty', 'Dokumenty'], ['finanse', 'Finanse'], ['samochod', 'Samochód'], ['terminy', 'Terminy'],
+  ['zadania', 'Zadania'], ['projekty', 'Projekty'], ['skrzynka', 'Poczekalnia'], ['planer', 'Planer'], ['grafik', 'Grafik'], ['nawyki', 'Nawyki'], ['leki', 'Leki'], ['wizyty', 'Wizyty'], ['przypomnienia', 'Przypomnienia'], ['zakupy', 'Zakupy'], ['rachunki', 'Rachunki'], ['miasto', 'Sprawy na mieście'], ['cele', 'Cele'], ['notatki', 'Notatki'], ['pomysly', 'Pomysły'], ['na_pozniej', 'Na później'], ['kontakty', 'Kontakty'], ['dokumenty', 'Dokumenty'], ['finanse', 'Finanse'], ['samochod', 'Samochód'], ['terminy', 'Terminy'],
 ].map(([wartosc, etykieta]) => ({ wartosc: wartosc as NazwaModulu, etykieta }))
 
 const etykietaZgody = (stan: StanZgody | null | undefined) => {

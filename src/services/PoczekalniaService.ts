@@ -92,7 +92,7 @@ function tabelaWynikuInbox(typ: NazwaModulu): NazwaTabeli {
   if (typ === 'na_pozniej') return 'naPozniej'
   if (typ === 'wizyty') return 'wizyty'
   if (typ === 'zakupy') return 'pozycjeZakupow'
-  throw new Error('Nie można cofnąć tej konwersji Inboxu.')
+  throw new Error('Nie można cofnąć tej konwersji poczekalni.')
 }
 
 export async function cofnijPrzeksztalcenieInbox(element: ElementSkrzynki, wynik: { typ: NazwaModulu; id: string }): Promise<void> {
