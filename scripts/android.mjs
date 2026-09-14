@@ -442,7 +442,13 @@ function sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko) {
   const apkSigner = znajdzApkSigner(diagnostyka.sdk)
   if (!apkSigner) throw new Error('Nie znaleziono apksigner w Android SDK build-tools.')
   const java = join(diagnostyka.jdk.katalog, 'bin', nazwaJava)
-  wykonajEtap('Weryfikacja podpisu release APK', java, ['-jar', apkSigner, 'verify', '--verbose', sciezkaApk], { srodowisko })
+  const wynik = wykonajPrzechwytywanie(java, ['-jar', apkSigner, 'verify', '--print-certs', sciezkaApk], { srodowisko })
+  const tekst = `${wynik.stdout ?? ''}\n${wynik.stderr ?? ''}`.trim()
+  if (tekst) console.log(`\n→ Weryfikacja podpisu release APK\n${tekst}`)
+  if (wynik.status !== 0) throw new Error('Weryfikacja podpisu release APK nie powiodła się.')
+  const faktyczny = /certificate SHA-256 digest:\s*([0-9a-f:]+)/i.exec(tekst)?.[1].replaceAll(':', '').toLowerCase()
+  const oczekiwany = String(JSON.parse(readFileSync(join(katalogRepozytorium, 'config', 'android-release.json'), 'utf8')).sha256Certyfikatu).toLowerCase()
+  if (faktyczny !== oczekiwany) throw new Error('SHA-256 certyfikatu finalnego APK nie zgadza się z config/android-release.json.')
 }
 
 function pobierzRepozytoriumGitHub() {
@@ -595,15 +601,20 @@ async function wykonajRelease(opcje) {
   const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu)
   console.log(`\nVERSION: OK — ${pakiet.version} (${obliczKodWersji(pakiet.version)}) > ${obecnyManifest.versionName} (${obecnyManifest.versionCode})`)
   const { diagnostyka, srodowisko } = wymagajSrodowiska()
-  zbudujFrontend(srodowisko)
-  synchronizujCapacitor(srodowisko)
-  const podpis = sprawdzKonfiguracjePodpisu()
-  if (podpis.plikKlucza !== podpisWstepny.plikKlucza || podpis.alias !== podpisWstepny.alias) {
-    throw new Error('Konfiguracja release signing zmieniła się podczas budowania. Uruchom release ponownie.')
+  const publikujIstniejace = opcje['publish-existing'] === true
+  if (!publikujIstniejace) {
+    zbudujFrontend(srodowisko)
+    synchronizujCapacitor(srodowisko)
+    const podpis = sprawdzKonfiguracjePodpisu()
+    if (podpis.plikKlucza !== podpisWstepny.plikKlucza || podpis.alias !== podpisWstepny.alias) {
+      throw new Error('Konfiguracja release signing zmieniła się podczas budowania. Uruchom release ponownie.')
+    }
+    console.log(`\nSIGNING: OK — stały alias ${podpis.alias}; plik klucza pozostaje poza repozytorium`)
+    zbudujGradle('Release', srodowisko)
   }
-  console.log(`\nSIGNING: OK — stały alias ${podpis.alias}; plik klucza pozostaje poza repozytorium`)
-  zbudujGradle('Release', srodowisko)
-  const sciezkaApk = znajdzNajnowszyApk('Release')
+  const katalogWyjscia = join(katalogAndroida, 'app', 'build', 'outputs', 'apk', 'release')
+  const sciezkaApk = join(katalogWyjscia, `Ogarniacz-${pakiet.version}-release.apk`)
+  if (!existsSync(sciezkaApk)) throw new Error(`Nie znaleziono finalnego APK: ${sciezkaApk}`)
   sprawdzPodpisApk(sciezkaApk, diagnostyka, srodowisko)
   const bazowyAdres = typeof opcje['base-url'] === 'string' ? opcje['base-url'] : process.env.OGARNIACZ_UPDATE_BASE_URL
   if (bazowyAdres && new URL(bazowyAdres).protocol !== 'https:') {
@@ -614,20 +625,34 @@ async function wykonajRelease(opcje) {
   const notatkiWydania = plikNotatek
     ? readFileSync(plikNotatek, 'utf8')
     : typeof opcje['release-notes'] === 'string' ? opcje['release-notes'] : undefined
-  const manifest = walidujManifestAktualizacji(await utworzManifestAktualizacji({
-    wersja: pakiet.version,
-    sciezkaApk,
-    bazowyAdres,
-    notatkiWydania,
-  }))
-  const katalogWyjscia = dirname(sciezkaApk)
   const sciezkaManifestu = join(katalogWyjscia, 'latest.json')
   const sciezkaSkrotu = `${sciezkaApk}.sha256`
-  writeFileSync(sciezkaManifestu, `${JSON.stringify(manifest, null, 2)}\n`)
-  writeFileSync(sciezkaSkrotu, `${manifest.sha256}  ${basename(sciezkaApk)}\n`)
+  if (publikujIstniejace && !existsSync(sciezkaManifestu)) throw new Error(`Nie znaleziono manifestu finalnego APK: ${sciezkaManifestu}`)
+  const manifest = publikujIstniejace
+    ? walidujManifestAktualizacji(JSON.parse(readFileSync(sciezkaManifestu, 'utf8')))
+    : walidujManifestAktualizacji(await utworzManifestAktualizacji({
+      wersja: pakiet.version,
+      sciezkaApk,
+      bazowyAdres,
+      notatkiWydania,
+    }))
+  if (!publikujIstniejace) {
+    writeFileSync(sciezkaManifestu, `${JSON.stringify(manifest, null, 2)}\n`)
+    writeFileSync(sciezkaSkrotu, `${manifest.sha256}  ${basename(sciezkaApk)}\n`)
+  }
+  if (!existsSync(sciezkaSkrotu)) throw new Error(`Nie znaleziono sumy finalnego APK: ${sciezkaSkrotu}`)
   await sprawdzArtefaktRelease({ sciezkaApk, manifest, adresManifestu, diagnostyka, srodowisko })
-  if (opcje.publish === true) {
-    await opublikujReleaseGitHub({ manifest, sciezkaApk, sciezkaSkrotu, sciezkaManifestu, adresManifestu, notatkiWydania })
+  const oczekiwanaSuma = `${manifest.sha256}  ${basename(sciezkaApk)}\n`
+  if (readFileSync(sciezkaSkrotu, 'utf8') !== oczekiwanaSuma) throw new Error('Plik SHA-256 nie odpowiada finalnemu APK.')
+  if (opcje.publish === true || publikujIstniejace) {
+    await opublikujReleaseGitHub({
+      manifest,
+      sciezkaApk,
+      sciezkaSkrotu,
+      sciezkaManifestu,
+      adresManifestu,
+      notatkiWydania: notatkiWydania ?? manifest.releaseNotes,
+    })
   }
 
   console.log('\n=====================================')

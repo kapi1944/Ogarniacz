@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
-test('workflow wydania wymaga Environment, buduje przed publikacją i nie zapisuje sekretów', async () => {
+test('workflow wydania wymaga Environment, buduje APK raz i publikuje gotowy artefakt', async () => {
   const workflow = await readFile('.github/workflows/android-release.yml', 'utf8')
   assert.match(workflow, /workflow_dispatch:/)
   assert.match(workflow, /version_bump:/)
@@ -15,14 +15,18 @@ test('workflow wydania wymaga Environment, buduje przed publikacją i nie zapisu
   assert.match(workflow, /android-release-przygotowanie\.mjs --version-bump/)
   assert.match(workflow, /git diff --cached --quiet/)
   assert.match(workflow, /test -x android\/gradlew \|\| chmod \+x android\/gradlew/)
-  assert.match(workflow, /npm run android:release --/)
+  assert.equal(workflow.match(/npm run android:release --/g)?.length, 2)
+  assert.match(workflow, /npm run android:release -- --publish-existing/)
   assert.ok(
     workflow.indexOf('Sprawdź jednorazową konfigurację środowiska') < workflow.indexOf('Zainstaluj zależności'),
     'preflight konfiguracji musi nastąpić przed buildem',
   )
   assert.ok(
-    workflow.indexOf('Zbuduj, podpisz, zweryfikuj i opublikuj') < workflow.indexOf('Sprawdź tag i punkt zgodności Web OTA'),
+    workflow.indexOf('Opublikuj tylko po przygotowaniu artefaktów') < workflow.indexOf('Sprawdź tag i punkt zgodności Web OTA'),
     'tag zgodności Web OTA jest sprawdzany dopiero po wydaniu APK',
   )
+  const skrypt = await readFile('scripts/android.mjs', 'utf8')
+  assert.match(skrypt, /verify', '--print-certs'/)
+  assert.match(skrypt, /sha256Certyfikatu/)
   assert.doesNotMatch(workflow, /storePassword=UZUPELNIJ|BEGIN PRIVATE KEY/)
 })

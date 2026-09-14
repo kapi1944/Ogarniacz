@@ -109,8 +109,22 @@ jobs:
       - name: Zainstaluj zależności
         run: npm ci
 
-      - name: Zbuduj i zweryfikuj artefakty przed commitem wersji
-        run: npm run android:release --
+      - name: Zapisz opcjonalne release notes
+        if: inputs.release_notes != ''
+        shell: bash
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Zbuduj, podpisz i zweryfikuj artefakty przed commitem wersji
+        shell: bash
+        run: |
+          set -euo pipefail
+          argumenty=()
+          if [[ -f "$RUNNER_TEMP/release-notes.md" ]]; then
+            argumenty+=(--release-notes-file "$RUNNER_TEMP/release-notes.md")
+          fi
+          npm run android:release -- "${argumenty[@]}"
 
       - name: Zapisz wersję dopiero po udanym buildzie
         shell: bash
@@ -125,13 +139,6 @@ jobs:
             git push origin HEAD:main
           fi
 
-      - name: Zapisz opcjonalne release notes
-        if: inputs.release_notes != ''
-        shell: bash
-        env:
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-        run: printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
-
       - name: Zapewnij wykonywalność Gradle Wrappera
         shell: bash
         run: |
@@ -141,13 +148,7 @@ jobs:
 
       - name: Opublikuj tylko po przygotowaniu artefaktów
         shell: bash
-        run: |
-          set -euo pipefail
-          argumenty=(--publish)
-          if [[ -f "$RUNNER_TEMP/release-notes.md" ]]; then
-            argumenty+=(--release-notes-file "$RUNNER_TEMP/release-notes.md")
-          fi
-          npm run android:release -- "${argumenty[@]}"
+        run: npm run android:release -- --publish-existing
 
       - name: Sprawdź tag i punkt zgodności Web OTA
         shell: bash
