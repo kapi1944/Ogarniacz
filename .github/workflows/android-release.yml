@@ -30,6 +30,7 @@ jobs:
       VITE_SYNC_API_URL: ${{ vars.ANDROID_SYNC_API_URL }}
       VITE_ANDROID_UPDATE_MANIFEST_URL: ${{ vars.ANDROID_UPDATE_MANIFEST_URL }}
       VITE_ANDROID_WEB_UPDATE_MANIFEST_URL: ${{ vars.ANDROID_WEB_UPDATE_MANIFEST_URL }}
+      ANDROID_WEB_OTA_PUBLIC_KEY_PEM: ${{ vars.ANDROID_WEB_OTA_PUBLIC_KEY_PEM }}
       ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
       ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
       ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
@@ -64,7 +65,7 @@ jobs:
           brak=()
           [[ "$GITHUB_REF" == refs/heads/main ]] || { echo 'Release wolno uruchomić wyłącznie z main.' >&2; exit 1; }
           [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || { echo 'Checkout nie odpowiada github.sha.' >&2; exit 1; }
-          for wpis in VITE_SYNC_API_URL:ANDROID_SYNC_API_URL VITE_ANDROID_UPDATE_MANIFEST_URL:ANDROID_UPDATE_MANIFEST_URL VITE_ANDROID_WEB_UPDATE_MANIFEST_URL:ANDROID_WEB_UPDATE_MANIFEST_URL ANDROID_RELEASE_KEYSTORE_BASE64:ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_STORE_PASSWORD:ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_KEY_PASSWORD:ANDROID_RELEASE_KEY_PASSWORD ANDROID_RELEASE_KEY_ALIAS:ANDROID_RELEASE_KEY_ALIAS; do
+          for wpis in VITE_SYNC_API_URL:ANDROID_SYNC_API_URL VITE_ANDROID_UPDATE_MANIFEST_URL:ANDROID_UPDATE_MANIFEST_URL VITE_ANDROID_WEB_UPDATE_MANIFEST_URL:ANDROID_WEB_UPDATE_MANIFEST_URL ANDROID_WEB_OTA_PUBLIC_KEY_PEM:ANDROID_WEB_OTA_PUBLIC_KEY_PEM ANDROID_RELEASE_KEYSTORE_BASE64:ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_STORE_PASSWORD:ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_KEY_PASSWORD:ANDROID_RELEASE_KEY_PASSWORD ANDROID_RELEASE_KEY_ALIAS:ANDROID_RELEASE_KEY_ALIAS; do
             zmienna="${wpis%%:*}"
             nazwa="${wpis#*:}"
             [[ -n "${!zmienna:-}" ]] || brak+=("$nazwa")
@@ -90,7 +91,11 @@ jobs:
           keyAlias=$ANDROID_RELEASE_KEY_ALIAS
           keyPassword=$ANDROID_RELEASE_KEY_PASSWORD
           EOF
-          test -s android/web-ota-public-key.pem || { echo 'Brak jawnego publicznego klucza Web OTA w repozytorium.' >&2; exit 1; }
+          printf '%s\n' "$ANDROID_WEB_OTA_PUBLIC_KEY_PEM" > android/web-ota-public-key.pem
+          test -f android/web-ota-public-key.pem || { echo 'Nie utworzono publicznego klucza Web OTA.' >&2; exit 1; }
+          test -s android/web-ota-public-key.pem || { echo 'Publiczny klucz Web OTA jest pusty.' >&2; exit 1; }
+          grep -q 'BEGIN PUBLIC KEY' android/web-ota-public-key.pem || { echo 'Publiczny klucz Web OTA nie zawiera BEGIN PUBLIC KEY.' >&2; exit 1; }
+          grep -q 'END PUBLIC KEY' android/web-ota-public-key.pem || { echo 'Publiczny klucz Web OTA nie zawiera END PUBLIC KEY.' >&2; exit 1; }
           oczekiwany="$(node -p "require('./config/android-release.json').sha256Certyfikatu")"
           faktyczny="$(keytool -list -v -keystore "$klucz" -alias "$ANDROID_RELEASE_KEY_ALIAS" -storepass "$ANDROID_RELEASE_STORE_PASSWORD" | awk -F': ' '/SHA256:/{print tolower($2); exit}')"
           [[ "$faktyczny" == "$oczekiwany" ]] || { echo 'Fingerprint produkcyjnego keystore nie zgadza się z config/android-release.json.' >&2; exit 1; }
