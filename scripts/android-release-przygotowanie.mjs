@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { obliczKodWersji, rozlozWersje } from './android-wspolne.mjs'
@@ -24,8 +25,19 @@ export function wyznaczNastepnaWersje(wersja, rodzaj) {
   throw new Error('version_bump musi mieć wartość patch, minor albo major.')
 }
 
-export function przygotujWydanie({ pakiet, lock, zgodnosc, rodzajWersji, wersjaOpublikowana }) {
+export function przygotujWydanie({ pakiet, lock, zgodnosc, rodzajWersji, wersjaOpublikowana, wersjaMaTag = false }) {
   if (!pakiet?.version || !lock || !zgodnosc) throw new Error('Brak plików wymaganych do przygotowania wydania.')
+  const porownanieZOpublikowana = wersjaOpublikowana ? porownajWersje(pakiet.version, wersjaOpublikowana) : 0
+  const kodPakietu = obliczKodWersji(pakiet.version)
+  const wydanieDoWznowienia = porownanieZOpublikowana > 0
+    && zgodnosc.minNativeVersionCode === kodPakietu
+    && !wersjaMaTag
+  if (porownanieZOpublikowana > 0 && !wydanieDoWznowienia) {
+    throw new Error('Repozytorium zawiera nieopublikowaną wersję w niejednoznacznym stanie. Przywróć zgodność wersji i tagu przed kolejną próbą.')
+  }
+  if (wydanieDoWznowienia) {
+    return { wersja: pakiet.version, kodWersji: kodPakietu, pakiet, lock, zgodnosc, tryb: 'wznowienie' }
+  }
   const wersjaBazowa = wersjaOpublikowana && porownajWersje(wersjaOpublikowana, pakiet.version) > 0
     ? wersjaOpublikowana
     : pakiet.version
@@ -41,7 +53,21 @@ export function przygotujWydanie({ pakiet, lock, zgodnosc, rodzajWersji, wersjaO
     packages: lock.packages ? { ...lock.packages, '': { ...lock.packages[''], version: wersja } } : lock.packages,
   }
   const nowaZgodnosc = { ...zgodnosc, minNativeVersionCode: kodWersji }
-  return { wersja, kodWersji, pakiet: nowyPakiet, lock: nowyLock, zgodnosc: nowaZgodnosc }
+  return { wersja, kodWersji, pakiet: nowyPakiet, lock: nowyLock, zgodnosc: nowaZgodnosc, tryb: 'nowe' }
+}
+
+function czyWersjaMaTag(wersja, katalog) {
+  try {
+    const wynik = execFileSync('git', ['ls-remote', '--exit-code', '--tags', 'origin', `refs/tags/v${wersja}`], {
+      cwd: katalog,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    return Boolean(wynik.trim())
+  } catch (blad) {
+    if (blad && typeof blad === 'object' && blad.status === 2) return false
+    throw blad
+  }
 }
 
 function pobierzArgumenty(argumenty) {
@@ -66,12 +92,14 @@ export async function uruchomPrzygotowanie(opcje, katalog = process.cwd()) {
     readFile(resolve(katalog, SCIEZKA_LOCK), 'utf8'),
     readFile(resolve(katalog, SCIEZKA_ZGODNOSCI), 'utf8'),
   ])
+  const pakiet = JSON.parse(tekstPakietu)
   const wynik = przygotujWydanie({
-    pakiet: JSON.parse(tekstPakietu),
+    pakiet,
     lock: JSON.parse(tekstLocka),
     zgodnosc: JSON.parse(tekstZgodnosci),
     rodzajWersji: opcje['version-bump'],
     wersjaOpublikowana: opcje['published-version'],
+    wersjaMaTag: czyWersjaMaTag(pakiet.version, katalog),
   })
   if (!opcje['dry-run']) {
     await Promise.all([
@@ -85,7 +113,7 @@ export async function uruchomPrzygotowanie(opcje, katalog = process.cwd()) {
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   uruchomPrzygotowanie(pobierzArgumenty(process.argv.slice(2))).then((wynik) => {
-    console.log(`Android release przygotowany: ${wynik.wersja} (${wynik.kodWersji})`)
+    console.log(`Android release ${wynik.tryb}: ${wynik.wersja} (${wynik.kodWersji})`)
   }).catch((blad) => {
     console.error(blad instanceof Error ? blad.message : String(blad))
     process.exitCode = 1

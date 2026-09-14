@@ -31,6 +31,24 @@ test('bazuje na nowszej wersji opublikowanej, gdy checkout jest opóźniony', ()
   assert.equal(wynik.kodWersji, 1_000_011)
 })
 
+test('wznawia przygotowane, ale nieopublikowane wydanie', () => {
+  const wynik = przygotujWydanie({
+    pakiet: { version: '1.0.10' }, lock: { packages: { '': { version: '1.0.10' } } },
+    zgodnosc: { minNativeVersionCode: 1_000_010 }, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9', wersjaMaTag: false,
+  })
+  assert.equal(wynik.wersja, '1.0.10')
+  assert.equal(wynik.tryb, 'wznowienie')
+})
+
+test('podbija wersję, gdy wersja repozytorium jest już publiczna', () => {
+  const wynik = przygotujWydanie({
+    pakiet: { version: '1.0.10' }, lock: { packages: { '': { version: '1.0.10' } } },
+    zgodnosc: { minNativeVersionCode: 1_000_010 }, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.10',
+  })
+  assert.equal(wynik.wersja, '1.0.11')
+  assert.equal(wynik.tryb, 'nowe')
+})
+
 test('nie pozwala przygotować wydania bez wzrostu punktu zgodności', () => {
   assert.throws(() => przygotujWydanie({
     pakiet: { version: '1.0.9' }, lock: { packages: { '': {} } },

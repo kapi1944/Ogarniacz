@@ -105,8 +105,10 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add package.json package-lock.json config/web-ota-compatibility.json
-          git commit -m "Przygotuj wydanie Androida $(node -p "require('./package.json').version")"
-          git push origin HEAD:main
+          if ! git diff --cached --quiet; then
+            git commit -m "Przygotuj wydanie Androida $(node -p "require('./package.json').version")"
+            git push origin HEAD:main
+          fi
 
       - name: Zapisz opcjonalne release notes
         if: inputs.release_notes != ''
@@ -114,6 +116,13 @@ jobs:
         env:
           RELEASE_NOTES: ${{ inputs.release_notes }}
         run: printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Zapewnij wykonywalność Gradle Wrappera
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x android/gradlew || chmod +x android/gradlew
+          test -x android/gradlew
 
       - name: Zbuduj, podpisz, zweryfikuj i opublikuj
         shell: bash

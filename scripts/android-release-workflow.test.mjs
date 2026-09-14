@@ -13,6 +13,8 @@ test('workflow wydania wymaga Environment, buduje przed publikacją i nie zapisu
   assert.match(workflow, /Brak konfiguracji Environment android-production/)
   assert.match(workflow, /VITE_SYNC_API_URL:ANDROID_SYNC_API_URL/)
   assert.match(workflow, /android-release-przygotowanie\.mjs --version-bump/)
+  assert.match(workflow, /git diff --cached --quiet/)
+  assert.match(workflow, /test -x android\/gradlew \|\| chmod \+x android\/gradlew/)
   assert.match(workflow, /npm run android:release --/)
   assert.ok(
     workflow.indexOf('Sprawdź jednorazową konfigurację środowiska') < workflow.indexOf('Zainstaluj zależności'),
