@@ -454,6 +454,8 @@ function pobierzRepozytoriumGitHub() {
 }
 
 function pobierzTokenGitHub() {
+  const tokenZeSrodowiska = process.env.GITHUB_TOKEN?.trim()
+  if (tokenZeSrodowiska) return tokenZeSrodowiska
   const wynik = wykonajPrzechwytywanie('git', ['credential', 'fill'], { wejscie: 'protocol=https\nhost=github.com\n\n' })
   if (wynik.status !== 0) throw new Error('Nie udało się odczytać poświadczeń GitHub z git credential helper.')
   const pola = Object.fromEntries((wynik.stdout ?? '').split(/\r?\n/).filter((linia) => linia.includes('=')).map((linia) => {

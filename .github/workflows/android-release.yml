@@ -1,0 +1,136 @@
+name: Produkcyjne wydanie Androida
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: Rodzaj kolejnej wersji
+        required: true
+        type: choice
+        options: [patch, minor, major]
+      release_notes:
+        description: Opcjonalne informacje o wydaniu
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Zbuduj i opublikuj APK
+    runs-on: ubuntu-latest
+    environment: android-production
+    env:
+      VITE_SYNC_API_URL: ${{ vars.ANDROID_SYNC_API_URL }}
+      VITE_ANDROID_UPDATE_MANIFEST_URL: ${{ vars.ANDROID_UPDATE_MANIFEST_URL }}
+      VITE_ANDROID_WEB_UPDATE_MANIFEST_URL: ${{ vars.ANDROID_WEB_UPDATE_MANIFEST_URL }}
+      ANDROID_WEB_OTA_PUBLIC_KEY_PEM: ${{ vars.ANDROID_WEB_OTA_PUBLIC_KEY_PEM }}
+      ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+      ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+      ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+      ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Sprawdź jednorazową konfigurację środowiska
+        shell: bash
+        run: |
+          set -euo pipefail
+          brak=()
+          for wpis in VITE_SYNC_API_URL:ANDROID_SYNC_API_URL VITE_ANDROID_UPDATE_MANIFEST_URL:ANDROID_UPDATE_MANIFEST_URL VITE_ANDROID_WEB_UPDATE_MANIFEST_URL:ANDROID_WEB_UPDATE_MANIFEST_URL ANDROID_WEB_OTA_PUBLIC_KEY_PEM:ANDROID_WEB_OTA_PUBLIC_KEY_PEM ANDROID_RELEASE_KEYSTORE_BASE64:ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_STORE_PASSWORD:ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_KEY_PASSWORD:ANDROID_RELEASE_KEY_PASSWORD ANDROID_RELEASE_KEY_ALIAS:ANDROID_RELEASE_KEY_ALIAS; do
+            zmienna="${wpis%%:*}"
+            nazwa="${wpis#*:}"
+            [[ -n "${!zmienna:-}" ]] || brak+=("$nazwa")
+          done
+          if ((${#brak[@]})); then
+            echo "Brak konfiguracji Environment android-production: ${brak[*]}" >&2
+            exit 1
+          fi
+          [[ "$VITE_ANDROID_UPDATE_MANIFEST_URL" == https://* ]] || { echo 'ANDROID_UPDATE_MANIFEST_URL musi używać HTTPS.' >&2; exit 1; }
+          [[ "$VITE_ANDROID_WEB_UPDATE_MANIFEST_URL" == https://* ]] || { echo 'ANDROID_WEB_UPDATE_MANIFEST_URL musi używać HTTPS.' >&2; exit 1; }
+
+      - name: Odtwórz stały klucz i konfigurację signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          klucz="$RUNNER_TEMP/ogarniacz-release.jks"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$klucz"
+          test -s "$klucz" || { echo 'Nie udało się odtworzyć ANDROID_RELEASE_KEYSTORE_BASE64.' >&2; exit 1; }
+          cat > android/keystore.properties <<EOF
+          storeFile=$klucz
+          storePassword=$ANDROID_RELEASE_STORE_PASSWORD
+          keyAlias=$ANDROID_RELEASE_KEY_ALIAS
+          keyPassword=$ANDROID_RELEASE_KEY_PASSWORD
+          EOF
+          printf '%s\n' "$ANDROID_WEB_OTA_PUBLIC_KEY_PEM" > android/web-ota-public-key.pem
+
+      - name: Odczytaj ostatnią opublikowaną wersję
+        id: opublikowana
+        shell: bash
+        run: |
+          set -euo pipefail
+          wersja="$(node --input-type=module -e "const r=await fetch(process.env.VITE_ANDROID_UPDATE_MANIFEST_URL,{headers:{Accept:'application/json'}}); if(!r.ok) throw new Error('latest.json HTTP '+r.status); const m=await r.json(); if(!/^\\d+\\.\\d+\\.\\d+$/.test(m.versionName ?? '')) throw new Error('latest.json nie zawiera versionName'); process.stdout.write(m.versionName)")"
+          echo "wersja=$wersja" >> "$GITHUB_OUTPUT"
+
+      - name: Przygotuj wersję i punkt zgodności Web OTA
+        run: node scripts/android-release-przygotowanie.mjs --version-bump "${{ inputs.version_bump }}" --published-version "${{ steps.opublikowana.outputs.wersja }}"
+
+      - name: Zainstaluj zależności
+        run: npm ci
+
+      - name: Zapisz wersję przed buildem
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json config/web-ota-compatibility.json
+          git commit -m "Przygotuj wydanie Androida $(node -p "require('./package.json').version")"
+          git push origin HEAD:main
+
+      - name: Zapisz opcjonalne release notes
+        if: inputs.release_notes != ''
+        shell: bash
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Zbuduj, podpisz, zweryfikuj i opublikuj
+        shell: bash
+        run: |
+          set -euo pipefail
+          argumenty=(--publish)
+          if [[ -f "$RUNNER_TEMP/release-notes.md" ]]; then
+            argumenty+=(--release-notes-file "$RUNNER_TEMP/release-notes.md")
+          fi
+          npm run android:release -- "${argumenty[@]}"
+
+      - name: Sprawdź tag i punkt zgodności Web OTA
+        shell: bash
+        run: |
+          set -euo pipefail
+          wersja="$(node -p "require('./package.json').version")"
+          kod="$(node --input-type=module -e "import { obliczKodWersji } from './scripts/android-wspolne.mjs'; process.stdout.write(String(obliczKodWersji(process.argv[1])))" "$wersja")"
+          git ls-remote --exit-code --tags origin "refs/tags/v$wersja" >/dev/null
+          [[ "$(node -e "process.stdout.write(String(require('./config/web-ota-compatibility.json').minNativeVersionCode))")" == "$kod" ]]
+          echo "APK wydane: v$wersja; Web OTA może użyć go jako kontrolowanej bazy kompatybilności."
