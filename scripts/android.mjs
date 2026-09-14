@@ -17,6 +17,7 @@ import {
   czyZgodnyJdk,
   normalizujFingerprintCertyfikatu,
   parsujUrzadzeniaAdb,
+  pobierzPublicznyManifestPoPublikacji,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
@@ -525,12 +526,7 @@ async function opublikujReleaseGitHub({ manifest, sciezkaApk, sciezkaSkrotu, sci
     body: JSON.stringify({ draft: false }),
   })
 
-  const odpowiedzManifestu = await fetch(adresManifestu, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } })
-  if (!odpowiedzManifestu.ok) throw new Error(`Publiczny latest.json po publikacji zwrócił HTTP ${odpowiedzManifestu.status}.`)
-  const opublikowany = walidujManifestAktualizacji(await odpowiedzManifestu.json())
-  if (opublikowany.versionCode !== manifest.versionCode || opublikowany.sha256 !== manifest.sha256) {
-    throw new Error('Publiczny latest.json nie odpowiada zweryfikowanemu artefaktowi release.')
-  }
+  const opublikowany = await pobierzPublicznyManifestPoPublikacji({ adresManifestu, oczekiwanyManifest: manifest })
   const adresApk = new URL(opublikowany.apkUrl, adresManifestu)
   const odpowiedzApk = await fetch(adresApk, { method: 'HEAD' })
   if (!odpowiedzApk.ok) throw new Error(`Publiczny APK po publikacji zwrócił HTTP ${odpowiedzApk.status}.`)

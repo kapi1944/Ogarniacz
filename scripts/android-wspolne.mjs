@@ -80,6 +80,26 @@ export function walidujManifestAktualizacji(manifest) {
   return manifest
 }
 
+export async function pobierzPublicznyManifestPoPublikacji({
+  adresManifestu,
+  oczekiwanyManifest,
+  pobierz = fetch,
+  odczekaj = (czasMs) => new Promise((rozwiaz) => setTimeout(rozwiaz, czasMs)),
+  maksymalnaLiczbaProb = 6,
+  opoznienieMs = 5_000,
+}) {
+  for (let numerProby = 1; numerProby <= maksymalnaLiczbaProb; numerProby += 1) {
+    const odpowiedz = await pobierz(adresManifestu, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } })
+    if (!odpowiedz.ok) throw new Error(`Publiczny latest.json po publikacji zwrócił HTTP ${odpowiedz.status}.`)
+    const opublikowany = walidujManifestAktualizacji(await odpowiedz.json())
+    if (opublikowany.versionCode === oczekiwanyManifest.versionCode && opublikowany.sha256 === oczekiwanyManifest.sha256) {
+      return opublikowany
+    }
+    if (numerProby < maksymalnaLiczbaProb) await odczekaj(opoznienieMs)
+  }
+  throw new Error('Publiczny latest.json nie odpowiada zweryfikowanemu artefaktowi release.')
+}
+
 export function parsujUrzadzeniaAdb(tekst) {
   return tekst.split(/\r?\n/).slice(1).map((wiersz) => wiersz.trim()).filter(Boolean).map((wiersz) => {
     const [serial, stan, ...pola] = wiersz.split(/\s+/)
