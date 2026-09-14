@@ -28,8 +28,8 @@ test('generator i workflow nie maja drugiego zrodla minNativeVersionCode', async
   assert.match(workflow, /git diff --name-only -z "\$tag_zgodnego_apk" "\$GITHUB_SHA"/)
   assert.match(workflow, /commit_bundla="\$\(git rev-list -n 1 "\$tag_zgodnego_apk"\)"/)
   assert.match(workflow, /--commit-sha "\$\{\{ needs\.ocena\.outputs\.commit_bundla \}\}"/)
-  assert.ok(
-    workflow.indexOf('refs/tags/$tag_zgodnego_apk') < workflow.indexOf('--wymuszenie'),
-    'force_web_ota nie moze omijac wymaganego tagu APK',
-  )
+  assert.doesNotMatch(workflow, /force_web_ota|--wymuszenie/)
+  assert.match(workflow, /VITE_SYNC_API_URL: ''/)
+  assert.match(workflow, /Zweryfikuj lokalny ZIP i manifest/)
+  assert.match(workflow, /Pobierz i zweryfikuj ZIP przed publikacja manifestu/)
 })

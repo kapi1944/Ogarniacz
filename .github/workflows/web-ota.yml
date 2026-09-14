@@ -6,11 +6,6 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      force_web_ota:
-        description: Administracyjnie omin klasyfikacje zgodnosci z APK
-        required: false
-        default: false
-        type: boolean
       bundle_version:
         description: Opcjonalna nazwa wersji; domyslnie pierwsze 7 znakow SHA
         required: false
@@ -73,18 +68,6 @@ jobs:
             exit 1
           fi
 
-          if node scripts/web-ota-klasyfikacja.mjs --wymuszenie "${{ github.event_name }}" "${{ inputs.force_web_ota }}"; then
-            echo "publikuj=true" >> "$GITHUB_OUTPUT"
-            echo "commit_bundla=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
-            echo "::warning title=WYMUSZENIE ADMINISTRACYJNE WEB OTA::Pominieto klasyfikacje plikow po potwierdzeniu zgodnego APK $tag_zgodnego_apk."
-            exit 0
-          else
-            kod=$?
-            if [[ "$kod" -ne 2 ]]; then
-              exit "$kod"
-            fi
-          fi
-
           mapfile -d '' pliki < <(git diff --name-only -z "$tag_zgodnego_apk" "$GITHUB_SHA")
           if wynik="$(node scripts/web-ota-klasyfikacja.mjs "${pliki[@]}")"; then
             echo "$wynik"
@@ -96,6 +79,7 @@ jobs:
             if [[ "$kod" -ne 2 ]]; then
               exit "$kod"
             fi
+            echo "Web OTA pominięte — wymagane nowe APK."
             echo "publikuj=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -150,6 +134,10 @@ jobs:
       - name: Zbuduj dist
         run: npm run build
         working-directory: zrodlo-bundla
+        env:
+          VITE_SYNC_API_URL: ''
+          VITE_ANDROID_UPDATE_MANIFEST_URL: ''
+          VITE_ANDROID_WEB_UPDATE_MANIFEST_URL: ''
 
       - name: Spakuj zawartosc dist
         shell: bash
@@ -174,6 +162,19 @@ jobs:
           )
           node scripts/web-ota-manifest.mjs "${argumenty[@]}"
 
+      - name: Zweryfikuj lokalny ZIP i manifest
+        shell: bash
+        env:
+          WEB_OTA_PRIVATE_KEY: ${{ secrets.WEB_OTA_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          unzip -t artifacts/web-ota/web-ota.zip
+          unzip -Z1 artifacts/web-ota/web-ota.zip | grep -Fx 'index.html'
+          node scripts/web-ota-weryfikacja.mjs \
+            --zip artifacts/web-ota/web-ota.zip \
+            --manifest artifacts/web-ota/web-ota.json \
+            --commit-sha "${{ needs.ocena.outputs.commit_bundla }}"
+
       - name: Opublikuj ZIP
         shell: bash
         run: |
@@ -183,19 +184,36 @@ jobs:
           fi
           gh release upload web-ota artifacts/web-ota/web-ota.zip --clobber
 
+      - name: Pobierz i zweryfikuj ZIP przed publikacja manifestu
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/weryfikacja-zip
+          gh release download web-ota --pattern web-ota.zip --dir artifacts/weryfikacja-zip --clobber
+          cmp artifacts/web-ota/web-ota.zip artifacts/weryfikacja-zip/web-ota.zip
+          unzip -t artifacts/weryfikacja-zip/web-ota.zip
+          unzip -Z1 artifacts/weryfikacja-zip/web-ota.zip | grep -Fx 'index.html'
+
       - name: Opublikuj zweryfikowany manifest na koncu
         run: gh release upload web-ota artifacts/web-ota/web-ota.json --clobber
 
       - name: Zweryfikuj opublikowane assets
         shell: bash
+        env:
+          WEB_OTA_PRIVATE_KEY: ${{ secrets.WEB_OTA_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           mkdir -p artifacts/weryfikacja
           gh release download web-ota --pattern web-ota.zip --pattern web-ota.json --dir artifacts/weryfikacja --clobber
           cmp artifacts/web-ota/web-ota.zip artifacts/weryfikacja/web-ota.zip
           cmp artifacts/web-ota/web-ota.json artifacts/weryfikacja/web-ota.json
+          unzip -t artifacts/weryfikacja/web-ota.zip
+          unzip -Z1 artifacts/weryfikacja/web-ota.zip | grep -Fx 'index.html'
+          node scripts/web-ota-weryfikacja.mjs \
+            --zip artifacts/weryfikacja/web-ota.zip \
+            --manifest artifacts/weryfikacja/web-ota.json \
+            --commit-sha "${{ needs.ocena.outputs.commit_bundla }}"
       - name: Opublikuj release (draft -> publiczny)
-        if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

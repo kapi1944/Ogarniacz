@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { czyWymuszenieAdministracyjne, sklasyfikujZmianyWebOta } from './web-ota-klasyfikacja.mjs'
+import { sklasyfikujZmianyWebOta } from './web-ota-klasyfikacja.mjs'
 
 test('dopuszcza zmiany obejmujace wylacznie web', () => {
   const wynik = sklasyfikujZmianyWebOta([
@@ -31,19 +31,17 @@ test('dopuszcza web-only po ustawieniu nowego zgodnego punktu APK', () => {
   assert.equal(wynik.czyPublikowac, true)
 })
 
-test('workflow_dispatch bez jawnego force nie omija klasyfikacji', () => {
-  assert.equal(czyWymuszenieAdministracyjne('workflow_dispatch', 'false'), false)
-  assert.equal(czyWymuszenieAdministracyjne('workflow_dispatch', ''), false)
-})
-
-test('force dziala tylko dla swiadomego workflow_dispatch', () => {
-  assert.equal(czyWymuszenieAdministracyjne('workflow_dispatch', 'true'), true)
-  assert.equal(czyWymuszenieAdministracyjne('push', 'true'), false)
-})
-
 test('odrzuca niejednoznaczne zmiany zaleznosci i konfiguracji Capacitor', () => {
   for (const sciezka of ['package.json', 'package-lock.json', 'capacitor.config.ts']) {
     const wynik = sklasyfikujZmianyWebOta([sciezka])
     assert.equal(wynik.czyPublikowac, false, sciezka)
+  }
+})
+
+test('odrzuca dodanie kamery lub ML Kit wymagajace cap sync', () => {
+  for (const sciezka of ['package.json', 'package-lock.json', 'android/app/build.gradle']) {
+    const wynik = sklasyfikujZmianyWebOta(['src/modules/zdrowie/WidokiZdrowia.tsx', sciezka])
+    assert.equal(wynik.czyPublikowac, false, sciezka)
+    assert.match(wynik.powod, new RegExp(sciezka.replaceAll('.', '\\.')))
   }
 })
