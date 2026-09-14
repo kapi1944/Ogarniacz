@@ -8,6 +8,7 @@ import { inicjalizujPlatforme } from './platform/platforma'
 import { PotwierdzenieGotowosciBundle } from './app/PotwierdzenieGotowosciBundle'
 import { inicjalizujWidgetSnapshotService } from './services/WidgetSnapshotService'
 import { inicjalizujSynchronizacjeAplikacji } from './services/SynchronizacjaAplikacji'
+import { inicjalizujKontroleAktualizacjiAplikacji } from './services/KontrolaAktualizacjiAplikacji'
 import { inicjalizujRuntimeConfig } from './services/RuntimeConfigService'
 import { AktualizacjaPwa } from './app/AktualizacjaPwa'
 import './styles/glowny.css'
@@ -25,3 +26,4 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode><App /><AktualizacjaPwa /><PotwierdzenieGotowosciBundle /></StrictMode>,
 )
 void inicjalizujSynchronizacjeAplikacji()
+void inicjalizujKontroleAktualizacjiAplikacji()

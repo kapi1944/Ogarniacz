@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Download, RefreshCw, RotateCcw } from 'lucide-react'
 import { Karta, Znacznik } from '../../components/Interfejs'
 import { platforma } from '../../platform/platforma'
 import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
+import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeWeb } from '../../services/KontrolaAktualizacjiAplikacji'
 import type { StanAktualizacjiWeb, WynikSprawdzeniaAktualizacjiWeb } from '../../platform/typy'
 
 type EtapWeb = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'odrzucona' | 'wymaga-apk' | 'blad'
@@ -34,6 +35,7 @@ export function PanelAktualizacjiWeb() {
   const [etap, ustawEtap] = useState<EtapWeb>('gotowy')
   const [komunikat, ustawKomunikat] = useState('')
   const [postep, ustawPostep] = useState<number>()
+  const stanKontroli = useSyncExternalStore(nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, pobierzStanKontroliAktualizacji)
   const skonfigurowane = platforma.aktualizacjeWeb.skonfigurowane()
 
   const odswiezStan = () => platforma.aktualizacjeWeb.pobierzStan().then(ustawStan)
@@ -42,12 +44,39 @@ export function PanelAktualizacjiWeb() {
     void odswiezStan().catch(() => ustawKomunikat('Nie udało się odczytać wersji interfejsu.'))
   }, [])
 
+  useEffect(() => {
+    const sprawdzenie = stanKontroli.wynikWeb
+    if (!sprawdzenie || etap === 'pobieranie') return
+    ustawWynik(sprawdzenie)
+    ustawStan(sprawdzenie.stan)
+    if (sprawdzenie.wymagaNowszegoApk) {
+      ustawEtap('wymaga-apk')
+      ustawKomunikat('Ta szybka poprawka wymaga nowszej wersji aplikacji Android. Najpierw zaktualizuj aplikację powyżej.')
+    } else if (!sprawdzenie.czyDostepna) {
+      ustawEtap('brak')
+      ustawKomunikat('Masz aktualną wersję interfejsu Ogarniacza.')
+    } else if (sprawdzenie.czyOdrzucona) {
+      ustawEtap('odrzucona')
+      ustawKomunikat('Ta wersja została wcześniej wycofana na tym urządzeniu.')
+    } else {
+      ustawEtap('dostepna')
+      ustawKomunikat('Dostępna szybka poprawka.')
+    }
+  }, [etap, stanKontroli.wynikWeb])
+
+  useEffect(() => {
+    if (!stanKontroli.bladWeb || etap === 'pobieranie') return
+    ustawEtap('blad')
+    ustawKomunikat(stanKontroli.bladWeb)
+  }, [etap, stanKontroli.bladWeb])
+
   const sprawdz = async () => {
     ustawEtap('sprawdzanie')
     ustawKomunikat('Sprawdzanie osobnego manifestu Web OTA…')
     ustawWynik(undefined)
     try {
-      const sprawdzenie = await platforma.aktualizacjeWeb.sprawdz()
+      const sprawdzenie = await sprawdzAktualizacjeWeb()
+      if (!sprawdzenie) return
       ustawWynik(sprawdzenie)
       ustawStan(sprawdzenie.stan)
       if (sprawdzenie.wymagaNowszegoApk) {
@@ -73,13 +102,13 @@ export function PanelAktualizacjiWeb() {
     if (!wynik) return
     ustawEtap('pobieranie')
     ustawPostep(0)
-    ustawKomunikat('Pobieranie podpisanego Web bundle…')
+    ustawKomunikat('Pobieranie podpisanej szybkiej poprawki…')
     try {
       await platforma.aktualizacjeWeb.pobierzIAktywuj(wynik.manifest, ponownaProba, (nowyStan, procent) => {
         ustawPostep(procent)
         ustawKomunikat(nowyStan === 'weryfikacja'
           ? 'Weryfikacja SHA-256 i podpisu…'
-          : nowyStan === 'rozpakowywanie' ? 'Bezpieczne rozpakowywanie bundle…' : `Pobieranie Web bundle… ${procent}%`)
+          : nowyStan === 'rozpakowywanie' ? 'Bezpieczne przygotowywanie poprawki…' : `Pobieranie szybkiej poprawki… ${procent}%`)
       })
     } catch (blad) {
       ustawEtap('blad')
@@ -103,7 +132,7 @@ export function PanelAktualizacjiWeb() {
   const wariant = etap === 'blad' ? 'blad' : etap === 'dostepna' || etap === 'odrzucona' || etap === 'wymaga-apk' ? 'ostrzezenie' : etap === 'brak' ? 'sukces' : 'neutralny'
 
   return <Karta>
-    <div className="naglowek-karty"><div><h2>Wersja interfejsu Ogarniacza</h2><p>React, CSS, HTML i assets · niezależnie od APK</p></div><Znacznik wariant={wariant}>{etykiety[etap]}</Znacznik></div>
+    <div className="naglowek-karty"><div><h2>Szybkie poprawki</h2><p>Poprawki interfejsu zgodne z aktualnie zainstalowaną aplikacją.</p></div><Znacznik wariant={wariant}>{etykiety[etap]}</Znacznik></div>
     <div className="lista-kompaktowa">
       <div><span>Aktualny bundle</span><strong>{stan?.aktualny.bundleVersion ?? '—'}</strong></div>
       <div><span>Commit</span><strong>{stan ? skrocCommit(stan.aktualny.commitSha) : '—'}</strong></div>
@@ -117,10 +146,10 @@ export function PanelAktualizacjiWeb() {
     {platforma.natywna && !skonfigurowane && <p className="tekst-pomocniczy">{pobierzDiagnostykeRuntime() || 'Osobny kanał Web OTA nie jest skonfigurowany w tym APK.'}</p>}
     <div className="akcje-formularza">
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={!skonfigurowane || zajete} onClick={sprawdz}><RefreshCw aria-hidden="true" />Sprawdź szybką aktualizację</button>
-      {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={() => void zainstaluj(false)}><Download aria-hidden="true" />Pobierz i zastosuj</button>}
+      {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={() => void zainstaluj(false)}><Download aria-hidden="true" />Zastosuj szybką poprawkę</button>}
       {etap === 'odrzucona' && <button type="button" className="przycisk przycisk--glowny" onClick={() => void zainstaluj(true)}>Spróbuj ponownie</button>}
       {stan?.poprzedni && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void przywroc('poprzednia')}><RotateCcw aria-hidden="true" />Przywróć poprzednią wersję</button>}
-      {stan?.aktualny.source === 'web-ota' && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void przywroc('wbudowana')}>Przywróć wersję wbudowaną w APK</button>}
+      {stan?.aktualny.source === 'web-ota' && <div><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void przywroc('wbudowana')}>Przywróć wersję wbudowaną w APK</button><p className="tekst-pomocniczy">Nie zmienia wersji APK ani danych. Przywraca tylko interfejs dostarczony razem z aktualnie zainstalowaną aplikacją.</p></div>}
     </div>
   </Karta>
 }

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import { Karta, Znacznik } from '../../components/Interfejs'
 import { platforma } from '../../platform/platforma'
 import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
+import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeApk } from '../../services/KontrolaAktualizacjiAplikacji'
 import type { PobranaAktualizacja, WynikSprawdzeniaAktualizacji } from '../../platform/typy'
 import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 
@@ -34,6 +35,7 @@ export function PanelAktualizacji() {
   const [postep, ustawPostep] = useState<number>()
   const [dostepna, ustawDostepna] = useState<WynikSprawdzeniaAktualizacji>()
   const [pobrana, ustawPobrana] = useState<PobranaAktualizacja>()
+  const stanKontroli = useSyncExternalStore(nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, pobierzStanKontroliAktualizacji)
   const skonfigurowane = platforma.aktualizacje.skonfigurowane()
 
   useEffect(() => {
@@ -42,13 +44,29 @@ export function PanelAktualizacji() {
       .catch(() => ustawWersje(__WERSJA_APLIKACJI__))
   }, [])
 
+  useEffect(() => {
+    if (!stanKontroli.wynikApk || etap === 'pobieranie' || etap === 'weryfikacja' || etap === 'uruchamianie') return
+    ustawDostepna(stanKontroli.wynikApk)
+    ustawEtap(stanKontroli.wynikApk.czyNowsza ? 'dostepna' : 'brak')
+    ustawKomunikat(stanKontroli.wynikApk.czyNowsza
+      ? `Dostępna wersja ${stanKontroli.wynikApk.manifest.versionName}.`
+      : 'Brak aktualizacji. Masz najnowszą wersję Ogarniacza.')
+  }, [etap, stanKontroli.wynikApk])
+
+  useEffect(() => {
+    if (!stanKontroli.bladApk || etap === 'pobieranie' || etap === 'weryfikacja' || etap === 'uruchamianie') return
+    ustawEtap('blad')
+    ustawKomunikat(stanKontroli.bladApk)
+  }, [etap, stanKontroli.bladApk])
+
   const sprawdzAktualizacje = async () => {
     ustawEtap('sprawdzanie')
     ustawKomunikat('Sprawdzanie manifestu latest.json…')
     ustawDostepna(undefined)
     ustawPobrana(undefined)
     try {
-      const wynik = await platforma.aktualizacje.sprawdz()
+      const wynik = await sprawdzAktualizacjeApk()
+      if (!wynik) return
       ustawDostepna(wynik)
       if (wynik.czyNowsza) {
         ustawEtap('dostepna')
