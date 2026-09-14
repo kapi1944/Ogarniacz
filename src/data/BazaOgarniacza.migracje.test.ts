@@ -138,7 +138,7 @@ async function utworzBazeHistoryczna(wersja: typeof wersjeHistoryczne[number]): 
   await historycznaBaza.close()
 }
 
-describe.sequential('migracja historycznych baz Dexie do v13', () => {
+describe.sequential('migracja historycznych baz Dexie do v14', () => {
   afterEach(async () => {
     baza.close()
     await Dexie.delete('ogarniacz-v1')
@@ -173,5 +173,25 @@ describe.sequential('migracja historycznych baz Dexie do v13', () => {
     if (wersja.numer >= 10) {
       await expect(baza.tabela('kolejkaSynchronizacji').get(`kolejka-v${wersja.numer}`)).resolves.toMatchObject({ id: `kolejka-v${wersja.numer}`, tabela: 'zadania', rekordId: `zadanie-v${wersja.numer}`, ...metadane })
     }
+  })
+
+  it('projektuje jednostkaLubPostac i zapas do nowych pól apteczki', async () => {
+    baza.close()
+    await Dexie.delete('ogarniacz-v1')
+    const bazaV13 = new Dexie('ogarniacz-v1')
+    bazaV13.version(13).stores({ leki: 'id, aktywny, updatedAt, usunietoAt' })
+    await bazaV13.open()
+    await bazaV13.table('leki').put({
+      id: 'lek-z-projekcja', nazwa: 'Starszy syrop', aktywny: true, godziny: ['08:00'], dawkaInstrukcja: '', jednostkaLubPostac: 'syrop', zapasJednostek: 120, ...metadane,
+    })
+    await bazaV13.close()
+
+    await baza.open()
+
+    await expect(baza.tabela('leki').get('lek-z-projekcja')).resolves.toMatchObject({
+      postac: 'syrop',
+      ruchyApteczki: [{ id: 'stan-poczatkowy:lek-z-projekcja', typ: 'dodanie', ilosc: 120 }],
+      jednostkaLubPostac: 'syrop',
+    })
   })
 })

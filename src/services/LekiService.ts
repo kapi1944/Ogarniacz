@@ -1,6 +1,9 @@
 import { addDays, differenceInCalendarDays, format, getDay, parseISO } from 'date-fns'
 import { terazIso, utworzMetadane } from '../domain/fabryki'
-import type { DawkaLeku, DziennikLeku, Lek, TrybDawkowaniaLeku } from '../domain/typy'
+import { baza } from '../data/BazaOgarniacza'
+import { dodajDoKolejkiSynchronizacji, tabelaKolejki } from '../data/KolejkaSynchronizacji'
+import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
+import type { DawkaLeku, DziennikLeku, Lek, RuchApteczkiLeku, TrybDawkowaniaLeku } from '../domain/typy'
 
 export interface DawkaDnia {
   idWystapienia: string
@@ -112,8 +115,9 @@ function zuzycieDnia(lek: Lek, data: string): number {
 }
 
 export function przewidywanaDataWyczerpania(lek: Lek, odDnia: string): string | undefined {
-  if (!lek.zapasJednostek || lek.zapasJednostek <= 0 || Number.isNaN(parseISO(odDnia).getTime())) return undefined
-  let pozostalo = lek.zapasJednostek
+  const zapas = stanApteczki(lek)
+  if (!zapas || zapas <= 0 || Number.isNaN(parseISO(odDnia).getTime())) return undefined
+  let pozostalo = zapas
   let data = odDnia
   for (let indeks = 0; indeks < 3660; indeks += 1) {
     const zuzycie = zuzycieDnia(lek, data)
@@ -125,6 +129,40 @@ export function przewidywanaDataWyczerpania(lek: Lek, odDnia: string): string | 
     if (lek.dataDo && data > lek.dataDo) return undefined
   }
   return undefined
+}
+
+/** Projekcja dla starszych leków oraz bilans niecofniętych ruchów apteczki. */
+export function ruchyApteczki(lek: Lek): RuchApteczkiLeku[] {
+  if (Array.isArray(lek.ruchyApteczki)) return lek.ruchyApteczki
+  if (typeof lek.zapasJednostek !== 'number') return []
+  return [{ id: `stan-poczatkowy:${lek.id}`, typ: 'dodanie', ilosc: lek.zapasJednostek, data: lek.dataOtwarcia ?? lek.createdAt.slice(0, 10), createdAt: lek.createdAt }]
+}
+
+export function stanApteczki(lek: Lek): number | undefined {
+  const ruchy = ruchyApteczki(lek)
+  if (ruchy.length === 0) return undefined
+  return ruchy.reduce((suma, ruch) => ruch.cofnietoAt ? suma : suma + (ruch.typ === 'dodanie' ? ruch.ilosc : -ruch.ilosc), 0)
+}
+
+function lekZRuchami(lek: Lek, ruchy: RuchApteczkiLeku[]): Lek {
+  return { ...lek, ruchyApteczki: ruchy, zapasJednostek: ruchy.reduce((suma, ruch) => ruch.cofnietoAt ? suma : suma + (ruch.typ === 'dodanie' ? ruch.ilosc : -ruch.ilosc), 0) }
+}
+
+export async function zapiszLekZDodanymZapasem(lek: Lek, dodanyZapas?: number): Promise<void> {
+  if (dodanyZapas !== undefined && (!Number.isFinite(dodanyZapas) || dodanyZapas < 0)) throw new Error('Podaj nieujemną ilość zapasu.')
+  const tabelaLekow = baza.tabela('leki')
+  await baza.transaction('rw', [tabelaLekow, tabelaKolejki()], async () => {
+    const poprzedni = await tabelaLekow.get(lek.id)
+    const ruchy = ruchyApteczki(poprzedni ?? lek)
+    const zDodaniem = dodanyZapas && dodanyZapas > 0
+      ? [...ruchy, { id: `dodanie:${crypto.randomUUID()}`, typ: 'dodanie' as const, ilosc: dodanyZapas, data: new Date().toISOString().slice(0, 10), createdAt: terazIso() }]
+      : ruchy
+    const zapisany = lekZRuchami({ ...lek, ruchyApteczki: zDodaniem }, zDodaniem)
+    zapisany.updatedAt = terazIso()
+    await tabelaLekow.put(zapisany)
+    await dodajDoKolejkiSynchronizacji('leki', zapisany, poprzedni)
+  })
+  powiadomOZmianieDanych('leki')
 }
 
 function dopasujWpisyDziennika(
@@ -188,6 +226,48 @@ export function zapiszStatusDawki(dawka: DawkaDnia, status: DziennikLeku['status
     odroczoneDo: status === 'odroczone' ? odroczoneDo : undefined,
     updatedAt: terazIso(),
   }
+}
+
+/** Zapisuje status i ruch apteczki w jednej transakcji. Id ruchu zużycia jest idempotentnym id wystąpienia. */
+export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: DziennikLeku['status'], odroczoneDo?: string): Promise<void> {
+  const tabelaLekow = baza.tabela('leki')
+  const tabelaDziennika = baza.tabela('dziennikLekow')
+  await baza.transaction('rw', [tabelaLekow, tabelaDziennika, tabelaKolejki()], async () => {
+    const [lek, poprzedniWpis] = await Promise.all([tabelaLekow.get(dawka.lek.id), tabelaDziennika.get(dawka.idWystapienia)])
+    if (!lek) throw new Error('Nie znaleziono leku dla tej dawki.')
+    const wpis = zapiszStatusDawki({ ...dawka, lek, wpis: poprzedniWpis }, status, odroczoneDo)
+    const ruchy = ruchyApteczki(lek)
+    const idZuzycia = `zuzycie:${dawka.idWystapienia}`
+    const istniejaceZuzycie = ruchy.find((ruch) => ruch.id === idZuzycia)
+    const ilosc = dawka.dawka.ilosc
+    let zaktualizowaneRuchy = ruchy
+
+    if (status === 'zazyte' && !istniejaceZuzycie && typeof ilosc === 'number' && ilosc > 0 && ruchy.length > 0) {
+      const stan = stanApteczki(lek) ?? 0
+      if (stan < ilosc) throw new Error(`Brak wystarczającego zapasu: dostępne ${stan}, potrzebne ${ilosc}. Dodaj zapas przed potwierdzeniem dawki.`)
+      zaktualizowaneRuchy = [...ruchy, { id: idZuzycia, typ: 'zuzycie', ilosc, data: dawka.data, idWystapienia: dawka.idWystapienia, createdAt: terazIso() }]
+    }
+    if (status === 'zazyte' && istniejaceZuzycie?.cofnietoAt) {
+      const stan = stanApteczki(lek) ?? 0
+      if (stan < istniejaceZuzycie.ilosc) throw new Error(`Brak wystarczającego zapasu: dostępne ${stan}, potrzebne ${istniejaceZuzycie.ilosc}. Dodaj zapas przed potwierdzeniem dawki.`)
+      zaktualizowaneRuchy = ruchy.map((ruch) => ruch.id === idZuzycia ? { ...ruch, cofnietoAt: undefined } : ruch)
+    }
+    if (status !== 'zazyte' && istniejaceZuzycie && !istniejaceZuzycie.cofnietoAt) {
+      const teraz = terazIso()
+      zaktualizowaneRuchy = ruchy.map((ruch) => ruch.id === idZuzycia ? { ...ruch, cofnietoAt: teraz } : ruch)
+    }
+
+    const zapisanyLek = lekZRuchami(lek, zaktualizowaneRuchy)
+    zapisanyLek.updatedAt = terazIso()
+    await tabelaDziennika.put(wpis)
+    await dodajDoKolejkiSynchronizacji('dziennikLekow', wpis, poprzedniWpis)
+    if (zaktualizowaneRuchy !== ruchy) {
+      await tabelaLekow.put(zapisanyLek)
+      await dodajDoKolejkiSynchronizacji('leki', zapisanyLek, lek)
+    }
+  })
+  powiadomOZmianieDanych('dziennikLekow')
+  powiadomOZmianieDanych('leki')
 }
 
 export function czasDawkiDoUwagi(data: string, godzina: string, status: DziennikLeku['status'], odroczoneDo?: string): number {

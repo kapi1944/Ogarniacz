@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { utworzMetadane } from '../domain/fabryki'
 import type { DziennikLeku, Lek } from '../domain/typy'
-import { dawkiZaplanowaneNaDzien, generujDawkiDnia, graniceLokalnegoDnia, idWystapieniaDawki, proponujGodzinyDawek, przewidywanaDataWyczerpania, zapiszStatusDawki } from './LekiService'
+import { dawkiZaplanowaneNaDzien, generujDawkiDnia, graniceLokalnegoDnia, idWystapieniaDawki, proponujGodzinyDawek, przewidywanaDataWyczerpania, stanApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawki, zapiszStatusDawkiZApteczka } from './LekiService'
 
 const lek: Lek = {
   ...utworzMetadane('lek-1'),
@@ -128,5 +129,61 @@ describe('leki', () => {
     expect(odswiezona.planowanaGodzina).toBe('09:00')
     expect(odswiezona.status).toBe('zazyte')
     expect(odswiezona.wpis?.planowanaGodzina).toBe('08:00')
+  })
+})
+
+describe('apteczka leków', () => {
+  beforeEach(async () => {
+    await inicjalizujBaze()
+    await baza.tabela('leki').clear()
+    await baza.tabela('dziennikLekow').clear()
+  })
+
+  afterEach(async () => {
+    await baza.tabela('leki').clear()
+    await baza.tabela('dziennikLekow').clear()
+  })
+
+  async function przygotujLek(iloscDawki: number, zapas = 5) {
+    const testowy: Lek = { ...lek, id: `lek-apteczka-${iloscDawki}`, dawki: [{ id: 'dawka-apteczka', godzina: '08:00', ilosc: iloscDawki }], godziny: ['08:00'], postac: 'tabletka', jednostka: 'szt.' }
+    await zapiszLekZDodanymZapasem(testowy, zapas)
+    const zapisany = await baza.tabela('leki').get(testowy.id)
+    return generujDawkiDnia([zapisany!], [], '2026-08-14')[0]!
+  }
+
+  it('odejmuje jedną jednostkę po potwierdzeniu dawki ilość 1', async () => {
+    const dawka = await przygotujLek(1)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(4)
+  })
+
+  it('odejmuje pełną ilość dawki 2', async () => {
+    const dawka = await przygotujLek(2)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(3)
+  })
+
+  it('ponowne zapisanie zażytego i synchronizacja tego samego wystąpienia nie tworzą drugiego zużycia', async () => {
+    const dawka = await przygotujLek(1)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    const odswiezona = generujDawkiDnia([(await baza.tabela('leki').get(dawka.lek.id))!], await baza.tabela('dziennikLekow').toArray(), dawka.data)[0]!
+    await zapiszStatusDawkiZApteczka(odswiezona, 'zazyte')
+    const zapisany = (await baza.tabela('leki').get(dawka.lek.id))!
+    expect(stanApteczki(zapisany)).toBe(4)
+    expect(zapisany.ruchyApteczki?.filter((ruch) => ruch.idWystapienia === dawka.idWystapienia)).toHaveLength(1)
+  })
+
+  it('cofnięcie zażytego przywraca zapas', async () => {
+    const dawka = await przygotujLek(2)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    const odswiezona = generujDawkiDnia([(await baza.tabela('leki').get(dawka.lek.id))!], await baza.tabela('dziennikLekow').toArray(), dawka.data)[0]!
+    await zapiszStatusDawkiZApteczka(odswiezona, 'pominiete')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(5)
+  })
+
+  it('zachowuje działanie starszego leku bez nowych pól apteczki', () => {
+    const starszy: Lek = { ...lek, jednostkaLubPostac: 'tabletka', postac: undefined, jednostka: undefined, ruchyApteczki: undefined, zapasJednostek: 3 }
+    expect(stanApteczki(starszy)).toBe(3)
+    expect(przewidywanaDataWyczerpania(starszy, '2026-08-14')).toBe('2026-08-14')
   })
 })

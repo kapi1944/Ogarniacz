@@ -154,6 +154,19 @@ export interface DawkaLeku {
   instrukcja?: string
 }
 
+export type PostacLeku = 'tabletka' | 'tabletka_powlekana' | 'kapsulka' | 'syrop' | 'zawiesina' | 'krople' | 'aerozol' | 'inhalacja' | 'saszetka' | 'proszek' | 'roztwor' | 'masc' | 'krem' | 'zel' | 'czopek' | 'plaster' | 'ampulka' | 'fiolka' | 'inna'
+export type JednostkaLeku = 'szt.' | 'ml' | 'mg' | 'g' | 'kropla' | 'rozpylenie' | 'dawka' | 'inna'
+
+export interface RuchApteczkiLeku {
+  id: Id
+  typ: 'dodanie' | 'zuzycie'
+  ilosc: number
+  data: string
+  idWystapienia?: string
+  cofnietoAt?: string
+  createdAt: string
+}
+
 export interface Lek extends EncjaBazowa {
   nazwa: string
   /** Pola historyczne; nowe zapisy utrzymują je jako projekcję dawek. */
@@ -167,6 +180,10 @@ export interface Lek extends EncjaBazowa {
   interwalGodzin?: number
   pierwszaGodzina?: string
   jednostkaLubPostac?: string
+  postac?: PostacLeku
+  jednostka?: JednostkaLeku
+  moc?: string
+  ruchyApteczki?: RuchApteczkiLeku[]
   dniTygodnia?: number[]
   coIleDni?: number
   dataOd?: string

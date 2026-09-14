@@ -3,7 +3,33 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 13
+export const WERSJA_SCHEMATU_BAZY = 14
+
+const POSTAC_Z_HISTORYCZNEJ_WARTOSCI: Record<string, string> = {
+  tabletka: 'tabletka',
+  'tabletka powlekana': 'tabletka_powlekana',
+  kapsulka: 'kapsulka',
+  kapsułka: 'kapsulka',
+  syrop: 'syrop',
+  zawiesina: 'zawiesina',
+  krople: 'krople',
+  aerozol: 'aerozol',
+  inhalacja: 'inhalacja',
+  saszetka: 'saszetka',
+  proszek: 'proszek',
+  roztwor: 'roztwor',
+  roztwór: 'roztwor',
+  masc: 'masc',
+  maść: 'masc',
+  krem: 'krem',
+  zel: 'zel',
+  żel: 'zel',
+  czopek: 'czopek',
+  plaster: 'plaster',
+  ampułka: 'ampulka',
+  ampulka: 'ampulka',
+  fiolka: 'fiolka',
+}
 
 export const nazwyTabel: NazwaTabeli[] = [
   'zadania',
@@ -123,7 +149,7 @@ class BazaOgarniacza extends Dexie {
       urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
     })
 
-    this.version(WERSJA_SCHEMATU_BAZY).stores({
+    this.version(13).stores({
       ...schematPelny,
       urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
       historiaZmian: 'id, znacznikCzasu, modul, typEncji, encjaId, operacja, updatedAt, usunietoAt',
@@ -142,6 +168,22 @@ class BazaOgarniacza extends Dexie {
           .filter((godzina: unknown) => typeof godzina === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(godzina))
           .map((godzina: string) => ({ id: `starsza-dawka:${lek.id}:${godzina}`, godzina, ilosc: typeof lek.zuzycieNaDawke === 'number' && lek.zuzycieNaDawke > 0 ? lek.zuzycieNaDawke : undefined, instrukcja: lek.dawkaInstrukcja || undefined }))
         lek.trybDawkowania ??= 'konkretne_godziny'
+      })
+    })
+
+    this.version(14).stores({
+      ...schematPelny,
+      urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
+      historiaZmian: 'id, znacznikCzasu, modul, typEncji, encjaId, operacja, updatedAt, usunietoAt',
+      stanSynchronizacji: 'id, stan, ostatniSync, updatedAt',
+      konfliktySynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, wykrytoAt, updatedAt',
+      kolejkaSynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, operacja, createdAt, updatedAt',
+    }).upgrade(async (transakcja) => {
+      await transakcja.table('leki').toCollection().modify((lek) => {
+        if (!lek.postac && typeof lek.jednostkaLubPostac === 'string') lek.postac = POSTAC_Z_HISTORYCZNEJ_WARTOSCI[lek.jednostkaLubPostac.trim().toLocaleLowerCase('pl')] ?? 'inna'
+        if (!Array.isArray(lek.ruchyApteczki) && typeof lek.zapasJednostek === 'number') {
+          lek.ruchyApteczki = [{ id: `stan-poczatkowy:${lek.id}`, typ: 'dodanie', ilosc: lek.zapasJednostek, data: lek.dataOtwarcia ?? lek.createdAt.slice(0, 10), createdAt: lek.createdAt }]
+        }
       })
     })
   }

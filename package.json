@@ -36,8 +36,10 @@
         "check": "npm run lint && npm run typecheck && npm run test && npm run server:test && npm run web-ota:test && npm run build"
     },
     "dependencies": {
+        "@capacitor-mlkit/text-recognition": "^8.2.1",
         "@capacitor/android": "^8.5.0",
         "@capacitor/app": "^8.1.1",
+        "@capacitor/camera": "^8.2.4",
         "@capacitor/core": "^8.5.0",
         "@capacitor/filesystem": "^8.0.0",
         "@capacitor/haptics": "^8.0.0",

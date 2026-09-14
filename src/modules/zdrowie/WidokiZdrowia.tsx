@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { BellPlus, CalendarClock, ClipboardList, Edit3, FileText, History, Pill, Plus, ShieldAlert, Stethoscope, Trash2 } from 'lucide-react'
+import { BellPlus, CalendarClock, ClipboardList, Edit3, FileText, History, Pill, Plus, ScanLine, ShieldAlert, Stethoscope, Trash2 } from 'lucide-react'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { Karta, Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import type { Repozytorium } from '../../data/Repozytorium'
 import { dzisiajIso, noweId, terazIso, utworzMetadane } from '../../domain/fabryki'
-import type { DawkaLeku, Lek, PozycjaRecepty, Przypomnienie, Recepta, Skierowanie, Terapia, UstawieniaHarmonogramu, Wizyta } from '../../domain/typy'
+import type { DawkaLeku, JednostkaLeku, Lek, PozycjaRecepty, PostacLeku, Przypomnienie, Recepta, Skierowanie, Terapia, UstawieniaHarmonogramu, Wizyta } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { dawkiLeku, dawkiZaplanowaneNaDzien, generujDawkiDnia, proponujGodzinyDawek, przewidywanaDataWyczerpania, zapiszStatusDawki } from '../../services/LekiService'
+import { dawkiLeku, dawkiZaplanowaneNaDzien, generujDawkiDnia, proponujGodzinyDawek, przewidywanaDataWyczerpania, stanApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from '../../services/LekiService'
+import { ocrLekow } from '../../services/LekiOcrService'
+import type { WynikOcrLeku } from '../../services/LekiOcrParser'
 import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
 import { utworzZadanie } from '../../services/ZadaniaService'
 import { useAplikacja } from '../../app/KontekstAplikacji'
@@ -122,8 +124,10 @@ export function WidokDziennikaTerapii() {
 
 interface SzkicLeku {
   nazwa: string
-  jednostkaLubPostac: string
-  zapasJednostek: string
+  postac: PostacLeku
+  jednostka: JednostkaLeku
+  moc: string
+  dodawanyZapas: string
   dataOtwarcia: string
   dataOd: string
   dataDo: string
@@ -141,6 +145,13 @@ interface SzkicLeku {
   dawki: DawkaLeku[]
 }
 
+const postacieLekow: { wartosc: PostacLeku; etykieta: string; domyslnaJednostka: JednostkaLeku }[] = [
+  ['tabletka', 'Tabletka', 'szt.'], ['tabletka_powlekana', 'Tabletka powlekana', 'szt.'], ['kapsulka', 'Kapsułka', 'szt.'], ['syrop', 'Syrop', 'ml'], ['zawiesina', 'Zawiesina', 'ml'], ['krople', 'Krople', 'kropla'], ['aerozol', 'Aerozol', 'rozpylenie'], ['inhalacja', 'Inhalacja', 'dawka'], ['saszetka', 'Saszetka', 'szt.'], ['proszek', 'Proszek', 'g'], ['roztwor', 'Roztwór', 'ml'], ['masc', 'Maść', 'g'], ['krem', 'Krem', 'g'], ['zel', 'Żel', 'g'], ['czopek', 'Czopek', 'szt.'], ['plaster', 'Plaster', 'szt.'], ['ampulka', 'Ampułka', 'szt.'], ['fiolka', 'Fiolka', 'szt.'], ['inna', 'Inna', 'szt.'],
+].map(([wartosc, etykieta, domyslnaJednostka]) => ({ wartosc: wartosc as PostacLeku, etykieta, domyslnaJednostka: domyslnaJednostka as JednostkaLeku }))
+const jednostkiLekow: { wartosc: JednostkaLeku; etykieta: string }[] = [['szt.', 'szt.'], ['ml', 'ml'], ['mg', 'mg'], ['g', 'g'], ['kropla', 'kropla'], ['rozpylenie', 'rozpylenie'], ['dawka', 'dawka'], ['inna', 'inna']].map(([wartosc, etykieta]) => ({ wartosc: wartosc as JednostkaLeku, etykieta }))
+
+function jednostkaLeku(lek: Lek): string | undefined { return lek.jednostka ?? lek.jednostkaLubPostac }
+
 function nowaDawka(godzina = '08:00'): DawkaLeku {
   return { id: noweId(), godzina, ilosc: 1, instrukcja: '' }
 }
@@ -149,8 +160,10 @@ function utworzSzkicLeku(lek: Lek | undefined, harmonogram: UstawieniaHarmonogra
   const dawki = lek ? dawkiLeku(lek).map((dawka) => ({ ...dawka })) : [nowaDawka()]
   return {
     nazwa: lek?.nazwa ?? '',
-    jednostkaLubPostac: lek?.jednostkaLubPostac ?? '',
-    zapasJednostek: lek?.zapasJednostek === undefined ? '' : String(lek.zapasJednostek),
+    postac: lek?.postac ?? 'inna',
+    jednostka: lek?.jednostka ?? 'szt.',
+    moc: lek?.moc ?? '',
+    dodawanyZapas: '',
     dataOtwarcia: lek?.dataOtwarcia ?? '',
     dataOd: lek?.dataOd ?? '',
     dataDo: lek?.dataDo ?? '',
@@ -192,12 +205,15 @@ function zapisanyLek(szkic: SzkicLeku, istniejacy?: Lek): Lek {
     oknoAktywnosciDo: szkic.trybDawkowania === 'razy_dziennie' ? szkic.oknoAktywnosciDo : undefined,
     interwalGodzin: szkic.trybDawkowania === 'co_x_godzin' ? Math.max(1, Number(szkic.interwalGodzin)) : undefined,
     pierwszaGodzina: szkic.trybDawkowania === 'co_x_godzin' ? szkic.pierwszaGodzina : undefined,
-    jednostkaLubPostac: szkic.jednostkaLubPostac.trim() || undefined,
+    postac: szkic.postac,
+    jednostka: szkic.jednostka,
+    moc: szkic.moc.trim() || undefined,
+    jednostkaLubPostac: szkic.jednostka,
     dniTygodnia: szkic.trybHarmonogramu === 'wybrane_dni' ? szkic.dniTygodnia.split(',').map(Number).filter((dzien) => Number.isInteger(dzien) && dzien >= 0 && dzien <= 6) : undefined,
     coIleDni: szkic.trybHarmonogramu === 'co_x_dni' ? Math.max(1, Number(szkic.coIleDni)) : undefined,
     dataOd: szkic.dataOd || (szkic.trybDawkowania === 'co_x_godzin' ? dzisiajIso() : undefined),
     dataDo: szkic.dataDo || undefined,
-    zapasJednostek: szkic.zapasJednostek === '' ? undefined : Math.max(0, Number(szkic.zapasJednostek)),
+    zapasJednostek: istniejacy?.zapasJednostek,
     zuzycieNaDawke: dawkiDoZapisu[0]?.ilosc,
     dataOtwarcia: szkic.dataOtwarcia || undefined,
     dodatkoweInstrukcje: szkic.dodatkoweInstrukcje.trim() || undefined,
@@ -226,19 +242,53 @@ function FormularzDawkowania({ szkic, ustawSzkic }: { szkic: SzkicLeku; ustawSzk
   </fieldset>
 }
 
+function PodgladOcrLeku({ wynik, ustawWynik, zatwierdz, anuluj }: { wynik: WynikOcrLeku; ustawWynik: (wynik: WynikOcrLeku) => void; zatwierdz: () => void; anuluj: () => void }) {
+  const pewnosc = (pewne: boolean) => pewne ? 'rozpoznano pewnie' : 'wymaga sprawdzenia'
+  return <Modal tytul="Podgląd skanu opakowania" zamknij={anuluj}><div className="formularz">
+    <p className="tekst-pomocniczy">Sprawdź i popraw dane przed uzupełnieniem formularza. Moc preparatu nie zmienia dawkowania.</p>
+    <label className="pole"><span>Nazwa — {pewnosc(wynik.nazwa.pewne)}</span><input value={wynik.nazwa.wartosc ?? ''} onChange={(e) => ustawWynik({ ...wynik, nazwa: { wartosc: e.target.value || undefined, pewne: false } })} /></label>
+    <label className="pole"><span>Moc — {pewnosc(wynik.moc.pewne)}</span><input value={wynik.moc.wartosc ?? ''} onChange={(e) => ustawWynik({ ...wynik, moc: { wartosc: e.target.value || undefined, pewne: false } })} /></label>
+    <label className="pole"><span>Postać — {pewnosc(wynik.postac.pewne)}</span><select value={wynik.postac.wartosc ?? 'inna'} onChange={(e) => ustawWynik({ ...wynik, postac: { wartosc: e.target.value as PostacLeku, pewne: false } })}>{postacieLekow.map((postac) => <option key={postac.wartosc} value={postac.wartosc}>{postac.etykieta}</option>)}</select></label>
+    <label className="pole"><span>Liczba jednostek w opakowaniu — {pewnosc(wynik.opakowanie.pewne)}</span><input type="number" min="0" step="0.01" value={wynik.opakowanie.wartosc?.ilosc ?? ''} onChange={(e) => { const ilosc = Number(e.target.value); ustawWynik({ ...wynik, opakowanie: { wartosc: Number.isFinite(ilosc) && ilosc > 0 ? { ilosc, jednostka: wynik.opakowanie.wartosc?.jednostka ?? 'szt.' } : undefined, pewne: false } }) }} /></label>
+    <label className="pole"><span>Jednostka opakowania</span><select value={wynik.opakowanie.wartosc?.jednostka ?? 'szt.'} onChange={(e) => ustawWynik({ ...wynik, opakowanie: { wartosc: { ilosc: wynik.opakowanie.wartosc?.ilosc ?? 0, jednostka: e.target.value as JednostkaLeku }, pewne: false } })}>{jednostkiLekow.map((jednostka) => <option key={jednostka.wartosc} value={jednostka.wartosc}>{jednostka.etykieta}</option>)}</select></label>
+    <details className="pole--pelne"><summary>Rozpoznany tekst</summary><pre>{wynik.surowyTekst || 'Brak tekstu rozpoznanego przez OCR.'}</pre></details>
+    <div className="akcje-formularza pole--pelne"><button type="button" className="przycisk przycisk--drugorzedny" onClick={anuluj}>Anuluj</button><button type="button" className="przycisk przycisk--glowny" onClick={zatwierdz}>Uzupełnij formularz</button></div>
+  </div></Modal>
+}
+
 function RejestrLekow({ leki, repozytorium, wybranyElementId, harmonogram }: { leki: Lek[]; repozytorium: Repozytorium<Lek>; wybranyElementId?: string; harmonogram: UstawieniaHarmonogramu }) {
   const [edytowany, ustawEdytowany] = useState<Lek>()
   const [szkic, ustawSzkic] = useState(() => utworzSzkicLeku(undefined, harmonogram))
   const [otwarty, ustawOtwarty] = useState(false)
   const [blad, ustawBlad] = useState('')
+  const [wynikOcr, ustawWynikOcr] = useState<WynikOcrLeku>()
+  const [skanowanie, ustawSkanowanie] = useState(false)
   const [doUsuniecia, ustawDoUsuniecia] = useState<Lek>()
   const otworz = (lek?: Lek) => { ustawEdytowany(lek); ustawSzkic(utworzSzkicLeku(lek, harmonogram)); ustawBlad(''); ustawOtwarty(true) }
+  const skanujOpakowanie = async () => {
+    try {
+      ustawSkanowanie(true)
+      ustawWynikOcr(await ocrLekow.zeskanujOpakowanie())
+    } catch (przyczyna) {
+      ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zeskanować opakowania.')
+    } finally {
+      ustawSkanowanie(false)
+    }
+  }
+  const zatwierdzSkan = () => {
+    if (!wynikOcr) return
+    const postac = wynikOcr.postac.wartosc
+    const jednostka = wynikOcr.opakowanie.wartosc?.jednostka ?? (postac ? postacieLekow.find((element) => element.wartosc === postac)?.domyslnaJednostka : undefined) ?? szkic.jednostka
+    ustawSzkic({ ...szkic, nazwa: wynikOcr.nazwa.wartosc ?? szkic.nazwa, moc: wynikOcr.moc.wartosc ?? szkic.moc, postac: postac ?? szkic.postac, jednostka, dodawanyZapas: wynikOcr.opakowanie.wartosc ? String(wynikOcr.opakowanie.wartosc.ilosc) : szkic.dodawanyZapas })
+    ustawWynikOcr(undefined)
+  }
   useEffect(() => { const lek = leki.find((element) => element.id === wybranyElementId); if (lek && !otwarty) otworz(lek) }, [wybranyElementId, leki, otwarty])
   const data = dzisiajIso()
   return <section className="widok"><NaglowekWidoku tytul="Harmonogramy leków" opis="Jeden lek może zawierać wiele dawek. Dezaktywacja zachowuje historię." akcje={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}><Plus aria-hidden="true" />Dodaj lek</button>} />
-    {leki.length === 0 ? <PustyStan tytul="Brak leków" opis="Dodaj lek i jego dawkowanie." akcja={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}>Dodaj lek</button>} /> : <div className="lista-rekordow">{leki.map((lek) => <article className="rekord" key={lek.id} data-element-id={lek.id}><div className="rekord__tresc"><h3>{lek.nazwa}</h3><div className="rekord__szczegoly"><Znacznik wariant={lek.aktywny ? 'sukces' : 'neutralny'}>{lek.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik><span>{dawkiZaplanowaneNaDzien(lek, data).map((dawka) => `${dawka.godzina} — ${dawka.ilosc ?? 'uzupełnij ilość'}${dawka.ilosc !== undefined && lek.jednostkaLubPostac ? ` ${lek.jednostkaLubPostac}` : ''}`).join(', ') || 'brak dawek'}</span>{lek.zapasJednostek !== undefined && <span>Zapas: {lek.zapasJednostek}; przewidywane wyczerpanie: {przewidywanaDataWyczerpania(lek, data) ?? 'uzupełnij zużycie'}</span>}{lek.dodatkoweInstrukcje && <p>{lek.dodatkoweInstrukcje}</p>}</div></div><div className="rekord__akcje"><button type="button" className="przycisk-ikona" title="Edytuj" onClick={() => otworz(lek)}><Edit3 aria-hidden="true" /></button><button type="button" className="przycisk-ikona przycisk-ikona--niebezpieczny" title="Usuń" onClick={() => ustawDoUsuniecia(lek)}><Trash2 aria-hidden="true" /></button></div></article>)}</div>}
-    {otwarty && <Modal tytul={edytowany ? 'Edytuj lek' : 'Dodaj lek'} zamknij={() => ustawOtwarty(false)}><form className="formularz" onSubmit={async (e) => { e.preventDefault(); try { await repozytorium.zapisz(zapisanyLek(szkic, edytowany)); ustawOtwarty(false) } catch (przyczyna) { ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać leku.') } }}>
-      {blad && <Komunikat typ="blad">{blad}</Komunikat>}<fieldset className="pole--pelne"><legend>Dane leku</legend><label className="pole"><span>Nazwa *</span><input required value={szkic.nazwa} onChange={(e) => ustawSzkic({ ...szkic, nazwa: e.target.value })} /></label><label className="pole"><span>Jednostka / postać</span><input placeholder="np. tabletka" value={szkic.jednostkaLubPostac} onChange={(e) => ustawSzkic({ ...szkic, jednostkaLubPostac: e.target.value })} /></label><label className="pole"><span>Zapas</span><input type="number" min="0" value={szkic.zapasJednostek} onChange={(e) => ustawSzkic({ ...szkic, zapasJednostek: e.target.value })} /></label><label className="pole"><span>Data otwarcia</span><input type="date" value={szkic.dataOtwarcia} onChange={(e) => ustawSzkic({ ...szkic, dataOtwarcia: e.target.value })} /></label><label className="pole"><span>Okres od</span><input type="date" value={szkic.dataOd} onChange={(e) => ustawSzkic({ ...szkic, dataOd: e.target.value })} /></label><label className="pole"><span>do</span><input type="date" value={szkic.dataDo} onChange={(e) => ustawSzkic({ ...szkic, dataDo: e.target.value })} /></label><label className="pole"><span>Harmonogram dni</span><select value={szkic.trybHarmonogramu} onChange={(e) => ustawSzkic({ ...szkic, trybHarmonogramu: e.target.value as SzkicLeku['trybHarmonogramu'] })}><option value="codziennie">Codziennie</option><option value="wybrane_dni">Wybrane dni</option><option value="co_x_dni">Co X dni</option></select></label>{szkic.trybHarmonogramu === 'wybrane_dni' && <label className="pole"><span>Dni tygodnia (0–6)</span><input placeholder="np. 1, 3, 5" value={szkic.dniTygodnia} onChange={(e) => ustawSzkic({ ...szkic, dniTygodnia: e.target.value })} /></label>}{szkic.trybHarmonogramu === 'co_x_dni' && <label className="pole"><span>Co ile dni</span><input type="number" min="1" value={szkic.coIleDni} onChange={(e) => ustawSzkic({ ...szkic, coIleDni: e.target.value })} /></label>}<label className="pole pole--pelne"><span>Dodatkowe instrukcje</span><textarea value={szkic.dodatkoweInstrukcje} onChange={(e) => ustawSzkic({ ...szkic, dodatkoweInstrukcje: e.target.value })} /></label><label className="pole"><span>Stan</span><select value={String(szkic.aktywny)} onChange={(e) => ustawSzkic({ ...szkic, aktywny: e.target.value === 'true' })}><option value="true">Aktywny</option><option value="false">Nieaktywny</option></select></label></fieldset><FormularzDawkowania szkic={szkic} ustawSzkic={ustawSzkic} /><div className="akcje-formularza pole--pelne"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawOtwarty(false)}>Anuluj</button><button type="submit" className="przycisk przycisk--glowny">Zapisz</button></div></form></Modal>}
+    {leki.length === 0 ? <PustyStan tytul="Brak leków" opis="Dodaj lek i jego dawkowanie." akcja={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}>Dodaj lek</button>} /> : <div className="lista-rekordow">{leki.map((lek) => <article className="rekord" key={lek.id} data-element-id={lek.id}><div className="rekord__tresc"><h3>{lek.nazwa}</h3><div className="rekord__szczegoly"><Znacznik wariant={lek.aktywny ? 'sukces' : 'neutralny'}>{lek.aktywny ? 'aktywny' : 'nieaktywny'}</Znacznik>{lek.moc && <span>{lek.moc}</span>}<span>{lek.postac ?? lek.jednostkaLubPostac ?? 'postać nieuzupełniona'}</span><span>{dawkiZaplanowaneNaDzien(lek, data).map((dawka) => `${dawka.godzina} — ${dawka.ilosc ?? 'uzupełnij ilość'}${dawka.ilosc !== undefined && jednostkaLeku(lek) ? ` ${jednostkaLeku(lek)}` : ''}`).join(', ') || 'brak dawek'}</span>{stanApteczki(lek) !== undefined && <span>Apteczka: {stanApteczki(lek)} {jednostkaLeku(lek)}; przewidywane wyczerpanie: {przewidywanaDataWyczerpania(lek, data) ?? 'uzupełnij zużycie'}</span>}{lek.dodatkoweInstrukcje && <p>{lek.dodatkoweInstrukcje}</p>}</div></div><div className="rekord__akcje"><button type="button" className="przycisk-ikona" title="Edytuj" onClick={() => otworz(lek)}><Edit3 aria-hidden="true" /></button><button type="button" className="przycisk-ikona przycisk-ikona--niebezpieczny" title="Usuń" onClick={() => ustawDoUsuniecia(lek)}><Trash2 aria-hidden="true" /></button></div></article>)}</div>}
+    {otwarty && <Modal tytul={edytowany ? 'Edytuj lek' : 'Dodaj lek'} zamknij={() => ustawOtwarty(false)}><form className="formularz" onSubmit={async (e) => { e.preventDefault(); try { await zapiszLekZDodanymZapasem(zapisanyLek(szkic, edytowany), szkic.dodawanyZapas === '' ? undefined : Number(szkic.dodawanyZapas)); ustawOtwarty(false) } catch (przyczyna) { ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać leku.') } }}>
+      {blad && <Komunikat typ="blad">{blad}</Komunikat>}{ocrLekow.czyDostepny() && <button type="button" className="przycisk przycisk--drugorzedny" disabled={skanowanie} onClick={() => void skanujOpakowanie()}><ScanLine aria-hidden="true" />{skanowanie ? 'Skanowanie…' : 'Skanuj opakowanie'}</button>}<fieldset className="pole--pelne"><legend>Dane leku</legend><label className="pole"><span>Nazwa *</span><input required value={szkic.nazwa} onChange={(e) => ustawSzkic({ ...szkic, nazwa: e.target.value })} /></label><label className="pole"><span>Postać leku</span><select value={szkic.postac} onChange={(e) => { const postac = e.target.value as PostacLeku; ustawSzkic({ ...szkic, postac, jednostka: postacieLekow.find((element) => element.wartosc === postac)?.domyslnaJednostka ?? szkic.jednostka }) }}>{postacieLekow.map((postac) => <option key={postac.wartosc} value={postac.wartosc}>{postac.etykieta}</option>)}</select></label><label className="pole"><span>Jednostka dawkowania / zapasu</span><select value={szkic.jednostka} onChange={(e) => ustawSzkic({ ...szkic, jednostka: e.target.value as JednostkaLeku })}>{jednostkiLekow.map((jednostka) => <option key={jednostka.wartosc} value={jednostka.wartosc}>{jednostka.etykieta}</option>)}</select></label><label className="pole"><span>Moc (opcjonalnie)</span><input placeholder="np. 500 mg" value={szkic.moc} onChange={(e) => ustawSzkic({ ...szkic, moc: e.target.value })} /></label><fieldset className="pole--pelne"><legend>Apteczka / zapas</legend>{edytowany && stanApteczki(edytowany) !== undefined && <p className="tekst-pomocniczy">Aktualny stan: {stanApteczki(edytowany)} {jednostkaLeku(edytowany)}</p>}<label className="pole"><span>{edytowany ? 'Dodaj zapas' : 'Zapas początkowy'}</span><input type="number" min="0" step="0.01" value={szkic.dodawanyZapas} onChange={(e) => ustawSzkic({ ...szkic, dodawanyZapas: e.target.value })} /></label><label className="pole"><span>Data otwarcia</span><input type="date" value={szkic.dataOtwarcia} onChange={(e) => ustawSzkic({ ...szkic, dataOtwarcia: e.target.value })} /></label></fieldset><label className="pole"><span>Okres od</span><input type="date" value={szkic.dataOd} onChange={(e) => ustawSzkic({ ...szkic, dataOd: e.target.value })} /></label><label className="pole"><span>do</span><input type="date" value={szkic.dataDo} onChange={(e) => ustawSzkic({ ...szkic, dataDo: e.target.value })} /></label><label className="pole"><span>Harmonogram dni</span><select value={szkic.trybHarmonogramu} onChange={(e) => ustawSzkic({ ...szkic, trybHarmonogramu: e.target.value as SzkicLeku['trybHarmonogramu'] })}><option value="codziennie">Codziennie</option><option value="wybrane_dni">Wybrane dni</option><option value="co_x_dni">Co X dni</option></select></label>{szkic.trybHarmonogramu === 'wybrane_dni' && <label className="pole"><span>Dni tygodnia (0–6)</span><input placeholder="np. 1, 3, 5" value={szkic.dniTygodnia} onChange={(e) => ustawSzkic({ ...szkic, dniTygodnia: e.target.value })} /></label>}{szkic.trybHarmonogramu === 'co_x_dni' && <label className="pole"><span>Co ile dni</span><input type="number" min="1" value={szkic.coIleDni} onChange={(e) => ustawSzkic({ ...szkic, coIleDni: e.target.value })} /></label>}<label className="pole pole--pelne"><span>Dodatkowe instrukcje</span><textarea value={szkic.dodatkoweInstrukcje} onChange={(e) => ustawSzkic({ ...szkic, dodatkoweInstrukcje: e.target.value })} /></label><label className="pole"><span>Stan</span><select value={String(szkic.aktywny)} onChange={(e) => ustawSzkic({ ...szkic, aktywny: e.target.value === 'true' })}><option value="true">Aktywny</option><option value="false">Nieaktywny</option></select></label></fieldset><FormularzDawkowania szkic={szkic} ustawSzkic={ustawSzkic} /><div className="akcje-formularza pole--pelne"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawOtwarty(false)}>Anuluj</button><button type="submit" className="przycisk przycisk--glowny">Zapisz</button></div></form></Modal>}
+    {wynikOcr && <PodgladOcrLeku wynik={wynikOcr} ustawWynik={ustawWynikOcr} zatwierdz={zatwierdzSkan} anuluj={() => ustawWynikOcr(undefined)} />}
     {doUsuniecia && <ModalPotwierdzenia tytul="Usunąć lek?" opis={`Lek „${doUsuniecia.nazwa}” zniknie z bieżących danych, a historia pozostanie lokalnie zachowana.`} etykietaAkcji="Usuń" niebezpieczne anuluj={() => ustawDoUsuniecia(undefined)} potwierdz={async () => { await repozytorium.usun(doUsuniecia.id); ustawDoUsuniecia(undefined) }} />}
   </section>
 }
@@ -247,7 +297,7 @@ export function WidokLekow() {
   const [parametryAdresu] = useSearchParams()
   const { ustawienia } = useAplikacja()
   const { dane: leki, repozytorium } = useRepozytorium('leki')
-  const { dane: wpisy, repozytorium: repoWpisow } = useRepozytorium('dziennikLekow')
+  const { dane: wpisy } = useRepozytorium('dziennikLekow')
   const [historia, ustawHistorie] = useState(false)
   const data = dzisiajIso()
   const dawki = generujDawkiDnia(leki, wpisy, data)
@@ -257,7 +307,7 @@ export function WidokLekow() {
     <Karta klasa="karta-bezpieczenstwa"><ShieldAlert aria-hidden="true" /><div><strong>Ogarniacz nie udziela porad medycznych.</strong><p>Nie dobiera leków ani dawek i nie zmienia zaleceń. Przechowuje wyłącznie informacje wpisane przez użytkownika.</p></div></Karta>
     <Karta>
       <h2>Dzisiejsze dawki</h2>
-      {dawki.length === 0 ? <PustyStan tytul="Brak aktywnych dawek" opis="Dodaj lek i co najmniej jedną dawkę." /> : <div className="lista-dawek lista-dawek--duza">{dawki.map((dawka) => <div key={dawka.idWystapienia}><time>{dawka.planowanaGodzina}</time><div><strong>{dawka.lek.nazwa}</strong><small>{dawka.dawka.instrukcja || (dawka.dawka.ilosc !== undefined ? `${dawka.dawka.ilosc}${dawka.lek.jednostkaLubPostac ? ` ${dawka.lek.jednostkaLubPostac}` : ''}` : 'Uzupełnij ilość dawki')}</small></div><select aria-label={`Status ${dawka.lek.nazwa} ${dawka.planowanaGodzina}`} value={dawka.status} onChange={(e) => repoWpisow.zapisz(zapiszStatusDawki(dawka, e.target.value as typeof dawka.status))}><option value="oczekuje">Oczekuje</option><option value="zazyte">Zażyte</option><option value="odroczone">Odroczone</option><option value="pominiete">Pominięte</option></select></div>)}</div>}
+      {dawki.length === 0 ? <PustyStan tytul="Brak aktywnych dawek" opis="Dodaj lek i co najmniej jedną dawkę." /> : <div className="lista-dawek lista-dawek--duza">{dawki.map((dawka) => <div key={dawka.idWystapienia}><time>{dawka.planowanaGodzina}</time><div><strong>{dawka.lek.nazwa}</strong><small>{dawka.dawka.instrukcja || (dawka.dawka.ilosc !== undefined ? `${dawka.dawka.ilosc}${jednostkaLeku(dawka.lek) ? ` ${jednostkaLeku(dawka.lek)}` : ''}` : 'Uzupełnij ilość dawki')}</small></div><select aria-label={`Status ${dawka.lek.nazwa} ${dawka.planowanaGodzina}`} value={dawka.status} onChange={async (e) => { try { await zapiszStatusDawkiZApteczka(dawka, e.target.value as typeof dawka.status) } catch (przyczyna) { window.alert(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać statusu dawki.') } }}><option value="oczekuje">Oczekuje</option><option value="zazyte">Zażyte</option><option value="odroczone">Odroczone</option><option value="pominiete">Pominięte</option></select></div>)}</div>}
     </Karta>
     {historia && <Karta><h2>Historia reakcji</h2>{wpisy.length === 0 ? <p className="tekst-pomocniczy">Brak zapisanych reakcji.</p> : <div className="tabela-przewijana"><table><thead><tr><th>Data</th><th>Godzina</th><th>Lek</th><th>Status</th><th>Reakcja</th></tr></thead><tbody>{[...wpisy].sort((a, b) => b.data.localeCompare(a.data)).map((wpis) => <tr key={wpis.id}><td>{wpis.data}</td><td>{wpis.planowanaGodzina}</td><td>{leki.find((lek) => lek.id === wpis.lekId)?.nazwa ?? 'Usunięty lek'}</td><td><Znacznik wariant={wpis.status === 'zazyte' ? 'sukces' : wpis.status === 'pominiete' ? 'blad' : 'ostrzezenie'}>{wpis.status}</Znacznik></td><td>{wpis.reakcjaAt ? new Date(wpis.reakcjaAt).toLocaleString('pl-PL') : '—'}</td></tr>)}</tbody></table></div>}</Karta>}
     <RejestrLekow leki={leki} repozytorium={repozytorium} wybranyElementId={parametryAdresu.get('element') ?? undefined} harmonogram={ustawienia.harmonogram} />
