@@ -1,6 +1,7 @@
 import { cleanup as wyczysc, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
+import { komunikatBleduAktualizacji } from './PanelAktualizacji'
 import { PodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
 import { SekcjaPolaczeniaIAktualizacji } from './SekcjaPolaczeniaIAktualizacji'
 
@@ -33,6 +34,13 @@ const stanWeb = {
 }
 
 describe('końcowa sekcja synchronizacji i aktualizacji', () => {
+  it('wyjaśnia brakującą przestrzeń na podstawie danych błędu natywnego', () => {
+    expect(komunikatBleduAktualizacji({
+      code: 'BRAK_MIEJSCA',
+      data: { wolneBajty: 495 * 1024 ** 2, wymaganeBajty: 2 * 1024 ** 3, brakujaceBajty: 1.5 * 1024 ** 3 },
+    }, 'błąd')).toContain('Zwolnij co najmniej 1,5 GB')
+  })
+
   it('układa Synchronizację przed aktualizacją aplikacji i szybkimi poprawkami', () => {
     pobierzStan.mockResolvedValue(stanWeb)
     const { container } = render(<SekcjaPolaczeniaIAktualizacji synchronizacjaSkonfigurowana dzieci={<h2>Synchronizacja</h2>} />)
