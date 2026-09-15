@@ -1,21 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Edit3, Plus, Trash2 } from 'lucide-react'
 import type { Repozytorium } from '../data/Repozytorium'
+import type { DefinicjaPolaRejestru } from '../domain/rejestr'
 import type { EncjaBazowa } from '../domain/typy'
+import { EdytorPolaRejestru, normalizujPolaRejestru, normalizujStarePolaRejestru, skonwertujWartoscPolaWlasnego, wartoscFormularzaPola, type DefinicjaPola, type PoleDoEdycjiRejestru } from './EdytorPolaRejestru'
 import { Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan } from './Interfejs'
 
-export interface DefinicjaPola {
-  klucz: string
-  etykieta: string
-  typ?: 'text' | 'textarea' | 'date' | 'time' | 'number' | 'email' | 'url' | 'select' | 'multiselect'
-  wymagane?: boolean
-  podpowiedz?: string
-  min?: number
-  krok?: number
-  opcje?: { wartosc: string; etykieta: string }[]
-  widoczne?: (formularz: Record<string, string>) => boolean
-  domyslnaWartosc?: string
-}
+export type { DefinicjaPola } from './EdytorPolaRejestru'
 
 interface Wlasciwosci<T extends EncjaBazowa> {
   tytul: string
@@ -24,6 +15,7 @@ interface Wlasciwosci<T extends EncjaBazowa> {
   dane: T[]
   repozytorium: Repozytorium<T>
   pola: DefinicjaPola[]
+  polaRejestru?: DefinicjaPolaRejestru[]
   zbuduj: (formularz: Record<string, string>, istniejacy?: T) => T
   etykieta: (element: T) => string
   szczegoly: (element: T) => ReactNode
@@ -35,11 +27,6 @@ interface Wlasciwosci<T extends EncjaBazowa> {
   pustyStan?: { tytul: string; opis: string }
 }
 
-function wartoscTekstowa(wartosc: unknown): string {
-  if (Array.isArray(wartosc)) return wartosc.join(', ')
-  return wartosc === undefined || wartosc === null ? '' : String(wartosc)
-}
-
 export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>) {
   const [formularzOtwarty, ustawFormularzOtwarty] = useState(false)
   const [edytowany, ustawEdytowany] = useState<T>()
@@ -47,14 +34,20 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
   const [doUsuniecia, ustawDoUsuniecia] = useState<T>()
   const [blad, ustawBlad] = useState('')
   const ostatnioOtwartyElement = useRef<string | undefined>(undefined)
+  const zewnetrznePola = normalizujPolaRejestru(wlasciwosci.polaRejestru ?? [])
+  const zewnetrzneIdPola = new Set(zewnetrznePola.map((pole) => pole.definicja.id))
+  const polaDoEdycji: PoleDoEdycjiRejestru[] = [
+    ...normalizujStarePolaRejestru(wlasciwosci.pola).filter((pole) => !zewnetrzneIdPola.has(pole.definicja.id)),
+    ...zewnetrznePola,
+  ]
 
   const otworz = useCallback((element?: T) => {
     ustawEdytowany(element)
-    const wartosciPoczatkowe = Object.fromEntries(wlasciwosci.pola.map((pole) => [pole.klucz, wartoscTekstowa(element ? (element as unknown as Record<string, unknown>)[pole.klucz] : pole.domyslnaWartosc ?? '')]))
+    const wartosciPoczatkowe = Object.fromEntries(polaDoEdycji.map((pole) => [pole.definicja.id, wartoscFormularzaPola(element, pole)]))
     ustawFormularz(element ? { ...wartosciPoczatkowe, ...wlasciwosci.uzupelnijFormularz?.(element) } : wartosciPoczatkowe)
     ustawBlad('')
     ustawFormularzOtwarty(true)
-  }, [wlasciwosci])
+  }, [polaDoEdycji, wlasciwosci])
 
   useEffect(() => {
     const wybranyElementId = wlasciwosci.wybranyElementId
@@ -68,7 +61,17 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
   const zapisz = async (zdarzenie: FormEvent) => {
     zdarzenie.preventDefault()
     try {
-      const encja = wlasciwosci.zbuduj(formularz, edytowany)
+      const formularzSystemowy = polaDoEdycji.reduce<Record<string, string>>((wynik, pole) => {
+        if (pole.definicja.zrodlo === 'systemowe' && pole.definicja.kluczWlasciwosci) {
+          wynik[pole.definicja.kluczWlasciwosci] = formularz[pole.definicja.id] ?? ''
+        }
+        return wynik
+      }, {})
+      const zbudowanaEncja = wlasciwosci.zbuduj(formularzSystemowy, edytowany)
+      const polaWlasne = polaDoEdycji
+        .filter((pole) => pole.definicja.zrodlo === 'wlasne')
+        .reduce((wynik, pole) => ({ ...wynik, [pole.definicja.id]: skonwertujWartoscPolaWlasnego(pole.definicja, formularz[pole.definicja.id] ?? '') }), zbudowanaEncja.polaWlasne ?? {})
+      const encja = { ...zbudowanaEncja, ...(polaDoEdycji.some((pole) => pole.definicja.zrodlo === 'wlasne') ? { polaWlasne } : {}) }
       await wlasciwosci.repozytorium.zapisz(encja)
       await wlasciwosci.poZapisie?.(encja, edytowany)
       ustawFormularzOtwarty(false)
@@ -108,24 +111,8 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
         <Modal tytul={edytowany ? 'Edytuj element' : wlasciwosci.etykietaDodawania} zamknij={() => ustawFormularzOtwarty(false)}>
           <form className="formularz" onSubmit={zapisz}>
             {blad && <Komunikat typ="blad">{blad}</Komunikat>}
-            {wlasciwosci.pola.filter((pole) => pole.widoczne?.(formularz) ?? true).map((pole) => (
-              <label className={pole.typ === 'textarea' ? 'pole pole--pelne' : 'pole'} key={pole.klucz}>
-                <span>{pole.etykieta}{pole.wymagane && ' *'}</span>
-                {pole.typ === 'textarea' ? (
-                  <textarea required={pole.wymagane} placeholder={pole.podpowiedz} value={formularz[pole.klucz] ?? ''} onChange={(e) => ustawFormularz({ ...formularz, [pole.klucz]: e.target.value })} />
-                ) : pole.typ === 'select' ? (
-                  <select required={pole.wymagane} value={formularz[pole.klucz] ?? ''} onChange={(e) => ustawFormularz({ ...formularz, [pole.klucz]: e.target.value })}>
-                    {!pole.wymagane && <option value="">—</option>}
-                    {pole.opcje?.map((opcja) => <option key={opcja.wartosc} value={opcja.wartosc}>{opcja.etykieta}</option>)}
-                  </select>
-                ) : pole.typ === 'multiselect' ? (
-                  <select multiple value={(formularz[pole.klucz] ?? '').split(',').filter(Boolean)} onChange={(e) => ustawFormularz({ ...formularz, [pole.klucz]: Array.from(e.target.selectedOptions, (opcja) => opcja.value).join(',') })}>
-                    {pole.opcje?.map((opcja) => <option key={opcja.wartosc} value={opcja.wartosc}>{opcja.etykieta}</option>)}
-                  </select>
-                ) : (
-                  <input type={pole.typ ?? 'text'} required={pole.wymagane} placeholder={pole.podpowiedz} min={pole.min} step={pole.krok} value={formularz[pole.klucz] ?? ''} onChange={(e) => ustawFormularz({ ...formularz, [pole.klucz]: e.target.value })} />
-                )}
-              </label>
+            {polaDoEdycji.filter((pole) => pole.widoczne?.(formularz) ?? true).map((pole) => (
+              <EdytorPolaRejestru key={pole.definicja.id} pole={pole} wartosc={formularz[pole.definicja.id] ?? ''} zmien={(wartosc) => ustawFormularz({ ...formularz, [pole.definicja.id]: wartosc })} />
             ))}
             <div className="akcje-formularza pole--pelne">
               <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawFormularzOtwarty(false)}>Anuluj</button>

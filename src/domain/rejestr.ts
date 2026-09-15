@@ -56,6 +56,7 @@ interface WspolnaDefinicjaPolaRejestru<Typ extends TypPolaRejestru> {
   id: IdPolaRejestru
   etykieta: string
   typ: Typ
+  opcje?: { wartosc: string; etykieta: string }[]
   rolaSemantyczna?: RolaSemantycznaDlaTypu<Typ>
 }
 
