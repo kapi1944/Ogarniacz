@@ -84,6 +84,12 @@ Baza nazywa się `ogarniacz-v1`.
 
 Każda encja ma `id`, `createdAt`, `updatedAt` i opcjonalny `usunietoAt`. Repozytorium wykonuje soft-delete. Dzięki temu rekord usunięty pozostawia znacznik potrzebny przyszłej synchronizacji. Twarde czyszczenie jest dostępne wyłącznie w Ustawieniach po wpisaniu frazy potwierdzającej.
 
+## Rejestr 2.0 — guardraile i Definition of Done
+
+**Antycele:** Rejestr nie duplikuje logiki serwisów domenowych ani nie tworzy drugiego źródła prawdy dla wartości wyliczanych. Nie dodajemy abstrakcji bez co najmniej jednego realnego zastosowania, `eval` ani wykonywania dowolnego JS z konfiguracji. Poza zakresem pozostają pełny silnik formuł oraz rozbudowane uprawnienia Rejestru. Nie utrzymujemy dwóch pełnych implementacji tego samego mechanizmu; potwierdzone martwe mechanizmy usuwamy, zamiast ukrywać je „na później”.
+
+**Definition of Done:** pole systemowe ma jawny tryb obsługi; resolver i akcja są wskazane stabilnym ID, a ich kod pozostaje poza Dexie i synchronizowanymi definicjami. Zapis domenowy przechodzi przez publiczny serwis domenowy. Zmiana formatu danych ma deterministyczną migrację przy otwarciu bazy oraz skoncentrowany test; bez zmiany formatu nie podnosimy wersji Dexie. `polaWlasne` przechowuje wyłącznie wartości `custom:*`; backup/restore zachowuje definicje, widoki i istniejące wartości, a przed destrukcyjnym restore powstaje kopia `before-restore`. Adapter starego UI może istnieć tylko jako mały, oznaczony przejściowy most z warunkiem usunięcia.
+
 ## ID i daty
 
 - encje używają `crypto.randomUUID()`;
