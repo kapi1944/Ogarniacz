@@ -70,7 +70,7 @@ export interface Projekt extends EncjaBazowa {
   kamienieMilowe?: { id: Id; nazwa: string; wykonany: boolean; termin?: string }[]
 }
 
-export interface ElementSkrzynki extends EncjaBazowa {
+export interface ElementPoczekalni extends EncjaBazowa {
   tresc: string
   zrodlo: 'tekst' | 'glos'
   sugerowanyTyp?: NazwaModulu
@@ -733,7 +733,7 @@ export type NazwaModulu =
 export interface MapaTabel {
   zadania: Zadanie
   projekty: Projekt
-  skrzynka: ElementSkrzynki
+  skrzynka: ElementPoczekalni
   blokiCzasu: BlokCzasu
   grafikPracy: GrafikPracy
   wyjatkiGrafiku: WyjatekGrafiku

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { utworzMetadane } from '../domain/fabryki'
-import type { ElementSkrzynki } from '../domain/typy'
+import type { ElementPoczekalni } from '../domain/typy'
 import { alertyPoczekalni } from '../modules/pulpit/logikaKafelkow'
 import { DostawcaPoczekalniPulpitu, PROG_STARZENIA_POCZEKALNI_DNI } from './DostawcaPoczekalniPulpitu'
 
 const zrodlo = <Encja>(dane: () => Encja[]) => ({ lista: async () => dane() })
-const wpis = (id: string, status: ElementSkrzynki['status'] = 'nowe', createdAt = '2026-08-20T10:00:00.000Z'): ElementSkrzynki => ({
+const wpis = (id: string, status: ElementPoczekalni['status'] = 'nowe', createdAt = '2026-08-20T10:00:00.000Z'): ElementPoczekalni => ({
   ...utworzMetadane(id),
   createdAt,
   updatedAt: createdAt,

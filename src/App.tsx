@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { DostawcaAplikacji } from './app/KontekstAplikacji'
 import { DostawcaSesjiEcho } from './app/DostawcaSesjiEcho'
 import { StraznikModulu, UkladAplikacji } from './app/UkladAplikacji'
@@ -8,7 +8,7 @@ import { NawigacjaPlatformy } from './platform/NawigacjaPlatformy'
 import type { NazwaModulu } from './domain/typy'
 import { DostawcaKonta } from './app/DostawcaKonta'
 
-const WidokSkrzynki = lazy(() => import('./modules/praca/WidokiPracy').then((modul) => ({ default: modul.WidokSkrzynki })))
+const WidokPoczekalni = lazy(() => import('./modules/praca/WidokiPracy').then((modul) => ({ default: modul.WidokPoczekalni })))
 const WidokZadan = lazy(() => import('./modules/praca/WidokiPracy').then((modul) => ({ default: modul.WidokZadan })))
 const WidokProjektow = lazy(() => import('./modules/praca/WidokiPracy').then((modul) => ({ default: modul.WidokProjektow })))
 const WidokPlanera = lazy(() => import('./modules/czas/WidokiCzasu').then((modul) => ({ default: modul.WidokPlanera })))
@@ -54,7 +54,9 @@ function LadowanieWidoku() {
 export default function App() {
   return <BrowserRouter><DostawcaKonta><DostawcaAplikacji><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><Suspense fallback={<LadowanieWidoku />}><Routes>
     <Route path="/" element={<WidokPulpitu />} />
-    <Route path="/skrzynka" element={chron('skrzynka', <WidokSkrzynki />)} />
+    <Route path="/poczekalnia" element={chron('skrzynka', <WidokPoczekalni />)} />
+    <Route path="/skrzynka" element={<Navigate to="/poczekalnia" replace />} />
+    <Route path="/inbox" element={<Navigate to="/poczekalnia" replace />} />
     <Route path="/zadania" element={chron('zadania', <WidokZadan />)} />
     <Route path="/projekty" element={chron('projekty', <WidokProjektow />)} />
     <Route path="/planer" element={chron('planer', <WidokPlanera />)} />

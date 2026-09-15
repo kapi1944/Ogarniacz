@@ -2,14 +2,14 @@ import { cleanup as wyczysc, fireEvent, render, screen, waitFor } from '@testing
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach as poKazdym, beforeEach, describe, expect, it, vi } from 'vitest'
 import { utworzMetadane } from '../../domain/fabryki'
-import type { ElementSkrzynki, Projekt, Zadanie } from '../../domain/typy'
-import { cofnijPrzeksztalcenieInbox, przeksztalcElementInbox } from '../../services/PoczekalniaService'
-import { WidokProjektow, WidokSkrzynki, WidokZadan } from './WidokiPracy'
+import type { ElementPoczekalni, Projekt, Zadanie } from '../../domain/typy'
+import { cofnijPrzeksztalceniePoczekalni, przeksztalcElementPoczekalni } from '../../services/PoczekalniaService'
+import { WidokProjektow, WidokPoczekalni, WidokZadan } from './WidokiPracy'
 
 const stan = vi.hoisted(() => ({
   zadania: [] as Zadanie[],
   projekty: [] as Projekt[],
-  skrzynka: [] as ElementSkrzynki[],
+  skrzynka: [] as ElementPoczekalni[],
   zapiszZadanie: vi.fn(),
   usunZadanie: vi.fn(),
   usunInbox: vi.fn(),
@@ -27,9 +27,9 @@ vi.mock('../../hooks/useRepozytorium', () => ({
 vi.mock('../../platform/platforma', () => ({ platforma: { haptyka: { sukces: vi.fn().mockResolvedValue(undefined) }, udostepnianie: { dostepne: () => false } } }))
 vi.mock('../../services/PoczekalniaService', async (importujOryginal) => ({
   ...await importujOryginal<typeof import('../../services/PoczekalniaService')>(),
-  przeksztalcElementInbox: vi.fn(),
-  cofnijPrzeksztalcenieInbox: vi.fn(),
-  zapiszDoInbox: vi.fn(),
+  przeksztalcElementPoczekalni: vi.fn(),
+  cofnijPrzeksztalceniePoczekalni: vi.fn(),
+  zapiszDoPoczekalni: vi.fn(),
 }))
 
 poKazdym(wyczysc)
@@ -44,19 +44,19 @@ beforeEach(() => {
 })
 
 describe('codzienny przepływ pracy', () => {
-  it('przekształca wpis Inboxu jednym kliknięciem, pokazuje wynik i pozwala cofnąć', async () => {
-    const element: ElementSkrzynki = { ...utworzMetadane('inbox-1'), tresc: 'Oddzwonić do administracji', zrodlo: 'tekst', status: 'do_sklasyfikowania' }
+  it('przekształca wpis Poczekalni jednym kliknięciem, pokazuje wynik i pozwala cofnąć', async () => {
+    const element: ElementPoczekalni = { ...utworzMetadane('inbox-1'), tresc: 'Oddzwonić do administracji', zrodlo: 'tekst', status: 'do_sklasyfikowania' }
     stan.skrzynka = [element]
-    vi.mocked(przeksztalcElementInbox).mockResolvedValue({ typ: 'zadania', id: 'zadanie-1' })
-    vi.mocked(cofnijPrzeksztalcenieInbox).mockResolvedValue(undefined)
+    vi.mocked(przeksztalcElementPoczekalni).mockResolvedValue({ typ: 'zadania', id: 'zadanie-1' })
+    vi.mocked(cofnijPrzeksztalceniePoczekalni).mockResolvedValue(undefined)
 
-    render(<MemoryRouter><WidokSkrzynki /></MemoryRouter>)
-    fireEvent.click(screen.getByRole('button', { name: 'Zadanie' }))
+    render(<MemoryRouter><WidokPoczekalni /></MemoryRouter>)
+    fireEvent.click(screen.getAllByRole('button', { name: 'Zadanie' })[0])
 
     await screen.findByText(/Utworzono zadanie/)
     expect(screen.getByRole('link', { name: /Otwórz utworzony element/ })).toHaveAttribute('href', '/zadania?element=zadanie-1')
     fireEvent.click(screen.getByRole('button', { name: 'Cofnij' }))
-    await waitFor(() => expect(cofnijPrzeksztalcenieInbox).toHaveBeenCalledWith(element, { typ: 'zadania', id: 'zadanie-1' }))
+    await waitFor(() => expect(cofnijPrzeksztalceniePoczekalni).toHaveBeenCalledWith(element, { typ: 'zadania', id: 'zadanie-1' }))
     expect(screen.getByText(/Wpis znowu czeka w poczekalni/)).toBeInTheDocument()
   })
 

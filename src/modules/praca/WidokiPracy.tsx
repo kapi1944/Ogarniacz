@@ -25,7 +25,6 @@ export function WidokZadan() {
   const { dane: zadania, repozytorium } = useRepozytorium('zadania')
   const { dane: projekty } = useRepozytorium('projekty')
   const { dane: miejsca } = useRepozytorium('miejsca')
-  const { dane: definicjePolRejestru } = useRepozytorium('definicjeWlasnychPolRejestru')
   const [filtr, ustawFiltr] = useState<'otwarte' | 'dzisiaj' | 'zalegle' | 'nadchodzace' | 'wykonane' | 'wszystkie'>('otwarte')
   const [sortowanie, ustawSortowanie] = useState<'termin' | 'priorytet' | 'aktualizacja'>('termin')
   const [widok, ustawWidok] = useState<'lista' | 'projekt' | 'termin'>('lista')
@@ -64,7 +63,6 @@ export function WidokZadan() {
     { id: 'system:status', zrodlo: 'systemowe', trybObslugi: 'tylko_odczyt', resolverId: 'resolver:zadania-status', etykieta: 'Status', typ: 'tekst' },
     { id: 'system:priorytet', zrodlo: 'systemowe', trybObslugi: 'tylko_odczyt', resolverId: 'resolver:zadania-priorytet', etykieta: 'Priorytet', typ: 'tekst' },
     { id: 'system:termin', zrodlo: 'systemowe', trybObslugi: 'tylko_odczyt', resolverId: 'resolver:zadania-termin', etykieta: 'Termin', typ: 'data' },
-    ...definicjePolRejestru.filter((pole) => pole.rejestrId === 'zadania' && pole.aktywne).map((pole) => ({ id: pole.id, zrodlo: 'wlasne' as const, etykieta: pole.etykieta, typ: pole.typ, opcje: pole.opcje, rolaSemantyczna: pole.rolaSemantyczna })),
   ]
 
 
@@ -145,6 +143,7 @@ export function WidokZadan() {
     wybranyElementId={parametryAdresu.get('element') ?? undefined}
     pola={[]}
     polaRejestru={polaRejestru}
+    konfiguracjaWlasciwosci={{ rejestrId: 'zadania', polaSystemowe: polaRejestru, tytulKonfiguracji: 'Kolumny Zadań' }}
     filtr={<>{komunikat && <Komunikat typ={komunikat.typ}>{komunikat.tresc}{ostatniaZmiana && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijZmiane()}><Undo2 aria-hidden="true" />Cofnij</button>}</Komunikat>}<div className="pasek-filtrow">
       <div className="segmenty">{(['otwarte', 'dzisiaj', 'zalegle', 'nadchodzace', 'wykonane', 'wszystkie'] as const).map((wartosc) => <button type="button" className={filtr === wartosc ? 'aktywny' : ''} onClick={() => ustawFiltr(wartosc)} key={wartosc}>{wartosc === 'wszystkie' ? 'Wszystkie' : wartosc[0].toUpperCase() + wartosc.slice(1)}</button>)}</div>
       <label className="pole-inline"><span>Sortuj</span><select value={sortowanie} onChange={(e) => ustawSortowanie(e.target.value as typeof sortowanie)}><option value="termin">Termin</option><option value="priorytet">Priorytet</option><option value="aktualizacja">Ostatnia zmiana</option></select></label>
@@ -257,7 +256,7 @@ export function WidokProjektow() {
   />
 }
 
-export function WidokSkrzynki() {
+export function WidokPoczekalni() {
   return <RejestrPoczekalni />
 }
 

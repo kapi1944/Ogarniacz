@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { utworzMetadane } from '../domain/fabryki'
-import type { ElementSkrzynki } from '../domain/typy'
+import type { ElementPoczekalni } from '../domain/typy'
 import { utworzWlasnePoleRejestru } from '../services/RejestrService'
 import { RejestrPoczekalni } from './RejestrPoczekalni'
 
@@ -12,7 +12,7 @@ describe.sequential('RejestrPoczekalni', () => {
   beforeEach(async () => { baza.close(); await Dexie.delete('ogarniacz-v1'); await inicjalizujBaze() })
 
   it('edytuje stary element i zapisuje własną właściwość pod trwałym ID', async () => {
-    const element: ElementSkrzynki = { ...utworzMetadane('poczekalnia-1'), tresc: 'Stary wpis', zrodlo: 'tekst', status: 'nowe' }
+    const element: ElementPoczekalni = { ...utworzMetadane('poczekalnia-1'), tresc: 'Stary wpis', zrodlo: 'tekst', status: 'nowe' }
     await pobierzRepozytorium('skrzynka').zapisz(element)
     const definicja = await utworzWlasnePoleRejestru({ rejestrId: 'poczekalnia', etykieta: 'Kontekst', typ: 'tekst' })
     render(<RejestrPoczekalni />)
@@ -25,7 +25,7 @@ describe.sequential('RejestrPoczekalni', () => {
   })
 
   it('przekształca element przez domenową akcję Poczekalni', async () => {
-    const element: ElementSkrzynki = { ...utworzMetadane('poczekalnia-2'), tresc: 'Napraw rower', zrodlo: 'tekst', status: 'do_sklasyfikowania' }
+    const element: ElementPoczekalni = { ...utworzMetadane('poczekalnia-2'), tresc: 'Napraw rower', zrodlo: 'tekst', status: 'do_sklasyfikowania' }
     await pobierzRepozytorium('skrzynka').zapisz(element)
     render(<RejestrPoczekalni />)
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Zadanie' }).length).toBeGreaterThan(0))

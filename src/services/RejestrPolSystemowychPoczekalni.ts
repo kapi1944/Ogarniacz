@@ -1,5 +1,5 @@
-import type { ElementSkrzynki } from '../domain/typy'
-import { przeksztalcElementInbox, type TypKonwersjiInbox } from './PoczekalniaService'
+import type { ElementPoczekalni } from '../domain/typy'
+import { przeksztalcElementPoczekalni, type TypKonwersjiPoczekalni } from './PoczekalniaService'
 import { rejestrAkcjiDomenowychPolSystemowych, rejestrResolverowPolSystemowych } from './KontraktPolSystemowychRejestru'
 
 export const POLE_AKCJI_PRZEKSZTALCENIA_POCZEKALNI = {
@@ -11,19 +11,19 @@ export const POLE_AKCJI_PRZEKSZTALCENIA_POCZEKALNI = {
   typ: 'checkbox',
 } as const
 
-rejestrResolverowPolSystemowych.zarejestruj<ElementSkrzynki>({
+rejestrResolverowPolSystemowych.zarejestruj<ElementPoczekalni>({
   id: 'resolver:poczekalnia-status',
   wyznaczRevision: ({ encja }) => `${encja.updatedAt}:${encja.status}`,
   rozwiaz: ({ encja }) => encja.status === 'przetworzone' ? 'Przetworzone' : 'Do sklasyfikowania',
 })
 
-rejestrResolverowPolSystemowych.zarejestruj<ElementSkrzynki>({
+rejestrResolverowPolSystemowych.zarejestruj<ElementPoczekalni>({
   id: 'resolver:poczekalnia-wynik-przeksztalcenia',
   wyznaczRevision: ({ encja }) => `${encja.updatedAt}:${encja.przeksztalconoNa?.typ ?? ''}:${encja.przeksztalconoNa?.id ?? ''}`,
   rozwiaz: ({ encja }) => encja.przeksztalconoNa ? `${encja.przeksztalconoNa.typ}: ${encja.przeksztalconoNa.id}` : '—',
 })
 
-rejestrAkcjiDomenowychPolSystemowych.zarejestruj<ElementSkrzynki>({
+rejestrAkcjiDomenowychPolSystemowych.zarejestruj<ElementPoczekalni>({
   id: 'action:poczekalnia-przeksztalc',
   wykonaj: async ({ encja, daneZrodlowe }) => {
     const typ = daneZrodlowe.typ
@@ -31,13 +31,13 @@ rejestrAkcjiDomenowychPolSystemowych.zarejestruj<ElementSkrzynki>({
     if (!['zadanie', 'notatka', 'przypomnienie', 'zakup', 'projekt', 'pomysl', 'na_pozniej', 'wizyta'].includes(String(typ)) || typeof zapiszWynik !== 'function') {
       throw new Error('Przekształcenie wymaga prawidłowego typu docelowego.')
     }
-    zapiszWynik(await przeksztalcElementInbox(encja, typ as TypKonwersjiInbox))
+    zapiszWynik(await przeksztalcElementPoczekalni(encja, typ as TypKonwersjiPoczekalni))
   },
 })
 
 export async function przeksztalcPoczekalniePrzezRejestr(
-  element: ElementSkrzynki,
-  typ: TypKonwersjiInbox,
+  element: ElementPoczekalni,
+  typ: TypKonwersjiPoczekalni,
 ): Promise<{ typ: string; id: string }> {
   let wynik: { typ: string; id: string } | undefined
   await rejestrAkcjiDomenowychPolSystemowych.uruchom(POLE_AKCJI_PRZEKSZTALCENIA_POCZEKALNI, {

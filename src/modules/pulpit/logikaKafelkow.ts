@@ -119,7 +119,7 @@ export function klasaRozmiaruKafelka(rozmiar: RozmiarKafelkaPulpitu) {
 }
 
 export function adresReferencjiZrodla(sourceRef: ReferencjaZrodla): string {
-  const adresy = { zadania: '/zadania', projekty: '/projekty', cele: '/cele', terminy: '/terminy', leki: '/zdrowie/leki', wizyty: '/zdrowie/wizyty', skierowania: '/zdrowie/skierowania', zdrowie: '/zdrowie/recepty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy', notatki: '/notatki', skrzynka: '/skrzynka', miasto: '/miasto' } as const
+  const adresy = { zadania: '/zadania', projekty: '/projekty', cele: '/cele', terminy: '/terminy', leki: '/zdrowie/leki', wizyty: '/zdrowie/wizyty', skierowania: '/zdrowie/skierowania', zdrowie: '/zdrowie/recepty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy', notatki: '/notatki', skrzynka: '/poczekalnia', miasto: '/miasto' } as const
   const adres = adresy[sourceRef.modul as keyof typeof adresy] ?? '/'
   const parametry = new URLSearchParams({ element: sourceRef.encjaId })
   if (sourceRef.wystapienieId) parametry.set('wystapienie', sourceRef.wystapienieId)

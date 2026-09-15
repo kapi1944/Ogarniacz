@@ -7,7 +7,7 @@ import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarnia
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { utworzMetadane } from '../domain/fabryki'
-import type { Dokument, ElementSkrzynki, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, Wizyta, Zadanie } from '../domain/typy'
+import type { Dokument, ElementPoczekalni, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, Wizyta, Zadanie } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 import { pobierzInstallationId } from './InstallationService'
 import {
@@ -361,7 +361,7 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
   it('finalnie odzyskuje krytyczne dane wielu kategorii i tworzy pre-restore backup', async () => {
     const zadanie = utworzZadanie({ tytul: 'Recovery zadanie', opis: '', priorytet: 'wysoki' })
     const notatka = utworzNotatke('Recovery notatka')
-    const poczekalnia: ElementSkrzynki = { ...utworzMetadane('recovery-poczekalnia'), tresc: 'Do rozpatrzenia', zrodlo: 'tekst', status: 'nowe' }
+    const poczekalnia: ElementPoczekalni = { ...utworzMetadane('recovery-poczekalnia'), tresc: 'Do rozpatrzenia', zrodlo: 'tekst', status: 'nowe' }
     const lek: Lek = { ...utworzMetadane('recovery-lek'), nazwa: 'Recovery lek', dawkaInstrukcja: '1 tabletka', godziny: ['08:00'], aktywny: true }
     const wizyta: Wizyta = { ...utworzMetadane('recovery-wizyta'), nazwa: 'Recovery wizyta', status: 'umowiona', data: '2026-09-15', godzina: '12:00', notatka: '', pytania: [], dokumentyIds: [], checklista: [] }
     const rachunek: Rachunek = { ...utworzMetadane('recovery-rachunek'), nazwa: 'Recovery rachunek', kwota: 150, termin: '2026-09-20', status: 'niezaplacony' }

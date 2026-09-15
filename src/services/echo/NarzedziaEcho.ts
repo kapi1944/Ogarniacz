@@ -45,7 +45,7 @@ import {
 import { DOMYSLNE_USTAWIENIA } from "../../domain/ustawienia";
 import { utworzHarmonogramDnia } from "../../modules/pulpit/logikaOsiCzasu";
 import { repozytoriumElementowZadan } from "../../data/RepozytoriumElementowZadan";
-import { czyElementInboxDoKlasyfikacji, przeksztalcElementInbox, zapiszSzybkiZrzut, zaproponujPodzialPoczekalni } from "../PoczekalniaService";
+import { czyElementPoczekalniDoKlasyfikacji, przeksztalcElementPoczekalni, zapiszSzybkiZrzut, zaproponujPodzialPoczekalni } from "../PoczekalniaService";
 import { utworzBriefingDnia } from "../BriefingDniaService";
 import { pobierzNajnowszaHistorie } from "../HistoriaZmianService";
 import { PolitykaDzialanEcho } from "./PolitykaDzialanEcho";
@@ -1346,7 +1346,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     ryzyko: "niskie",
     wykonaj: async () =>
       (await pobierzRepozytorium("skrzynka").lista())
-        .filter(czyElementInboxDoKlasyfikacji)
+        .filter(czyElementPoczekalniDoKlasyfikacji)
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
         .map((x) => ({ id: x.id, tytul: x.tresc, sugerowanyTyp: x.sugerowanyTyp ?? zaproponujPodzialPoczekalni(x.tresc)[0]?.typ, typ: "poczekalnia" })),
   });
@@ -1357,7 +1357,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     ryzyko: "niskie",
     wykonaj: async () =>
       (await pobierzRepozytorium("skrzynka").lista()).filter(
-        czyElementInboxDoKlasyfikacji,
+        czyElementPoczekalniDoKlasyfikacji,
       ),
   });
   rejestr.zarejestruj({
@@ -1377,8 +1377,8 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     ryzyko: "niskie",
     wykonaj: async ({ id, typ }) => {
       const element = await pobierzRepozytorium("skrzynka").pobierz(id);
-      if (!element || !czyElementInboxDoKlasyfikacji(element)) return null;
-      return { ...await przeksztalcElementInbox(element, typ), tytul: element.tresc };
+      if (!element || !czyElementPoczekalniDoKlasyfikacji(element)) return null;
+      return { ...await przeksztalcElementPoczekalni(element, typ), tytul: element.tresc };
     },
   });
   rejestr.zarejestruj({

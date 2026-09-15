@@ -2,7 +2,7 @@ import { addDays, format } from 'date-fns'
 import { baza } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { dzisiajIso, utworzMetadane } from '../domain/fabryki'
-import type { BlokCzasu, Budzet, Cel, Dokument, ElementSkrzynki, Kontakt, Lek, ListaZakupow, NaPozniej, Nawyk, Notatka, Pomysl, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, TerminWaznosci, Wizyta, Wydatek } from '../domain/typy'
+import type { BlokCzasu, Budzet, Cel, Dokument, ElementPoczekalni, Kontakt, Lek, ListaZakupow, NaPozniej, Nawyk, Notatka, Pomysl, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, TerminWaznosci, Wizyta, Wydatek } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 
 const tabeleUzytkownika = ['zadania', 'projekty', 'skrzynka', 'blokiCzasu', 'nawyki', 'leki', 'wizyty', 'przypomnienia', 'listyZakupow', 'rachunki', 'notatki', 'pomysly', 'naPozniej', 'cele', 'kontakty', 'dokumenty', 'wydatki', 'budzety', 'pojazdy', 'terminyWaznosci'] as const
@@ -24,7 +24,7 @@ export async function wczytajDaneDemonstracyjne(): Promise<void> {
     utworzZadanie({ tytul: 'Odebrać paczkę', opis: '', priorytet: 'normalny', termin: jutro, szacowanyCzasMin: 30, kontekst: 'paczkomat' }),
     utworzZadanie({ tytul: 'Zadzwonić do serwisu', opis: '', priorytet: 'krytyczny', termin: format(addDays(new Date(), -1), 'yyyy-MM-dd'), kontekst: 'telefon' }),
   ])
-  const inbox: ElementSkrzynki = { ...utworzMetadane(), tresc: 'Sprawdzić pomysł na kurs fotografii', zrodlo: 'tekst', sugerowanyTyp: 'pomysly', status: 'do_sklasyfikowania' }
+  const inbox: ElementPoczekalni = { ...utworzMetadane(), tresc: 'Sprawdzić pomysł na kurs fotografii', zrodlo: 'tekst', sugerowanyTyp: 'pomysly', status: 'do_sklasyfikowania' }
   await pobierzRepozytorium('skrzynka').zapisz(inbox)
   const lek: Lek = { ...utworzMetadane(), nazwa: 'Przykładowy lek', dawkaInstrukcja: 'Instrukcja wpisana przez użytkownika', godziny: ['08:00', '20:00'], aktywny: true }
   await pobierzRepozytorium('leki').zapisz(lek)

@@ -270,7 +270,6 @@ export function WidokNotatek() {
   const { dane: cele } = useRepozytorium("cele");
   const { dane: pojazdy } = useRepozytorium("pojazdy");
   const { dane: dokumenty } = useRepozytorium("dokumenty");
-  const { dane: definicjePolRejestru } = useRepozytorium("definicjeWlasnychPolRejestru");
   const [tag, ustawTag] = useState("");
   const encje = [
     {
@@ -297,7 +296,6 @@ export function WidokNotatek() {
     { id: "system:przypieta", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "przypieta", etykieta: "Przypięta", typ: "checkbox" as const },
     { id: "system:przypomnienieAt", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "przypomnienieAt", etykieta: "Przypomnienie", typ: "tekst" as const },
     { id: "system:powiazania", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "powiazaniaIds", etykieta: "Powiązania", typ: "multiselect" as const, opcje: encje.flatMap((grupa) => grupa.dane.map((element) => ({ wartosc: `${grupa.typ}:${element.id}`, etykieta: `${grupa.typ} — ${element.nazwa}` }))) },
-    ...definicjePolRejestru.filter((pole) => pole.rejestrId === "notatki" && pole.aktywne).map((pole) => ({ id: pole.id, zrodlo: "wlasne" as const, etykieta: pole.etykieta, typ: pole.typ, opcje: pole.opcje, rolaSemantyczna: pole.rolaSemantyczna })),
   ];
   usePodswietlenie(dane.length);
   return (
@@ -310,6 +308,7 @@ export function WidokNotatek() {
       wybranyElementId={parametry.get("element") ?? undefined}
       pola={[]}
       polaRejestru={polaRejestru}
+      konfiguracjaWlasciwosci={{ rejestrId: 'notatki', polaSystemowe: polaRejestru, tytulKonfiguracji: 'Kolumny Notatek' }}
       filtr={
         <div className="pasek-filtrow">
           <button

@@ -92,9 +92,9 @@ type ZamiarPrzekrojowyEcho =
   | { typ: "wolne_okna"; data: string; minuty: number }
   | { typ: "briefing_dnia" }
   | { typ: "szybki_zrzut" }
-  | { typ: "porzadkuj_inbox"; elementy: ElementPorzadkowaniaInbox[]; nastepnyIndeks: number; komunikat: string };
+  | { typ: "porzadkuj_inbox"; elementy: ElementPorzadkowaniaPoczekalni[]; nastepnyIndeks: number; komunikat: string };
 
-interface ElementPorzadkowaniaInbox {
+interface ElementPorzadkowaniaPoczekalni {
   id: string
   tytul: string
   sugerowanyTyp?: string
@@ -159,7 +159,7 @@ function lokalnaGodzina(teraz: string, strefaCzasowa: string): string {
   return new Intl.DateTimeFormat('pl-PL', { timeZone: strefaCzasowa, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(teraz))
 }
 
-function pokazElementPorzadkowaniaInbox(elementy: ElementPorzadkowaniaInbox[], indeks: number, komunikat = ''): DecyzjaModeluEcho {
+function pokazElementPorzadkowaniaPoczekalni(elementy: ElementPorzadkowaniaPoczekalni[], indeks: number, komunikat = ''): DecyzjaModeluEcho {
   const element = elementy[indeks]
   if (!element) return { typ: 'odpowiedz', tresc: `${komunikat}${komunikat ? ' ' : ''}To wszystkie elementy w tym przebiegu porządkowania.`, aktualizacjaKontekstu: { oczekujacaAkcja: null } }
   const etykiety: Record<string, string> = { zadania: 'zadanie', notatki: 'notatkę', przypomnienia: 'przypomnienie', zakupy: 'zakup', projekty: 'projekt', pomysly: 'pomysł', na_pozniej: 'na później', wizyty: 'wizytę' }
@@ -574,11 +574,11 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       return this.odpowiedzPoWyniku(wynik, zamiarWyniku);
 
     const porzadkowanie = zadanie.kontekstRozmowy.oczekujacaAkcja?.intencja === 'porzadkuj_inbox'
-      ? zadanie.kontekstRozmowy.oczekujacaAkcja.dane as { elementy?: ElementPorzadkowaniaInbox[]; indeks?: number }
+      ? zadanie.kontekstRozmowy.oczekujacaAkcja.dane as { elementy?: ElementPorzadkowaniaPoczekalni[]; indeks?: number }
       : undefined
     if (porzadkowanie?.elementy && typeof porzadkowanie.indeks === 'number') {
       const decyzja = uprosc(ostatniaWypowiedz(zadanie.kontekstRozmowy)).replace(/[^a-z_ ]/g, '').trim()
-      if (/^(nastepne|dalej)$/.test(decyzja)) return pokazElementPorzadkowaniaInbox(porzadkowanie.elementy, porzadkowanie.indeks + 1)
+      if (/^(nastepne|dalej)$/.test(decyzja)) return pokazElementPorzadkowaniaPoczekalni(porzadkowanie.elementy, porzadkowanie.indeks + 1)
       const typy: Record<string, string> = { zadanie: 'zadanie', notatka: 'notatka', przypomnienie: 'przypomnienie', zakup: 'zakup', projekt: 'projekt', pomysl: 'pomysl', 'na pozniej': 'na_pozniej', wizyta: 'wizyta' }
       const typ = typy[decyzja]
       const element = porzadkowanie.elementy[porzadkowanie.indeks]
@@ -1831,12 +1831,12 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     }
     if (zamiar.typ === 'porzadkuj_inbox') {
       if (!zamiar.elementy.length) {
-        const elementy = Array.isArray(wynik.dane) ? wynik.dane.filter((element): element is ElementPorzadkowaniaInbox => Boolean(element && typeof element === 'object' && typeof (element as { id?: unknown }).id === 'string' && typeof (element as { tytul?: unknown }).tytul === 'string')) : []
+        const elementy = Array.isArray(wynik.dane) ? wynik.dane.filter((element): element is ElementPorzadkowaniaPoczekalni => Boolean(element && typeof element === 'object' && typeof (element as { id?: unknown }).id === 'string' && typeof (element as { tytul?: unknown }).tytul === 'string')) : []
         return elementy.length
-          ? pokazElementPorzadkowaniaInbox(elementy, 0, `Masz ${elementy.length} ${elementy.length === 1 ? 'rzecz' : 'rzeczy'} w poczekalni.`)
+          ? pokazElementPorzadkowaniaPoczekalni(elementy, 0, `Masz ${elementy.length} ${elementy.length === 1 ? 'rzecz' : 'rzeczy'} w poczekalni.`)
           : { typ: 'odpowiedz', tresc: 'Poczekalnia jest pusta.', aktualizacjaKontekstu }
       }
-      return pokazElementPorzadkowaniaInbox(zamiar.elementy, zamiar.nastepnyIndeks, zamiar.komunikat)
+      return pokazElementPorzadkowaniaPoczekalni(zamiar.elementy, zamiar.nastepnyIndeks, zamiar.komunikat)
     }
     if (zamiar.typ === 'plan_dnia' && zamiar.etap === 'podglad') {
       const dane = wynik.dane as { pozycje?: { id: string; tytul: string; poczatek?: string; status: string; powod?: string }[] }

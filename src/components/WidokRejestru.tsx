@@ -5,6 +5,7 @@ import type { DefinicjaPolaRejestru } from '../domain/rejestr'
 import type { EncjaBazowa } from '../domain/typy'
 import { EdytorPolaRejestru, normalizujPolaRejestru, normalizujStarePolaRejestru, skonwertujWartoscPolaWlasnego, wartoscFormularzaPola, type DefinicjaPola, type PoleDoEdycjiRejestru } from './EdytorPolaRejestru'
 import { Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan } from './Interfejs'
+import { useWlasciwosciRejestru } from './useWlasciwosciRejestru'
 
 export type { DefinicjaPola } from './EdytorPolaRejestru'
 
@@ -16,6 +17,7 @@ interface Wlasciwosci<T extends EncjaBazowa> {
   repozytorium: Repozytorium<T>
   pola: DefinicjaPola[]
   polaRejestru?: DefinicjaPolaRejestru[]
+  konfiguracjaWlasciwosci?: { rejestrId: string; polaSystemowe: DefinicjaPolaRejestru[]; tytulKonfiguracji?: string }
   zbuduj: (formularz: Record<string, string>, istniejacy?: T) => T
   etykieta: (element: T) => string
   szczegoly: (element: T) => ReactNode
@@ -34,7 +36,8 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
   const [doUsuniecia, ustawDoUsuniecia] = useState<T>()
   const [blad, ustawBlad] = useState('')
   const ostatnioOtwartyElement = useRef<string | undefined>(undefined)
-  const zewnetrznePola = normalizujPolaRejestru(wlasciwosci.polaRejestru ?? [])
+  const konfiguracjaWlasciwosci = useWlasciwosciRejestru({ rejestrId: wlasciwosci.konfiguracjaWlasciwosci?.rejestrId ?? 'nieaktywny', polaSystemowe: wlasciwosci.konfiguracjaWlasciwosci?.polaSystemowe ?? [], tytulKonfiguracji: wlasciwosci.konfiguracjaWlasciwosci?.tytulKonfiguracji, aktywny: Boolean(wlasciwosci.konfiguracjaWlasciwosci) })
+  const zewnetrznePola = normalizujPolaRejestru(wlasciwosci.konfiguracjaWlasciwosci ? konfiguracjaWlasciwosci.pola : wlasciwosci.polaRejestru ?? [])
   const zewnetrzneIdPola = new Set(zewnetrznePola.map((pole) => pole.definicja.id))
   const polaDoEdycji: PoleDoEdycjiRejestru[] = [
     ...normalizujStarePolaRejestru(wlasciwosci.pola).filter((pole) => !zewnetrzneIdPola.has(pole.definicja.id)),
@@ -92,7 +95,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
       <NaglowekWidoku
         tytul={wlasciwosci.tytul}
         opis={wlasciwosci.opis}
-        akcje={<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}><Plus aria-hidden="true" />{wlasciwosci.etykietaDodawania}</button>}
+        akcje={<>{konfiguracjaWlasciwosci.sterowanie}<button type="button" className="przycisk przycisk--glowny" onClick={() => otworz()}><Plus aria-hidden="true" />{wlasciwosci.etykietaDodawania}</button></>}
       />
       {wlasciwosci.filtr}
       {wlasciwosci.dane.length === 0 ? (

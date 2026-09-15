@@ -1,6 +1,6 @@
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { terazIso, utworzMetadane } from '../domain/fabryki'
-import type { ElementSkrzynki, ListaZakupow, NaPozniej, NazwaModulu, NazwaTabeli, Notatka, PozycjaZakupow, Pomysl, Projekt, Przypomnienie, Wizyta } from '../domain/typy'
+import type { ElementPoczekalni, ListaZakupow, NaPozniej, NazwaModulu, NazwaTabeli, Notatka, PozycjaZakupow, Pomysl, Projekt, Przypomnienie, Wizyta } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 
 export interface PropozycjaPoczekalni {
@@ -17,25 +17,25 @@ function sugerujTyp(tresc: string): NazwaModulu {
   return 'zadania'
 }
 
-export type TypKonwersjiInbox = 'zadanie' | 'notatka' | 'przypomnienie' | 'zakup' | 'projekt' | 'pomysl' | 'na_pozniej' | 'wizyta'
+export type TypKonwersjiPoczekalni = 'zadanie' | 'notatka' | 'przypomnienie' | 'zakup' | 'projekt' | 'pomysl' | 'na_pozniej' | 'wizyta'
 
-export function czyElementInboxDoKlasyfikacji(element: Pick<ElementSkrzynki, 'status'>): boolean {
+export function czyElementPoczekalniDoKlasyfikacji(element: Pick<ElementPoczekalni, 'status'>): boolean {
   return element.status === 'do_sklasyfikowania' || element.status === 'nowe'
 }
 
-export function sugerujPewnyTypInbox(tresc: string): NazwaModulu | undefined {
+export function sugerujPewnyTypPoczekalni(tresc: string): NazwaModulu | undefined {
   return /^\s*(?:kup|kupić|dokup|weź z zakupów)\b/i.test(tresc) ? 'zakupy' : undefined
 }
 
-export async function zapiszDoInbox(tresc: string, zrodlo: ElementSkrzynki['zrodlo'] = 'tekst'): Promise<ElementSkrzynki> {
-  const element: ElementSkrzynki = {
-    ...utworzMetadane(), tresc: tresc.trim(), zrodlo, status: 'do_sklasyfikowania', sugerowanyTyp: sugerujPewnyTypInbox(tresc),
+export async function zapiszDoPoczekalni(tresc: string, zrodlo: ElementPoczekalni['zrodlo'] = 'tekst'): Promise<ElementPoczekalni> {
+  const element: ElementPoczekalni = {
+    ...utworzMetadane(), tresc: tresc.trim(), zrodlo, status: 'do_sklasyfikowania', sugerowanyTyp: sugerujPewnyTypPoczekalni(tresc),
   }
   await pobierzRepozytorium('skrzynka').zapisz(element)
   return element
 }
 
-export async function przeksztalcElementInbox(element: ElementSkrzynki, typ: TypKonwersjiInbox, oznaczZrodlo = true): Promise<{ typ: NazwaModulu; id: string }> {
+export async function przeksztalcElementPoczekalni(element: ElementPoczekalni, typ: TypKonwersjiPoczekalni, oznaczZrodlo = true): Promise<{ typ: NazwaModulu; id: string }> {
   let wynik: { typ: NazwaModulu; id: string }
   if (typ === 'zadanie') {
     const cel = utworzZadanie({ tytul: element.tresc, opis: '', priorytet: 'normalny' })
@@ -83,7 +83,7 @@ export async function przeksztalcElementInbox(element: ElementSkrzynki, typ: Typ
   return wynik
 }
 
-function tabelaWynikuInbox(typ: NazwaModulu): NazwaTabeli {
+function tabelaWynikuPoczekalni(typ: NazwaModulu): NazwaTabeli {
   if (typ === 'zadania') return 'zadania'
   if (typ === 'notatki') return 'notatki'
   if (typ === 'przypomnienia') return 'przypomnienia'
@@ -95,20 +95,20 @@ function tabelaWynikuInbox(typ: NazwaModulu): NazwaTabeli {
   throw new Error('Nie można cofnąć tej konwersji poczekalni.')
 }
 
-export async function cofnijPrzeksztalcenieInbox(element: ElementSkrzynki, wynik: { typ: NazwaModulu; id: string }): Promise<void> {
+export async function cofnijPrzeksztalceniePoczekalni(element: ElementPoczekalni, wynik: { typ: NazwaModulu; id: string }): Promise<void> {
   await pobierzRepozytorium('skrzynka').zapisz({
     ...element,
     status: 'do_sklasyfikowania',
     przeksztalconoNa: undefined,
     updatedAt: terazIso(),
   })
-  await pobierzRepozytorium(tabelaWynikuInbox(wynik.typ)).usun(wynik.id)
+  await pobierzRepozytorium(tabelaWynikuPoczekalni(wynik.typ)).usun(wynik.id)
 }
 
-export async function zapiszSzybkiZrzut(tresc: string, zrodlo: ElementSkrzynki['zrodlo'] = 'tekst'): Promise<{ element: ElementSkrzynki; wynik?: { typ: NazwaModulu; id: string } }> {
-  const element = await zapiszDoInbox(tresc, zrodlo)
-  const pewnyTyp = sugerujPewnyTypInbox(tresc)
-  return pewnyTyp === 'zakupy' ? { element, wynik: await przeksztalcElementInbox(element, 'zakup') } : { element }
+export async function zapiszSzybkiZrzut(tresc: string, zrodlo: ElementPoczekalni['zrodlo'] = 'tekst'): Promise<{ element: ElementPoczekalni; wynik?: { typ: NazwaModulu; id: string } }> {
+  const element = await zapiszDoPoczekalni(tresc, zrodlo)
+  const pewnyTyp = sugerujPewnyTypPoczekalni(tresc)
+  return pewnyTyp === 'zakupy' ? { element, wynik: await przeksztalcElementPoczekalni(element, 'zakup') } : { element }
 }
 
 export function zaproponujPodzialPoczekalni(tresc: string): PropozycjaPoczekalni[] {

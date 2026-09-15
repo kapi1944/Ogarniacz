@@ -9,7 +9,7 @@ export interface CelNawigacji {
 const SCIEZKI_MODULOW: Record<NazwaModulu, string> = {
   zadania: '/zadania',
   projekty: '/projekty',
-  skrzynka: '/skrzynka',
+  skrzynka: '/poczekalnia',
   planer: '/planer',
   grafik: '/grafik',
   nawyki: '/nawyki',
