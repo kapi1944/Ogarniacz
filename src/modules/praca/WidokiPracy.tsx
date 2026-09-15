@@ -1,16 +1,16 @@
 import { useState } from 'react'
-import { ArrowRight, Check, RotateCcw, Share2, Undo2 } from 'lucide-react'
+import { Check, RotateCcw, Share2, Undo2 } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { WidokRejestru, type DefinicjaPola } from '../../components/WidokRejestru'
-import { Karta, Komunikat, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
+import { RejestrPoczekalni } from '../../components/RejestrPoczekalni'
+import { Komunikat, Znacznik } from '../../components/Interfejs'
 import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
 import { normalizujTerminZadania, odczytajTerminZadania } from '../../domain/logikaTerminuZadania'
-import type { ElementSkrzynki, Projekt, Zadanie } from '../../domain/typy'
+import type { Projekt, Zadanie } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { czyZadanieZalegle, przypiszZadanieDoProjektu, przywrocZadanie, ukonczZadanie, utworzZadanie, zmienPriorytetZadania, zmienTerminZadania } from '../../services/ZadaniaService'
 import { platforma } from '../../platform/platforma'
-import { cofnijPrzeksztalcenieInbox, czyElementInboxDoKlasyfikacji, przeksztalcElementInbox, zapiszDoInbox, zaproponujPodzialPoczekalni, type TypKonwersjiInbox } from '../../services/PoczekalniaService'
 
 const opcjePriorytetu = [
   { wartosc: 'niski', etykieta: 'Niski' },
@@ -18,13 +18,6 @@ const opcjePriorytetu = [
   { wartosc: 'wysoki', etykieta: 'Wysoki' },
   { wartosc: 'krytyczny', etykieta: 'Krytyczny' },
 ]
-
-const sciezkiWynikowInbox = { zadania: '/zadania', notatki: '/notatki', przypomnienia: '/przypomnienia', projekty: '/projekty', pomysly: '/pomysly', na_pozniej: '/na-pozniej', wizyty: '/zdrowie/wizyty', zakupy: '/zakupy' } as const
-const etykietyWynikowInbox = { zadania: 'zadanie', notatki: 'notatkę', przypomnienia: 'przypomnienie', projekty: 'projekt', pomysly: 'pomysł', na_pozniej: 'element „Na później”', wizyty: 'wizytę do umówienia', zakupy: 'pozycję zakupów' } as const
-
-function adresWynikuInbox(wynik: { typ: keyof typeof sciezkiWynikowInbox; id: string }) {
-  return `${sciezkiWynikowInbox[wynik.typ]}?element=${encodeURIComponent(wynik.id)}`
-}
 
 export function WidokZadan() {
   const [parametryAdresu] = useSearchParams()
@@ -287,73 +280,7 @@ export function WidokProjektow() {
 }
 
 export function WidokSkrzynki() {
-  const { dane, repozytorium } = useRepozytorium('skrzynka')
-  const [podgladPodzialu, ustawPodgladPodzialu] = useState<string>()
-  const [pokazHistorie, ustawPokazHistorie] = useState(false)
-  const [przetwarzanyId, ustawPrzetwarzanyId] = useState<string>()
-  const [komunikat, ustawKomunikat] = useState<{ typ: 'sukces' | 'blad'; tresc: string; element?: ElementSkrzynki; wynik?: { typ: keyof typeof sciezkiWynikowInbox; id: string } }>()
-  usePodswietlenie(dane.length)
-  const oczekujace = dane.filter(czyElementInboxDoKlasyfikacji).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  const historia = dane.filter((element) => !czyElementInboxDoKlasyfikacji(element)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  const widoczne = [...oczekujace, ...(pokazHistorie ? historia : [])]
-
-  const przetworz = async (element: ElementSkrzynki, typ: TypKonwersjiInbox, pokazRezultat = true) => {
-    ustawPrzetwarzanyId(element.id)
-    try {
-      const wynik = await przeksztalcElementInbox(element, typ, pokazRezultat)
-      if (pokazRezultat) ustawKomunikat({ typ: 'sukces', tresc: `Utworzono ${etykietyWynikowInbox[wynik.typ as keyof typeof etykietyWynikowInbox]}. Wpis pozostał w historii poczekalni.`, element, wynik: wynik as { typ: keyof typeof sciezkiWynikowInbox; id: string } })
-      return wynik
-    } catch (przyczyna) {
-      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się przekształcić wpisu. Pozostał w poczekalni.' })
-      if (!pokazRezultat) throw przyczyna
-    } finally {
-      ustawPrzetwarzanyId(undefined)
-    }
-  }
-
-  const przetworzPodzial = async (element: ElementSkrzynki) => {
-    try {
-      const propozycje = zaproponujPodzialPoczekalni(element.tresc)
-      for (const propozycja of propozycje) {
-        const typ = propozycja.typ === 'zakupy' ? 'zakup' : propozycja.typ === 'wizyty' ? 'wizyta' : propozycja.typ === 'na_pozniej' ? 'na_pozniej' : propozycja.typ === 'pomysly' ? 'pomysl' : 'zadanie'
-        await przetworz({ ...element, id: `${element.id}:${propozycja.tresc}`, tresc: propozycja.tresc }, typ, false)
-      }
-      await repozytorium.zapisz({ ...element, status: 'przetworzone', updatedAt: terazIso() })
-      ustawKomunikat({ typ: 'sukces', tresc: `Podzielono wpis na ${propozycje.length} elementy. Oryginał pozostał w historii.` })
-    } catch {
-      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się dokończyć podziału. Oryginalny wpis pozostał w poczekalni.' })
-    }
-  }
-
-  const cofnijKonwersje = async () => {
-    if (!komunikat?.element || !komunikat.wynik) return
-    try {
-      await cofnijPrzeksztalcenieInbox(komunikat.element, komunikat.wynik)
-      ustawKomunikat({ typ: 'sukces', tresc: 'Cofnięto konwersję. Wpis znowu czeka w poczekalni.' })
-    } catch {
-      ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się w pełni cofnąć konwersji. Wpis pozostaje widoczny w poczekalni.' })
-    }
-  }
-
-  return <div className="widok">
-    <NaglowekWidoku tytul="Poczekalnia" opis={`${oczekujace.length} ${oczekujace.length === 1 ? 'sprawa czeka' : 'spraw czeka'} na uporządkowanie. Najpierw zapisz, sklasyfikuj później.`} />
-    {komunikat && <Komunikat typ={komunikat.typ}>{komunikat.tresc}{komunikat.wynik && <><Link className="przycisk przycisk--tekstowy" to={adresWynikuInbox(komunikat.wynik)}><ArrowRight aria-hidden="true" />Otwórz utworzony element</Link><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijKonwersje()}><Undo2 aria-hidden="true" />Cofnij</button></>}</Komunikat>}
-    <Karta>
-      <form className="szybki-wpis" onSubmit={async (e) => { e.preventDefault(); const pole = e.currentTarget.elements.namedItem('tresc') as HTMLInputElement; if (!pole.value.trim()) return; await zapiszDoInbox(pole.value, 'tekst'); ustawKomunikat({ typ: 'sukces', tresc: 'Dodano do poczekalni. Wpis czeka poniżej na uporządkowanie.' }); pole.value = ''; pole.focus() }}>
-        <input name="tresc" aria-label="Treść do poczekalni" placeholder="Co chcesz zapamiętać?" />
-        <button className="przycisk przycisk--glowny" type="submit">Dodaj do poczekalni</button>
-      </form>
-    </Karta>
-    {historia.length > 0 && <div className="pasek-filtrow"><span>{historia.length} {historia.length === 1 ? 'wpis w historii' : 'wpisów w historii'}</span><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPokazHistorie((wartosc) => !wartosc)}>{pokazHistorie ? 'Ukryj historię' : 'Pokaż historię'}</button></div>}
-    {oczekujace.length === 0 && !pokazHistorie ? <PustyStan tytul="Poczekalnia jest uporządkowana" opis={historia.length > 0 ? 'Żaden wpis nie czeka na decyzję. Przetworzone elementy są bezpiecznie zachowane w historii.' : 'Nic nie czeka na uporządkowanie. Nową rzecz możesz zapisać w polu powyżej.'} /> : <div className="lista-rekordow">{widoczne.map((element) => <article className={`rekord ${czyElementInboxDoKlasyfikacji(element) ? 'rekord--inbox-oczekuje' : 'rekord--inbox-historia'}`} data-element-id={element.id} key={element.id}>
-      <div className="rekord__tresc"><h3>{element.tresc}</h3><div className="rekord__szczegoly"><Znacznik wariant={element.status === 'przetworzone' ? 'sukces' : 'ostrzezenie'}>{czyElementInboxDoKlasyfikacji(element) ? 'do sklasyfikowania' : 'przetworzone'}</Znacznik><span>{new Date(element.createdAt).toLocaleString('pl-PL')}</span>{element.sugerowanyTyp && <span>Sugerowany typ: {element.sugerowanyTyp}</span>}</div></div>
-      <div className="rekord__akcje">
-        {czyElementInboxDoKlasyfikacji(element) ? <><button type="button" className="przycisk przycisk--maly" disabled={przetwarzanyId === element.id} onClick={() => void przetworz(element, 'zadanie')}>Zadanie</button><button type="button" className="przycisk przycisk--maly" disabled={przetwarzanyId === element.id} onClick={() => void przetworz(element, 'projekt')}>Projekt</button><select aria-label={`Inny typ dla ${element.tresc}`} value="" disabled={przetwarzanyId === element.id} onChange={(e) => { if (e.target.value) void przetworz(element, e.target.value as TypKonwersjiInbox) }}><option value="">Inny typ…</option><option value="notatka">Notatka</option><option value="przypomnienie">Przypomnienie</option><option value="zakup">Zakup</option><option value="pomysl">Pomysł</option><option value="wizyta">Do umówienia</option><option value="na_pozniej">Na później</option></select>{zaproponujPodzialPoczekalni(element.tresc).length > 1 && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPodgladPodzialu(element.id)}>Podziel</button>}</> : element.przeksztalconoNa && element.przeksztalconoNa.typ in sciezkiWynikowInbox && <Link className="przycisk przycisk--tekstowy" to={adresWynikuInbox(element.przeksztalconoNa as { typ: keyof typeof sciezkiWynikowInbox; id: string })}>Otwórz element</Link>}
-        <button type="button" className="przycisk przycisk--tekstowy" onClick={async () => { if (!window.confirm(`Usunąć wpis „${element.tresc}”?`)) return; await repozytorium.usun(element.id); ustawKomunikat({ typ: 'sukces', tresc: 'Usunięto wpis z poczekalni.' }) }}>Usuń</button>
-      </div>
-      {podgladPodzialu === element.id && <div className="rekord__szczegoly"><span>{zaproponujPodzialPoczekalni(element.tresc).map((propozycja) => `${propozycja.typ}: ${propozycja.tresc}`).join(' · ')}</span><button type="button" className="przycisk przycisk--maly" onClick={() => { void przetworzPodzial(element); ustawPodgladPodzialu(undefined) }}>Przetwórz propozycje</button><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPodgladPodzialu(undefined)}>Anuluj</button></div>}
-    </article>)}</div>}
-  </div>
+  return <RejestrPoczekalni />
 }
 
 // OGARNIACZ_TASK_DEADLINE_TIME_2026_08_27_V3: Zadanie obsługuje tryb terminu i godzinę deadline.
