@@ -14,6 +14,7 @@ const konfiguracjaHistorii: Partial<Record<NazwaTabeli, {
   platnosciRachunkow: { modul: 'finanse', pola: ['rachunekId', 'kwota', 'zaplaconoAt', 'usunietoAt'] },
   wydatki: { modul: 'finanse', pola: ['kwota', 'data', 'kategoria', 'opis', 'usunietoAt'] },
   budzety: { modul: 'finanse', pola: ['nazwa', 'kategoria', 'okres', 'limit', 'usunietoAt'] },
+  definicjeWlasnychPolRejestru: { modul: 'rejestr', pola: ['rejestrId', 'etykieta', 'typ', 'opcje', 'rolaSemantyczna', 'aktywne', 'revision', 'usunietoAt'] },
   pojazdy: { modul: 'samochod', pola: ['nazwa', 'marka', 'model', 'rok', 'numerRejestracyjny', 'vin', 'przebieg', 'historiaPrzebiegu', 'historiaSerwisowa', 'ocDo', 'ubezpieczyciel', 'numerPolisy', 'przegladDo', 'wymianaOlejuDo', 'wymianaOlejuPrzebieg', 'planowanySerwisData', 'planowanySerwisGodzina', 'usunietoAt'] },
 }
 

@@ -545,7 +545,7 @@ export interface DziennikEcho extends EncjaBazowa {
   wynik: 'wykonane' | 'odrzucone' | 'blad'
 }
 
-export type ModulHistorii = 'finanse' | 'leki' | 'wizyty' | 'samochod' | 'zadania'
+export type ModulHistorii = 'finanse' | 'leki' | 'wizyty' | 'samochod' | 'zadania' | 'rejestr'
 export type OperacjaHistorii = 'utworzenie' | 'aktualizacja' | 'usuniecie'
 
 export interface WpisHistoriiZmian extends EncjaBazowa {

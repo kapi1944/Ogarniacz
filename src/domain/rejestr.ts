@@ -13,10 +13,14 @@ export type TypPolaRejestru =
   | 'url'
 
 export type WartoscPolaWlasnego = string | number | boolean | string[] | null
+export type WartoscPolaRejestru = WartoscPolaWlasnego
 export type IdPolaSystemowego = `system:${string}`
 export type IdPolaWlasnego = `custom:${string}`
 export type IdPolaRejestru = IdPolaSystemowego | IdPolaWlasnego
 export type PolaWlasne = Partial<Record<IdPolaWlasnego, WartoscPolaWlasnego>>
+export type TrybObslugiPolaSystemowego = 'bezposrednie' | 'tylko_odczyt' | 'akcja_domenowa'
+export type IdResolveraPolaRejestru = `resolver:${string}`
+export type IdAkcjiDomenowejPolaRejestru = `action:${string}`
 
 export interface RolaSemantycznaRejestru<Typ extends TypPolaRejestru = TypPolaRejestru> {
   id: string
@@ -62,12 +66,12 @@ interface WspolnaDefinicjaPolaRejestru<Typ extends TypPolaRejestru> {
   rolaSemantyczna?: RolaSemantycznaDlaTypu<Typ>
 }
 
-export type DefinicjaPolaRejestru<Typ extends TypPolaRejestru = TypPolaRejestru> = Typ extends TypPolaRejestru
-  ? WspolnaDefinicjaPolaRejestru<Typ> & (
-    | { zrodlo: 'systemowe'; id: IdPolaSystemowego; kluczWlasciwosci?: string }
-    | { zrodlo: 'wlasne'; id: IdPolaWlasnego }
-  )
-  : never
+export type DefinicjaPolaRejestru<Typ extends TypPolaRejestru = TypPolaRejestru> = WspolnaDefinicjaPolaRejestru<Typ> & (
+  | { zrodlo: 'systemowe'; id: IdPolaSystemowego; trybObslugi: 'bezposrednie'; kluczWlasciwosci: string }
+  | { zrodlo: 'systemowe'; id: IdPolaSystemowego; trybObslugi: 'tylko_odczyt'; resolverId: IdResolveraPolaRejestru }
+  | { zrodlo: 'systemowe'; id: IdPolaSystemowego; trybObslugi: 'akcja_domenowa'; actionId: IdAkcjiDomenowejPolaRejestru }
+  | { zrodlo: 'wlasne'; id: IdPolaWlasnego }
+)
 
 export interface DefinicjaRejestru {
   id: string
@@ -90,6 +94,7 @@ export interface DefinicjaWlasnegoPolaRejestru<Typ extends TypPolaRejestru = Typ
   opcje?: { wartosc: string; etykieta: string }[]
   rolaSemantyczna?: RolaSemantycznaDlaTypu<Typ>
   aktywne: boolean
+  revision: number
 }
 
 export function zapiszWartoscPolaWlasnego(polaWlasne: PolaWlasne | undefined, idPola: IdPolaWlasnego, wartosc: WartoscPolaWlasnego): PolaWlasne {
@@ -103,6 +108,18 @@ export function utworzDefinicjePolaRejestru<Pole extends DefinicjaPolaRejestru>(
 
   if (pole.zrodlo === 'systemowe' && !pole.id.startsWith('system:')) {
     throw new Error('Id systemowego pola musi zaczynać się od „system:”.')
+  }
+
+  if (pole.zrodlo === 'systemowe' && pole.trybObslugi === 'bezposrednie' && !pole.kluczWlasciwosci) {
+    throw new Error('Bezpośrednie pole systemowe wymaga klucza właściwości.')
+  }
+
+  if (pole.zrodlo === 'systemowe' && pole.trybObslugi === 'tylko_odczyt' && !pole.resolverId) {
+    throw new Error('Pole tylko do odczytu wymaga resolverId.')
+  }
+
+  if (pole.zrodlo === 'systemowe' && pole.trybObslugi === 'akcja_domenowa' && !pole.actionId) {
+    throw new Error('Pole z akcją domenową wymaga actionId.')
   }
 
   walidujRoleSemantycznaPolaRejestru(pole.typ, pole.rolaSemantyczna)

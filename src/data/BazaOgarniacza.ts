@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 15
+export const WERSJA_SCHEMATU_BAZY = 16
 
 const POSTAC_Z_HISTORYCZNEJ_WARTOSCI: Record<string, string> = {
   tabletka: 'tabletka',
@@ -198,6 +198,19 @@ class BazaOgarniacza extends Dexie {
       stanSynchronizacji: 'id, stan, ostatniSync, updatedAt',
       konfliktySynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, wykrytoAt, updatedAt',
       kolejkaSynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, operacja, createdAt, updatedAt',
+    })
+
+    this.version(16).stores({
+      ...schematPelny,
+      urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
+      historiaZmian: 'id, znacznikCzasu, modul, typEncji, encjaId, operacja, updatedAt, usunietoAt',
+      stanSynchronizacji: 'id, stan, ostatniSync, updatedAt',
+      konfliktySynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, wykrytoAt, updatedAt',
+      kolejkaSynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, operacja, createdAt, updatedAt',
+    }).upgrade(async (transakcja) => {
+      await transakcja.table('definicjeWlasnychPolRejestru').toCollection().modify((definicja) => {
+        definicja.revision ??= 1
+      })
     })
   }
 

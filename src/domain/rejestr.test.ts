@@ -50,6 +50,7 @@ describe('fundament Rejestru 2.0', () => {
     const systemowe = utworzDefinicjePolaRejestru({
       id: 'system:nazwa',
       zrodlo: 'systemowe',
+      trybObslugi: 'bezposrednie',
       kluczWlasciwosci: 'nazwa',
       etykieta: 'Nazwa',
       typ: 'tekst',
@@ -81,5 +82,17 @@ describe('fundament Rejestru 2.0', () => {
       typ: 'data',
       rolaSemantyczna: 'semantyka:nieistniejaca',
     } as unknown as DefinicjaPolaRejestru<'data'>)).toThrow('Rola semantyczna')
+  })
+
+  it('wymaga kompletnego trybu obsługi pola systemowego', () => {
+    expect(() => utworzDefinicjePolaRejestru({
+      id: 'system:wartosc', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', etykieta: 'Wartość', typ: 'tekst',
+    } as unknown as DefinicjaPolaRejestru<'tekst'>)).toThrow('klucza właściwości')
+    expect(() => utworzDefinicjePolaRejestru({
+      id: 'system:wartosc', zrodlo: 'systemowe', trybObslugi: 'tylko_odczyt', etykieta: 'Wartość', typ: 'tekst',
+    } as unknown as DefinicjaPolaRejestru<'tekst'>)).toThrow('resolverId')
+    expect(() => utworzDefinicjePolaRejestru({
+      id: 'system:wartosc', zrodlo: 'systemowe', trybObslugi: 'akcja_domenowa', etykieta: 'Wartość', typ: 'tekst',
+    } as unknown as DefinicjaPolaRejestru<'tekst'>)).toThrow('actionId')
   })
 })

@@ -46,7 +46,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
     const wartosciPoczatkowe = Object.fromEntries(polaDoEdycji.map((pole) => [pole.definicja.id, wartoscFormularzaPola(element, pole)]))
     const uzupelnienia = element ? wlasciwosci.uzupelnijFormularz?.(element) : undefined
     const formularzZUzupelnieniem = Object.fromEntries(polaDoEdycji.map((pole) => {
-      const kluczUzupelnienia = pole.definicja.zrodlo === 'systemowe'
+      const kluczUzupelnienia = pole.definicja.zrodlo === 'systemowe' && pole.definicja.trybObslugi === 'bezposrednie'
         ? pole.definicja.kluczWlasciwosci
         : pole.definicja.id
       return [pole.definicja.id, uzupelnienia?.[kluczUzupelnienia ?? pole.definicja.id] ?? wartosciPoczatkowe[pole.definicja.id]]
@@ -69,7 +69,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
     zdarzenie.preventDefault()
     try {
       const formularzSystemowy = polaDoEdycji.reduce<Record<string, string>>((wynik, pole) => {
-        if (pole.definicja.zrodlo === 'systemowe' && pole.definicja.kluczWlasciwosci) {
+        if (pole.definicja.zrodlo === 'systemowe' && pole.definicja.trybObslugi === 'bezposrednie') {
           wynik[pole.definicja.kluczWlasciwosci] = formularz[pole.definicja.id] ?? ''
         }
         return wynik

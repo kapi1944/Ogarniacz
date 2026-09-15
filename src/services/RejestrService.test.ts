@@ -40,7 +40,10 @@ describe.sequential('trwałe definicje i widoki Rejestru', () => {
     expect(zmieniona.id).toBe(definicja.id)
     expect(await pobierzAktywneDefinicjePolRejestru('wydatki')).toEqual([])
     expect((await pobierzRepozytorium('zadania').pobierz(zadanie.id))?.polaWlasne?.[definicja.id]).toBe('Zachowana wartość')
-    expect(await pobierzRepozytorium('definicjeWlasnychPolRejestru').pobierz(definicja.id)).toMatchObject({ etykieta: 'Marka', aktywne: false })
+    expect(await pobierzRepozytorium('definicjeWlasnychPolRejestru').pobierz(definicja.id)).toMatchObject({ etykieta: 'Marka', aktywne: false, revision: 3 })
+    expect(await baza.tabela('historiaZmian').toArray()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ modul: 'rejestr', typEncji: 'definicjeWlasnychPolRejestru', zmienionePola: expect.arrayContaining(['revision', 'aktywne']) }),
+    ]))
   })
 
   it('odrzuca rolę semantyczną niezgodną z typem pola', async () => {
@@ -60,7 +63,7 @@ describe.sequential('trwałe definicje i widoki Rejestru', () => {
   it('synchronizuje definicję własnego pola i wykrywa jej równoległy konflikt', async () => {
     const repozytorium = pobierzRepozytorium('definicjeWlasnychPolRejestru')
     const lokalna: DefinicjaWlasnegoPolaRejestru = {
-      ...utworzMetadane('custom:konflikt'), id: 'custom:konflikt', rejestrId: 'wydatki', etykieta: 'Lokalna', typ: 'tekst', aktywne: true,
+      ...utworzMetadane('custom:konflikt'), id: 'custom:konflikt', rejestrId: 'wydatki', etykieta: 'Lokalna', typ: 'tekst', aktywne: true, revision: 1,
     }
     const zdalna = { ...lokalna, etykieta: 'Zdalna', updatedAt: '2026-09-15T12:00:00.000Z' }
     await repozytorium.zapisz(lokalna)

@@ -217,4 +217,22 @@ describe.sequential('migracja historycznych baz Dexie do v15', () => {
     expect(await baza.tabela('definicjeWlasnychPolRejestru').count()).toBe(0)
     expect(await baza.tabela('widokiRejestru').count()).toBe(0)
   })
+
+  it('nadaje revision istniejącej definicji własnego pola Rejestru', async () => {
+    baza.close()
+    await Dexie.delete('ogarniacz-v1')
+    const bazaV15 = new Dexie('ogarniacz-v1')
+    bazaV15.version(15).stores({
+      definicjeWlasnychPolRejestru: 'id, rejestrId, aktywne, updatedAt, usunietoAt',
+    })
+    await bazaV15.open()
+    await bazaV15.table('definicjeWlasnychPolRejestru').put({
+      id: 'custom:starsze', rejestrId: 'subskrypcje', etykieta: 'Starsze pole', typ: 'tekst', aktywne: true, ...metadane,
+    })
+    await bazaV15.close()
+
+    await baza.open()
+
+    expect(await baza.tabela('definicjeWlasnychPolRejestru').get('custom:starsze')).toMatchObject({ revision: 1 })
+  })
 })

@@ -85,7 +85,7 @@ describe('WidokRejestru z kontraktem Rejestru 2.0', () => {
   })
 
   it('nie zapisuje pola systemowego do polaWlasne', async () => {
-    const repozytorium = renderujRejestr({ polaRejestru: [{ id: 'system:nazwa', zrodlo: 'systemowe', kluczWlasciwosci: 'nazwa', etykieta: 'Nazwa systemowa', typ: 'tekst' }] })
+    const repozytorium = renderujRejestr({ polaRejestru: [{ id: 'system:nazwa', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'nazwa', etykieta: 'Nazwa systemowa', typ: 'tekst' }] })
     fireEvent.click(screen.getAllByRole('button', { name: 'Dodaj rekord' })[0])
     fireEvent.change(screen.getAllByLabelText(/Nazwa/)[0], { target: { value: 'Rekord' } })
     fireEvent.change(screen.getByLabelText('Nazwa systemowa'), { target: { value: 'Systemowa wartość' } })

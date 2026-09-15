@@ -42,6 +42,7 @@ export function normalizujStarePolaRejestru(pola: DefinicjaPola[]): PoleDoEdycji
     definicja: {
       id: `system:${pole.klucz}`,
       zrodlo: 'systemowe',
+      trybObslugi: 'bezposrednie',
       kluczWlasciwosci: pole.klucz,
       etykieta: pole.etykieta,
       typ: typyStarychPol[pole.typ ?? 'text'],
@@ -65,7 +66,7 @@ export function wartoscFormularzaPola(encja: EncjaBazowa | undefined, pole: Pole
   const { definicja } = pole
   const wartosc = definicja.zrodlo === 'wlasne'
     ? encja?.polaWlasne?.[definicja.id]
-    : definicja.kluczWlasciwosci ? (encja as unknown as Record<string, unknown> | undefined)?.[definicja.kluczWlasciwosci] : undefined
+    : definicja.trybObslugi === 'bezposrednie' ? (encja as unknown as Record<string, unknown> | undefined)?.[definicja.kluczWlasciwosci] : undefined
   if (Array.isArray(wartosc)) return wartosc.join(',')
   if (typeof wartosc === 'boolean') return String(wartosc)
   return wartosc === undefined || wartosc === null ? pole.domyslnaWartosc ?? '' : String(wartosc)
@@ -100,11 +101,12 @@ interface Wlasciwosci {
 export function EdytorPolaRejestru({ pole, wartosc, zmien }: Wlasciwosci) {
   const { definicja } = pole
   const wspolne = { required: pole.wymagane, placeholder: pole.podpowiedz }
+  const tylkoOdczyt = definicja.zrodlo === 'systemowe' && definicja.trybObslugi === 'tylko_odczyt'
 
   return (
     <label className={definicja.typ === 'textarea' ? 'pole pole--pelne' : 'pole'}>
       <span>{definicja.etykieta}{pole.wymagane && ' *'}</span>
-      {definicja.typ === 'textarea' ? (
+      {tylkoOdczyt ? <output>{wartosc || '—'}</output> : definicja.typ === 'textarea' ? (
         <textarea {...wspolne} value={wartosc} onChange={(zdarzenie) => zmien(zdarzenie.target.value)} />
       ) : definicja.typ === 'checkbox' ? (
         <input type="checkbox" checked={wartosc === 'true'} onChange={(zdarzenie) => zmien(String(zdarzenie.target.checked))} />

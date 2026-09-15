@@ -9,7 +9,7 @@ import {
   type TypPolaRejestru,
 } from '../domain/rejestr'
 
-type DaneNowegoPola<Typ extends TypPolaRejestru> = Omit<DefinicjaWlasnegoPolaRejestru<Typ>, 'id' | 'createdAt' | 'updatedAt' | 'usunietoAt' | 'aktywne'>
+type DaneNowegoPola<Typ extends TypPolaRejestru> = Omit<DefinicjaWlasnegoPolaRejestru<Typ>, 'id' | 'createdAt' | 'updatedAt' | 'usunietoAt' | 'aktywne' | 'revision'>
 type ZmianyDefinicjiPola<Typ extends TypPolaRejestru> = Pick<DefinicjaWlasnegoPolaRejestru<Typ>, 'etykieta' | 'opcje' | 'rolaSemantyczna'>
 type DaneWidokuRejestru = Omit<DefinicjaWidokuRejestru, 'createdAt' | 'updatedAt' | 'usunietoAt'>
 
@@ -35,6 +35,7 @@ export async function utworzWlasnePoleRejestru<Typ extends TypPolaRejestru>(
     ...dane,
     id,
     aktywne: true,
+    revision: 1,
   }
   sprawdzDefinicje(definicja)
   await repozytorium.zapisz(definicja)
@@ -48,7 +49,7 @@ export async function zmienDefinicjeWlasnegoPolaRejestru<Typ extends TypPolaReje
 ): Promise<DefinicjaWlasnegoPolaRejestru<Typ>> {
   const istniejaca = await repozytorium.pobierz(id)
   if (!istniejaca) throw new Error('Nie znaleziono definicji własnego pola rejestru.')
-  const definicja = { ...istniejaca, ...zmiany } as DefinicjaWlasnegoPolaRejestru<Typ>
+  const definicja = { ...istniejaca, ...zmiany, revision: (istniejaca.revision ?? 1) + 1 } as DefinicjaWlasnegoPolaRejestru<Typ>
   sprawdzDefinicje(definicja)
   await repozytorium.zapisz(definicja)
   return definicja
@@ -60,7 +61,7 @@ export async function archiwizujWlasnePoleRejestru(
 ): Promise<void> {
   const definicja = await repozytorium.pobierz(id)
   if (!definicja) throw new Error('Nie znaleziono definicji własnego pola rejestru.')
-  await repozytorium.zapisz({ ...definicja, aktywne: false })
+  await repozytorium.zapisz({ ...definicja, aktywne: false, revision: (definicja.revision ?? 1) + 1 })
 }
 
 export async function pobierzWidokiRejestru(

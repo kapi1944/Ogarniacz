@@ -217,6 +217,7 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     opcje: z.array(z.object({ wartosc: z.string(), etykieta: z.string() })).optional(),
     rolaSemantyczna: z.string().optional(),
     aktywne: z.boolean(),
+    revision: z.number().int().positive().default(1),
   }).refine((definicja) => !definicja.rolaSemantyczna || ROLE_SEMANTYCZNE_REJESTRU.some((rola) =>
     rola.id === definicja.rolaSemantyczna && rola.dozwoloneTypy.includes(definicja.typ as never),
   ), 'Rola semantyczna nie istnieje lub nie jest zgodna z typem pola.'),
