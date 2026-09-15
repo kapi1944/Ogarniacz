@@ -6,7 +6,7 @@ import { RepozytoriumZdalneInMemory } from '../data/RepozytoriumZdalneInMemory'
 import { utworzMetadane } from '../domain/fabryki'
 import type { DefinicjaWlasnegoPolaRejestru } from '../domain/rejestr'
 import { utworzZadanie } from './ZadaniaService'
-import { przygotujBackupDoPrzywracania, przywrocBackup, utworzBackup } from './BackupService'
+import { obliczChecksum, przygotujBackupDoPrzywracania, przywrocBackup, utworzBackup } from './BackupService'
 import { SyncEngine } from './SyncEngine'
 import {
   archiwizujWlasnePoleRejestru,
@@ -82,16 +82,21 @@ describe.sequential('trwałe definicje i widoki Rejestru', () => {
     })
   })
 
-  it('odtwarza definicje i widoki z backupu', async () => {
+  it('odtwarza definicje i widoki z backupu v15 bez revision', async () => {
     const definicja = await utworzWlasnePoleRejestru({ rejestrId: 'wydatki', etykieta: 'Producent', typ: 'tekst' })
     await zapiszWidokRejestru({ id: 'widok:wydatki:backup', rejestrId: 'wydatki', nazwa: 'Backup', widocznePolaIds: [definicja.id] })
-    const backup = await przygotujBackupDoPrzywracania(JSON.stringify(await utworzBackup(['rejestr'])))
+    const starszyBackup = await utworzBackup(['rejestr'])
+    starszyBackup.manifest.dexieSchemaVersion = 15
+    delete starszyBackup.payload.rejestr!.definicjeWlasnychPolRejestru[0].revision
+    const { checksum: _checksum, ...manifest } = starszyBackup.manifest
+    starszyBackup.manifest.checksum = await obliczChecksum({ manifest, payload: starszyBackup.payload })
+    const backup = await przygotujBackupDoPrzywracania(JSON.stringify(starszyBackup))
     await baza.tabela('definicjeWlasnychPolRejestru').clear()
     await baza.tabela('widokiRejestru').clear()
 
     await przywrocBackup(backup, ['rejestr'])
 
-    expect(await pobierzRepozytorium('definicjeWlasnychPolRejestru').pobierz(definicja.id)).toMatchObject({ etykieta: 'Producent' })
+    expect(await pobierzRepozytorium('definicjeWlasnychPolRejestru').pobierz(definicja.id)).toMatchObject({ etykieta: 'Producent', revision: 1 })
     expect(await pobierzWidokiRejestru('wydatki')).toMatchObject([{ id: 'widok:wydatki:backup' }])
   })
 })

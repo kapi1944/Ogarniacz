@@ -37,6 +37,8 @@ const typyStarychPol: Record<NonNullable<DefinicjaPola['typ']>, TypPolaRejestru>
   multiselect: 'multiselect',
 }
 
+// Tymczasowy adapter dla widoków przekazujących dawną definicję formularza.
+// Usunąć po przejściu wszystkich wywołań WidokRejestru na polaRejestru.
 export function normalizujStarePolaRejestru(pola: DefinicjaPola[]): PoleDoEdycjiRejestru[] {
   return pola.map((pole) => ({
     definicja: {

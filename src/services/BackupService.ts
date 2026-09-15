@@ -10,6 +10,7 @@ import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
 const WERSJA_APLIKACJI = '1.0.0'
+const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, WERSJA_SCHEMATU_BAZY]
 
 export const SEKCJE_BACKUPU = [
   { nazwa: 'ustawienia', etykieta: 'Ustawienia' },
@@ -374,9 +375,15 @@ function normalizujLekZBackupu(rekord: RekordBackupu): RekordBackupu {
   }
 }
 
+function normalizujDefinicjePolaRejestruZBackupu(rekord: RekordBackupu): RekordBackupu {
+  return { ...rekord, revision: typeof rekord.revision === 'number' && rekord.revision > 0 ? rekord.revision : 1 }
+}
+
 function normalizujRekordDoPrzywrocenia(tabela: NazwaTabeli, rekord: RekordBackupu): RekordBackupu {
   const odtworzony = odtworzWartoscZTransportu(rekord) as RekordBackupu
-  return tabela === 'leki' ? normalizujLekZBackupu(odtworzony) : odtworzony
+  if (tabela === 'leki') return normalizujLekZBackupu(odtworzony)
+  if (tabela === 'definicjeWlasnychPolRejestru') return normalizujDefinicjePolaRejestruZBackupu(odtworzony)
+  return odtworzony
 }
 
 function kanonizuj(wartosc: unknown): string {
@@ -528,7 +535,7 @@ function sprawdzKompatybilnosc(surowy: SurowyBackup): void {
     throw new BladBackupu(`Backup pochodzi z niekompatybilnej wersji aplikacji: ${surowy.manifest.appVersion}.`, 'WERSJA_APLIKACJI')
   }
   if (wersja >= 2) {
-    if (![4, 5, 14, WERSJA_SCHEMATU_BAZY].includes(surowy.manifest.dexieSchemaVersion ?? -1)) {
+    if (!WSPARTE_WERSJE_SCHEMATU_BACKUPU.includes(surowy.manifest.dexieSchemaVersion ?? -1)) {
       throw new BladBackupu('Backup ma nieobsługiwaną wersję schematu danych.', 'WERSJA_SCHEMATU_BAZY')
     }
   }
@@ -614,7 +621,7 @@ function walidujCaloscBackupu(backup: SurowyBackup): OgarniaczBackup {
   const sekcje = backup.manifest.sections as NazwaSekcjiBackupu[]
   if (
     backup.manifest.formatVersion !== WERSJA_FORMATU_BACKUPU
-    || ![4, 5, 14, WERSJA_SCHEMATU_BAZY].includes(backup.manifest.dexieSchemaVersion ?? -1)
+    || !WSPARTE_WERSJE_SCHEMATU_BACKUPU.includes(backup.manifest.dexieSchemaVersion ?? -1)
     || !backup.manifest.installationId
     || !backup.manifest.backupType
   ) {
