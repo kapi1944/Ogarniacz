@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { Check, RotateCcw, Share2, Undo2 } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { WidokRejestru, type DefinicjaPola } from '../../components/WidokRejestru'
+import { WidokRejestru } from '../../components/WidokRejestru'
 import { RejestrPoczekalni } from '../../components/RejestrPoczekalni'
 import { Komunikat, Znacznik } from '../../components/Interfejs'
 import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
-import { normalizujTerminZadania, odczytajTerminZadania } from '../../domain/logikaTerminuZadania'
+import { odczytajTerminZadania } from '../../domain/logikaTerminuZadania'
 import type { Projekt, Zadanie } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { czyZadanieZalegle, przypiszZadanieDoProjektu, przywrocZadanie, ukonczZadanie, utworzZadanie, zmienPriorytetZadania, zmienTerminZadania } from '../../services/ZadaniaService'
 import { platforma } from '../../platform/platforma'
+import '../../services/RejestrPolSystemowychZadan'
 
 const opcjePriorytetu = [
   { wartosc: 'niski', etykieta: 'Niski' },
@@ -24,6 +25,7 @@ export function WidokZadan() {
   const { dane: zadania, repozytorium } = useRepozytorium('zadania')
   const { dane: projekty } = useRepozytorium('projekty')
   const { dane: miejsca } = useRepozytorium('miejsca')
+  const { dane: definicjePolRejestru } = useRepozytorium('definicjeWlasnychPolRejestru')
   const [filtr, ustawFiltr] = useState<'otwarte' | 'dzisiaj' | 'zalegle' | 'nadchodzace' | 'wykonane' | 'wszystkie'>('otwarte')
   const [sortowanie, ustawSortowanie] = useState<'termin' | 'priorytet' | 'aktualizacja'>('termin')
   const [widok, ustawWidok] = useState<'lista' | 'projekt' | 'termin'>('lista')
@@ -51,34 +53,20 @@ export function WidokZadan() {
       return (a.termin ?? '9999').localeCompare(b.termin ?? '9999')
     })
 
-  const pola: DefinicjaPola[] = [
-    { klucz: 'tytul', etykieta: 'Tytuł', wymagane: true },
-    { klucz: 'opis', etykieta: 'Opis', typ: 'textarea' },
-    { klucz: 'status', etykieta: 'Status', typ: 'select', wymagane: true, opcje: [
-      { wartosc: 'otwarte', etykieta: 'Otwarte' }, { wartosc: 'w_toku', etykieta: 'W toku' }, { wartosc: 'wykonane', etykieta: 'Wykonane' },
-    ] },
-    { klucz: 'priorytet', etykieta: 'Priorytet', typ: 'select', wymagane: true, opcje: opcjePriorytetu },
-    { klucz: 'termin', etykieta: 'Termin', typ: 'date' },
-    { klucz: 'trybTerminuElementu', etykieta: 'Tryb terminu', typ: 'select', wymagane: true, domyslnaWartosc: 'bez_godziny', opcje: [
-      { wartosc: 'o_godzinie', etykieta: 'O konkretnej godzinie' },
-      { wartosc: 'koniec_dnia', etykieta: 'Do końca dnia' },
-      { wartosc: 'bez_godziny', etykieta: 'Bez godziny' },
-    ] },
-    { klucz: 'godzinaElementu', etykieta: 'Godzina', typ: 'time', widoczne: (formularz) => formularz.trybTerminuElementu === 'o_godzinie' },
-    { klucz: 'dataStartu', etykieta: 'Najwcześniej od', typ: 'date' },
-    { klucz: 'szacowanyCzasMin', etykieta: 'Szacowany czas (min)', typ: 'number', min: 1 },
-    { klucz: 'faktycznyCzasMin', etykieta: 'Faktyczny czas (min)', typ: 'number', min: 0 },
-    { klucz: 'projektId', etykieta: 'Projekt', typ: 'select', opcje: projekty.map((projekt) => ({ wartosc: projekt.id, etykieta: projekt.nazwa })) },
-    { klucz: 'kontekst', etykieta: 'Kontekst / miejsce', podpowiedz: 'np. apteka, telefon, komputer' },
-    { klucz: 'miejsceId', etykieta: 'Zapisane miejsce', typ: 'select', opcje: miejsca.map((miejsce) => ({ wartosc: miejsce.id, etykieta: `${miejsce.nazwa} — ${miejsce.adres}` })) },
-    { klucz: 'tagi', etykieta: 'Tagi', podpowiedz: 'oddzielone przecinkami' },
-    { klucz: 'podzadaniaTekst', etykieta: 'Podzadania', typ: 'textarea', podpowiedz: 'jedno podzadanie w wierszu' },
-    { klucz: 'blokujaceIds', etykieta: 'Blokowane przez zadania', typ: 'multiselect', opcje: zadania.map((zadanie) => ({ wartosc: zadanie.id, etykieta: zadanie.tytul })) },
-    { klucz: 'powtarzanieTyp', etykieta: 'Powtarzanie', typ: 'select', opcje: [
-      { wartosc: 'brak', etykieta: 'Brak' }, { wartosc: 'codziennie', etykieta: 'Codziennie' }, { wartosc: 'co_x_dni', etykieta: 'Co X dni' }, { wartosc: 'tygodniowo', etykieta: 'Tygodniowo' }, { wartosc: 'miesiecznie', etykieta: 'Miesięcznie' }, { wartosc: 'rocznie', etykieta: 'Rocznie' },
-    ] },
-    { klucz: 'powtarzanieCoIle', etykieta: 'Powtarzaj co', typ: 'number', min: 1 },
+  const polaRejestru: import('../../domain/rejestr').DefinicjaPolaRejestru[] = [
+    { id: 'system:tytul', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'tytul', etykieta: 'Tytuł', typ: 'tekst' },
+    { id: 'system:opis', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'opis', etykieta: 'Opis', typ: 'textarea' },
+    { id: 'system:kontekst', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'kontekst', etykieta: 'Kontekst / miejsce', typ: 'tekst' },
+    { id: 'system:tagi', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'tagi', etykieta: 'Tagi', typ: 'tekst' },
+    { id: 'system:dataStartu', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'dataStartu', etykieta: 'Najwcześniej od', typ: 'data' },
+    { id: 'system:szacowanyCzasMin', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'szacowanyCzasMin', etykieta: 'Szacowany czas (min)', typ: 'liczba' },
+    { id: 'system:faktycznyCzasMin', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'faktycznyCzasMin', etykieta: 'Faktyczny czas (min)', typ: 'liczba' },
+    { id: 'system:status', zrodlo: 'systemowe', trybObslugi: 'tylko_odczyt', resolverId: 'resolver:zadania-status', etykieta: 'Status', typ: 'tekst' },
+    { id: 'system:priorytet', zrodlo: 'systemowe', trybObslugi: 'tylko_odczyt', resolverId: 'resolver:zadania-priorytet', etykieta: 'Priorytet', typ: 'tekst' },
+    { id: 'system:termin', zrodlo: 'systemowe', trybObslugi: 'tylko_odczyt', resolverId: 'resolver:zadania-termin', etykieta: 'Termin', typ: 'data' },
+    ...definicjePolRejestru.filter((pole) => pole.rejestrId === 'zadania' && pole.aktywne).map((pole) => ({ id: pole.id, zrodlo: 'wlasne' as const, etykieta: pole.etykieta, typ: pole.typ, opcje: pole.opcje, rolaSemantyczna: pole.rolaSemantyczna })),
   ]
+
 
   const zapiszSzybkaZmiane = async (poprzednie: Zadanie, zmienione: Zadanie, tresc: string, utworzoneId?: string) => {
     try {
@@ -155,7 +143,8 @@ export function WidokZadan() {
     repozytorium={repozytorium}
     pustyStan={pustyStan}
     wybranyElementId={parametryAdresu.get('element') ?? undefined}
-    pola={pola}
+    pola={[]}
+    polaRejestru={polaRejestru}
     filtr={<>{komunikat && <Komunikat typ={komunikat.typ}>{komunikat.tresc}{ostatniaZmiana && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijZmiane()}><Undo2 aria-hidden="true" />Cofnij</button>}</Komunikat>}<div className="pasek-filtrow">
       <div className="segmenty">{(['otwarte', 'dzisiaj', 'zalegle', 'nadchodzace', 'wykonane', 'wszystkie'] as const).map((wartosc) => <button type="button" className={filtr === wartosc ? 'aktywny' : ''} onClick={() => ustawFiltr(wartosc)} key={wartosc}>{wartosc === 'wszystkie' ? 'Wszystkie' : wartosc[0].toUpperCase() + wartosc.slice(1)}</button>)}</div>
       <label className="pole-inline"><span>Sortuj</span><select value={sortowanie} onChange={(e) => ustawSortowanie(e.target.value as typeof sortowanie)}><option value="termin">Termin</option><option value="priorytet">Priorytet</option><option value="aktualizacja">Ostatnia zmiana</option></select></label>
@@ -164,33 +153,22 @@ export function WidokZadan() {
       {trybMasowy && zaznaczone.size > 0 && <div className="akcje-karty"><strong>{zaznaczone.size} zazn.</strong><button type="button" className="przycisk przycisk--maly" onClick={() => void zakonczZaznaczone()}>Wykonaj</button><button type="button" className="przycisk przycisk--maly" onClick={() => { const data = window.prompt('Nowy termin (RRRR-MM-DD)'); if (data) void zmienZaznaczone((zadanie) => zmienTerminZadania(zadanie, data), `Zmieniono termin ${zaznaczone.size} zadań.`) }}>Przełóż</button><button type="button" className="przycisk przycisk--maly" onClick={() => { const priorytet = window.prompt('Priorytet: niski, normalny, wysoki, krytyczny'); if (['niski', 'normalny', 'wysoki', 'krytyczny'].includes(priorytet ?? '')) void zmienZaznaczone((zadanie) => zmienPriorytetZadania(zadanie, priorytet as Zadanie['priorytet']), `Zmieniono priorytet ${zaznaczone.size} zadań.`) }}>Priorytet</button><select aria-label="Przypisz zaznaczone do projektu" defaultValue="" onChange={(e) => { const projektId = e.target.value || undefined; void zmienZaznaczone((zadanie) => przypiszZadanieDoProjektu(zadanie, projektId), `Zmieniono projekt ${zaznaczone.size} zadań.`) }}><option value="">Projekt…</option>{projekty.map((x) => <option key={x.id} value={x.id}>{x.nazwa}</option>)}</select></div>}
     </div></>}
     zbuduj={(formularz, istniejace) => {
-      const baza = istniejace ?? utworzZadanie({ tytul: formularz.tytul, opis: formularz.opis, priorytet: formularz.priorytet as Zadanie['priorytet'], termin: formularz.termin || undefined })
+      const baza = istniejace ?? utworzZadanie({ tytul: formularz.tytul, opis: formularz.opis, priorytet: 'normalny' })
       const {
         deadlineMode: _deadlineMode,
         time: _time,
         godzinaElementu: _godzinaElementu,
         ...kanonicznaBaza
       } = baza as Zadanie & { deadlineMode?: unknown; time?: unknown }
-      const termin = normalizujTerminZadania(formularz.trybTerminuElementu, formularz.godzinaElementu)
       return {
         ...kanonicznaBaza,
         tytul: formularz.tytul.trim(),
         opis: formularz.opis ?? '',
-        status: (formularz.status || 'otwarte') as Zadanie['status'],
-        priorytet: (formularz.priorytet || 'normalny') as Zadanie['priorytet'],
-        termin: formularz.termin || undefined,
-        trybTerminuElementu: termin.tryb,
-        ...(termin.godzina ? { godzinaElementu: termin.godzina } : {}),
         dataStartu: formularz.dataStartu || undefined,
         szacowanyCzasMin: formularz.szacowanyCzasMin ? Number(formularz.szacowanyCzasMin) : undefined,
         faktycznyCzasMin: formularz.faktycznyCzasMin ? Number(formularz.faktycznyCzasMin) : undefined,
-        projektId: formularz.projektId || undefined,
         kontekst: formularz.kontekst || undefined,
-        miejsceId: formularz.miejsceId || undefined,
         tagi: (formularz.tagi ?? '').split(',').map((tag) => tag.trim()).filter(Boolean),
-        podzadania: formularz.podzadaniaTekst.split('\n').map((tytul) => tytul.trim()).filter(Boolean).map((tytul) => baza.podzadania.find((x) => x.tytul === tytul) ?? { id: crypto.randomUUID(), tytul, wykonane: false }),
-        blokowanePrzezIds: formularz.blokujaceIds.split(',').filter((id) => id && id !== baza.id && zadania.some((x) => x.id === id)),
-        powtarzanie: formularz.powtarzanieTyp && formularz.powtarzanieTyp !== 'brak' ? { typ: formularz.powtarzanieTyp as NonNullable<Zadanie['powtarzanie']>['typ'], coIle: Number(formularz.powtarzanieCoIle) || 1, dataStartu: formularz.termin || dzisiaj } : undefined,
         updatedAt: terazIso(),
       }
     }}
