@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 14
+export const WERSJA_SCHEMATU_BAZY = 15
 
 const POSTAC_Z_HISTORYCZNEJ_WARTOSCI: Record<string, string> = {
   tabletka: 'tabletka',
@@ -72,6 +72,8 @@ export const nazwyTabel: NazwaTabeli[] = [
   'uprawnienia',
   'edytorzy',
   'dziennikEcho',
+  'definicjeWlasnychPolRejestru',
+  'widokiRejestru',
   'ustawienia',
   'historiaZmian',
   'stanSynchronizacji',
@@ -119,6 +121,8 @@ const schematPelny = {
   uprawnienia: 'id, editorId, modul, status, updatedAt, usunietoAt',
   edytorzy: 'id, aktywny, updatedAt, usunietoAt',
   dziennikEcho: 'id, ryzyko, wynik, createdAt, updatedAt, usunietoAt',
+  definicjeWlasnychPolRejestru: 'id, rejestrId, aktywne, updatedAt, usunietoAt',
+  widokiRejestru: 'id, rejestrId, updatedAt, usunietoAt',
   ustawienia: 'id, updatedAt, usunietoAt',
 }
 
@@ -185,6 +189,15 @@ class BazaOgarniacza extends Dexie {
           lek.ruchyApteczki = [{ id: `stan-poczatkowy:${lek.id}`, typ: 'dodanie', ilosc: lek.zapasJednostek, data: lek.dataOtwarcia ?? lek.createdAt.slice(0, 10), createdAt: lek.createdAt }]
         }
       })
+    })
+
+    this.version(15).stores({
+      ...schematPelny,
+      urlopy: 'id, dataOd, dataDo, typ, status, updatedAt, usunietoAt',
+      historiaZmian: 'id, znacznikCzasu, modul, typEncji, encjaId, operacja, updatedAt, usunietoAt',
+      stanSynchronizacji: 'id, stan, ostatniSync, updatedAt',
+      konfliktySynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, wykrytoAt, updatedAt',
+      kolejkaSynchronizacji: 'id, [tabela+rekordId], tabela, rekordId, operacja, createdAt, updatedAt',
     })
   }
 

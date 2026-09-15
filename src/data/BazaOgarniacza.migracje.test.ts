@@ -138,7 +138,7 @@ async function utworzBazeHistoryczna(wersja: typeof wersjeHistoryczne[number]): 
   await historycznaBaza.close()
 }
 
-describe.sequential('migracja historycznych baz Dexie do v14', () => {
+describe.sequential('migracja historycznych baz Dexie do v15', () => {
   afterEach(async () => {
     baza.close()
     await Dexie.delete('ogarniacz-v1')
@@ -193,5 +193,28 @@ describe.sequential('migracja historycznych baz Dexie do v14', () => {
       ruchyApteczki: [{ id: 'stan-poczatkowy:lek-z-projekcja', typ: 'dodanie', ilosc: 120 }],
       jednostkaLubPostac: 'syrop',
     })
+  })
+
+  it('dodaje tabele Rejestru 2.0 do bazy v14 bez przepisywania istniejących rekordów', async () => {
+    baza.close()
+    await Dexie.delete('ogarniacz-v1')
+    const bazaV14 = new Dexie('ogarniacz-v1')
+    bazaV14.version(14).stores({
+      zadania: 'id, status, termin, priorytet, projektId, updatedAt, usunietoAt',
+    })
+    await bazaV14.open()
+    await bazaV14.table('zadania').put({
+      id: 'zadanie-z-wlasna-wartoscia', tytul: 'Stare dane', status: 'otwarte', priorytet: 'normalny',
+      polaWlasne: { 'custom:producent': 'Zachowana wartość' }, ...metadane,
+    })
+    await bazaV14.close()
+
+    await baza.open()
+
+    expect(await baza.tabela('zadania').get('zadanie-z-wlasna-wartoscia')).toEqual(expect.objectContaining({
+      polaWlasne: { 'custom:producent': 'Zachowana wartość' },
+    }))
+    expect(await baza.tabela('definicjeWlasnychPolRejestru').count()).toBe(0)
+    expect(await baza.tabela('widokiRejestru').count()).toBe(0)
   })
 })

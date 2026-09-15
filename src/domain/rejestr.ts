@@ -1,3 +1,5 @@
+import type { EncjaBazowa } from './typy'
+
 export type TypPolaRejestru =
   | 'tekst'
   | 'textarea'
@@ -73,11 +75,21 @@ export interface DefinicjaRejestru {
   pola: DefinicjaPolaRejestru[]
 }
 
-export interface DefinicjaWidokuRejestru {
+export interface DefinicjaWidokuRejestru extends EncjaBazowa {
   id: string
   rejestrId: DefinicjaRejestru['id']
   nazwa: string
   widocznePolaIds: IdPolaRejestru[]
+}
+
+export interface DefinicjaWlasnegoPolaRejestru<Typ extends TypPolaRejestru = TypPolaRejestru> extends EncjaBazowa {
+  id: IdPolaWlasnego
+  rejestrId: DefinicjaRejestru['id']
+  etykieta: string
+  typ: Typ
+  opcje?: { wartosc: string; etykieta: string }[]
+  rolaSemantyczna?: RolaSemantycznaDlaTypu<Typ>
+  aktywne: boolean
 }
 
 export function zapiszWartoscPolaWlasnego(polaWlasne: PolaWlasne | undefined, idPola: IdPolaWlasnego, wartosc: WartoscPolaWlasnego): PolaWlasne {
@@ -93,12 +105,15 @@ export function utworzDefinicjePolaRejestru<Pole extends DefinicjaPolaRejestru>(
     throw new Error('Id systemowego pola musi zaczynać się od „system:”.')
   }
 
-  if (pole.rolaSemantyczna) {
-    const rola = ROLE_SEMANTYCZNE_REJESTRU.find((kandydat) => kandydat.id === pole.rolaSemantyczna)
-    if (!rola || !rola.dozwoloneTypy.includes(pole.typ as never)) {
-      throw new Error('Rola semantyczna nie istnieje lub nie jest zgodna z typem pola.')
-    }
-  }
+  walidujRoleSemantycznaPolaRejestru(pole.typ, pole.rolaSemantyczna)
 
   return pole
+}
+
+export function walidujRoleSemantycznaPolaRejestru(typ: TypPolaRejestru, rolaSemantyczna?: string): void {
+  if (!rolaSemantyczna) return
+  const rola = ROLE_SEMANTYCZNE_REJESTRU.find((kandydat) => kandydat.id === rolaSemantyczna)
+  if (!rola || !rola.dozwoloneTypy.includes(typ as never)) {
+    throw new Error('Rola semantyczna nie istnieje lub nie jest zgodna z typem pola.')
+  }
 }

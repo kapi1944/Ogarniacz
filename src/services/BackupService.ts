@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { baza, nazwyTabel, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { normalizujUstawienia, WERSJA_USTAWIEN } from '../domain/ustawienia'
+import { ROLE_SEMANTYCZNE_REJESTRU } from '../domain/rejestr'
 import type { NazwaTabeli } from '../domain/typy'
 import { pobierzInstallationId } from './InstallationService'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
@@ -21,6 +22,7 @@ export const SEKCJE_BACKUPU = [
   { nazwa: 'samochod', etykieta: 'Samochód' },
   { nazwa: 'zakupy', etykieta: 'Zakupy' },
   { nazwa: 'dokumenty', etykieta: 'Dokumenty i pliki' },
+  { nazwa: 'rejestr', etykieta: 'Definicje pól i widoki rejestru' },
   { nazwa: 'pozostaleDane', etykieta: 'Pozostałe dane i powiązania' },
   { nazwa: 'historia', etykieta: 'Historia ważnych zmian' },
 ] as const
@@ -206,6 +208,22 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     nazwa: z.string(),
     powiazania: z.array(z.unknown()),
     plik: schematTransportowegoBlobu.optional(),
+  }),
+  definicjeWlasnychPolRejestru: schematEncji.extend({
+    id: z.string().regex(/^custom:/),
+    rejestrId: z.string().min(1),
+    etykieta: z.string(),
+    typ: z.enum(['tekst', 'textarea', 'liczba', 'kwota', 'data', 'czas', 'checkbox', 'select', 'multiselect', 'url']),
+    opcje: z.array(z.object({ wartosc: z.string(), etykieta: z.string() })).optional(),
+    rolaSemantyczna: z.string().optional(),
+    aktywne: z.boolean(),
+  }).refine((definicja) => !definicja.rolaSemantyczna || ROLE_SEMANTYCZNE_REJESTRU.some((rola) =>
+    rola.id === definicja.rolaSemantyczna && rola.dozwoloneTypy.includes(definicja.typ as never),
+  ), 'Rola semantyczna nie istnieje lub nie jest zgodna z typem pola.'),
+  widokiRejestru: schematEncji.extend({
+    rejestrId: z.string().min(1),
+    nazwa: z.string(),
+    widocznePolaIds: z.array(z.string()),
   }),
   projekty: schematEncji,
   blokiCzasu: schematEncji,
@@ -402,6 +420,7 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('samochod', ['pojazdy']),
   zrodloRepozytoriow('zakupy', ['listyZakupow', 'pozycjeZakupow']),
   zrodloRepozytoriow('dokumenty', ['dokumenty']),
+  zrodloRepozytoriow('rejestr', ['definicjeWlasnychPolRejestru', 'widokiRejestru']),
   zrodloRepozytoriow('pozostaleDane', [
     'projekty',
     'blokiCzasu',
@@ -508,7 +527,7 @@ function sprawdzKompatybilnosc(surowy: SurowyBackup): void {
     throw new BladBackupu(`Backup pochodzi z niekompatybilnej wersji aplikacji: ${surowy.manifest.appVersion}.`, 'WERSJA_APLIKACJI')
   }
   if (wersja >= 2) {
-    if (![4, 5, WERSJA_SCHEMATU_BAZY].includes(surowy.manifest.dexieSchemaVersion ?? -1)) {
+    if (![4, 5, 14, WERSJA_SCHEMATU_BAZY].includes(surowy.manifest.dexieSchemaVersion ?? -1)) {
       throw new BladBackupu('Backup ma nieobsługiwaną wersję schematu danych.', 'WERSJA_SCHEMATU_BAZY')
     }
   }
@@ -594,7 +613,7 @@ function walidujCaloscBackupu(backup: SurowyBackup): OgarniaczBackup {
   const sekcje = backup.manifest.sections as NazwaSekcjiBackupu[]
   if (
     backup.manifest.formatVersion !== WERSJA_FORMATU_BACKUPU
-    || ![4, 5, WERSJA_SCHEMATU_BAZY].includes(backup.manifest.dexieSchemaVersion ?? -1)
+    || ![4, 5, 14, WERSJA_SCHEMATU_BAZY].includes(backup.manifest.dexieSchemaVersion ?? -1)
     || !backup.manifest.installationId
     || !backup.manifest.backupType
   ) {

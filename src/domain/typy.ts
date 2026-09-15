@@ -1,5 +1,5 @@
 import type { PersonalizacjaUI } from './personalizacja'
-import type { PolaWlasne } from './rejestr'
+import type { DefinicjaWidokuRejestru, DefinicjaWlasnegoPolaRejestru, PolaWlasne } from './rejestr'
 
 export type Id = string
 
@@ -771,6 +771,8 @@ export interface MapaTabel {
   uprawnienia: Uprawnienie
   edytorzy: ProfilEdytora
   dziennikEcho: DziennikEcho
+  definicjeWlasnychPolRejestru: DefinicjaWlasnegoPolaRejestru
+  widokiRejestru: DefinicjaWidokuRejestru
   ustawienia: Ustawienia
   historiaZmian: WpisHistoriiZmian
   stanSynchronizacji: StanSynchronizacji
