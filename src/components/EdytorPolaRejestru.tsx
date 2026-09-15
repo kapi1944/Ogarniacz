@@ -1,4 +1,4 @@
-import type { DefinicjaPolaRejestru, TypPolaRejestru, WartoscPolaWlasnego } from '../domain/rejestr'
+import { utworzDefinicjePolaRejestru, type DefinicjaPolaRejestru, type TypPolaRejestru, type WartoscPolaWlasnego } from '../domain/rejestr'
 import type { EncjaBazowa } from '../domain/typy'
 
 export interface DefinicjaPola {
@@ -27,7 +27,7 @@ export interface PoleDoEdycjiRejestru {
 
 const typyStarychPol: Record<NonNullable<DefinicjaPola['typ']>, TypPolaRejestru> = {
   text: 'tekst',
-  textarea: 'dlugi_tekst',
+  textarea: 'textarea',
   date: 'data',
   time: 'czas',
   number: 'liczba',
@@ -58,7 +58,7 @@ export function normalizujStarePolaRejestru(pola: DefinicjaPola[]): PoleDoEdycji
 }
 
 export function normalizujPolaRejestru(pola: DefinicjaPolaRejestru[]): PoleDoEdycjiRejestru[] {
-  return pola.map((definicja) => ({ definicja }))
+  return pola.map((definicja) => ({ definicja: utworzDefinicjePolaRejestru(definicja) }))
 }
 
 export function wartoscFormularzaPola(encja: EncjaBazowa | undefined, pole: PoleDoEdycjiRejestru): string {
@@ -102,9 +102,9 @@ export function EdytorPolaRejestru({ pole, wartosc, zmien }: Wlasciwosci) {
   const wspolne = { required: pole.wymagane, placeholder: pole.podpowiedz }
 
   return (
-    <label className={definicja.typ === 'dlugi_tekst' ? 'pole pole--pelne' : 'pole'}>
+    <label className={definicja.typ === 'textarea' ? 'pole pole--pelne' : 'pole'}>
       <span>{definicja.etykieta}{pole.wymagane && ' *'}</span>
-      {definicja.typ === 'dlugi_tekst' ? (
+      {definicja.typ === 'textarea' ? (
         <textarea {...wspolne} value={wartosc} onChange={(zdarzenie) => zmien(zdarzenie.target.value)} />
       ) : definicja.typ === 'checkbox' ? (
         <input type="checkbox" checked={wartosc === 'true'} onChange={(zdarzenie) => zmien(String(zdarzenie.target.checked))} />

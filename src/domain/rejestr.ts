@@ -1,6 +1,6 @@
 export type TypPolaRejestru =
   | 'tekst'
-  | 'dlugi_tekst'
+  | 'textarea'
   | 'liczba'
   | 'kwota'
   | 'data'

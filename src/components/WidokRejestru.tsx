@@ -44,7 +44,14 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
   const otworz = useCallback((element?: T) => {
     ustawEdytowany(element)
     const wartosciPoczatkowe = Object.fromEntries(polaDoEdycji.map((pole) => [pole.definicja.id, wartoscFormularzaPola(element, pole)]))
-    ustawFormularz(element ? { ...wartosciPoczatkowe, ...wlasciwosci.uzupelnijFormularz?.(element) } : wartosciPoczatkowe)
+    const uzupelnienia = element ? wlasciwosci.uzupelnijFormularz?.(element) : undefined
+    const formularzZUzupelnieniem = Object.fromEntries(polaDoEdycji.map((pole) => {
+      const kluczUzupelnienia = pole.definicja.zrodlo === 'systemowe'
+        ? pole.definicja.kluczWlasciwosci
+        : pole.definicja.id
+      return [pole.definicja.id, uzupelnienia?.[kluczUzupelnienia ?? pole.definicja.id] ?? wartosciPoczatkowe[pole.definicja.id]]
+    }))
+    ustawFormularz(formularzZUzupelnieniem)
     ustawBlad('')
     ustawFormularzOtwarty(true)
   }, [polaDoEdycji, wlasciwosci])

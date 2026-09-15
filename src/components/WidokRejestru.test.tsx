@@ -16,7 +16,7 @@ function utworzRepozytorium() {
   return { zapisz: vi.fn().mockResolvedValue('rekord-1') } as unknown as Repozytorium<RekordTestowy>
 }
 
-function renderujRejestr(opcje: { polaRejestru?: DefinicjaPolaRejestru[]; encja?: RekordTestowy } = {}) {
+function renderujRejestr(opcje: { polaRejestru?: DefinicjaPolaRejestru[]; encja?: RekordTestowy; uzupelnijFormularz?: (element: RekordTestowy) => Record<string, string> } = {}) {
   const repozytorium = utworzRepozytorium()
   render(
     <WidokRejestru
@@ -31,6 +31,7 @@ function renderujRejestr(opcje: { polaRejestru?: DefinicjaPolaRejestru[]; encja?
         ...(istniejacy ?? { id: 'rekord-1', createdAt: '2026-09-15T10:00:00.000Z', updatedAt: '2026-09-15T10:00:00.000Z' }),
         nazwa: formularz.nazwa,
       })}
+      uzupelnijFormularz={opcje.uzupelnijFormularz}
       etykieta={(rekord) => rekord.nazwa}
       szczegoly={() => null}
     />,
@@ -46,6 +47,15 @@ describe('WidokRejestru z kontraktem Rejestru 2.0', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
 
     await waitFor(() => expect(repozytorium.zapisz).toHaveBeenCalledWith(expect.objectContaining({ nazwa: 'Stary rekord' })))
+  })
+
+  it('zachowuje uzupełnienia starego formularza po zmianie kluczy technicznych', async () => {
+    const encja: RekordTestowy = { id: 'rekord-1', createdAt: '2026-09-15T10:00:00.000Z', updatedAt: '2026-09-15T10:00:00.000Z', nazwa: 'Stara wartość' }
+    const repozytorium = renderujRejestr({ encja, uzupelnijFormularz: () => ({ nazwa: 'Uzupełniona wartość' }) })
+    fireEvent.click(screen.getByTitle('Edytuj'))
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
+
+    await waitFor(() => expect(repozytorium.zapisz).toHaveBeenCalledWith(expect.objectContaining({ nazwa: 'Uzupełniona wartość' })))
   })
 
   it('zapisuje tekst własnego pola pod jego trwałym ID', async () => {
