@@ -90,6 +90,10 @@ Każda encja ma `id`, `createdAt`, `updatedAt` i opcjonalny `usunietoAt`. Repozy
 
 **Definition of Done:** pole systemowe ma jawny tryb obsługi; resolver i akcja są wskazane stabilnym ID, a ich kod pozostaje poza Dexie i synchronizowanymi definicjami. Zapis domenowy przechodzi przez publiczny serwis domenowy. Zmiana formatu danych ma deterministyczną migrację przy otwarciu bazy oraz skoncentrowany test; bez zmiany formatu nie podnosimy wersji Dexie. `polaWlasne` przechowuje wyłącznie wartości `custom:*`; backup/restore zachowuje definicje, widoki i istniejące wartości, a przed destrukcyjnym restore powstaje kopia `before-restore`. Adapter starego UI może istnieć tylko jako mały, oznaczony przejściowy most z warunkiem usunięcia.
 
+### GO dla migracji modułu
+
+Przed migracją modułu potwierdź: (1) zachowanie dotychczasowej funkcjonalności, (2) stabilne ID i dane po migracji, (3) przejście odpowiednich testów regresji, (4) krótką dokumentację zmiany oraz (5) ręczny test bez blokującej regresji. Pierwsze planowane moduły to: Poczekalnia, Notatki, Zadania i Leki. To wyłącznie kolejność przygotowania — każda migracja wymaga osobnego GO.
+
 ## ID i daty
 
 - encje używają `crypto.randomUUID()`;

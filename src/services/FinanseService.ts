@@ -1,4 +1,5 @@
 import { dzisiajIso, utworzMetadane } from '../domain/fabryki'
+import type { Repozytorium } from '../data/Repozytorium'
 import type { Budzet, PlanRat, PlatnoscStala, Rachunek, Rata, Wydatek } from '../domain/typy'
 
 export interface WykorzystanieBudzetu {
@@ -117,4 +118,13 @@ export function przeliczRatyPoNadplacie(raty: readonly Rata[], rataPoEdycji: Rat
 
 export function zaplanowanePlatnosciStale(platnosci: readonly PlatnoscStala[], miesiac: string): PlatnoscStala[] {
   return platnosci.filter((platnosc) => platnosc.aktywna && platnosc.dataStartu.slice(0, 7) <= miesiac)
+}
+
+export async function zaksiegujPlatnoscStala(
+  platnosc: PlatnoscStala,
+  miesiac: string,
+  repozytoriumWydatkow: Repozytorium<Wydatek>,
+): Promise<void> {
+  const data = `${miesiac}-${String(Math.min(platnosc.dzienMiesiaca, new Date(Number(miesiac.slice(0, 4)), Number(miesiac.slice(5, 7)), 0).getDate())).padStart(2, '0')}`
+  await repozytoriumWydatkow.zapisz({ ...utworzMetadane(), opis: platnosc.nazwa, kwota: platnosc.kwota, data, kategoria: platnosc.kategoria, platnoscStalaId: platnosc.id })
 }
