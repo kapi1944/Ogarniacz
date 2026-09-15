@@ -270,6 +270,7 @@ export function WidokNotatek() {
   const { dane: cele } = useRepozytorium("cele");
   const { dane: pojazdy } = useRepozytorium("pojazdy");
   const { dane: dokumenty } = useRepozytorium("dokumenty");
+  const { dane: definicjePolRejestru } = useRepozytorium("definicjeWlasnychPolRejestru");
   const [tag, ustawTag] = useState("");
   const encje = [
     {
@@ -287,6 +288,17 @@ export function WidokNotatek() {
     a.localeCompare(b, "pl"),
   );
   const widoczne = tag ? dane.filter((x) => x.tagi.includes(tag)) : dane;
+  const polaRejestru: import("../../domain/rejestr").DefinicjaPolaRejestru[] = [
+    { id: "system:tytul", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "tytul", etykieta: "Tytuł", typ: "tekst" as const },
+    { id: "system:tresc", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "tresc", etykieta: "Treść", typ: "textarea" as const },
+    { id: "system:tagi", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "tagi", etykieta: "Tagi", typ: "tekst" as const },
+    { id: "system:data", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "data", etykieta: "Jawna data", typ: "data" as const },
+    { id: "system:godzina", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "godzina", etykieta: "Jawna godzina", typ: "czas" as const },
+    { id: "system:przypieta", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "przypieta", etykieta: "Przypięta", typ: "checkbox" as const },
+    { id: "system:przypomnienieAt", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "przypomnienieAt", etykieta: "Przypomnienie", typ: "tekst" as const },
+    { id: "system:powiazania", zrodlo: "systemowe" as const, trybObslugi: "bezposrednie" as const, kluczWlasciwosci: "powiazaniaIds", etykieta: "Powiązania", typ: "multiselect" as const, opcje: encje.flatMap((grupa) => grupa.dane.map((element) => ({ wartosc: `${grupa.typ}:${element.id}`, etykieta: `${grupa.typ} — ${element.nazwa}` }))) },
+    ...definicjePolRejestru.filter((pole) => pole.rejestrId === "notatki" && pole.aktywne).map((pole) => ({ id: pole.id, zrodlo: "wlasne" as const, etykieta: pole.etykieta, typ: pole.typ, opcje: pole.opcje, rolaSemantyczna: pole.rolaSemantyczna })),
+  ];
   usePodswietlenie(dane.length);
   return (
     <WidokRejestru
@@ -296,40 +308,8 @@ export function WidokNotatek() {
       dane={widoczne}
       repozytorium={repozytorium}
       wybranyElementId={parametry.get("element") ?? undefined}
-      pola={[
-        { klucz: "tytul", etykieta: "Tytuł", wymagane: true },
-        { klucz: "tresc", etykieta: "Treść", typ: "textarea", wymagane: true },
-        {
-          klucz: "tagi",
-          etykieta: "Tagi",
-          podpowiedz: "oddzielone przecinkami",
-        },
-        { klucz: "data", etykieta: "Jawna data", typ: "date" },
-        { klucz: "godzina", etykieta: "Jawna godzina", typ: "time" },
-        {
-          klucz: "przypieta",
-          etykieta: "Przypięta",
-          typ: "select",
-          opcje: [
-            { wartosc: "true", etykieta: "Tak" },
-            { wartosc: "false", etykieta: "Nie" },
-          ],
-        },
-        {
-          klucz: "przypomnienieAt",
-          etykieta: "Przypomnienie",
-          podpowiedz: "YYYY-MM-DDTHH:mm",
-        },
-        {
-          klucz: "powiazaniaIds",
-          etykieta: "Powiązania (wybierz wiele)",
-          typ: "multiselect",
-          opcje: encje.flatMap((grupa) => grupa.dane.map((element) => ({
-            wartosc: `${grupa.typ}:${element.id}`,
-            etykieta: `${grupa.typ} — ${element.nazwa}`,
-          }))),
-        },
-      ]}
+      pola={[]}
+      polaRejestru={polaRejestru}
       filtr={
         <div className="pasek-filtrow">
           <button
