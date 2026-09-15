@@ -1,4 +1,5 @@
 import type { PersonalizacjaUI } from './personalizacja'
+import type { PolaWlasne } from './rejestr'
 
 export type Id = string
 
@@ -7,6 +8,7 @@ export interface EncjaBazowa {
   createdAt: string
   updatedAt: string
   usunietoAt?: string
+  polaWlasne?: PolaWlasne
 }
 
 export type Priorytet = 'niski' | 'normalny' | 'wysoki' | 'krytyczny'
