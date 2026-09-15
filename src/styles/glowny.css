@@ -397,6 +397,19 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 table { width: 100%; border-collapse: collapse; font-size: .78rem; }
 th, td { padding: 9px 10px; border-bottom: 1px solid var(--obramowanie); text-align: left; }
 th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; letter-spacing: .04em; text-transform: uppercase; }
+.rejestr-subskrypcji { display: grid; gap: 12px; }
+.rejestr-subskrypcji__naglowek { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.rejestr-subskrypcji__naglowek h2, .rejestr-subskrypcji__naglowek p { margin: 0; }
+.rejestr-subskrypcji__naglowek p, .rejestr-subskrypcji__karty span { color: var(--tekst-2); font-size: .76rem; }
+.rejestr-subskrypcji__tabela { overflow-x: auto; }
+.rejestr-subskrypcji__karty { display: none; }
+@media (max-width: 720px) {
+  .rejestr-subskrypcji__naglowek { align-items: stretch; flex-direction: column; }
+  .rejestr-subskrypcji__tabela { display: none; }
+  .rejestr-subskrypcji__karty { display: grid; gap: 8px; }
+  .rejestr-subskrypcji__karty article { display: grid; gap: 5px; padding: 11px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); }
+  .rejestr-subskrypcji__karty .przycisk { justify-self: start; margin-top: 4px; }
+}
 
 .siatka-kart-modulow { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .statystyki-mini { display: grid; grid-template-columns: repeat(2, 1fr); gap: 7px; margin: 12px 0; }
