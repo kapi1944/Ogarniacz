@@ -192,8 +192,8 @@ export class SyncEngine implements DostawcaSynchronizacji {
       const oczekujace = await tabelaKolejki().where('[tabela+rekordId]').equals([tabela, rekord.id]).primaryKeys()
       await usunWyslaneZmiany(oczekujace)
     }
-    powiadomOZmianieDanych(tabela)
     await this.ustawStanPoKonfliktach()
+    powiadomOZmianieDanych(tabela)
   }
 
   private async wykonajSynchronizacje(
@@ -251,14 +251,8 @@ export class SyncEngine implements DostawcaSynchronizacji {
       await this.zapiszPobrane(doPobrania)
       await this.zapiszKonflikty(konflikty)
 
-      const liczbaKonfliktow = await baza.tabela('konfliktySynchronizacji').count()
-      const stan = liczbaKonfliktow > 0 ? 'konflikt' : 'zsynchronizowano'
-      await this.zapiszStan({
-        stan,
+      const stan = await this.ustawStanPoKonfliktach({
         ostatniSync: repozytoriumZdalne.pobierzKursor?.() ?? synchronizowanoDo,
-        ostatniBlad: undefined,
-        liczbaKonfliktow,
-        liczbaOczekujacych: await tabelaKolejki().count(),
       })
       return { wyslane: doWyslania.length, pobrane: doPobrania.length, konflikty: konflikty.length, stan }
     } catch (blad) {
@@ -309,12 +303,38 @@ export class SyncEngine implements DostawcaSynchronizacji {
     }
   }
 
-  private async ustawStanPoKonfliktach(): Promise<void> {
-    const liczbaKonfliktow = await baza.tabela('konfliktySynchronizacji').count()
-    await this.zapiszStan({
-      stan: liczbaKonfliktow > 0 ? 'konflikt' : 'zsynchronizowano',
-      liczbaKonfliktow,
-      ostatniBlad: undefined,
+  private async ustawStanPoKonfliktach(zmiany: Partial<StanSynchronizacji> = {}): Promise<WynikSynchronizacji['stan']> {
+    const tabelaKonfliktow = baza.tabela('konfliktySynchronizacji')
+    const kolejka = tabelaKolejki()
+    const tabelaStanu = baza.tabela('stanSynchronizacji')
+    return baza.transaction('rw', [tabelaKonfliktow, kolejka, tabelaStanu], async () => {
+      const [liczbaKonfliktow, liczbaOczekujacych, zapisanyStan] = await Promise.all([
+        tabelaKonfliktow.count(),
+        kolejka.count(),
+        tabelaStanu.get('glowny'),
+      ])
+      const obecny = zapisanyStan ?? {
+        ...utworzMetadane('glowny'),
+        stan: 'zsynchronizowano' as const,
+        liczbaKonfliktow: 0,
+        liczbaOczekujacych: 0,
+        kolejkaZmigrowana: false,
+      }
+      const stan = liczbaKonfliktow > 0
+        ? 'konflikt'
+        : liczbaOczekujacych > 0
+          ? (this.czyOnline() ? 'oczekuje' : 'offline')
+          : 'zsynchronizowano'
+      await tabelaStanu.put({
+        ...obecny,
+        ...zmiany,
+        stan,
+        liczbaKonfliktow,
+        liczbaOczekujacych,
+        ostatniBlad: undefined,
+        updatedAt: this.teraz(),
+      })
+      return stan
     })
   }
 
