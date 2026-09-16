@@ -84,6 +84,7 @@ export function PanelAktualizacji() {
   const [postep, ustawPostep] = useState<number>()
   const [dostepna, ustawDostepna] = useState<WynikSprawdzeniaAktualizacji>()
   const [pobrana, ustawPobrana] = useState<PobranaAktualizacja>()
+  const [czyLokalnyPrzebieg, ustawCzyLokalnyPrzebieg] = useState(false)
   const stanKontroli = useSyncExternalStore(nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, pobierzStanKontroliAktualizacji)
   const skonfigurowane = platforma.aktualizacje.skonfigurowane()
 
@@ -97,6 +98,7 @@ export function PanelAktualizacji() {
     const zastosuj = (stan: { status?: StatusInstalacjiAktualizacji, komunikatAndroida?: string }) => {
       if (!stan.status) return
       const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(stan.status)
+      ustawCzyLokalnyPrzebieg(true)
       ustawEtap(nowyEtap); ustawKomunikat(stan.komunikatAndroida || nowyKomunikat)
     }
     void platforma.aktualizacje.pobierzStanInstalacji().then(zastosuj)
@@ -106,21 +108,22 @@ export function PanelAktualizacji() {
   }, [])
 
   useEffect(() => {
-    if (!stanKontroli.wynikApk || etap === 'pobieranie' || etap === 'weryfikacja' || etap === 'uruchamianie') return
+    if (!stanKontroli.wynikApk || czyLokalnyPrzebieg) return
     ustawDostepna(stanKontroli.wynikApk)
     ustawEtap(stanKontroli.wynikApk.czyNowsza ? 'dostepna' : 'brak')
     ustawKomunikat(stanKontroli.wynikApk.czyNowsza
       ? `Dostępna wersja ${stanKontroli.wynikApk.manifest.versionName}.`
       : 'Brak aktualizacji. Masz najnowszą wersję Ogarniacza.')
-  }, [etap, stanKontroli.wynikApk])
+  }, [czyLokalnyPrzebieg, stanKontroli.wynikApk])
 
   useEffect(() => {
-    if (!stanKontroli.bladApk || etap === 'pobieranie' || etap === 'weryfikacja' || etap === 'uruchamianie') return
+    if (!stanKontroli.bladApk || czyLokalnyPrzebieg) return
     ustawEtap('blad')
     ustawKomunikat(stanKontroli.bladApk)
-  }, [etap, stanKontroli.bladApk])
+  }, [czyLokalnyPrzebieg, stanKontroli.bladApk])
 
   const sprawdzAktualizacje = async () => {
+    ustawCzyLokalnyPrzebieg(true)
     ustawEtap('sprawdzanie')
     ustawKomunikat('Sprawdzanie manifestu latest.json…')
     ustawDostepna(undefined)
@@ -143,6 +146,7 @@ export function PanelAktualizacji() {
   }
 
   const uruchomInstalator = async (aktualizacja: PobranaAktualizacja, manifest: WynikSprawdzeniaAktualizacji['manifest']) => {
+    ustawCzyLokalnyPrzebieg(true)
     ustawEtap('uruchamianie')
     ustawKomunikat('Przekazywanie APK do systemowego instalatora…')
     try {
@@ -163,6 +167,7 @@ export function PanelAktualizacji() {
 
   const pobierzAktualizacje = async () => {
     if (!dostepna) return
+    ustawCzyLokalnyPrzebieg(true)
     ustawEtap('pobieranie')
     ustawPostep(0)
     ustawKomunikat('Pobieranie podpisanego APK…')
@@ -188,7 +193,8 @@ export function PanelAktualizacji() {
   }
 
   const zajete = etap === 'sprawdzanie' || etap === 'pobieranie' || etap === 'weryfikacja' || etap === 'uruchamianie'
-  const wariant = etap === 'blad' || etap === 'brak_miejsca' || etap === 'blad_instalatora' || etap === 'blad_pobierania' || etap === 'bledny_sha' || etap === 'blad_finalizacji' ? 'blad' : etap === 'dostepna' || etap === 'zgoda' ? 'ostrzezenie' : etap === 'brak' || etap === 'gotowe' ? 'sukces' : 'neutralny'
+  const czyEtapBledu = etap === 'blad' || etap === 'brak_miejsca' || etap === 'blad_instalatora' || etap === 'blad_pobierania' || etap === 'bledny_sha' || etap === 'blad_finalizacji'
+  const wariant = czyEtapBledu ? 'blad' : etap === 'dostepna' || etap === 'zgoda' ? 'ostrzezenie' : etap === 'brak' || etap === 'gotowe' ? 'sukces' : 'neutralny'
 
   return <><Karta>
     <div className="naglowek-karty"><div><h2>Aktualizacja aplikacji</h2><p>Warstwa natywna Android · OTA APK</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
@@ -197,7 +203,7 @@ export function PanelAktualizacji() {
       <div><span>Dostępna wersja</span><strong>{dostepna?.manifest.versionName ?? '—'}</strong></div>
     </div>
     {dostepna?.manifest.releaseNotes && <div><h3>Informacje o wydaniu</h3><p className="tekst-pomocniczy" style={{ whiteSpace: 'pre-wrap' }}>{dostepna.manifest.releaseNotes}</p></div>}
-    {komunikat && <p className="tekst-pomocniczy" role={etap === 'blad' ? 'alert' : 'status'}>{komunikat}</p>}
+    {komunikat && <p className="tekst-pomocniczy" role={czyEtapBledu ? 'alert' : 'status'}>{komunikat}</p>}
     {postep !== undefined && (etap === 'pobieranie' || etap === 'weryfikacja') && <progress value={postep} max="100" aria-label="Postęp pobierania aktualizacji" />}
     {!platforma.natywna && <p className="tekst-pomocniczy">Aktualizacje APK są dostępne w aplikacji Android.</p>}
     {platforma.natywna && <p className="tekst-pomocniczy">APK pobierane przez Ogarniacza trafia do prywatnej pamięci aplikacji, więc nie musi być widoczne w systemowym folderze „Pobrane”.</p>}
@@ -207,6 +213,7 @@ export function PanelAktualizacji() {
       {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Pobierz i zainstaluj</button>}
       {etap === 'zgoda' && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Uruchom instalator</button>}
       {(etap === 'brak_miejsca' || etap === 'blad_instalatora') && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Ponów instalację</button>}
+      {czyEtapBledu && !pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Ponów pobieranie</button>}
     </div>
   </Karta><PanelAktualizacjiWeb /></>
 }
