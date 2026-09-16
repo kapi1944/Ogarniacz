@@ -1,6 +1,7 @@
 import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { utworzMetadane } from '../domain/fabryki'
@@ -15,7 +16,7 @@ describe.sequential('RejestrPoczekalni', () => {
     const element: ElementPoczekalni = { ...utworzMetadane('poczekalnia-1'), tresc: 'Stary wpis', zrodlo: 'tekst', status: 'nowe' }
     await pobierzRepozytorium('skrzynka').zapisz(element)
     const definicja = await utworzWlasnePoleRejestru({ rejestrId: 'poczekalnia', etykieta: 'Kontekst', typ: 'tekst' })
-    render(<RejestrPoczekalni />)
+    render(<MemoryRouter><RejestrPoczekalni /></MemoryRouter>)
     await waitFor(() => expect(screen.getAllByText('Stary wpis').length).toBeGreaterThan(0))
     fireEvent.click(screen.getByTitle('Edytuj element Poczekalni'))
     fireEvent.change(screen.getByLabelText('Treść'), { target: { value: 'Zmieniony wpis' } })
@@ -24,13 +25,17 @@ describe.sequential('RejestrPoczekalni', () => {
     await waitFor(async () => expect(await pobierzRepozytorium('skrzynka').pobierz(element.id)).toMatchObject({ tresc: 'Zmieniony wpis', polaWlasne: { [definicja.id]: 'dom' } }))
   })
 
-  it('przekształca element przez domenową akcję Poczekalni', async () => {
+  it('przekształca element przez domenową akcję Poczekalni, otwiera wynik i pozwala cofnąć', async () => {
     const element: ElementPoczekalni = { ...utworzMetadane('poczekalnia-2'), tresc: 'Napraw rower', zrodlo: 'tekst', status: 'do_sklasyfikowania' }
     await pobierzRepozytorium('skrzynka').zapisz(element)
-    render(<RejestrPoczekalni />)
+    render(<MemoryRouter><RejestrPoczekalni /></MemoryRouter>)
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Zadanie' }).length).toBeGreaterThan(0))
     fireEvent.click(screen.getAllByRole('button', { name: 'Zadanie' })[0])
     await waitFor(async () => expect(await pobierzRepozytorium('zadania').lista()).toMatchObject([{ tytul: 'Napraw rower' }]))
     expect(await pobierzRepozytorium('skrzynka').pobierz(element.id)).toMatchObject({ status: 'przetworzone' })
+    expect(screen.getByRole('link', { name: 'Otwórz utworzony element' })).toHaveAttribute('href', expect.stringMatching(/^\/zadania\?element=/))
+    fireEvent.click(screen.getByRole('button', { name: 'Cofnij' }))
+    await waitFor(async () => expect(await pobierzRepozytorium('skrzynka').pobierz(element.id)).toMatchObject({ status: 'do_sklasyfikowania', przeksztalconoNa: undefined }))
+    expect(await pobierzRepozytorium('zadania').lista()).toEqual([])
   })
 })

@@ -1,16 +1,21 @@
 import { useState, type FormEvent } from 'react'
 import { Pencil } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import type { DefinicjaPolaRejestru } from '../domain/rejestr'
-import type { ElementPoczekalni } from '../domain/typy'
+import type { ElementPoczekalni, NazwaModulu } from '../domain/typy'
 import { useRepozytorium } from '../hooks/useRepozytorium'
+import { sciezkaDlaCeluNawigacji } from '../platform/trasy'
 import { rejestrResolverowPolSystemowych } from '../services/KontraktPolSystemowychRejestru'
 import { POLE_AKCJI_PRZEKSZTALCENIA_POCZEKALNI, przeksztalcPoczekalniePrzezRejestr } from '../services/RejestrPolSystemowychPoczekalni'
-import { czyElementPoczekalniDoKlasyfikacji, zapiszDoPoczekalni, type TypKonwersjiPoczekalni } from '../services/PoczekalniaService'
+import { czyElementPoczekalniDoKlasyfikacji, cofnijPrzeksztalceniePoczekalni, zapiszDoPoczekalni, type TypKonwersjiPoczekalni } from '../services/PoczekalniaService'
 import { EdytorPolaRejestru, skonwertujWartoscPolaWlasnego, wartoscFormularzaPola, type PoleDoEdycjiRejestru } from './EdytorPolaRejestru'
 import { Karta, Komunikat, Modal } from './Interfejs'
 import { useWlasciwosciRejestru } from './useWlasciwosciRejestru'
 
 const ID_REJESTRU = 'poczekalnia'
+const etykietyWynikow: Record<NazwaModulu, string> = {
+  zadania: 'zadanie', projekty: 'projekt', skrzynka: 'wpis Poczekalni', planer: 'element planera', grafik: 'wpis grafiku', nawyki: 'nawyk', leki: 'lek', wizyty: 'wizytę', zdrowie: 'element zdrowia', skierowania: 'skierowanie', przypomnienia: 'przypomnienie', zakupy: 'pozycję zakupów', rachunki: 'rachunek', miasto: 'sprawę na mieście', miejsca: 'miejsce', cele: 'cel', notatki: 'notatkę', pomysly: 'pomysł', na_pozniej: 'element „Na później”', kontakty: 'kontakt', dokumenty: 'dokument', finanse: 'element finansów', samochod: 'element samochodu', terminy: 'termin', echo: 'element Echo', ustawienia: 'ustawienie',
+}
 export const POLA_SYSTEMOWE_POCZEKALNI: DefinicjaPolaRejestru[] = [
   { id: 'system:tresc', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'tresc', etykieta: 'Treść', typ: 'textarea' },
   { id: 'system:zrodlo', zrodlo: 'systemowe', trybObslugi: 'bezposrednie', kluczWlasciwosci: 'zrodlo', etykieta: 'Źródło', typ: 'select', opcje: [{ wartosc: 'tekst', etykieta: 'Tekst' }, { wartosc: 'glos', etykieta: 'Głos' }] },
@@ -32,6 +37,7 @@ export function RejestrPoczekalni() {
   const [edytowany, ustawEdytowany] = useState<ElementPoczekalni>()
   const [formularz, ustawFormularz] = useState<Record<string, string>>({})
   const [komunikat, ustawKomunikat] = useState<{ typ: 'sukces' | 'blad'; tresc: string }>()
+  const [ostatniePrzeksztalcenie, ustawOstatniePrzeksztalcenie] = useState<{ element: ElementPoczekalni; wynik: { typ: NazwaModulu; id: string } }>()
   const { pola: wszystkiePola, widocznePola: kolumny, sterowanie } = useWlasciwosciRejestru({ rejestrId: ID_REJESTRU, polaSystemowe: POLA_SYSTEMOWE_POCZEKALNI, tytulKonfiguracji: 'Kolumny Poczekalni' })
   const oczekujace = dane.filter(czyElementPoczekalniDoKlasyfikacji).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   const historia = dane.filter((element) => !czyElementPoczekalniDoKlasyfikacji(element)).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
@@ -53,12 +59,23 @@ export function RejestrPoczekalni() {
   }
   const przeksztalc = async (element: ElementPoczekalni, typ: TypKonwersjiPoczekalni) => {
     try {
-      await przeksztalcPoczekalniePrzezRejestr(element, typ)
-      ustawKomunikat({ typ: 'sukces', tresc: 'Przekształcono element. Oryginał pozostał w historii Poczekalni.' })
+      const wynik = await przeksztalcPoczekalniePrzezRejestr(element, typ)
+      ustawOstatniePrzeksztalcenie({ element, wynik })
+      ustawKomunikat(undefined)
     } catch { ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się przekształcić elementu. Pozostał w Poczekalni.' }) }
+  }
+  const cofnijPrzeksztalcenie = async () => {
+    if (!ostatniePrzeksztalcenie) return
+    try {
+      await cofnijPrzeksztalceniePoczekalni(ostatniePrzeksztalcenie.element, ostatniePrzeksztalcenie.wynik)
+      ustawOstatniePrzeksztalcenie(undefined)
+      ustawKomunikat({ typ: 'sukces', tresc: 'Wpis znowu czeka w Poczekalni.' })
+    } catch { ustawKomunikat({ typ: 'blad', tresc: 'Nie udało się cofnąć przekształcenia.' }) }
   }
   const akcjePrzeksztalcenia = (element: ElementPoczekalni) => czyElementPoczekalniDoKlasyfikacji(element) && <><button type="button" className="przycisk przycisk--maly" onClick={() => void przeksztalc(element, 'zadanie')}>Zadanie</button><button type="button" className="przycisk przycisk--maly" onClick={() => void przeksztalc(element, 'projekt')}>Projekt</button><select aria-label={`Inny typ dla ${element.tresc}`} value="" onChange={(zdarzenie) => { if (zdarzenie.target.value) void przeksztalc(element, zdarzenie.target.value as TypKonwersjiPoczekalni) }}><option value="">Inny typ…</option><option value="notatka">Notatka</option><option value="przypomnienie">Przypomnienie</option><option value="zakup">Zakup</option><option value="pomysl">Pomysł</option><option value="wizyta">Do umówienia</option><option value="na_pozniej">Na później</option></select></>
   const polaEdycji = wszystkiePola.filter((pole) => !czyAkcja(pole)).map((definicja) => ({ definicja })) satisfies PoleDoEdycjiRejestru[]
 
-  return <div className="rejestr-poczekalni"><Karta><div className="rejestr-poczekalni__naglowek"><div><h2>Poczekalnia</h2><p>{oczekujace.length} {oczekujace.length === 1 ? 'sprawa czeka' : 'spraw czeka'} na uporządkowanie.</p></div>{sterowanie}</div><form className="szybki-wpis" onSubmit={async (zdarzenie) => { zdarzenie.preventDefault(); const tresc = new FormData(zdarzenie.currentTarget).get('tresc'); if (typeof tresc !== 'string' || !tresc.trim()) return; await zapiszDoPoczekalni(tresc); zdarzenie.currentTarget.reset(); ustawKomunikat({ typ: 'sukces', tresc: 'Dodano do Poczekalni.' }) }}><input name="tresc" aria-label="Treść do Poczekalni" placeholder="Co chcesz zapamiętać?" /><button className="przycisk przycisk--glowny">Dodaj</button></form></Karta>{komunikat && <Komunikat typ={komunikat.typ}>{komunikat.tresc}</Komunikat>}<Karta klasa="rejestr-poczekalni"><div className="rejestr-poczekalni__tabela"><table><thead><tr>{kolumny.map((pole) => <th key={pole.id}>{pole.etykieta}</th>)}<th aria-label="Akcje" /></tr></thead><tbody>{elementy.map((element) => <tr key={element.id}>{kolumny.map((pole) => <td key={pole.id}>{wartoscPola(element, pole)}</td>)}<td><div className="akcje-karty">{akcjePrzeksztalcenia(element)}<button type="button" className="przycisk-ikona" title="Edytuj element Poczekalni" onClick={() => otworz(element)}><Pencil aria-hidden="true" /></button></div></td></tr>)}</tbody></table></div><div className="rejestr-poczekalni__karty">{elementy.map((element) => <article key={element.id}><strong>{element.tresc}</strong>{kolumny.filter((pole) => pole.id !== 'system:tresc').slice(0, 3).map((pole) => <span key={pole.id}>{pole.etykieta}: {wartoscPola(element, pole)}</span>)}<div className="akcje-karty">{akcjePrzeksztalcenia(element)}<button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworz(element)}>Edytuj</button></div></article>)}</div></Karta>{edytowany && <Modal tytul="Edytuj element Poczekalni" zamknij={() => ustawEdytowany(undefined)}><form className="formularz" onSubmit={zapisz}>{polaEdycji.map((pole) => <EdytorPolaRejestru key={pole.definicja.id} pole={pole} wartosc={formularz[pole.definicja.id] ?? ''} zmien={(wartosc) => ustawFormularz({ ...formularz, [pole.definicja.id]: wartosc })} />)}<div className="akcje-formularza"><button type="button" className="przycisk" onClick={() => ustawEdytowany(undefined)}>Anuluj</button><button className="przycisk przycisk--glowny">Zapisz</button></div></form></Modal>}</div>
+  const adresWyniku = ostatniePrzeksztalcenie && sciezkaDlaCeluNawigacji({ sourceRef: ostatniePrzeksztalcenie.wynik, route: '/poczekalnia' })
+
+  return <div className="rejestr-poczekalni"><Karta><div className="rejestr-poczekalni__naglowek"><div><h2>Poczekalnia</h2><p>{oczekujace.length} {oczekujace.length === 1 ? 'sprawa czeka' : 'spraw czeka'} na uporządkowanie.</p></div>{sterowanie}</div><form className="szybki-wpis" onSubmit={async (zdarzenie) => { zdarzenie.preventDefault(); const tresc = new FormData(zdarzenie.currentTarget).get('tresc'); if (typeof tresc !== 'string' || !tresc.trim()) return; await zapiszDoPoczekalni(tresc); zdarzenie.currentTarget.reset(); ustawKomunikat({ typ: 'sukces', tresc: 'Dodano do Poczekalni.' }) }}><input name="tresc" aria-label="Treść do Poczekalni" placeholder="Co chcesz zapamiętać?" /><button className="przycisk przycisk--glowny">Dodaj</button></form></Karta>{ostatniePrzeksztalcenie && <Komunikat typ="sukces">Utworzono {etykietyWynikow[ostatniePrzeksztalcenie.wynik.typ]}: {ostatniePrzeksztalcenie.element.tresc}. {adresWyniku && <Link to={adresWyniku}>Otwórz utworzony element</Link>}<button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijPrzeksztalcenie()}>Cofnij</button></Komunikat>}{komunikat && <Komunikat typ={komunikat.typ}>{komunikat.tresc}</Komunikat>}<Karta klasa="rejestr-poczekalni"><div className="rejestr-poczekalni__tabela"><table><thead><tr>{kolumny.map((pole) => <th key={pole.id}>{pole.etykieta}</th>)}<th aria-label="Akcje" /></tr></thead><tbody>{elementy.map((element) => <tr key={element.id}>{kolumny.map((pole) => <td key={pole.id}>{wartoscPola(element, pole)}</td>)}<td><div className="akcje-karty">{akcjePrzeksztalcenia(element)}<button type="button" className="przycisk-ikona" title="Edytuj element Poczekalni" onClick={() => otworz(element)}><Pencil aria-hidden="true" /></button></div></td></tr>)}</tbody></table></div><div className="rejestr-poczekalni__karty">{elementy.map((element) => <article key={element.id}><strong>{element.tresc}</strong>{kolumny.filter((pole) => pole.id !== 'system:tresc').slice(0, 3).map((pole) => <span key={pole.id}>{pole.etykieta}: {wartoscPola(element, pole)}</span>)}<div className="akcje-karty">{akcjePrzeksztalcenia(element)}<button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworz(element)}>Edytuj</button></div></article>)}</div></Karta>{edytowany && <Modal tytul="Edytuj element Poczekalni" zamknij={() => ustawEdytowany(undefined)}><form className="formularz" onSubmit={zapisz}>{polaEdycji.map((pole) => <EdytorPolaRejestru key={pole.definicja.id} pole={pole} wartosc={formularz[pole.definicja.id] ?? ''} zmien={(wartosc) => ustawFormularz({ ...formularz, [pole.definicja.id]: wartosc })} />)}<div className="akcje-formularza"><button type="button" className="przycisk" onClick={() => ustawEdytowany(undefined)}>Anuluj</button><button className="przycisk przycisk--glowny">Zapisz</button></div></form></Modal>}</div>
 }

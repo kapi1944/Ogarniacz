@@ -1,4 +1,4 @@
-import type { ElementPoczekalni } from '../domain/typy'
+import type { ElementPoczekalni, NazwaModulu } from '../domain/typy'
 import { przeksztalcElementPoczekalni, type TypKonwersjiPoczekalni } from './PoczekalniaService'
 import { rejestrAkcjiDomenowychPolSystemowych, rejestrResolverowPolSystemowych } from './KontraktPolSystemowychRejestru'
 
@@ -38,11 +38,11 @@ rejestrAkcjiDomenowychPolSystemowych.zarejestruj<ElementPoczekalni>({
 export async function przeksztalcPoczekalniePrzezRejestr(
   element: ElementPoczekalni,
   typ: TypKonwersjiPoczekalni,
-): Promise<{ typ: string; id: string }> {
-  let wynik: { typ: string; id: string } | undefined
+): Promise<{ typ: NazwaModulu; id: string }> {
+  let wynik: { typ: NazwaModulu; id: string } | undefined
   await rejestrAkcjiDomenowychPolSystemowych.uruchom(POLE_AKCJI_PRZEKSZTALCENIA_POCZEKALNI, {
     encja: element,
-    daneZrodlowe: { typ, zapiszWynik: (nowyWynik: { typ: string; id: string }) => { wynik = nowyWynik } },
+    daneZrodlowe: { typ, zapiszWynik: (nowyWynik: { typ: NazwaModulu; id: string }) => { wynik = nowyWynik } },
   })
   if (!wynik) throw new Error('Nie udało się odczytać wyniku przekształcenia.')
   return wynik
