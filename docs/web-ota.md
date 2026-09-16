@@ -18,7 +18,7 @@ publishedAt
 
 Publiczny klucz X.509 PEM należy przed buildem APK umieścić jako `android/web-ota-public-key.pem`. Plik jest ignorowany przez Git; wzór znajduje się w `android/web-ota-public-key.example.pem`. Prywatny klucz nie może trafić do repozytorium — w GitHub Actions powinien być odtwarzany wyłącznie z sekretu na czas podpisania manifestu.
 
-Workflow `.github/workflows/web-ota.yml` ocenia kazdy push do `main` i reczne uruchomienie. Automatycznie publikuje tylko zmiany jednoznacznie webowe od ostatniego punktu zgodnosci z APK. Dopuszczone sa `src/**` (`.ts`, `.tsx`, `.css`), `public/**` i `index.html`. Kazda inna lub niejednoznaczna zmiana, w tym `android/**`, zaleznosci i konfiguracja Capacitor, wymaga najpierw nowego APK oraz zwiekszenia `minNativeVersionCode`. Klasyfikatora nie można ominąć ręcznym uruchomieniem: pominięcie raportuje `Web OTA pominięte — wymagane nowe APK` i nie jest błędem pipeline.
+Workflow `.github/workflows/web-ota.yml` uruchamia się automatycznie po zielonym pełnym CI dla pushu do `main` oraz ręcznie. W obu przypadkach przed publikacją potwierdza sukces CI dla dokładnie tego samego SHA. Publikuje tylko zmiany jednoznacznie webowe od ostatniego punktu zgodnosci z APK. Dopuszczone sa `src/**` (`.ts`, `.tsx`, `.css`), `public/**` i `index.html`. Kazda inna lub niejednoznaczna zmiana, w tym `android/**`, zaleznosci i konfiguracja Capacitor, wymaga najpierw nowego APK oraz zwiekszenia `minNativeVersionCode`. Klasyfikatora nie można ominąć ręcznym uruchomieniem: pominięcie raportuje `Web OTA pominięte — wymagane nowe APK` i nie jest błędem pipeline.
 
 Workflow:
 

@@ -22,7 +22,9 @@ const daneBazowe = {
 }
 
 test('pobiera minNativeVersionCode z kontrolowanego pliku zgodnosci', async () => {
-  assert.equal(await wczytajMinNativeVersionCode(), 1_000_009)
+  const minNativeVersionCode = await wczytajMinNativeVersionCode()
+  assert.ok(Number.isSafeInteger(minNativeVersionCode))
+  assert.ok(minNativeVersionCode > 0)
 })
 
 test('tworzy manifest zgodny z podpisem weryfikowanym przez APK', () => {

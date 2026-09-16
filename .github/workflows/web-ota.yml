@@ -1,9 +1,10 @@
 name: Publikacja Web OTA
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       bundle_version:
@@ -12,6 +13,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -19,8 +21,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  bramka_ci:
+    name: Potwierdz zielone CI dla commita
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    outputs:
+      commit_ci: ${{ steps.ci.outputs.commit_ci }}
+    env:
+      COMMIT_CI: ${{ github.event.workflow_run.head_sha || github.sha }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Sprawdz zakonczone sukcesem CI dla tego samego SHA
+        id: ci
+        shell: bash
+        run: |
+          set -euo pipefail
+          wynik="$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=$COMMIT_CI&status=completed" --jq '.workflow_runs | any(.[]; .head_sha == env.COMMIT_CI and .conclusion == "success")')"
+          [[ "$wynik" == "true" ]] || { echo "Brak zielonego pelnego CI dla commita $COMMIT_CI." >&2; exit 1; }
+          echo "commit_ci=$COMMIT_CI" >> "$GITHUB_OUTPUT"
+
   ocena:
     name: Ocen zgodnosc z APK
+    needs: bramka_ci
     runs-on: ubuntu-latest
     outputs:
       publikuj: ${{ steps.klasyfikacja.outputs.publikuj }}
@@ -29,6 +53,7 @@ jobs:
       - name: Pobierz repozytorium
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.bramka_ci.outputs.commit_ci }}
           fetch-depth: 0
 
       - name: Sklasyfikuj zmiany
@@ -68,11 +93,12 @@ jobs:
             exit 1
           fi
 
-          mapfile -d '' pliki < <(git diff --name-only -z "$tag_zgodnego_apk" "$GITHUB_SHA")
+          commit_ci="${{ needs.bramka_ci.outputs.commit_ci }}"
+          mapfile -d '' pliki < <(git diff --name-only -z "$tag_zgodnego_apk" "$commit_ci")
           if wynik="$(node scripts/web-ota-klasyfikacja.mjs "${pliki[@]}")"; then
             echo "$wynik"
             echo "publikuj=true" >> "$GITHUB_OUTPUT"
-            echo "commit_bundla=$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+            echo "commit_bundla=$commit_ci" >> "$GITHUB_OUTPUT"
           else
             kod=$?
             echo "$wynik"
