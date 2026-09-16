@@ -55,7 +55,9 @@ export function normalizujStarePolaRejestru(pola: DefinicjaPola[]): PoleDoEdycji
     min: pole.min,
     krok: pole.krok,
     typHtml: pole.typ === 'email' ? 'email' : undefined,
-    widoczne: pole.widoczne,
+    widoczne: pole.widoczne ? (formularz) => pole.widoczne!(Object.fromEntries(
+      Object.entries(formularz).map(([klucz, wartosc]) => [klucz.startsWith('system:') ? klucz.slice(7) : klucz, wartosc]),
+    )) : undefined,
     domyslnaWartosc: pole.domyslnaWartosc,
   }))
 }

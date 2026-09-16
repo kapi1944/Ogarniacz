@@ -462,3 +462,11 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     expect(json).toContain('zostaje')
   })
 })
+
+it('zachowuje checksum backupu bez secure context i Web Crypto', async () => {
+  const dane = { manifest: { formatVersion: 1 }, payload: { tekst: 'Zażółć gęślą jaźń' } }
+  const oczekiwany = await obliczChecksum(dane as never)
+  vi.stubGlobal('crypto', undefined)
+  try { expect(await obliczChecksum(dane as never)).toBe(oczekiwany) }
+  finally { vi.unstubAllGlobals() }
+})

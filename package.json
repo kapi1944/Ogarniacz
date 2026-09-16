@@ -46,6 +46,7 @@
     "@capacitor/haptics": "^8.0.0",
     "@capacitor/local-notifications": "^8.3.0",
     "@capacitor/share": "^8.0.0",
+    "@noble/hashes": "2.4.0",
     "date-fns": "^4.4.0",
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",

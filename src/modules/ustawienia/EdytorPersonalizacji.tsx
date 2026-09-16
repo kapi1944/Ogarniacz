@@ -1,3 +1,4 @@
+import { noweId } from '../../domain/fabryki'
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import {
   AlertTriangle,
@@ -93,9 +94,7 @@ function kopiujPersonalizacje(value: PersonalizacjaUI): PersonalizacjaUI {
 }
 
 function idMotywu(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `motyw-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return noweId()
 }
 
 export function EdytorPersonalizacji() {

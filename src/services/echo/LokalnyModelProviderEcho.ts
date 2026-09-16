@@ -1,3 +1,4 @@
+import { noweId } from '../../domain/fabryki'
 import { z } from 'zod'
 import type { DecyzjaModeluEcho, ProviderModeluEcho, ZadanieModeluEcho } from './typyEcho'
 
@@ -102,7 +103,7 @@ export class LokalnyModelProviderEcho implements ProviderModeluEcho {
       if (decyzja.typ !== 'narzedzie') return { typ: decyzja.typ, tresc: decyzja.tresc, aktualizacjaKontekstu }
       const kroki = decyzja.kroki?.length
         ? decyzja.kroki
-        : [{ id: crypto.randomUUID(), narzedzie: decyzja.narzedzie, argumenty: decyzja.argumenty, zaleznosci: [] }]
+        : [{ id: noweId(), narzedzie: decyzja.narzedzie, argumenty: decyzja.argumenty, zaleznosci: [] }]
       if (new Set(kroki.map((krok) => krok.id)).size !== kroki.length) return zapytaj('Plan zawiera powtórzone kroki. Spróbuj sformułować polecenie ponownie.')
       const wywolania = []
       for (const krok of kroki) {

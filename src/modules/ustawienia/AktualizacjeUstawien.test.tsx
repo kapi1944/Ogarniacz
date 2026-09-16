@@ -1,3 +1,4 @@
+import { platforma } from '../../platform/platforma'
 import { cleanup as wyczysc, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
@@ -157,4 +158,19 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
     await waitFor(() => expect(screen.getByText('Przywróć wersję wbudowaną w APK')).toBeInTheDocument())
     expect(screen.getByText('Nie zmienia wersji APK ani danych. Przywraca tylko interfejs dostarczony razem z aktualnie zainstalowaną aplikacją.')).toBeInTheDocument()
   })
+})
+
+it('pokazuje błąd odczytu instalatora bez odrzucenia Promise poza panelem', async () => {
+  vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockRejectedValueOnce(new Error('most niedostępny'))
+  render(<PanelAktualizacji />)
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Nie udało się odczytać stanu instalatora'))
+  expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeEnabled()
+})
+
+it('nie pozostawia sprawdzania bez końca po utracie konfiguracji', async () => {
+  sprawdzAktualizacjeApk.mockResolvedValueOnce(undefined)
+  render(<PanelAktualizacji />)
+  fireEvent.click(screen.getByRole('button', { name: 'Sprawdź aktualizacje' }))
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Źródło aktualizacji nie jest skonfigurowane'))
+  expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeEnabled()
 })

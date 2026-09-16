@@ -12,18 +12,24 @@ import { inicjalizujKontroleAktualizacjiAplikacji } from './services/KontrolaAkt
 import { inicjalizujRuntimeConfig } from './services/RuntimeConfigService'
 import { AktualizacjaPwa } from './app/AktualizacjaPwa'
 import './styles/glowny.css'
+import { GranicaBledu, KomunikatBleduAsynchronicznego } from './components/GranicaBledu'
 
-await inicjalizujBaze()
-await inicjalizujPlatforme()
-await inicjalizujRuntimeConfig()
-zastosujUstawieniaInterfejsu(
-  await repozytoriumUstawien.wczytaj(),
-  window.matchMedia('(prefers-color-scheme: dark)').matches,
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-)
-inicjalizujWidgetSnapshotService()
-createRoot(document.getElementById('root')!).render(
-  <StrictMode><App /><AktualizacjaPwa /><PotwierdzenieGotowosciBundle /></StrictMode>,
-)
-void inicjalizujSynchronizacjeAplikacji()
-void inicjalizujKontroleAktualizacjiAplikacji()
+const korzen = createRoot(document.getElementById('root')!)
+try {
+  await inicjalizujBaze()
+  await inicjalizujPlatforme()
+  await inicjalizujRuntimeConfig()
+  zastosujUstawieniaInterfejsu(
+    await repozytoriumUstawien.wczytaj(),
+    window.matchMedia('(prefers-color-scheme: dark)').matches,
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  )
+  inicjalizujWidgetSnapshotService()
+  korzen.render(
+    <StrictMode><KomunikatBleduAsynchronicznego /><GranicaBledu><App /><AktualizacjaPwa /><PotwierdzenieGotowosciBundle /></GranicaBledu></StrictMode>,
+  )
+  void inicjalizujSynchronizacjeAplikacji()
+  void inicjalizujKontroleAktualizacjiAplikacji()
+} catch {
+  korzen.render(<section className="karta" role="alert"><h1>Nie udało się uruchomić aplikacji</h1><p>Nie czyść danych aplikacji. Spróbuj ją odświeżyć.</p><button className="przycisk" onClick={() => window.location.reload()}>Spróbuj ponownie</button></section>)
+}

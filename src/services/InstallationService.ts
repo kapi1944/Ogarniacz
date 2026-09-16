@@ -1,3 +1,4 @@
+import { noweId } from '../domain/fabryki'
 const KLUCZ_INSTALLATION_ID = 'ogarniacz.installationId.v1'
 
 let installationIdWPamieci: string | undefined
@@ -14,7 +15,7 @@ export function pobierzInstallationId(): string {
     // Pamięć przeglądarki może być niedostępna w trybie prywatnym.
   }
 
-  installationIdWPamieci = crypto.randomUUID()
+  installationIdWPamieci = noweId()
   try {
     localStorage.setItem(KLUCZ_INSTALLATION_ID, installationIdWPamieci)
   } catch {

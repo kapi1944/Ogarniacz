@@ -1,3 +1,4 @@
+import { noweId } from '../../domain/fabryki'
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Bot,
@@ -142,7 +143,7 @@ export function WidokEcho() {
     if (!wypowiedz.trim() || wysylanie) return;
     ustawWiadomosci((obecne) => [
       ...obecne,
-      { id: crypto.randomUUID(), autor: "uzytkownik", tresc: wypowiedz },
+      { id: noweId(), autor: "uzytkownik", tresc: wypowiedz },
     ]);
     ustawTekst("");
     ustawWysylanie(true);

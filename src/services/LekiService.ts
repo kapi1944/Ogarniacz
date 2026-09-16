@@ -1,5 +1,5 @@
 import { addDays, differenceInCalendarDays, format, getDay, parseISO } from 'date-fns'
-import { terazIso, utworzMetadane } from '../domain/fabryki'
+import { noweId, terazIso, utworzMetadane } from '../domain/fabryki'
 import { baza } from '../data/BazaOgarniacza'
 import { dodajDoKolejkiSynchronizacji, tabelaKolejki } from '../data/KolejkaSynchronizacji'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
@@ -155,7 +155,7 @@ export async function zapiszLekZDodanymZapasem(lek: Lek, dodanyZapas?: number): 
     const poprzedni = await tabelaLekow.get(lek.id)
     const ruchy = ruchyApteczki(poprzedni ?? lek)
     const zDodaniem = dodanyZapas && dodanyZapas > 0
-      ? [...ruchy, { id: `dodanie:${crypto.randomUUID()}`, typ: 'dodanie' as const, ilosc: dodanyZapas, data: new Date().toISOString().slice(0, 10), createdAt: terazIso() }]
+      ? [...ruchy, { id: `dodanie:${noweId()}`, typ: 'dodanie' as const, ilosc: dodanyZapas, data: new Date().toISOString().slice(0, 10), createdAt: terazIso() }]
       : ruchy
     const zapisany = lekZRuchami({ ...lek, ruchyApteczki: zDodaniem }, zDodaniem)
     zapisany.updatedAt = terazIso()

@@ -1,4 +1,4 @@
-import { dzisiajIso } from '../../domain/fabryki'
+import { noweId, dzisiajIso } from '../../domain/fabryki'
 import { KontekstRozmowyEcho } from './KontekstRozmowyEcho'
 import { pobierzKontekstPlanowaniaEcho } from './KontekstPlanowaniaEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
@@ -79,7 +79,7 @@ function korektaOczekujacejAkcji(tekst: string, akcja: AkcjaDoPotwierdzeniaEcho,
       }
       if (opisKorekty) return {
         ...akcja,
-        wywolanie: { ...akcja.wywolanie, id: crypto.randomUUID(), argumenty: { ...dane, ograniczenia: [...pozostale, ograniczenie] } },
+        wywolanie: { ...akcja.wywolanie, id: noweId(), argumenty: { ...dane, ograniczenia: [...pozostale, ograniczenie] } },
         opis: `${opisKorekty}. Zapisać zmieniony plan?`,
       }
     }
@@ -91,7 +91,7 @@ function korektaOczekujacejAkcji(tekst: string, akcja: AkcjaDoPotwierdzeniaEcho,
   if ('termin' in dane || akcja.wywolanie.nazwa === 'create_task') dane.termin = data
   else if ('zmiany' in dane && dane.zmiany && typeof dane.zmiany === 'object') (dane.zmiany as Record<string, unknown>).termin = data
   else return undefined
-  return { ...akcja, wywolanie: { ...akcja.wywolanie, id: crypto.randomUUID(), argumenty: dane }, opis: `${akcja.opis} Termin: ${data}.` }
+  return { ...akcja, wywolanie: { ...akcja.wywolanie, id: noweId(), argumenty: dane }, opis: `${akcja.opis} Termin: ${data}.` }
 }
 
 function podsumujAkcje(akcja: AkcjaDoPotwierdzeniaEcho): string {

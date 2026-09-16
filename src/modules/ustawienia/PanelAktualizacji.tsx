@@ -74,7 +74,7 @@ function opisStatusuInstalacji(status: StatusInstalacjiAktualizacji): [EtapAktua
     NIEPRAWIDLOWY_APK: ['blad_instalatora', 'Pakiet aktualizacji jest nieprawidłowy.'], KONFLIKT_PAKIETU: ['blad_instalatora', 'Wystąpił konflikt pakietu aktualizacji.'],
     BLOKADA_SYSTEMOWA: ['blad_instalatora', 'Android zablokował instalację.'], NIEZNANY_BLAD: ['blad_instalatora', 'Android nie mógł zainstalować aktualizacji.'],
   }
-  return opisy[status]
+  return opisy[status] ?? ['blad_instalatora', 'Nie udało się odczytać stanu instalacji. Sprawdź wersję aplikacji.']
 }
 
 export function PanelAktualizacji() {
@@ -95,16 +95,26 @@ export function PanelAktualizacji() {
   }, [])
 
   useEffect(() => {
+    let aktywny = true
     const zastosuj = (stan: { status?: StatusInstalacjiAktualizacji, komunikatAndroida?: string }) => {
-      if (!stan.status) return
+      if (!aktywny || !stan?.status) return
       const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(stan.status)
       ustawCzyLokalnyPrzebieg(true)
       ustawEtap(nowyEtap); ustawKomunikat(stan.komunikatAndroida || nowyKomunikat)
     }
-    void platforma.aktualizacje.pobierzStanInstalacji().then(zastosuj)
+    const pokazBlad = () => {
+      if (!aktywny) return
+      ustawCzyLokalnyPrzebieg(true)
+      ustawEtap('blad')
+      ustawKomunikat('Nie udało się odczytać stanu instalatora. Możesz ponownie sprawdzić aktualizacje.')
+    }
+    void platforma.aktualizacje.pobierzStanInstalacji().then(zastosuj).catch(pokazBlad)
     let usun: () => void = () => undefined
-    void platforma.aktualizacje.nasluchujStanuInstalacji(zastosuj).then((odsubskrybuj) => { usun = odsubskrybuj })
-    return () => usun()
+    void platforma.aktualizacje.nasluchujStanuInstalacji(zastosuj).then((odsubskrybuj) => {
+      if (aktywny) usun = odsubskrybuj
+      else odsubskrybuj()
+    }).catch(pokazBlad)
+    return () => { aktywny = false; usun() }
   }, [])
 
   useEffect(() => {
@@ -130,7 +140,7 @@ export function PanelAktualizacji() {
     ustawPobrana(undefined)
     try {
       const wynik = await sprawdzAktualizacjeApk()
-      if (!wynik) return
+      if (!wynik) throw new Error('Źródło aktualizacji nie jest skonfigurowane w tym APK.')
       ustawDostepna(wynik)
       if (wynik.czyNowsza) {
         ustawEtap('dostepna')

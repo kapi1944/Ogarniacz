@@ -1,3 +1,4 @@
+import { noweId } from '../../domain/fabryki'
 import type { RyzykoDzialania } from '../../domain/typy'
 import { czyWymagaPotwierdzenia } from '../RyzykoDzialaniaService'
 import type { RejestrNarzedziEcho } from './NarzedziaEcho'
@@ -8,7 +9,7 @@ const kolejnoscRyzyka: Record<RyzykoDzialania, number> = { niskie: 0, umiarkowan
 export function utworzPlanWykonaniaEcho(cel: string, wywolania: readonly WywolanieNarzedziaEcho[], rejestr: RejestrNarzedziEcho): PlanWykonaniaEcho {
   const identyfikatory = new Set(wywolania.map((wywolanie) => wywolanie.id))
   return {
-    id: crypto.randomUUID(),
+    id: noweId(),
     cel,
     utworzonoAt: new Date().toISOString(),
     status: 'oczekuje',

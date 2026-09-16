@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { pobierzRepozytorium } from "../../data/Repozytorium";
-import { utworzMetadane } from "../../domain/fabryki";
+import { noweId, utworzMetadane } from "../../domain/fabryki";
 import { zadanieLegacyNaElement } from "../../domain/adapterZadania";
 import type {
   DziennikEcho,
@@ -1123,7 +1123,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
       const pojazd = await repo.pobierz(pojazdId);
       if (!pojazd) return null;
       const tankowanie = {
-        id: crypto.randomUUID(),
+        id: noweId(),
         data: dane.data,
         przebieg: dane.przebieg,
         litry: dane.litry,
@@ -1876,7 +1876,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
       const repo = pobierzRepozytorium("pojazdy");
       const pojazd = await repo.pobierz(pojazdId);
       if (!pojazd) return null;
-      const wpis = { id: crypto.randomUUID(), typ: "serwis" as const, ...dane };
+      const wpis = { id: noweId(), typ: "serwis" as const, ...dane };
       await repo.zapisz({
         ...pojazd,
         historiaSerwisowa: [...(pojazd.historiaSerwisowa ?? []), wpis],

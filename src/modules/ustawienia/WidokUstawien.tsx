@@ -76,9 +76,17 @@ export function WidokUstawien() {
   const synchronizacjaSkonfigurowana = czySynchronizacjaSkonfigurowana()
 
   useEffect(() => {
-    czyMoznaWczytacDemo().then(ustawMoznaDemo)
-    navigator.storage?.estimate().then((wynik) => ustawZajete(wynik.usage ? `${(wynik.usage / 1024 / 1024).toFixed(2)} MB` : '0 MB'))
-    platforma.powiadomienia.sprawdzStan().then(ustawStanPowiadomien)
+    let aktywny = true
+    void Promise.allSettled([
+      Promise.resolve().then(czyMoznaWczytacDemo).then((wynik) => { if (aktywny) ustawMoznaDemo(wynik) }),
+      Promise.resolve().then(() => navigator.storage?.estimate?.()).then((wynik) => {
+        if (aktywny && wynik) ustawZajete(wynik.usage ? `${(wynik.usage / 1024 / 1024).toFixed(2)} MB` : '0 MB')
+      }),
+      Promise.resolve().then(() => platforma.powiadomienia.sprawdzStan()).then((wynik) => { if (aktywny) ustawStanPowiadomien(wynik) }),
+    ]).then((wyniki) => {
+      if (aktywny && wyniki.some((wynik) => wynik.status === 'rejected')) ustawBlad('Nie udało się odczytać części ustawień urządzenia. Spróbuj ponownie otworzyć Ustawienia.')
+    })
+    return () => { aktywny = false }
   }, [])
 
   const przygotujBackup = async () => {

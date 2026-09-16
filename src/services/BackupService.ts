@@ -397,7 +397,10 @@ function kanonizuj(wartosc: unknown): string {
 }
 
 async function obliczSha256(tresc: string): Promise<string> {
-  const skrot = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(tresc))
+  const bajty = new TextEncoder().encode(tresc)
+  const skrot = typeof globalThis.crypto?.subtle?.digest === 'function'
+    ? await globalThis.crypto.subtle.digest('SHA-256', bajty)
+    : (await import('@noble/hashes/sha2.js')).sha256(bajty)
   return `sha256:${Array.from(new Uint8Array(skrot), (bajt) => bajt.toString(16).padStart(2, '0')).join('')}`
 }
 

@@ -44,10 +44,10 @@ test('zachowuje globalną blokadę HTTP i wyjątek wyłącznie dla endpointu LAN
   assert.throws(() => sprawdzAdresSynchronizacji('http://example.com'), /wyłącznie/)
 })
 
-test('źródłowy network security config zachowuje wyjątek dla Raspberry Pi bez globalnego HTTP', () => {
+test('źródłowy network security config nie utrwala adresu LAN i blokuje HTTP', () => {
   const konfiguracja = readFileSync(new URL('../android/app/src/main/res/xml/network_security_config.xml', import.meta.url), 'utf8')
   assert.match(konfiguracja, /<base-config cleartextTrafficPermitted="false"\s*\/>/)
-  assert.match(konfiguracja, /<domain-config cleartextTrafficPermitted="true">\s*<domain includeSubdomains="false">192\.168\.0\.116<\/domain>/)
+  assert.doesNotMatch(konfiguracja, /cleartextTrafficPermitted="true"/)
   assert.doesNotMatch(konfiguracja, /<base-config cleartextTrafficPermitted="true"/)
 })
 

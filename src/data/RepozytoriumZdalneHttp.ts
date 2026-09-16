@@ -72,15 +72,19 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
     try {
       return await zadanie()
     } catch (blad) {
-      const komunikat = blad instanceof Error ? blad.message : ''
+      const komunikat = blad instanceof Error ? blad.message
+        : typeof blad === 'object' && blad !== null && 'message' in blad ? String(blad.message) : ''
+      const wskazowkaSieci = new URL(this.adresApi).hostname.endsWith('.ts.net')
+        ? 'Sprawdź, czy Tailscale jest połączony na telefonie i Raspberry Pi.'
+        : 'Sprawdź adres endpointu i połączenie z siecią lokalną.'
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         throw new Error('Brak połączenia z siecią. Synchronizacja zachowa oczekujące zmiany.')
       }
       if (/timeout|timed out/i.test(komunikat)) {
-        throw new Error('Przekroczono czas połączenia z serwerem synchronizacji. Sprawdź sieć lokalną.')
+        throw new Error(`Przekroczono czas połączenia z serwerem synchronizacji. ${wskazowkaSieci}`)
       }
-      if (/failed to fetch|network error|unable to resolve host|connection refused/i.test(komunikat)) {
-        throw new Error('Serwer synchronizacji jest niedostępny. Sprawdź adres endpointu i połączenie z siecią lokalną.')
+      if (/failed to fetch|network error|unable to resolve host|connection refused|failed to connect|unreachable/i.test(komunikat)) {
+        throw new Error(`Serwer synchronizacji jest niedostępny. ${wskazowkaSieci}`)
       }
       throw new Error('Nie udało się połączyć z serwerem synchronizacji.')
     }

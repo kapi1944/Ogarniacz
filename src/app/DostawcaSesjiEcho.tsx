@@ -1,3 +1,4 @@
+import { noweId } from '../domain/fabryki'
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAplikacja } from './KontekstAplikacji'
 import { platforma } from '../platform/platforma'
@@ -84,14 +85,14 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
   }, [echo])
   const dodajOdpowiedz = useCallback((odpowiedz: OdpowiedzEcho, zrodloWejscia: ZrodloWejsciaEcho) => {
     ustawTryb(odpowiedz.tryb)
-    ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'echo', tresc: odpowiedz.tekst, zrodloWejscia, ryzyko: odpowiedz.ryzyko, wartosciDomyslne: odpowiedz.wartosciDomyslne, wyniki: odpowiedz.wyniki }])
+    ustawWiadomosci((obecne) => [...obecne, { id: noweId(), autor: 'echo', tresc: odpowiedz.tekst, zrodloWejscia, ryzyko: odpowiedz.ryzyko, wartosciDomyslne: odpowiedz.wartosciDomyslne, wyniki: odpowiedz.wyniki }])
     ustawOczekujacaAkcje(odpowiedz.akcjaDoPotwierdzenia)
   }, [])
   const kontrolerGlosu = useMemo(() => new KontrolerSesjiGlosowejEcho({
     glos: platforma.glosEcho, echo, konfiguracjaRozmowy: echo.agent.konfiguracjaRozmowy, cyklZycia: platforma.cyklZycia,
     obsluga: {
       zmienStan: ustawStan, odebranoCzesciowaWypowiedz: ustawCzesciowaWypowiedz, zglosBlad: ustawBladGlosu,
-      odebranoWypowiedz: (wypowiedz) => ustawWiadomosci((obecne) => [...obecne, { id: crypto.randomUUID(), autor: 'uzytkownik', tresc: wypowiedz }]),
+      odebranoWypowiedz: (wypowiedz) => ustawWiadomosci((obecne) => [...obecne, { id: noweId(), autor: 'uzytkownik', tresc: wypowiedz }]),
       odebranoOdpowiedz: (odpowiedz) => dodajOdpowiedz(odpowiedz, 'stt'),
     },
   }), [dodajOdpowiedz, echo])

@@ -4,7 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { WidokRejestru } from '../../components/WidokRejestru'
 import { RejestrPoczekalni } from '../../components/RejestrPoczekalni'
 import { Komunikat, Znacznik } from '../../components/Interfejs'
-import { dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
+import { noweId, dzisiajIso, terazIso, utworzMetadane } from '../../domain/fabryki'
 import { odczytajTerminZadania } from '../../domain/logikaTerminuZadania'
 import type { Projekt, Zadanie } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
@@ -233,7 +233,7 @@ export function WidokProjektow() {
       { klucz: 'kamienieTekst', etykieta: 'Kamienie milowe', typ: 'textarea', podpowiedz: 'Nazwa | RRRR-MM-DD, jeden w wierszu' },
     ]}
     zbuduj={(formularz, istniejacy) => ({
-      ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), opis: formularz.opis ?? '', status: (formularz.status || 'aktywne') as Projekt['status'], nastepneDzialanie: formularz.nastepneDzialanie || undefined, blokady: formularz.blokady ?? '', dataStartu: formularz.dataStartu || undefined, termin: formularz.termin || undefined, celId: formularz.celId || undefined, kamienieMilowe: formularz.kamienieTekst.split('\n').map((wiersz) => wiersz.trim()).filter(Boolean).map((wiersz) => { const [nazwa, termin] = wiersz.split('|').map((x) => x.trim()); return istniejacy?.kamienieMilowe?.find((x) => x.nazwa === nazwa) ?? { id: crypto.randomUUID(), nazwa, wykonany: false, termin: termin || undefined } }), updatedAt: terazIso(),
+      ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), opis: formularz.opis ?? '', status: (formularz.status || 'aktywne') as Projekt['status'], nastepneDzialanie: formularz.nastepneDzialanie || undefined, blokady: formularz.blokady ?? '', dataStartu: formularz.dataStartu || undefined, termin: formularz.termin || undefined, celId: formularz.celId || undefined, kamienieMilowe: formularz.kamienieTekst.split('\n').map((wiersz) => wiersz.trim()).filter(Boolean).map((wiersz) => { const [nazwa, termin] = wiersz.split('|').map((x) => x.trim()); return istniejacy?.kamienieMilowe?.find((x) => x.nazwa === nazwa) ?? { id: noweId(), nazwa, wykonany: false, termin: termin || undefined } }), updatedAt: terazIso(),
     })}
     uzupelnijFormularz={(projekt) => ({ kamienieTekst: (projekt.kamienieMilowe ?? []).map((x) => `${x.nazwa}${x.termin ? ` | ${x.termin}` : ''}`).join('\n') })}
     etykieta={(projekt) => projekt.nazwa}

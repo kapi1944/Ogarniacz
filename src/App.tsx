@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { GranicaBledu } from './components/GranicaBledu'
 import { DostawcaAplikacji } from './app/KontekstAplikacji'
 import { DostawcaSesjiEcho } from './app/DostawcaSesjiEcho'
 import { StraznikModulu, UkladAplikacji } from './app/UkladAplikacji'
@@ -52,7 +53,7 @@ function LadowanieWidoku() {
 }
 
 export default function App() {
-  return <BrowserRouter><DostawcaKonta><DostawcaAplikacji><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><Suspense fallback={<LadowanieWidoku />}><Routes>
+  return <BrowserRouter><DostawcaKonta><DostawcaAplikacji><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><GranicaBleduTrasy><Suspense fallback={<LadowanieWidoku />}><Routes>
     <Route path="/" element={<WidokPulpitu />} />
     <Route path="/poczekalnia" element={chron('skrzynka', <WidokPoczekalni />)} />
     <Route path="/skrzynka" element={<Navigate to="/poczekalnia" replace />} />
@@ -89,5 +90,10 @@ export default function App() {
     <Route path="/ustawienia" element={chron('ustawienia', <WidokUstawien />)} />
     <Route path="/ustawienia/personalizacja" element={chron('ustawienia', <EdytorPersonalizacji />)} />
     <Route path="*" element={<NieZnaleziono />} />
-  </Routes></Suspense></UkladAplikacji></DostawcaSesjiEcho></DostawcaAplikacji></DostawcaKonta></BrowserRouter>
+  </Routes></Suspense></GranicaBleduTrasy></UkladAplikacji></DostawcaSesjiEcho></DostawcaAplikacji></DostawcaKonta></BrowserRouter>
+}
+
+function GranicaBleduTrasy({ children }: { children: React.ReactNode }) {
+  const lokalizacja = useLocation()
+  return <GranicaBledu key={lokalizacja.pathname}>{children}</GranicaBledu>
 }

@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
-import { beforeEach, describe, expect, it } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
@@ -8,6 +8,8 @@ import { utworzMetadane } from '../domain/fabryki'
 import type { ElementPoczekalni } from '../domain/typy'
 import { utworzWlasnePoleRejestru } from '../services/RejestrService'
 import { RejestrPoczekalni } from './RejestrPoczekalni'
+
+afterEach(cleanup)
 
 describe.sequential('RejestrPoczekalni', () => {
   beforeEach(async () => { baza.close(); await Dexie.delete('ogarniacz-v1'); await inicjalizujBaze() })
@@ -38,4 +40,13 @@ describe.sequential('RejestrPoczekalni', () => {
     await waitFor(async () => expect(await pobierzRepozytorium('skrzynka').pobierz(element.id)).toMatchObject({ status: 'do_sklasyfikowania', przeksztalconoNa: undefined }))
     expect(await pobierzRepozytorium('zadania').lista()).toEqual([])
   })
+})
+
+it('czyści szybki formularz dopiero po zapisie rekordu', async () => {
+  render(<MemoryRouter><RejestrPoczekalni /></MemoryRouter>)
+  const pole = screen.getByRole('textbox', { name: 'Treść do Poczekalni' })
+  fireEvent.change(pole, { target: { value: 'Sprawa testowa' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Dodaj' }))
+  await waitFor(() => expect(pole).toHaveValue(''))
+  expect(screen.getByText('Dodano do Poczekalni.')).toBeInTheDocument()
 })
