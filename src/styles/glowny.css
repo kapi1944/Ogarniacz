@@ -489,6 +489,19 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .lista-sekcji-backupu input { accent-color: var(--akcent); }
 .podglad-manifestu, .transfer-ustawien { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--obramowanie); }
 .podglad-manifestu > code { display: block; overflow-wrap: anywhere; margin: 8px 0 14px; color: var(--tekst-2); }
+.lista-konfliktow-synchronizacji { display: grid; gap: 12px; }
+.konflikt-synchronizacji { display: grid; gap: 12px; padding: 14px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); }
+.konflikt-synchronizacji header span { color: var(--tekst-2); font-size: .72rem; font-weight: 750; text-transform: uppercase; }
+.konflikt-synchronizacji header h4, .konflikt-synchronizacji h5 { margin: 2px 0 0; }
+.konflikt-synchronizacji__czasy { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.konflikt-synchronizacji__czasy > div { display: flex; flex-direction: column; padding: 9px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: 7px; }
+.konflikt-synchronizacji__czasy strong { font-size: .74rem; }
+.konflikt-synchronizacji__czasy time { color: var(--tekst-2); font-size: .72rem; }
+.konflikt-synchronizacji__tabela { overflow-x: auto; }
+.konflikt-synchronizacji table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+.konflikt-synchronizacji th, .konflikt-synchronizacji td { min-width: 140px; padding: 8px; border: 1px solid var(--obramowanie); text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
+.konflikt-synchronizacji th:first-child { min-width: 110px; }
+.konflikt-synchronizacji .tekst-pomocniczy { margin: 0; }
 .kopia-before-restore { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); }
 .kopia-before-restore span { flex: 1 1 220px; color: var(--tekst-2); }
 .lista-historii { display: grid; }

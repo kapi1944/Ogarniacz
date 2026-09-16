@@ -28,7 +28,7 @@ export interface WynikSynchronizacji {
   wyslane: number
   pobrane: number
   konflikty: number
-  stan: 'zsynchronizowano' | 'offline' | 'konflikt'
+  stan: 'zsynchronizowano' | 'oczekuje' | 'offline' | 'konflikt'
 }
 
 export interface RepozytoriumZdalne {

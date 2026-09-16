@@ -129,6 +129,33 @@ describe.sequential('SyncEngine', () => {
     expect(await baza.tabela('zadania').get('wspolne')).toMatchObject({ tytul: 'Wersja zdalna' })
   })
 
+  it('po zachowaniu ostatniej wersji lokalnej czeka na wysłanie, a po opróżnieniu kolejki kończy synchronizację', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const lokalne = zadanie('lokalny-wybor', 'Wersja z tego urządzenia', '2026-08-23T10:00:00.000Z')
+    const zdalneZadanie = zadanie('lokalny-wybor', 'Wersja z serwera', '2026-08-24T10:00:00.000Z')
+    await baza.tabela('zadania').put(lokalne)
+    await zdalne.ustawZmiany([{ tabela: 'zadania', rekord: zdalneZadanie, installationId: 'instalacja-zdalna' }])
+    const silnik = utworzSilnik()
+    await silnik.synchronizuj(zdalne)
+    const konflikt = (await baza.tabela('konfliktySynchronizacji').toArray())[0]
+
+    await silnik.rozstrzygnijKonflikt(konflikt.id, 'lokalny')
+
+    expect(await pobierzStanSynchronizacji()).toMatchObject({
+      stan: 'oczekuje',
+      liczbaKonfliktow: 0,
+      liczbaOczekujacych: 1,
+    })
+
+    await silnik.synchronizuj(zdalne)
+
+    expect(await pobierzStanSynchronizacji()).toMatchObject({
+      stan: 'zsynchronizowano',
+      liczbaKonfliktow: 0,
+      liczbaOczekujacych: 0,
+    })
+  })
+
   it('zachowuje edycję i tombstone jako jawny konflikt', async () => {
     const zdalne = new RepozytoriumZdalneInMemory()
     const lokalne = zadanie('usuniecie-konflikt', 'Edycja lokalna', '2026-08-23T10:00:00.000Z')
@@ -289,6 +316,34 @@ describe.sequential('SyncEngine', () => {
     zwolnijPobieranie?.()
     await expect(zResume).resolves.toMatchObject({ stan: 'zsynchronizowano' })
     expect(pobierzZmiany).toHaveBeenCalledTimes(1)
+  })
+
+  it('nie zapisuje stanu zsynchronizowano, gdy nowa zmiana trafia do kolejki podczas wysyłania', async () => {
+    let rozpocznijWysylanie: (() => void) | undefined
+    let zakonczWysylanie: (() => void) | undefined
+    const wysylanieRozpoczete = new Promise<void>((rozwiaz) => { rozpocznijWysylanie = rozwiaz })
+    const oczekujaceWysylanie = new Promise<void>((rozwiaz) => { zakonczWysylanie = rozwiaz })
+    const zdalne: RepozytoriumZdalne = {
+      trwale: false,
+      pobierzZmiany: vi.fn(async () => []),
+      wyslijZmiany: vi.fn(async () => {
+        rozpocznijWysylanie?.()
+        await oczekujaceWysylanie
+      }),
+    }
+    const repozytorium = pobierzRepozytorium('zadania')
+    await repozytorium.zapisz(zadanie('przed-sync', 'Pierwsza zmiana', '2026-08-27T10:00:00.000Z'))
+
+    const synchronizacja = utworzSilnik().synchronizuj(zdalne)
+    await wysylanieRozpoczete
+    await repozytorium.zapisz(zadanie('podczas-sync', 'Zmiana podczas wysyłania', '2026-08-27T10:01:00.000Z'))
+    zakonczWysylanie?.()
+
+    await expect(synchronizacja).resolves.toMatchObject({ stan: 'oczekuje' })
+    expect(await pobierzStanSynchronizacji()).toMatchObject({
+      stan: 'oczekuje',
+      liczbaOczekujacych: 1,
+    })
   })
 
   it('zapisuje rozróżnialne stany: pending, offline, synced i error', async () => {
