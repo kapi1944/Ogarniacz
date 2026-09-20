@@ -113,8 +113,8 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
     await screen.findByRole('button', { name: 'Pobierz i zainstaluj' })
     fireEvent.click(screen.getByRole('button', { name: 'Pobierz i zainstaluj' }))
 
-    await screen.findByRole('button', { name: 'Uruchom instalator' })
-    fireEvent.click(screen.getByRole('button', { name: 'Uruchom instalator' }))
+    await screen.findByRole('button', { name: 'Ponów instalację' })
+    fireEvent.click(screen.getByRole('button', { name: 'Ponów instalację' }))
 
     await waitFor(() => expect(uruchomInstalator).toHaveBeenCalledTimes(2))
     expect(pobierzApk).toHaveBeenCalledTimes(1)

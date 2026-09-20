@@ -86,9 +86,14 @@ export interface WynikUruchomieniaInstalatora {
   versionCodeDocelowy?: number
   sessionId?: number
   wymagaZgody: boolean
+  nazwaPliku?: string
+  sha256?: string
+  maZweryfikowanyApk?: boolean
+  maPotwierdzenieInstalacji?: boolean
+  moznaPonowicInstalacje?: boolean
 }
 
-export type StatusInstalacjiAktualizacji = 'OCZEKUJE_NA_UZYTKOWNIKA' | 'INSTALOWANIE' | 'SUKCES' | 'ANULOWANO' | 'BRAK_MIEJSCA' | 'NIEZGODNY_PODPIS' | 'NIEPRAWIDLOWY_APK' | 'KONFLIKT_PAKIETU' | 'BLOKADA_SYSTEMOWA' | 'NIEZNANY_BLAD'
+export type StatusInstalacjiAktualizacji = 'POBRANO' | 'ZWERYFIKOWANO' | 'OCZEKUJE_NA_ZGODE_NIEZNANYCH_ZRODEL' | 'OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI' | 'INSTALOWANIE' | 'SUKCES' | 'ANULOWANO' | 'BRAK_MIEJSCA' | 'NIEZGODNY_PODPIS' | 'NIEPRAWIDLOWY_APK' | 'KONFLIKT_PAKIETU' | 'BLOKADA_SYSTEMOWA' | 'NIEZNANY_BLAD'
 
 export interface StanInstalacjiAktualizacji extends WynikUruchomieniaInstalatora {
   czasRozpoczecia?: number
@@ -180,6 +185,8 @@ export interface PlatformaOgarniacza {
       obslugaStanu: (stan: 'pobieranie' | 'weryfikacja', procent: number) => void,
     ) => Promise<PobranaAktualizacja>
     uruchomInstalator: (aktualizacja: PobranaAktualizacja, manifest: ManifestAktualizacji) => Promise<WynikUruchomieniaInstalatora>
+    ponowInstalacje: () => Promise<WynikUruchomieniaInstalatora>
+    potwierdzInstalacje: () => Promise<WynikUruchomieniaInstalatora>
     pobierzStanInstalacji: () => Promise<StanInstalacjiAktualizacji>
     nasluchujStanuInstalacji: (obsluga: (stan: StanInstalacjiAktualizacji) => void) => Promise<() => void>
   }

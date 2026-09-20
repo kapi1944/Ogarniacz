@@ -48,6 +48,7 @@ public class AktualizacjePlugin extends Plugin {
 
     @PluginMethod public void pobierzApk(PluginCall wywolanie) {
         String adres = wywolanie.getString("adres"), oczekiwanySkrot = wywolanie.getString("sha256"), nazwaPliku = wywolanie.getString("nazwaPliku");
+        String wersjaDocelowa = wywolanie.getString("wersjaDocelowa"); Long versionCodeDocelowy = wywolanie.getLong("versionCodeDocelowy");
         Long deklarowanyRozmiar = wywolanie.getLong("rozmiar");
         if (!poprawnyAdresHttps(adres)) { wywolanie.reject("Adres APK musi używać HTTPS.", KOD_BLAD_POBIERANIA); return; }
         if (oczekiwanySkrot == null || !oczekiwanySkrot.matches("(?i)^[a-f0-9]{64}$")) { wywolanie.reject("Manifest nie zawiera prawidłowego SHA-256.", KOD_BLEDNY_SHA); return; }
@@ -63,10 +64,12 @@ public class AktualizacjePlugin extends Plugin {
                 sprawdzMiejscePrzedPobraniem(katalog, deklarowanyRozmiar); usunJesliIstnieje(tymczasowy);
                 powiadomOStanie("pobieranie", 0);
                 String skrot = pobierz(adres, tymczasowy);
+                StanInstalacjiApk.zapiszPobrano(getContext(), nazwaPliku, oczekiwanySkrot, wersjaDocelowa, versionCodeDocelowy);
                 powiadomOStanie("weryfikacja", 100);
                 if (!zweryfikujSkrotLubUsunPlik(tymczasowy, skrot, oczekiwanySkrot)) throw new BladShaException();
                 usunJesliIstnieje(docelowy);
                 sfinalizujZweryfikowanyApk(tymczasowy, docelowy, oczekiwanySkrot, AktualizacjePlugin::przeniesAtomowo);
+                StanInstalacjiApk.zapiszZweryfikowano(getContext(), nazwaPliku, skrot, wersjaDocelowa, versionCodeDocelowy);
                 JSObject wynik = new JSObject(); wynik.put("nazwaPliku", nazwaPliku); wynik.put("sha256", skrot); wywolanie.resolve(wynik);
             } catch (Exception blad) {
                 usunCzesciowePliki(tymczasowy, docelowy);
@@ -89,23 +92,62 @@ public class AktualizacjePlugin extends Plugin {
         getBridge().executeOnMainThread(() -> uruchomInstalatorNaWatkuGlownym(wywolanie, nazwa, wersjaDocelowa, versionCodeDocelowy));
     }
 
+    @PluginMethod public void ponowInstalacje(PluginCall wywolanie) {
+        String nazwa = StanInstalacjiApk.nazwaPliku(getContext()), wersja = StanInstalacjiApk.wersja(getContext());
+        long kodWersji = StanInstalacjiApk.kodDocelowy(getContext());
+        if (!StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.status(getContext())) || nazwa == null || wersja == null || kodWersji <= 0) {
+            wywolanie.reject("Nie ma zweryfikowanego APK gotowego do ponowienia instalacji.", KOD_BRAK_INSTALATORA); return;
+        }
+        getBridge().executeOnMainThread(() -> uruchomInstalatorNaWatkuGlownym(wywolanie, nazwa, wersja, kodWersji));
+    }
+
+    @PluginMethod public void potwierdzInstalacje(PluginCall wywolanie) {
+        getBridge().executeOnMainThread(() -> {
+            try {
+                Activity aktywnosc = getActivity();
+                Intent potwierdzenie = StanInstalacjiApk.pobierzPotwierdzenie(getContext());
+                if (aktywnosc == null || potwierdzenie == null || potwierdzenie.resolveActivity(aktywnosc.getPackageManager()) == null) {
+                    wywolanie.reject("Potwierdzenie instalacji nie jest teraz dostępne. Ponów instalację z Ogarniacza.", KOD_BRAK_INSTALATORA); return;
+                }
+                aktywnosc.startActivity(potwierdzenie);
+                JSObject wynik = StanInstalacjiApk.odczytaj(getContext()); wynik.put("wymagaZgody", false); wywolanie.resolve(wynik);
+            } catch (Exception blad) {
+                String komunikat = bezpiecznyKomunikat(blad, "Nie udało się otworzyć potwierdzenia instalacji.");
+                StanInstalacjiApk.zapiszBladUruchomienia(getContext(), komunikat);
+                wywolanie.reject(komunikat, KOD_BRAK_INSTALATORA);
+            }
+        });
+    }
+
     private void uruchomInstalatorNaWatkuGlownym(PluginCall wywolanie, String nazwa, String wersjaDocelowa, long versionCodeDocelowy) {
+        PackageInstaller instalator = null; int sesja = -1;
         try {
             Activity aktywnosc = getActivity();
             if (aktywnosc == null) { wywolanie.reject("Nie można teraz otworzyć ekranu systemowego. Wróć do aplikacji i spróbuj ponownie.", KOD_BRAK_INSTALATORA); return; }
+            if (!StanInstalacjiApk.czyZweryfikowanyApk(getContext(), nazwa, wersjaDocelowa, versionCodeDocelowy)) {
+                wywolanie.reject("Brakuje danych zweryfikowanej aktualizacji. Pobierz APK ponownie.", KOD_BRAK_INSTALATORA); return;
+            }
             File plik = bezpiecznyPlik(new File(getContext().getCacheDir(), KATALOG_AKTUALIZACJI), nazwa);
-            if (!plik.isFile()) { wywolanie.reject("Zweryfikowany plik APK nie jest już dostępny. Pobierz go ponownie.", KOD_BRAK_INSTALATORA); return; }
+            String oczekiwanySkrot = StanInstalacjiApk.sha256(getContext());
+            if (!plik.isFile() || oczekiwanySkrot == null || !obliczSkrotPliku(plik).equalsIgnoreCase(oczekiwanySkrot)) {
+                StanInstalacjiApk.zapiszUszkodzonyApk(getContext());
+                wywolanie.reject("Zweryfikowany plik APK nie jest już dostępny lub jest uszkodzony. Pobierz go ponownie.", KOD_BRAK_INSTALATORA); return;
+            }
             sprawdzMiejscePrzedInstalacja(plik.getParentFile(), plik.length());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getContext().getPackageManager().canRequestPackageInstalls()) {
                 Intent ustawienia = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:pl.ogarniacz.app"));
                 if (ustawienia.resolveActivity(aktywnosc.getPackageManager()) == null) { wywolanie.reject("Android nie udostępnia ustawień instalowania nieznanych aplikacji dla Ogarniacza.", KOD_BRAK_INSTALATORA); return; }
-                aktywnosc.startActivity(ustawienia); JSObject wynik = new JSObject(); wynik.put("przekazanoDoSystemu", false); wynik.put("wymagaZgody", true); wywolanie.resolve(wynik); return;
+                StanInstalacjiApk.zapiszOczekiwanieNaZgode(getContext());
+                aktywnosc.startActivity(ustawienia);
+                JSObject wynik = StanInstalacjiApk.odczytaj(getContext()); wynik.put("wymagaZgody", true); wywolanie.resolve(wynik); return;
             }
             PackageInstaller.SessionParams parametry = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
             parametry.setSize(plik.length());
-            PackageInstaller instalator = getContext().getPackageManager().getPackageInstaller();
-            int sesja = instalator.createSession(parametry);
-            StanInstalacjiApk.zapisz(getContext(), wersjaDocelowa, versionCodeDocelowy, sesja, StanInstalacjiApk.INSTALOWANIE, null, null);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) parametry.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) parametry.setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE);
+            instalator = getContext().getPackageManager().getPackageInstaller();
+            sesja = instalator.createSession(parametry);
+            StanInstalacjiApk.zapiszInstalowanie(getContext(), sesja);
             try (PackageInstaller.Session otwartaSesja = instalator.openSession(sesja); InputStream wejscie = new FileInputStream(plik); OutputStream wyjscie = otwartaSesja.openWrite("base.apk", 0, plik.length())) {
                 byte[] bufor = new byte[64 * 1024]; int liczba;
                 while ((liczba = wejscie.read(bufor)) != -1) wyjscie.write(bufor, 0, liczba);
@@ -116,8 +158,14 @@ public class AktualizacjePlugin extends Plugin {
                 otwartaSesja.commit(PendingIntent.getBroadcast(getContext(), sesja, wynikSesji, flagi).getIntentSender());
             }
             JSObject wynik = StanInstalacjiApk.odczytaj(getContext()); wynik.put("wymagaZgody", false); wywolanie.resolve(wynik);
-        } catch (BrakMiejscaException blad) { odrzucBrakMiejsca(wywolanie, blad); }
-        catch (Exception blad) { wywolanie.reject(bezpiecznyKomunikat(blad, "Nie udało się uruchomić instalatora Androida. Spróbuj ponownie."), KOD_BRAK_INSTALATORA); }
+        } catch (BrakMiejscaException blad) {
+            StanInstalacjiApk.zapiszBrakMiejsca(getContext(), blad.getMessage()); odrzucBrakMiejsca(wywolanie, blad);
+        } catch (Exception blad) {
+            if (instalator != null && sesja >= 0) try { instalator.abandonSession(sesja); } catch (Exception ignored) { }
+            String komunikat = bezpiecznyKomunikat(blad, "Nie udało się uruchomić instalatora Androida. Spróbuj ponownie.");
+            StanInstalacjiApk.zapiszBladUruchomienia(getContext(), komunikat);
+            wywolanie.reject(komunikat, KOD_BRAK_INSTALATORA);
+        }
     }
 
     @PluginMethod public void pobierzStanInstalacji(PluginCall wywolanie) {
@@ -130,7 +178,7 @@ public class AktualizacjePlugin extends Plugin {
     private void potwierdzSukcesPoRestarcie() {
         long oczekiwanyKod = StanInstalacjiApk.kodDocelowy(getContext());
         if (oczekiwanyKod > 0 && oczekiwanyKod == BuildConfig.VERSION_CODE && !StanInstalacjiApk.SUKCES.equals(StanInstalacjiApk.status(getContext()))) {
-            StanInstalacjiApk.zapisz(getContext(), BuildConfig.VERSION_NAME, oczekiwanyKod, -1, StanInstalacjiApk.SUKCES, PackageInstaller.STATUS_SUCCESS, null);
+            StanInstalacjiApk.zapiszSukces(getContext(), BuildConfig.VERSION_NAME, oczekiwanyKod);
         }
     }
     static void powiadomOStatusieInstalacji(android.content.Context kontekst) { AktualizacjePlugin wtyczka = aktywnaWtyczka; if (wtyczka != null) wtyczka.notifyListeners("stanInstalacji", StanInstalacjiApk.odczytaj(kontekst)); }

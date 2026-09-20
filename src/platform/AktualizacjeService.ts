@@ -12,8 +12,10 @@ import type {
 } from './typy'
 
 interface WtyczkaAktualizacji {
-  pobierzApk: (dane: { adres: string; sha256: string; nazwaPliku: string; rozmiar?: number }) => Promise<PobranaAktualizacja>
+  pobierzApk: (dane: { adres: string; sha256: string; nazwaPliku: string; wersjaDocelowa: string; versionCodeDocelowy: number; rozmiar?: number }) => Promise<PobranaAktualizacja>
   uruchomInstalator: (dane: { nazwaPliku: string; wersjaDocelowa: string; versionCodeDocelowy: number }) => Promise<WynikUruchomieniaInstalatora>
+  ponowInstalacje: () => Promise<WynikUruchomieniaInstalatora>
+  potwierdzInstalacje: () => Promise<WynikUruchomieniaInstalatora>
   pobierzStanInstalacji: () => Promise<StanInstalacjiAktualizacji>
   addListener: (
     nazwa: 'stanAktualizacji' | 'stanInstalacji',
@@ -123,6 +125,8 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
           adres: sprawdzAdresHttps(adresApk, 'Adres APK'),
           sha256: manifest.sha256,
           nazwaPliku: nazwaApk(manifest),
+          wersjaDocelowa: manifest.versionName,
+          versionCodeDocelowy: manifest.versionCode,
           rozmiar: manifest.size,
         })
       } finally {
@@ -132,6 +136,14 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
     uruchomInstalator: async (aktualizacja: PobranaAktualizacja, manifest: ManifestAktualizacji) => {
       if (!czyAndroid) throw new Error('Instalator APK jest dostępny tylko w aplikacji Android.')
       return wtyczkaAktualizacji.uruchomInstalator({ nazwaPliku: aktualizacja.nazwaPliku, wersjaDocelowa: manifest.versionName, versionCodeDocelowy: manifest.versionCode })
+    },
+    ponowInstalacje: async () => {
+      if (!czyAndroid) throw new Error('Instalator APK jest dostępny tylko w aplikacji Android.')
+      return wtyczkaAktualizacji.ponowInstalacje()
+    },
+    potwierdzInstalacje: async () => {
+      if (!czyAndroid) throw new Error('Instalator APK jest dostępny tylko w aplikacji Android.')
+      return wtyczkaAktualizacji.potwierdzInstalacje()
     },
     pobierzStanInstalacji: async () => {
       if (!czyAndroid) return { status: 'NIEZNANY_BLAD' as const, wymagaZgody: false }

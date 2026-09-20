@@ -4,7 +4,7 @@ import { Karta, Znacznik } from '../../components/Interfejs'
 import { platforma } from '../../platform/platforma'
 import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
 import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeApk } from '../../services/KontrolaAktualizacjiAplikacji'
-import type { PobranaAktualizacja, StatusInstalacjiAktualizacji, WynikSprawdzeniaAktualizacji } from '../../platform/typy'
+import type { PobranaAktualizacja, StanInstalacjiAktualizacji, StatusInstalacjiAktualizacji, WynikSprawdzeniaAktualizacji, WynikUruchomieniaInstalatora } from '../../platform/typy'
 import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 
 type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'blad_instalatora' | 'blad_pobierania' | 'bledny_sha' | 'blad_finalizacji' | 'blad'
@@ -68,7 +68,11 @@ function etapBleduPobierania(blad: unknown): EtapAktualizacji {
 
 function opisStatusuInstalacji(status: StatusInstalacjiAktualizacji): [EtapAktualizacji, string] {
   const opisy: Record<StatusInstalacjiAktualizacji, [EtapAktualizacji, string]> = {
-    OCZEKUJE_NA_UZYTKOWNIKA: ['zgoda', 'Czeka na potwierdzenie Androida.'], INSTALOWANIE: ['uruchamianie', 'Instalowanie aktualizacji…'],
+    POBRANO: ['weryfikacja', 'APK pobrano. Trwa weryfikacja SHA-256.'],
+    ZWERYFIKOWANO: ['gotowe', 'APK pobrano i zweryfikowano. Możesz uruchomić instalację.'],
+    OCZEKUJE_NA_ZGODE_NIEZNANYCH_ZRODEL: ['zgoda', 'Android oczekuje zgody na instalowanie nieznanych aplikacji. Wróć tutaj po jej włączeniu.'],
+    OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI: ['zgoda', 'Android oczekuje systemowego potwierdzenia instalacji.'],
+    INSTALOWANIE: ['uruchamianie', 'Instalowanie aktualizacji…'],
     SUKCES: ['gotowe', 'Aktualizacja zakończona.'], ANULOWANO: ['blad_instalatora', 'Instalacja została anulowana.'],
     BRAK_MIEJSCA: ['brak_miejsca', 'Za mało wolnego miejsca na aktualizację.'], NIEZGODNY_PODPIS: ['blad_instalatora', 'APK jest podpisane innym kluczem.'],
     NIEPRAWIDLOWY_APK: ['blad_instalatora', 'Pakiet aktualizacji jest nieprawidłowy.'], KONFLIKT_PAKIETU: ['blad_instalatora', 'Wystąpił konflikt pakietu aktualizacji.'],
@@ -84,6 +88,7 @@ export function PanelAktualizacji() {
   const [postep, ustawPostep] = useState<number>()
   const [dostepna, ustawDostepna] = useState<WynikSprawdzeniaAktualizacji>()
   const [pobrana, ustawPobrana] = useState<PobranaAktualizacja>()
+  const [stanNatywny, ustawStanNatywny] = useState<StanInstalacjiAktualizacji>()
   const [czyLokalnyPrzebieg, ustawCzyLokalnyPrzebieg] = useState(false)
   const stanKontroli = useSyncExternalStore(nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, pobierzStanKontroliAktualizacji)
   const skonfigurowane = platforma.aktualizacje.skonfigurowane()
@@ -96,10 +101,12 @@ export function PanelAktualizacji() {
 
   useEffect(() => {
     let aktywny = true
-    const zastosuj = (stan: { status?: StatusInstalacjiAktualizacji, komunikatAndroida?: string }) => {
+    const zastosuj = (stan: StanInstalacjiAktualizacji) => {
       if (!aktywny || !stan?.status) return
       const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(stan.status)
       ustawCzyLokalnyPrzebieg(true)
+      ustawStanNatywny(stan)
+      if (stan.maZweryfikowanyApk && stan.nazwaPliku && stan.sha256) ustawPobrana({ nazwaPliku: stan.nazwaPliku, sha256: stan.sha256 })
       ustawEtap(nowyEtap); ustawKomunikat(stan.komunikatAndroida || nowyKomunikat)
     }
     const pokazBlad = () => {
@@ -155,23 +162,48 @@ export function PanelAktualizacji() {
     }
   }
 
+  const zastosujWynikInstalatora = (wynik: WynikUruchomieniaInstalatora) => {
+    ustawStanNatywny(wynik)
+    if (wynik.maZweryfikowanyApk && wynik.nazwaPliku && wynik.sha256) ustawPobrana({ nazwaPliku: wynik.nazwaPliku, sha256: wynik.sha256 })
+    const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(wynik.status)
+    ustawEtap(wynik.wymagaZgody ? 'zgoda' : nowyEtap)
+    ustawKomunikat(wynik.wymagaZgody
+      ? 'Android otworzył zgodę „Instaluj nieznane aplikacje”. Włącz ją dla Ogarniacza, wróć tutaj i ponów instalację.'
+      : wynik.komunikatAndroida || nowyKomunikat)
+  }
+
   const uruchomInstalator = async (aktualizacja: PobranaAktualizacja, manifest: WynikSprawdzeniaAktualizacji['manifest']) => {
     ustawCzyLokalnyPrzebieg(true)
     ustawEtap('uruchamianie')
     ustawKomunikat('Przekazywanie APK do systemowego instalatora…')
     try {
       const wynik = await platforma.aktualizacje.uruchomInstalator(aktualizacja, manifest)
-      if (wynik.wymagaZgody) {
-        ustawEtap('zgoda')
-        ustawKomunikat('Android otworzył zgodę „Instaluj nieznane aplikacje”. Włącz ją dla Ogarniacza, wróć tutaj i ponów instalację.')
-      } else if (wynik.status) {
-        const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(wynik.status)
-        ustawEtap(nowyEtap)
-        ustawKomunikat(wynik.komunikatAndroida || nowyKomunikat)
-      }
+      zastosujWynikInstalatora(wynik)
     } catch (blad) {
       ustawEtap(kodBledu(blad) === 'BRAK_MIEJSCA' ? 'brak_miejsca' : 'blad_instalatora')
       ustawKomunikat(komunikatBleduAktualizacji(blad, 'Nie udało się uruchomić instalatora Androida.'))
+    }
+  }
+
+  const ponowInstalacje = async () => {
+    ustawCzyLokalnyPrzebieg(true)
+    ustawEtap('uruchamianie')
+    ustawKomunikat('Ponowne przekazywanie zweryfikowanego APK do Androida…')
+    try {
+      zastosujWynikInstalatora(await platforma.aktualizacje.ponowInstalacje())
+    } catch (blad) {
+      ustawEtap(kodBledu(blad) === 'BRAK_MIEJSCA' ? 'brak_miejsca' : 'blad_instalatora')
+      ustawKomunikat(komunikatBleduAktualizacji(blad, 'Nie udało się ponowić instalacji Androida.'))
+    }
+  }
+
+  const potwierdzInstalacje = async () => {
+    ustawCzyLokalnyPrzebieg(true)
+    try {
+      zastosujWynikInstalatora(await platforma.aktualizacje.potwierdzInstalacje())
+    } catch (blad) {
+      ustawEtap('blad_instalatora')
+      ustawKomunikat(komunikatBleduAktualizacji(blad, 'Nie udało się otworzyć potwierdzenia instalacji.'))
     }
   }
 
@@ -206,6 +238,9 @@ export function PanelAktualizacji() {
   const czyEtapBledu = etap === 'blad' || etap === 'brak_miejsca' || etap === 'blad_instalatora' || etap === 'blad_pobierania' || etap === 'bledny_sha' || etap === 'blad_finalizacji'
   const wariant = czyEtapBledu ? 'blad' : etap === 'dostepna' || etap === 'zgoda' ? 'ostrzezenie' : etap === 'brak' || etap === 'gotowe' ? 'sukces' : 'neutralny'
 
+  const maZweryfikowanyApk = Boolean(stanNatywny?.maZweryfikowanyApk || pobrana)
+  const czekaNaPotwierdzenie = stanNatywny?.status === 'OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI' && stanNatywny.maPotwierdzenieInstalacji
+  const moznaPonowicInstalacje = Boolean(stanNatywny?.moznaPonowicInstalacje && maZweryfikowanyApk)
   return <><Karta>
     <div className="naglowek-karty"><div><h2>Aktualizacja aplikacji</h2><p>Warstwa natywna Android · OTA APK</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
     <div className="lista-kompaktowa">
@@ -220,10 +255,12 @@ export function PanelAktualizacji() {
     {platforma.natywna && !skonfigurowane && <p className="tekst-pomocniczy">{pobierzDiagnostykeRuntime() || 'Źródło aktualizacji nie jest skonfigurowane w tym APK.'}</p>}
     <div className="akcje-formularza">
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={!skonfigurowane || zajete} onClick={sprawdzAktualizacje}><RefreshCw aria-hidden="true" />Sprawdź aktualizacje</button>
-      {etap === 'dostepna' && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Pobierz i zainstaluj</button>}
-      {etap === 'zgoda' && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Uruchom instalator</button>}
-      {(etap === 'brak_miejsca' || etap === 'blad_instalatora') && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Ponów instalację</button>}
-      {czyEtapBledu && !pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Ponów pobieranie</button>}
+      {etap === 'dostepna' && !maZweryfikowanyApk && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Pobierz i zainstaluj</button>}
+      {czekaNaPotwierdzenie && <button type="button" className="przycisk przycisk--glowny" onClick={potwierdzInstalacje}>Potwierdź instalację</button>}
+      {moznaPonowicInstalacje && !czekaNaPotwierdzenie && <button type="button" className="przycisk przycisk--glowny" onClick={ponowInstalacje}>{stanNatywny?.status === 'ZWERYFIKOWANO' ? 'Uruchom instalator' : 'Ponów instalację'}</button>}
+      {!moznaPonowicInstalacje && etap === 'zgoda' && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Ponów instalację</button>}
+      {!moznaPonowicInstalacje && (etap === 'brak_miejsca' || etap === 'blad_instalatora') && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Ponów instalację</button>}
+      {czyEtapBledu && !maZweryfikowanyApk && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Ponów pobieranie</button>}
     </div>
   </Karta><PanelAktualizacjiWeb /></>
 }

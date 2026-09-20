@@ -19,12 +19,22 @@ public class AktualizacjePluginTest {
     }
 
     @Test public void mapujeStatusyPackageInstalleraNaStabilneRezultaty() {
-        assertEquals(StanInstalacjiApk.OCZEKUJE_NA_UZYTKOWNIKA, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null));
+        assertEquals(StanInstalacjiApk.OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_PENDING_USER_ACTION, null));
         assertEquals(StanInstalacjiApk.SUKCES, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_SUCCESS, null));
         assertEquals(StanInstalacjiApk.BRAK_MIEJSCA, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_STORAGE, null));
         assertEquals(StanInstalacjiApk.NIEZGODNY_PODPIS, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_CONFLICT, "signature mismatch"));
         assertEquals(StanInstalacjiApk.NIEPRAWIDLOWY_APK, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_INVALID, null));
         assertEquals(StanInstalacjiApk.ANULOWANO, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_ABORTED, null));
+    }
+    @Test public void trwałyApkPozostajeDostępnyDoPonowieniaTylkoPoWeryfikacji() {
+        assertFalse(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.POBRANO));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.ZWERYFIKOWANO));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.OCZEKUJE_NA_ZGODE_NIEZNANYCH_ZRODEL));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.ANULOWANO));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.BRAK_MIEJSCA));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.NIEZGODNY_PODPIS));
+        assertFalse(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI));
+        assertFalse(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.INSTALOWANIE));
     }
 
     @Test public void konserwatywnyZapasPozwalaKontynuowac() {
