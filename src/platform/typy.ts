@@ -82,6 +82,7 @@ export interface WynikUruchomieniaInstalatora {
   status: StatusInstalacjiAktualizacji
   statusAndroida?: number
   komunikatAndroida?: string
+  komunikatUzytkownika?: string
   wersjaDocelowa?: string
   versionCodeDocelowy?: number
   sessionId?: number
@@ -93,7 +94,7 @@ export interface WynikUruchomieniaInstalatora {
   moznaPonowicInstalacje?: boolean
 }
 
-export type StatusInstalacjiAktualizacji = 'POBRANO' | 'ZWERYFIKOWANO' | 'OCZEKUJE_NA_ZGODE_NIEZNANYCH_ZRODEL' | 'OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI' | 'INSTALOWANIE' | 'SUKCES' | 'ANULOWANO' | 'BRAK_MIEJSCA' | 'NIEZGODNY_PODPIS' | 'NIEPRAWIDLOWY_APK' | 'KONFLIKT_PAKIETU' | 'BLOKADA_SYSTEMOWA' | 'NIEZNANY_BLAD'
+export type StatusInstalacjiAktualizacji = 'POBRANO' | 'ZWERYFIKOWANO' | 'OCZEKUJE_NA_ZGODE_NIEZNANYCH_ZRODEL' | 'OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI' | 'INSTALOWANIE' | 'SUKCES' | 'ANULOWANO' | 'BRAK_MIEJSCA' | 'NIEZGODNY_PODPIS' | 'NIEPRAWIDLOWY_APK' | 'KONFLIKT_PAKIETU' | 'KONFLIKT_WERSJI' | 'NIEDOZWOLONE_ZRODLO' | 'BRAK_SYSTEMOWEGO_INSTALATORA' | 'BLOKADA_SYSTEMOWA' | 'NIEZNANY_BLAD'
 
 export interface StanInstalacjiAktualizacji extends WynikUruchomieniaInstalatora {
   czasRozpoczecia?: number

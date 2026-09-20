@@ -69,8 +69,10 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
   it('wyjaśnia brakującą przestrzeń na podstawie danych błędu natywnego', () => {
     expect(komunikatBleduAktualizacji({
       code: 'BRAK_MIEJSCA',
-      data: { wolneBajty: 495 * 1024 ** 2, wymaganeBajty: 2 * 1024 ** 3, brakujaceBajty: 1.5 * 1024 ** 3 },
-    }, 'błąd')).toContain('Zwolnij co najmniej 1,5 GB')
+      data: { wolneBajty: 100 * 1024 ** 2, wymaganeBajty: 154 * 1024 ** 2, brakujaceBajty: 54 * 1024 ** 2 },
+    }, 'błąd')).toContain('Wymagane: około 154 MB')
+    expect(komunikatBleduAktualizacji({ code: 'BRAK_MIEJSCA' }, 'błąd')).not.toContain('2 GB')
+    expect(komunikatBleduAktualizacji(new Error('java.lang.IllegalStateException'), 'Bezpieczny komunikat')).toBe('Bezpieczny komunikat')
   })
 
   it('nie nadpisuje błędu pobierania automatycznie wykrytą wersją 1.0.12', async () => {

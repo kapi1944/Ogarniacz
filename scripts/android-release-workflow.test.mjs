@@ -15,6 +15,7 @@ const nowyManifest = {
   versionCode: 1_000_011,
   apkUrl: 'Ogarniacz-1.0.11-release.apk',
   sha256: 'b'.repeat(64),
+  size: 123,
 }
 
 function odpowiedzJson(manifest) {
@@ -56,6 +57,20 @@ test('kończy publikację błędem po wyczerpaniu prób propagacji latest.json',
   assert.equal(liczbaOpoznien, 5)
 })
 
+test('odrzuca publiczny latest.json z tym samym SHA, ale innym artefaktem', async () => {
+  const niespojny = { ...nowyManifest, apkUrl: 'Ogarniacz-1.0.10-release.apk' }
+  await assert.rejects(
+    pobierzPublicznyManifestPoPublikacji({
+      adresManifestu: 'https://example.test/releases/latest/download/latest.json',
+      oczekiwanyManifest: nowyManifest,
+      pobierz: async () => odpowiedzJson(niespojny),
+      odczekaj: async () => undefined,
+      maksymalnaLiczbaProb: 1,
+    }),
+    /Publiczny latest\.json nie odpowiada zweryfikowanemu artefaktowi release/,
+  )
+})
+
 test('workflow wydania wymaga Environment, buduje APK raz i publikuje gotowy artefakt', async () => {
   const workflow = await readFile('.github/workflows/android-release.yml', 'utf8')
   assert.match(workflow, /workflow_dispatch:/)
@@ -92,4 +107,8 @@ test('workflow wydania wymaga Environment, buduje APK raz i publikuje gotowy art
   assert.match(skrypt, /verify', '--print-certs'/)
   assert.match(skrypt, /sha256Certyfikatu/)
   assert.doesNotMatch(workflow, /storePassword=UZUPELNIJ|BEGIN PRIVATE KEY/)
+  assert.match(skrypt, /sprawdzArtefaktRelease/)
+  assert.match(skrypt, /'dump', 'badging'/)
+  assert.match(skrypt, /packageMatch\[1\] !== 'pl\.ogarniacz\.app'/)
+  assert.match(skrypt, /manifest\.apkUrl !== oczekiwanaNazwa/)
 })

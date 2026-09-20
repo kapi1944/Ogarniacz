@@ -29,8 +29,10 @@ import java.util.Locale;
 @CapacitorPlugin(name = "Aktualizacje")
 public class AktualizacjePlugin extends Plugin {
     private static final long MAKSYMALNY_ROZMIAR_APK = 250L * 1024L * 1024L;
-    private static final long MINIMALNE_WYMAGANE_MIEJSCE = 2L * 1024L * 1024L * 1024L;
-    private static final long MNOZNIK_MIEJSCA_DLA_APK = 4L;
+    private static final long MEBIBAJT = 1024L * 1024L;
+    private static final long MARGINES_OPERACYJNY = 64L * MEBIBAJT;
+    private static final long ROZMIAR_STARTOWY_BEZ_CONTENT_LENGTH = 16L * MEBIBAJT;
+    private static final long LICZBA_KOPII_PODCZAS_POBIERANIA = 3L;
     private static final long RETENCJA_NIEUDANYCH_ARTEFAKTOW_MS = 24L * 60L * 60L * 1000L;
     private static final int LIMIT_PRZEKIEROWAN = 5;
     private static final String KATALOG_AKTUALIZACJI = "aktualizacje";
@@ -54,16 +56,24 @@ public class AktualizacjePlugin extends Plugin {
         if (oczekiwanySkrot == null || !oczekiwanySkrot.matches("(?i)^[a-f0-9]{64}$")) { wywolanie.reject("Manifest nie zawiera prawidłowego SHA-256.", KOD_BLEDNY_SHA); return; }
         if (nazwaPliku == null || !nazwaPliku.matches("^[A-Za-z0-9._-]+\\.apk$")) { wywolanie.reject("Nieprawidłowa nazwa pliku APK.", KOD_BLAD_POBIERANIA); return; }
         if (deklarowanyRozmiar != null && (deklarowanyRozmiar <= 0 || deklarowanyRozmiar > MAKSYMALNY_ROZMIAR_APK)) { wywolanie.reject("Manifest zawiera nieprawidłowy rozmiar APK.", KOD_BLAD_POBIERANIA); return; }
+        if (wersjaDocelowa == null || versionCodeDocelowy == null || versionCodeDocelowy <= 0) { wywolanie.reject("Manifest nie zawiera prawidłowej wersji APK.", KOD_BLAD_POBIERANIA); return; }
         execute(() -> {
             File tymczasowy = null, docelowy = null;
             try {
                 File katalog = new File(getContext().getCacheDir(), KATALOG_AKTUALIZACJI);
                 if (!katalog.exists() && !katalog.mkdirs()) throw new Exception("Nie udało się przygotować katalogu aktualizacji.");
                 docelowy = bezpiecznyPlik(katalog, nazwaPliku); tymczasowy = bezpiecznyPlik(katalog, nazwaPliku + ".part");
-                posprzatajKatalogAktualizacji(katalog, nazwaPliku, System.currentTimeMillis(), false);
+                long teraz = System.currentTimeMillis();
+                String nazwaTrwaleChroniona = StanInstalacjiApk.czyChronićArtefakt(getContext(), teraz) ? StanInstalacjiApk.nazwaPliku(getContext()) : null;
+                posprzatajKatalogAktualizacji(katalog, nazwaPliku, nazwaTrwaleChroniona, teraz, false);
+                if (StanInstalacjiApk.czyZweryfikowanyApk(getContext(), nazwaPliku, wersjaDocelowa, versionCodeDocelowy)
+                    && docelowy.isFile() && oczekiwanySkrot.equalsIgnoreCase(obliczSkrotPliku(docelowy))) {
+                    JSObject wynik = new JSObject(); wynik.put("nazwaPliku", nazwaPliku); wynik.put("sha256", oczekiwanySkrot); wywolanie.resolve(wynik);
+                    return;
+                }
                 sprawdzMiejscePrzedPobraniem(katalog, deklarowanyRozmiar); usunJesliIstnieje(tymczasowy);
                 powiadomOStanie("pobieranie", 0);
-                String skrot = pobierz(adres, tymczasowy);
+                String skrot = pobierz(adres, tymczasowy, deklarowanyRozmiar);
                 StanInstalacjiApk.zapiszPobrano(getContext(), nazwaPliku, oczekiwanySkrot, wersjaDocelowa, versionCodeDocelowy);
                 powiadomOStanie("weryfikacja", 100);
                 if (!zweryfikujSkrotLubUsunPlik(tymczasowy, skrot, oczekiwanySkrot)) throw new BladShaException();
@@ -72,7 +82,7 @@ public class AktualizacjePlugin extends Plugin {
                 StanInstalacjiApk.zapiszZweryfikowano(getContext(), nazwaPliku, skrot, wersjaDocelowa, versionCodeDocelowy);
                 JSObject wynik = new JSObject(); wynik.put("nazwaPliku", nazwaPliku); wynik.put("sha256", skrot); wywolanie.resolve(wynik);
             } catch (Exception blad) {
-                usunCzesciowePliki(tymczasowy, docelowy);
+                usunCzesciowePliki(tymczasowy);
                 if (blad instanceof BrakMiejscaException) odrzucBrakMiejsca(wywolanie, (BrakMiejscaException) blad);
                 else if (blad instanceof BladShaException) wywolanie.reject(blad.getMessage(), KOD_BLEDNY_SHA);
                 else if (blad instanceof BladFinalizacjiException) wywolanie.reject(blad.getMessage(), KOD_BLAD_FINALIZACJI);
@@ -107,6 +117,7 @@ public class AktualizacjePlugin extends Plugin {
                 Activity aktywnosc = getActivity();
                 Intent potwierdzenie = StanInstalacjiApk.pobierzPotwierdzenie(getContext());
                 if (aktywnosc == null || potwierdzenie == null || potwierdzenie.resolveActivity(aktywnosc.getPackageManager()) == null) {
+                    StanInstalacjiApk.zapiszBrakSystemowegoInstalatora(getContext(), "Systemowe potwierdzenie instalacji nie jest dostępne.");
                     wywolanie.reject("Potwierdzenie instalacji nie jest teraz dostępne. Ponów instalację z Ogarniacza.", KOD_BRAK_INSTALATORA); return;
                 }
                 aktywnosc.startActivity(potwierdzenie);
@@ -136,7 +147,7 @@ public class AktualizacjePlugin extends Plugin {
             sprawdzMiejscePrzedInstalacja(plik.getParentFile(), plik.length());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getContext().getPackageManager().canRequestPackageInstalls()) {
                 Intent ustawienia = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:pl.ogarniacz.app"));
-                if (ustawienia.resolveActivity(aktywnosc.getPackageManager()) == null) { wywolanie.reject("Android nie udostępnia ustawień instalowania nieznanych aplikacji dla Ogarniacza.", KOD_BRAK_INSTALATORA); return; }
+                if (ustawienia.resolveActivity(aktywnosc.getPackageManager()) == null) { StanInstalacjiApk.zapiszBrakSystemowegoInstalatora(getContext(), "Android nie udostępnia ustawień instalowania z tego źródła."); wywolanie.reject("Android nie udostępnia ustawień instalowania nieznanych aplikacji dla Ogarniacza.", KOD_BRAK_INSTALATORA); return; }
                 StanInstalacjiApk.zapiszOczekiwanieNaZgode(getContext());
                 aktywnosc.startActivity(ustawienia);
                 JSObject wynik = StanInstalacjiApk.odczytaj(getContext()); wynik.put("wymagaZgody", true); wywolanie.resolve(wynik); return;
@@ -146,6 +157,7 @@ public class AktualizacjePlugin extends Plugin {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) parametry.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) parametry.setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE);
             instalator = getContext().getPackageManager().getPackageInstaller();
+            if (instalator == null) { StanInstalacjiApk.zapiszBrakSystemowegoInstalatora(getContext(), "Android nie udostępnia PackageInstaller."); wywolanie.reject("Android nie udostępnia systemowego instalatora.", KOD_BRAK_INSTALATORA); return; }
             sesja = instalator.createSession(parametry);
             StanInstalacjiApk.zapiszInstalowanie(getContext(), sesja);
             try (PackageInstaller.Session otwartaSesja = instalator.openSession(sesja); InputStream wejscie = new FileInputStream(plik); OutputStream wyjscie = otwartaSesja.openWrite("base.apk", 0, plik.length())) {
@@ -188,7 +200,7 @@ public class AktualizacjePlugin extends Plugin {
         wywolanie.reject(blad.getMessage(), KOD_BRAK_MIEJSCA, dane);
     }
 
-    private String pobierz(String adresPoczatkowy, File docelowy) throws Exception {
+    private String pobierz(String adresPoczatkowy, File docelowy, Long deklarowanyRozmiar) throws Exception {
         URL adres = URI.create(adresPoczatkowy).toURL();
         for (int numer = 0; numer <= LIMIT_PRZEKIEROWAN; numer++) {
             HttpURLConnection polaczenie = (HttpURLConnection) adres.openConnection(); polaczenie.setInstanceFollowRedirects(false); polaczenie.setConnectTimeout(15000); polaczenie.setReadTimeout(30000); polaczenie.setRequestProperty("Accept", "application/vnd.android.package-archive, application/octet-stream"); polaczenie.setRequestProperty("User-Agent", "Ogarniacz-Android-Updater");
@@ -197,6 +209,7 @@ public class AktualizacjePlugin extends Plugin {
             if (kod < 200 || kod >= 300) { polaczenie.disconnect(); throw new Exception("Serwer APK zwrócił HTTP " + kod + "."); }
             long rozmiar = polaczenie.getContentLengthLong();
             if (rozmiar > MAKSYMALNY_ROZMIAR_APK) { polaczenie.disconnect(); throw new Exception("Plik APK przekracza dozwolony rozmiar 250 MB."); }
+            if (deklarowanyRozmiar != null && rozmiar > 0 && rozmiar != deklarowanyRozmiar) { polaczenie.disconnect(); throw new Exception("Rozmiar APK z serwera nie zgadza się z manifestem."); }
             if (rozmiar > 0) sprawdzMiejscePrzedPobraniem(docelowy.getParentFile(), rozmiar);
             MessageDigest skrot = MessageDigest.getInstance("SHA-256"); long pobrano = 0; int ostatniProcent = -1;
             try (InputStream wejscie = polaczenie.getInputStream(); FileOutputStream wyjscie = new FileOutputStream(docelowy)) {
@@ -208,6 +221,8 @@ public class AktualizacjePlugin extends Plugin {
                     if (rozmiar > 0) { int procent = (int) Math.min(99, pobrano * 100 / rozmiar); if (procent != ostatniProcent && procent % 5 == 0) { ostatniProcent = procent; powiadomOStanie("pobieranie", procent); } }
                 } wyjscie.getFD().sync();
             } finally { polaczenie.disconnect(); }
+            if (deklarowanyRozmiar != null && pobrano != deklarowanyRozmiar) throw new Exception("Pobrany APK ma rozmiar niezgodny z manifestem.");
+            sprawdzMiejscePodczasPobierania(docelowy.getParentFile(), pobrano);
             return zapisSzesnastkowy(skrot.digest());
         } throw new Exception("Serwer APK przekroczył limit przekierowań.");
     }
@@ -215,11 +230,16 @@ public class AktualizacjePlugin extends Plugin {
     private boolean poprawnyAdresHttps(String adres) { try { return adres != null && "https".equalsIgnoreCase(URI.create(adres).getScheme()); } catch (Exception blad) { return false; } }
     private File bezpiecznyPlik(File katalog, String nazwa) throws Exception { File plik = new File(katalog, nazwa); if (!plik.getCanonicalPath().startsWith(katalog.getCanonicalPath() + File.separator)) throw new Exception("Nieprawidłowa ścieżka pliku aktualizacji."); return plik; }
     private static void usunJesliIstnieje(File plik) throws Exception { if (plik.exists() && !plik.delete()) throw new Exception("Nie udało się usunąć pliku aktualizacji."); }
-    private void sprawdzMiejscePrzedPobraniem(File katalog, Long rozmiar) throws BrakMiejscaException { sprawdzDostepneMiejsce(katalog, rozmiar == null ? MINIMALNE_WYMAGANE_MIEJSCE : obliczWymaganeMiejsce(rozmiar)); }
+    private void sprawdzMiejscePrzedPobraniem(File katalog, Long rozmiar) throws BrakMiejscaException { sprawdzDostepneMiejsce(katalog, rozmiar == null ? obliczWymaganeMiejscePrzyBrakuRozmiaru() : obliczWymaganeMiejsce(rozmiar)); }
     private void sprawdzMiejscePodczasPobierania(File katalog, long pobrane) throws BrakMiejscaException { sprawdzDostepneMiejsce(katalog, obliczWymaganeMiejsce(pobrane)); }
-    private void sprawdzMiejscePrzedInstalacja(File katalog, long rozmiar) throws BrakMiejscaException { sprawdzDostepneMiejsce(katalog, obliczWymaganeMiejsce(rozmiar)); }
+    private void sprawdzMiejscePrzedInstalacja(File katalog, long rozmiar) throws BrakMiejscaException { sprawdzDostepneMiejsce(katalog, obliczWymaganeMiejsceInstalacji(rozmiar)); }
     private void sprawdzDostepneMiejsce(File katalog, long wymagane) throws BrakMiejscaException { long wolne = new StatFs(katalog.getAbsolutePath()).getAvailableBytes(); if (wolne < wymagane) throw new BrakMiejscaException(wolne, wymagane); }
-    static long obliczWymaganeMiejsce(long rozmiarApk) { if (rozmiarApk < 0) throw new IllegalArgumentException("Rozmiar APK nie może być ujemny."); return Math.max(MINIMALNE_WYMAGANE_MIEJSCE, Math.multiplyExact(rozmiarApk, MNOZNIK_MIEJSCA_DLA_APK)); }
+    static long obliczWymaganeMiejsce(long rozmiarApk) { return dodajBezPrzepelnienia(pomnozBezPrzepelnienia(sprawdzRozmiarApk(rozmiarApk), LICZBA_KOPII_PODCZAS_POBIERANIA), MARGINES_OPERACYJNY); }
+    static long obliczWymaganeMiejsceInstalacji(long rozmiarApk) { return dodajBezPrzepelnienia(sprawdzRozmiarApk(rozmiarApk), MARGINES_OPERACYJNY); }
+    static long obliczWymaganeMiejscePrzyBrakuRozmiaru() { return obliczWymaganeMiejsce(ROZMIAR_STARTOWY_BEZ_CONTENT_LENGTH); }
+    private static long sprawdzRozmiarApk(long rozmiarApk) { if (rozmiarApk < 0 || rozmiarApk > MAKSYMALNY_ROZMIAR_APK) throw new IllegalArgumentException("Rozmiar APK jest nieprawidłowy."); return rozmiarApk; }
+    private static long pomnozBezPrzepelnienia(long wartosc, long mnoznik) { return wartosc > Long.MAX_VALUE / mnoznik ? Long.MAX_VALUE : wartosc * mnoznik; }
+    private static long dodajBezPrzepelnienia(long lewa, long prawa) { return lewa > Long.MAX_VALUE - prawa ? Long.MAX_VALUE : lewa + prawa; }
     static boolean czyJestWystarczajacoMiejsca(long wolne, long rozmiarApk) { return wolne >= obliczWymaganeMiejsce(rozmiarApk); }
     static long obliczBrakujaceMiejsce(long wolne, long wymagane) { return Math.max(0L, wymagane - wolne); }
     static boolean zweryfikujSkrotLubUsunPlik(File plik, String obliczony, String oczekiwany) throws Exception { if (obliczony.equalsIgnoreCase(oczekiwany)) return true; usunPlikPoBledzie(plik); return false; }
@@ -235,9 +255,9 @@ public class AktualizacjePlugin extends Plugin {
     }
     private static void przeniesAtomowo(File zrodlo, File cel) throws Exception { Files.move(zrodlo.toPath(), cel.toPath(), StandardCopyOption.ATOMIC_MOVE); }
     private static void skopiujZFsynchronizacja(File zrodlo, File cel) throws Exception { try (FileInputStream wejscie = new FileInputStream(zrodlo); FileOutputStream wyjscie = new FileOutputStream(cel)) { byte[] bufor = new byte[64 * 1024]; int liczba; while ((liczba = wejscie.read(bufor)) != -1) wyjscie.write(bufor, 0, liczba); wyjscie.getFD().sync(); } if (!cel.isFile() || cel.length() != zrodlo.length()) throw new Exception("Kopiowanie APK nie zachowało oczekiwanego rozmiaru."); }
-    static void posprzatajKatalogAktualizacji(File katalog, String nazwaChroniona, long teraz, boolean poAktualizacji) throws Exception {
+    static void posprzatajKatalogAktualizacji(File katalog, String nazwaBiezaca, String nazwaTrwaleChroniona, long teraz, boolean poAktualizacji) throws Exception {
         File[] pliki = katalog.listFiles(); if (pliki == null) return;
-        for (File plik : pliki) { String nazwa = plik.getName(); boolean zarzadzany = nazwa.matches("Ogarniacz-[A-Za-z0-9._-]+-release\\.apk(?:\\.(?:part|tmp))?"); if (!zarzadzany || nazwa.equals(nazwaChroniona) || nazwa.equals(nazwaChroniona + ".part")) continue; boolean wygasly = teraz - plik.lastModified() >= RETENCJA_NIEUDANYCH_ARTEFAKTOW_MS; if (poAktualizacji || nazwa.endsWith(".apk") || wygasly) usunJesliIstnieje(plik); }
+        for (File plik : pliki) { String nazwa = plik.getName(); boolean zarzadzany = nazwa.matches("Ogarniacz-[A-Za-z0-9._-]+-release\\.apk(?:\\.(?:part|tmp))?"); boolean chroniony = nazwa.equals(nazwaBiezaca) || nazwa.equals(nazwaBiezaca + ".part") || nazwa.equals(nazwaTrwaleChroniona) || nazwa.equals(nazwaTrwaleChroniona + ".part"); if (!zarzadzany || chroniony) continue; boolean wygasly = teraz - plik.lastModified() >= RETENCJA_NIEUDANYCH_ARTEFAKTOW_MS; if (poAktualizacji || wygasly) usunJesliIstnieje(plik); }
     }
     private static String obliczSkrotPliku(File plik) throws Exception { MessageDigest skrot = MessageDigest.getInstance("SHA-256"); try (InputStream wejscie = new FileInputStream(plik)) { byte[] bufor = new byte[64 * 1024]; int liczba; while ((liczba = wejscie.read(bufor)) != -1) skrot.update(bufor, 0, liczba); } return zapisSzesnastkowy(skrot.digest()); }
     private static void usunPlikPoBledzie(File plik) throws Exception { if (plik.exists() && !plik.delete()) throw new Exception("Nie udało się usunąć niekompletnego pliku aktualizacji."); }

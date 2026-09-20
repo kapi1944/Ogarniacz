@@ -13,9 +13,10 @@ import org.junit.Test;
 
 public class AktualizacjePluginTest {
     private static final long GIB = 1024L * 1024L * 1024L;
+    private static final long MIB = 1024L * 1024L;
 
     @Test public void malaIloscMiejscaBlokujePobieranie() {
-        assertFalse(AktualizacjePlugin.czyJestWystarczajacoMiejsca(495L * 1024L * 1024L, 30L * 1024L * 1024L));
+        assertFalse(AktualizacjePlugin.czyJestWystarczajacoMiejsca(100L * MIB, 30L * MIB));
     }
 
     @Test public void mapujeStatusyPackageInstalleraNaStabilneRezultaty() {
@@ -24,6 +25,9 @@ public class AktualizacjePluginTest {
         assertEquals(StanInstalacjiApk.BRAK_MIEJSCA, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_STORAGE, null));
         assertEquals(StanInstalacjiApk.NIEZGODNY_PODPIS, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_CONFLICT, "signature mismatch"));
         assertEquals(StanInstalacjiApk.NIEPRAWIDLOWY_APK, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_INVALID, null));
+        assertEquals(StanInstalacjiApk.KONFLIKT_WERSJI, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_CONFLICT, "INSTALL_FAILED_VERSION_DOWNGRADE"));
+        assertEquals(StanInstalacjiApk.NIEDOZWOLONE_ZRODLO, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_BLOCKED, "unknown source"));
+        assertEquals(StanInstalacjiApk.BLOKADA_SYSTEMOWA, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_BLOCKED, "blocked by device policy"));
         assertEquals(StanInstalacjiApk.ANULOWANO, StanInstalacjiApk.mapujStatus(PackageInstaller.STATUS_FAILURE_ABORTED, null));
     }
     @Test public void trwałyApkPozostajeDostępnyDoPonowieniaTylkoPoWeryfikacji() {
@@ -35,11 +39,16 @@ public class AktualizacjePluginTest {
         assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.NIEZGODNY_PODPIS));
         assertFalse(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI));
         assertFalse(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.INSTALOWANIE));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.KONFLIKT_WERSJI));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.NIEDOZWOLONE_ZRODLO));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.BRAK_SYSTEMOWEGO_INSTALATORA));
     }
 
     @Test public void konserwatywnyZapasPozwalaKontynuowac() {
-        assertEquals(2L * GIB, AktualizacjePlugin.obliczWymaganeMiejsce(30L * 1024L * 1024L));
-        assertTrue(AktualizacjePlugin.czyJestWystarczajacoMiejsca(2L * GIB, 30L * 1024L * 1024L));
+        assertEquals(154L * MIB, AktualizacjePlugin.obliczWymaganeMiejsce(30L * MIB));
+        assertEquals(94L * MIB, AktualizacjePlugin.obliczWymaganeMiejsceInstalacji(30L * MIB));
+        assertEquals(112L * MIB, AktualizacjePlugin.obliczWymaganeMiejscePrzyBrakuRozmiaru());
+        assertTrue(AktualizacjePlugin.czyJestWystarczajacoMiejsca(154L * MIB, 30L * MIB));
         assertEquals(3L * GIB, AktualizacjePlugin.obliczBrakujaceMiejsce(1L * GIB, 4L * GIB));
     }
 
@@ -70,16 +79,18 @@ public class AktualizacjePluginTest {
         tymczasowy.delete(); katalog.delete();
     }
 
-    @Test public void sprzatanieUsuwaStaryPartIZachowujePotrzebnyApk() throws Exception {
+    @Test public void sprzatanieUsuwaWygasleArtefaktyIZachowujeZweryfikowanyApk() throws Exception {
         File katalog = Files.createTempDirectory("ogarniacz-sprzatanie-").toFile();
         File staryPart = new File(katalog, "Ogarniacz-1.0.9-release.apk.part");
         File staryApk = new File(katalog, "Ogarniacz-1.0.9-release.apk");
-        File potrzebny = new File(katalog, "Ogarniacz-1.0.10-release.apk");
-        zapisz(staryPart, new byte[] {1}); zapisz(staryApk, new byte[] {2}); zapisz(potrzebny, new byte[] {3});
+        File trwaleChroniony = new File(katalog, "Ogarniacz-1.0.10-release.apk");
+        File potrzebny = new File(katalog, "Ogarniacz-1.0.11-release.apk");
+        zapisz(staryPart, new byte[] {1}); zapisz(staryApk, new byte[] {2}); zapisz(trwaleChroniony, new byte[] {3}); zapisz(potrzebny, new byte[] {4});
         staryPart.setLastModified(System.currentTimeMillis() - 25L * 60L * 60L * 1000L);
-        AktualizacjePlugin.posprzatajKatalogAktualizacji(katalog, potrzebny.getName(), System.currentTimeMillis(), false);
-        assertFalse(staryPart.exists()); assertFalse(staryApk.exists()); assertTrue(potrzebny.exists());
-        potrzebny.delete(); katalog.delete();
+        staryApk.setLastModified(System.currentTimeMillis() - 25L * 60L * 60L * 1000L);
+        AktualizacjePlugin.posprzatajKatalogAktualizacji(katalog, potrzebny.getName(), trwaleChroniony.getName(), System.currentTimeMillis(), false);
+        assertFalse(staryPart.exists()); assertFalse(staryApk.exists()); assertTrue(trwaleChroniony.exists()); assertTrue(potrzebny.exists());
+        trwaleChroniony.delete(); potrzebny.delete(); katalog.delete();
     }
 
     private static void zapisz(File plik, byte[] bajty) throws Exception { try (FileOutputStream wyjscie = new FileOutputStream(plik)) { wyjscie.write(bajty); } }

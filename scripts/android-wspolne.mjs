@@ -80,6 +80,14 @@ export function walidujManifestAktualizacji(manifest) {
   return manifest
 }
 
+export function czyToSamArtefaktAktualizacji(opublikowany, oczekiwany) {
+  return opublikowany.versionName === oczekiwany.versionName
+    && opublikowany.versionCode === oczekiwany.versionCode
+    && opublikowany.apkUrl === oczekiwany.apkUrl
+    && opublikowany.size === oczekiwany.size
+    && opublikowany.sha256 === oczekiwany.sha256
+}
+
 export async function pobierzPublicznyManifestPoPublikacji({
   adresManifestu,
   oczekiwanyManifest,
@@ -92,7 +100,7 @@ export async function pobierzPublicznyManifestPoPublikacji({
     const odpowiedz = await pobierz(adresManifestu, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } })
     if (!odpowiedz.ok) throw new Error(`Publiczny latest.json po publikacji zwrócił HTTP ${odpowiedz.status}.`)
     const opublikowany = walidujManifestAktualizacji(await odpowiedz.json())
-    if (opublikowany.versionCode === oczekiwanyManifest.versionCode && opublikowany.sha256 === oczekiwanyManifest.sha256) {
+    if (czyToSamArtefaktAktualizacji(opublikowany, oczekiwanyManifest)) {
       return opublikowany
     }
     if (numerProby < maksymalnaLiczbaProb) await odczekaj(opoznienieMs)

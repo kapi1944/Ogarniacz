@@ -47,7 +47,7 @@ export function komunikatBleduAktualizacji(blad: unknown, domyslny: string) {
     if ([wolneBajty, wymaganeBajty, brakujaceBajty].every((wartosc) => typeof wartosc === 'number')) {
       return `Za mało wolnego miejsca na aktualizację. Dostępne: ${format(wolneBajty!)}. Wymagane: około ${format(wymaganeBajty!)}. Zwolnij co najmniej ${format(brakujaceBajty!)} i spróbuj ponownie.`
     }
-    return 'Za mało wolnego miejsca na aktualizację. Zwolnij około 2 GB w pamięci wewnętrznej i spróbuj ponownie.'
+    return 'Za mało wolnego miejsca na aktualizację. Zwolnij trochę miejsca w pamięci wewnętrznej i spróbuj ponownie.'
   }
   const wiadomosci: Record<string, string> = {
     BLAD_POBIERANIA: 'Nie udało się pobrać APK. Sprawdź połączenie z internetem i spróbuj ponownie.',
@@ -55,7 +55,7 @@ export function komunikatBleduAktualizacji(blad: unknown, domyslny: string) {
     BLAD_FINALIZACJI: 'APK został pobrany, ale nie udało się bezpiecznie zapisać zweryfikowanego pliku. Spróbuj ponownie.',
     BRAK_INSTALATORA: 'Nie udało się uruchomić systemowego instalatora Androida. Sprawdź ustawienia urządzenia i spróbuj ponownie.',
   }
-  return wiadomosci[kod] ?? (blad instanceof Error ? blad.message : domyslny)
+  return wiadomosci[kod] ?? domyslny
 }
 
 function etapBleduPobierania(blad: unknown): EtapAktualizacji {
@@ -76,7 +76,9 @@ function opisStatusuInstalacji(status: StatusInstalacjiAktualizacji): [EtapAktua
     SUKCES: ['gotowe', 'Aktualizacja zakończona.'], ANULOWANO: ['blad_instalatora', 'Instalacja została anulowana.'],
     BRAK_MIEJSCA: ['brak_miejsca', 'Za mało wolnego miejsca na aktualizację.'], NIEZGODNY_PODPIS: ['blad_instalatora', 'APK jest podpisane innym kluczem.'],
     NIEPRAWIDLOWY_APK: ['blad_instalatora', 'Pakiet aktualizacji jest nieprawidłowy.'], KONFLIKT_PAKIETU: ['blad_instalatora', 'Wystąpił konflikt pakietu aktualizacji.'],
-    BLOKADA_SYSTEMOWA: ['blad_instalatora', 'Android zablokował instalację.'], NIEZNANY_BLAD: ['blad_instalatora', 'Android nie mógł zainstalować aktualizacji.'],
+    KONFLIKT_WERSJI: ['blad_instalatora', 'Android nie pozwala zainstalować tej wersji, ponieważ nie jest nowsza od zainstalowanej.'],
+    NIEDOZWOLONE_ZRODLO: ['zgoda', 'Android wymaga zgody na instalowanie aplikacji z tego źródła.'], BRAK_SYSTEMOWEGO_INSTALATORA: ['blad_instalatora', 'Systemowy instalator Androida nie jest dostępny.'],
+    BLOKADA_SYSTEMOWA: ['blad_instalatora', 'Android lub administrator urządzenia zablokował instalację.'], NIEZNANY_BLAD: ['blad_instalatora', 'Android nie mógł zainstalować aktualizacji.'],
   }
   return opisy[status] ?? ['blad_instalatora', 'Nie udało się odczytać stanu instalacji. Sprawdź wersję aplikacji.']
 }
@@ -107,7 +109,7 @@ export function PanelAktualizacji() {
       ustawCzyLokalnyPrzebieg(true)
       ustawStanNatywny(stan)
       if (stan.maZweryfikowanyApk && stan.nazwaPliku && stan.sha256) ustawPobrana({ nazwaPliku: stan.nazwaPliku, sha256: stan.sha256 })
-      ustawEtap(nowyEtap); ustawKomunikat(stan.komunikatAndroida || nowyKomunikat)
+      ustawEtap(nowyEtap); ustawKomunikat(stan.komunikatUzytkownika || nowyKomunikat)
     }
     const pokazBlad = () => {
       if (!aktywny) return
@@ -169,7 +171,7 @@ export function PanelAktualizacji() {
     ustawEtap(wynik.wymagaZgody ? 'zgoda' : nowyEtap)
     ustawKomunikat(wynik.wymagaZgody
       ? 'Android otworzył zgodę „Instaluj nieznane aplikacje”. Włącz ją dla Ogarniacza, wróć tutaj i ponów instalację.'
-      : wynik.komunikatAndroida || nowyKomunikat)
+      : wynik.komunikatUzytkownika || nowyKomunikat)
   }
 
   const uruchomInstalator = async (aktualizacja: PobranaAktualizacja, manifest: WynikSprawdzeniaAktualizacji['manifest']) => {

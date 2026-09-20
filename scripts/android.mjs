@@ -558,7 +558,7 @@ async function sprawdzArtefaktRelease({ sciezkaApk, manifest, adresManifestu, di
   if (manifest.size !== statSync(sciezkaApk).size) throw new Error('Rozmiar APK nie zgadza się z latest.json.')
   if (manifest.sha256 !== await obliczSha256(sciezkaApk)) throw new Error('SHA-256 APK nie zgadza się z latest.json.')
   const adresApk = new URL(manifest.apkUrl, adresManifestu)
-  if (basename(adresApk.pathname) !== oczekiwanaNazwa) throw new Error('latest.json nie wskazuje artefaktu bieżącego wydania.')
+  if (manifest.apkUrl !== oczekiwanaNazwa || basename(adresApk.pathname) !== oczekiwanaNazwa) throw new Error('latest.json musi wskazywać względny asset bieżącego wydania GitHub.')
 }
 
 async function sprawdzMonotonicznoscWydania(adresManifestu) {
