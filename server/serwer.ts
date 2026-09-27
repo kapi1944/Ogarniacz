@@ -4,7 +4,8 @@ import { extname, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { KonfiguracjaSerwera } from './config.ts'
 import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } from './echo.ts'
-import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstSynchronizacji, sprawdzCsrf } from './konta.ts'
+import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, pobierzKontekstSynchronizacji, sprawdzCsrf } from './konta.ts'
+import { utworzAktualizacjeRpi, type AktualizacjeRpi } from './aktualizacje-rpi.ts'
 import { odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
 
 const METODY_SYNCHRONIZACJI = 'GET, POST, OPTIONS'
@@ -81,11 +82,53 @@ async function odpowiedzZasobemStatycznym(zadanie: IncomingMessage, odpowiedz: S
     odpowiedzJson(odpowiedz, 503, { error: 'Build aplikacji nie jest dostępny na serwerze.' })
   }
 }
-export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSync, obslugaEcho: ObslugaEchoApi = niedostepnaObslugaEcho) {
+export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSync, obslugaEcho: ObslugaEchoApi = niedostepnaObslugaEcho, aktualizacje?: AktualizacjeRpi) {
+  const aktualizacjeRpi = aktualizacje ?? (konfiguracja.aktualizacjeRpi ? utworzAktualizacjeRpi() : undefined)
   return createServer(async (zadanie: IncomingMessage, odpowiedz: ServerResponse) => {
     ustawNaglowkiBezpieczenstwa(odpowiedz)
     if (zadanie.method === 'GET' && (zadanie.url === '/health' || zadanie.url === '/api/health')) {
       odpowiedzJson(odpowiedz, 200, { status: 'ok', service: 'ogarniacz-api', database: 'connected' })
+      return
+    }
+    if (zadanie.url?.startsWith('/api/rpi-update')) {
+      if (!konfiguracja.aktualizacjeRpi) {
+        odpowiedzJson(odpowiedz, 404, { error: 'Aktualizacje Raspberry są wyłączone.' })
+        return
+      }
+      const kontekst = pobierzKontekstDostepu(zadanie, baza)
+      if (kontekst?.rola !== 'wlasciciel') {
+        odpowiedzJson(odpowiedz, 403, { error: 'Wymagana sesja właściciela.' })
+        return
+      }
+      const adres = new URL(zadanie.url, 'http://localhost')
+      const akcja = adres.pathname.slice('/api/rpi-update'.length)
+      if (zadanie.method === 'GET' && (akcja === '' || akcja === '/status')) {
+        try { odpowiedzJson(odpowiedz, 200, await aktualizacjeRpi!.odczytaj()) }
+        catch { odpowiedzJson(odpowiedz, 503, { error: 'Nie można odczytać stanu aktualizacji.' }) }
+        return
+      }
+      if (zadanie.method === 'POST' && ['/check', '/start', '/rollback'].includes(akcja)) {
+        const zdalny = zadanie.socket.remoteAddress
+        if (zdalny !== '127.0.0.1' && zdalny !== '::1' && zdalny !== '::ffff:127.0.0.1') {
+          odpowiedzJson(odpowiedz, 403, { error: 'Aktualizację można uruchomić tylko lokalnie.' })
+          return
+        }
+        const pochodzenie = zadanie.headers.origin
+        if (pochodzenie && pochodzenie !== `http://127.0.0.1:${konfiguracja.port}` && pochodzenie !== `http://localhost:${konfiguracja.port}`) {
+          odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
+          return
+        }
+        if (!sprawdzCsrf(zadanie, kontekst)) {
+          odpowiedzJson(odpowiedz, 403, { error: 'Sesja wymaga odświeżenia.' })
+          return
+        }
+        try {
+          const wynik = await aktualizacjeRpi!.uruchom(akcja.slice(1) as 'check' | 'start' | 'rollback')
+          odpowiedzJson(odpowiedz, wynik ? 202 : 409, wynik ? { status: 'przyjeto' } : { error: 'Aktualizacja już trwa.' })
+        } catch { odpowiedzJson(odpowiedz, 503, { error: 'Nie można uruchomić aktualizatora.' }) }
+        return
+      }
+      odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu aktualizacji.' })
       return
     }
     if (zadanie.url?.startsWith('/api/auth/') || zadanie.url?.startsWith('/api/account')) {

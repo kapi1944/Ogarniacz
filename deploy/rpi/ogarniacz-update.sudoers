@@ -1,0 +1,1 @@
+kacper ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block ogarniacz-update-check.service, /usr/bin/systemctl start --no-block ogarniacz-update.service, /usr/bin/systemctl start --no-block ogarniacz-update-rollback.service, /usr/bin/systemctl restart ogarniacz.service

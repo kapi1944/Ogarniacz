@@ -9,6 +9,7 @@ export interface KonfiguracjaSerwera {
   ownerBootstrapToken?: string
   czasSesjiDni: number
   dozwolonePochodzeniaCors: string[]
+  aktualizacjeRpi: boolean
 }
 
 function odczytajPort(wartosc: string | undefined): number {
@@ -36,5 +37,6 @@ export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env):
     ownerBootstrapToken: env.OWNER_BOOTSTRAP_TOKEN?.trim() || undefined,
     czasSesjiDni: Math.min(90, Math.max(1, Number(env.SESSION_TTL_DAYS ?? 30) || 30)),
     dozwolonePochodzeniaCors,
+    aktualizacjeRpi: env.RPI_UPDATE_ENABLED === '1',
   }
 }
