@@ -12,8 +12,8 @@ let repozytoriumZdalne: RepozytoriumZdalne | undefined
 let inicjalizacja: Promise<() => void> | undefined
 
 function utworzRepozytoriumZdalne(): RepozytoriumZdalne | undefined {
-  const { adresApi, kluczDostepu } = pobierzKonfiguracjeSynchronizacji()
-  return adresApi ? new RepozytoriumZdalneHttp(adresApi, kluczDostepu) : undefined
+  const { adresApi } = pobierzKonfiguracjeSynchronizacji()
+  return adresApi ? new RepozytoriumZdalneHttp(adresApi) : undefined
 }
 
 export function synchronizujTeraz() {

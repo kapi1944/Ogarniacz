@@ -176,6 +176,12 @@ test('Właściciel A nie czyta ani nie zmienia danych Właściciela B', async ()
       body: JSON.stringify({ od: TERAZ, installationId: 'instalacja-testowa', zmiany: [{ zmianaId: 'zmiana-wlasciciela-a', bazowyUpdatedAt: TERAZ, tabela: 'zadania', rekord: obcyId, installationId: 'instalacja-testowa' }] }),
     })
     assert.equal(zapis.status, 200)
+    const zapisBezCsrf = await fetch(`${adres}/api/sync/changes`, {
+      method: 'POST', headers: naglowki('token-a'),
+      body: JSON.stringify({ od: TERAZ, installationId: 'instalacja-testowa', zmiany: [] }),
+    })
+    assert.equal(zapisBezCsrf.status, 403)
+    assert.deepEqual(await zapisBezCsrf.json(), { error: 'Sesja wymaga odświeżenia.' })
     const rekordB = baza.prepare('SELECT dane_json FROM rekordy_synchronizacji WHERE uzytkownik_id = ? AND rekord_id = ?').get('wlasciciel-b', 'zadanie-b')
     assert.equal(JSON.parse(String(rekordB?.dane_json)).tytul, 'Dane B')
   })

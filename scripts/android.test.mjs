@@ -14,7 +14,7 @@ import {
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
-import { sprawdzAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
+import { sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
 
 test('oblicza rosnący versionCode z wersji package.json', () => {
   assert.equal(obliczKodWersji('1.0.1'), 1_000_001)
@@ -42,6 +42,14 @@ test('zachowuje globalną blokadę HTTP i wyjątek wyłącznie dla endpointu LAN
   assert.doesNotMatch(konfiguracja, /<base-config cleartextTrafficPermitted="true"/)
   assert.doesNotMatch(konfiguracja, /<domain-config cleartextTrafficPermitted="true">\s*<domain[^>]*>\s*<\/domain>/)
   assert.throws(() => sprawdzAdresSynchronizacji('http://example.com'), /wyłącznie/)
+})
+
+test('produkcyjny Android wymaga HTTPS dla endpointu synchronizacji', () => {
+  assert.equal(sprawdzProdukcyjnyAdresSynchronizacji('https://raspberrypi.tailnet.ts.net').protocol, 'https:')
+  assert.throws(
+    () => sprawdzProdukcyjnyAdresSynchronizacji('http://192.168.0.116:8787'),
+    /prywatnego HTTPS/,
+  )
 })
 
 test('źródłowy network security config nie utrwala adresu LAN i blokuje HTTP', () => {

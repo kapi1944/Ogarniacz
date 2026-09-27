@@ -79,6 +79,7 @@ test('workflow wydania wymaga Environment, buduje APK raz i publikuje gotowy art
   assert.match(workflow, /environment: android-production/)
   assert.match(workflow, /ANDROID_RELEASE_KEYSTORE_BASE64: \$\{\{ secrets\.ANDROID_RELEASE_KEYSTORE_BASE64 \}\}/)
   assert.match(workflow, /VITE_SYNC_API_URL: \$\{\{ vars\.ANDROID_SYNC_API_URL \}\}/)
+  assert.match(workflow, /VITE_SYNC_API_URL.*https:\/\/\*/)
   assert.match(workflow, /ANDROID_WEB_OTA_PUBLIC_KEY_PEM: \$\{\{ vars\.ANDROID_WEB_OTA_PUBLIC_KEY_PEM \}\}/)
   assert.match(workflow, /Brak konfiguracji Environment android-production/)
   assert.match(workflow, /VITE_SYNC_API_URL:ANDROID_SYNC_API_URL/)

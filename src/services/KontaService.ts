@@ -3,6 +3,7 @@ import { pobierzKonfiguracjeSynchronizacji } from './KonfiguracjaSynchronizacji'
 
 const KLUCZ_CSRF = 'ogarniacz-csrf'
 const KLUCZ_KONTA_OFFLINE = 'ogarniacz-konto-offline'
+let odswiezanieSesji: Promise<KontoUzytkownika> | undefined
 
 export interface GrantKonta {
   id: string
@@ -100,7 +101,10 @@ export function pobierzKontoOffline(): KontoUzytkownika | undefined {
 }
 
 export async function pobierzSesjeKonta(): Promise<KontoUzytkownika> {
-  return zapiszKonto(await wykonaj<KontoUzytkownika>('GET', '/api/auth/session'))
+  odswiezanieSesji ??= wykonaj<KontoUzytkownika>('GET', '/api/auth/session')
+    .then(zapiszKonto)
+    .finally(() => { odswiezanieSesji = undefined })
+  return odswiezanieSesji
 }
 
 export async function czyBootstrapDostepny(): Promise<boolean> {

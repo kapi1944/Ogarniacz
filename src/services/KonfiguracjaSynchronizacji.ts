@@ -1,6 +1,5 @@
 export interface KonfiguracjaSynchronizacji {
   adresApi?: string
-  kluczDostepu?: string
   blad?: string
 }
 
@@ -18,12 +17,11 @@ export function pobierzKonfiguracjeSynchronizacji(
   zmienne?: Record<string, string | undefined>,
 ): KonfiguracjaSynchronizacji {
   const adresApi = (zmienne?.VITE_SYNC_API_URL ?? pobierzKonfiguracjeRuntime().syncApiUrl)?.trim()
-  const kluczDostepu = zmienne?.VITE_SYNC_ACCESS_KEY?.trim()
-  if (!adresApi && !kluczDostepu) return {}
+  if (!adresApi) return {}
   const poprawnyAdres = adresApi ? sprawdzAdresApi(adresApi) : undefined
   if (!poprawnyAdres) {
     return { blad: 'Konfiguracja endpointu synchronizacji jest niepełna lub nieprawidłowa.' }
   }
-  return { adresApi: poprawnyAdres, kluczDostepu }
+  return { adresApi: poprawnyAdres }
 }
 import { pobierzKonfiguracjeRuntime } from './RuntimeConfigService'

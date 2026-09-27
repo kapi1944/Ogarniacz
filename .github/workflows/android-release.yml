@@ -76,6 +76,7 @@ jobs:
           fi
           [[ "$VITE_ANDROID_UPDATE_MANIFEST_URL" == https://* ]] || { echo 'ANDROID_UPDATE_MANIFEST_URL musi używać HTTPS.' >&2; exit 1; }
           [[ "$VITE_ANDROID_WEB_UPDATE_MANIFEST_URL" == https://* ]] || { echo 'ANDROID_WEB_UPDATE_MANIFEST_URL musi używać HTTPS.' >&2; exit 1; }
+          [[ "$VITE_SYNC_API_URL" == https://* ]] || { echo 'ANDROID_SYNC_API_URL musi używać prywatnego HTTPS.' >&2; exit 1; }
 
       - name: Odtwórz stały klucz i konfigurację signing
         shell: bash

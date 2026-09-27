@@ -22,7 +22,7 @@ import {
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
-import { pobierzKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
+import { pobierzKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
 
 const katalogRepozytorium = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const katalogAndroida = join(katalogRepozytorium, 'android')
@@ -594,7 +594,7 @@ async function wykonajRelease(opcje) {
   if (!konfiguracjaSynchronizacji.adresApi) {
     throw new Error('Release wymaga VITE_SYNC_API_URL, aby nie opublikować APK bez połączenia z kontem i synchronizacją.')
   }
-  sprawdzAdresSynchronizacji(konfiguracjaSynchronizacji.adresApi)
+  sprawdzProdukcyjnyAdresSynchronizacji(konfiguracjaSynchronizacji.adresApi)
   const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu)
   console.log(`\nVERSION: OK — ${pakiet.version} (${obliczKodWersji(pakiet.version)}) > ${obecnyManifest.versionName} (${obecnyManifest.versionCode})`)
   const { diagnostyka, srodowisko } = wymagajSrodowiska()

@@ -53,6 +53,14 @@ export function sprawdzAdresSynchronizacji(adresApi) {
   throw new Error('HTTP dla synchronizacji jest dozwolony wyłącznie dla localhost, .local albo prywatnego IPv4.')
 }
 
+export function sprawdzProdukcyjnyAdresSynchronizacji(adresApi) {
+  const adres = sprawdzAdresSynchronizacji(adresApi)
+  if (adres.protocol !== 'https:') {
+    throw new Error('Produkcyjny VITE_SYNC_API_URL musi używać prywatnego HTTPS, np. Tailscale Serve.')
+  }
+  return adres
+}
+
 export function utworzKonfiguracjeBezpieczenstwaSieci(adresApi) {
   if (!adresApi?.trim()) return '<?xml version="1.0" encoding="utf-8"?>\n<network-security-config>\n    <base-config cleartextTrafficPermitted="false" />\n</network-security-config>\n'
   const adres = sprawdzAdresSynchronizacji(adresApi)
