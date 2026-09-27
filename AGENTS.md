@@ -26,3 +26,12 @@ Główna instrukcja: `docs/INSTRUCTIONS.md`
 Przy konflikcie: dokumenty zasad są nadrzędne co do reguł. Dokumenty szczegółowe są źródłem detali technicznych.
 
 Zasada nadrzędna: dobieraj najlepsze rozwiązanie techniczne. Minimalizuj zakres zmian, ale nie kosztem jakości, poprawności i utrzymywalności.
+
+## Proporcjonalność pracy agenta
+
+- Czytaj tylko dokumenty i kod potrzebne dla bieżącego zadania.
+- Pełny audyt repo wykonuj tylko wtedy, gdy zadanie tego wymaga.
+- Plan dostosuj do złożoności; dla prostych zmian nie twórz osobnej fazy planowania.
+- Testuj najpierw zmieniony obszar. Pełną regresję uruchamiaj tylko przy zmianach przekrojowych, release albo gdy wąskie testy ujawnią problem.
+- Nie dodawaj testów, które tylko odtwarzają implementację.
+- Przy jednoznacznym i odwracalnym zadaniu działaj autonomicznie do kompletnego wyniku zamiast zatrzymywać się po planie.

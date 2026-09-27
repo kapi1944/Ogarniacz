@@ -13,7 +13,15 @@ Dobieraj najlepsze rozwiązanie techniczne. Minimalizuj zakres zmian, ale nie ko
 7. Sekrety nigdy nie trafiają do repo ani frontendu. Szczegóły: `SECURITY.md`.
 8. Local-first dla danych osobistych; cloud/API dla funkcji, które tego naturalnie wymagają.
 9. Preferuj darmowe i lokalne, ale przedstaw płatną opcję, jeśli daje istotną przewagę. Bez zgody użytkownika — żadnych kosztów.
-10. Najpierw diagnoza i plan, potem zmiana. Uzasadniaj wybór rozwiązania.
+10. Najpierw rozpoznaj zakres zadania; plan i uzasadnienie dostosuj do jego złożoności. Dla prostych zmian nie twórz osobnej fazy planowania.
+
+## Proporcjonalność pracy agenta
+
+- Czytaj tylko dokumenty i kod potrzebne dla bieżącego zadania.
+- Pełny audyt repo wykonuj tylko wtedy, gdy zadanie tego wymaga.
+- Testuj najpierw zmieniony obszar. Pełną regresję uruchamiaj tylko przy zmianach przekrojowych, release albo gdy wąskie testy ujawnią problem.
+- Nie dodawaj testów, które tylko odtwarzają implementację.
+- Przy jednoznacznym i odwracalnym zadaniu działaj autonomicznie do kompletnego wyniku zamiast zatrzymywać się po planie.
 
 ## Nienegocjowalne
 - Brak sekretów w repo i froncie.
