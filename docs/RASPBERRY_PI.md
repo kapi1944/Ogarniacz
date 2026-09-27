@@ -4,7 +4,7 @@
 
 Istniejący proces Node.js obsługuje build Reacta, konta, synchronizację, Echo i `GET /health` na porcie `8787`. Docelowo `HOST=127.0.0.1` ogranicza proces do loopbacku, a Tailscale Serve przekazuje prywatny adres `https://<urządzenie>.<tailnet>.ts.net` i automatycznie zapewnia certyfikat TLS. Dostęp mają tylko urządzenia dopuszczone do tailnetu; nie używamy publicznego Tailscale Funnel ani port forwardingu.
 
-Przejściowo, dopóki APK 1.0.8 używa `http://192.168.0.116:8787`, działająca instancja zachowuje `HOST=0.0.0.0` i dostęp z zaufanego LAN. Aktualizacja skryptem nie zmienia tej wartości. Migracja telefonu do Tailscale/HTTPS i późniejsze przełączenie na loopback są osobnym etapem.
+Zweryfikowany produkcyjny klient Android korzysta z HTTPS Tailscale i nie wymaga już bezpośredniego dostępu przez LAN. Aktualizacja skryptem nie zmienia `HOST`; przełączenie istniejącej konfiguracji live na `127.0.0.1` pozostaje osobną, ręczną operacją po potwierdzeniu wszystkich aktywnych klientów.
 
 Ten wariant pasuje do prywatnej aplikacji jednej osoby: telefon i komputer instalują klienta Tailscale, a konto Ogarniacza nadal niezależnie egzekwuje rolę Właściciela/Edytora. Konfiguracja Serve z `--bg` jest trwała po restarcie urządzenia i `tailscale up`. Szczegóły: [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve) oraz [instalacja na Linux/Raspberry Pi OS](https://tailscale.com/docs/install/linux).
 
@@ -27,7 +27,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now ogarniacz
 ```
 
-W `/etc/ogarniacz/ogarniacz.env` ustaw długi, losowy `OWNER_BOOTSTRAP_TOKEN`. Utwórz pierwsze konto Właściciela, zapisz jednorazowe kody odzyskiwania poza Raspberry Pi, potem usuń token z env i zrestartuj usługę. `SYNC_ACCESS_KEY` pozostaw pusty; jest potrzebny tylko przejściowo dla starego APK 1.0.7, dopóki urządzenie nie zaloguje się na konto. Sekretów nie zapisuj w repozytorium.
+W `/etc/ogarniacz/ogarniacz.env` ustaw długi, losowy `OWNER_BOOTSTRAP_TOKEN`. Utwórz pierwsze konto Właściciela, zapisz jednorazowe kody odzyskiwania poza Raspberry Pi, potem usuń token z env i zrestartuj usługę. Sekretów nie zapisuj w repozytorium.
 
 Zainstaluj Tailscale z oficjalnego pakietu, dołącz Raspberry Pi, telefon i komputer do tego samego tailnetu, po czym uruchom:
 
@@ -78,9 +78,9 @@ Skrypt zatrzymuje się wyłącznie przy zmianach w śledzonych plikach Git; igno
 
 Przed restartem porównuje `deploy/rpi/ogarniacz.service` z `/etc/systemd/system/ogarniacz.service`. Zmienioną jednostkę instaluje z trybem `0644`, wykonuje `systemctl daemon-reload`, zapewnia `systemctl enable ogarniacz` i restartuje usługę. Healthcheck jest ponawiany maksymalnie 15 razy co sekundę. Sukces wymaga HTTP 200 oraz JSON-u z `status: ok`, `service: ogarniacz-api` i `database: connected`; po niepowodzeniu skrypt pokazuje ostatnie 100 wpisów `journalctl -u ogarniacz`.
 
-`/etc/ogarniacz/ogarniacz.env` nigdy nie jest tworzony ani nadpisywany podczas aktualizacji. Skrypt porównuje jedynie nazwy wymaganych wpisów z plikiem przykładowym i ostrzega o brakujących nazwach bez wypisywania wartości. `OWNER_BOOTSTRAP_TOKEN`, `SYNC_USER_ID` i `SYNC_ACCESS_KEY` pozostają opcjonalne i nie wywołują ostrzeżenia. Nowe wymagane wartości trzeba uzupełnić ręcznie. Skrypt nie wykonuje resetu Git, nie usuwa `data/ogarniacz.sqlite`, konfiguracji kont ani Tailscale.
+`/etc/ogarniacz/ogarniacz.env` nigdy nie jest tworzony ani nadpisywany podczas aktualizacji. Skrypt porównuje jedynie nazwy wymaganych wpisów z plikiem przykładowym i ostrzega o brakujących nazwach bez wypisywania wartości. `OWNER_BOOTSTRAP_TOKEN` pozostaje opcjonalny i nie wywołuje ostrzeżenia. Nowe wymagane wartości trzeba uzupełnić ręcznie. Skrypt nie wykonuje resetu Git, nie usuwa `data/ogarniacz.sqlite`, konfiguracji kont ani Tailscale.
 
-Obecne APK 1.0.8 łączy się bezpośrednio z `http://192.168.0.116:8787`, dlatego na działającej instancji pozostaw dotychczasowe `HOST=0.0.0.0`, dopóki telefon nie zostanie osobno zmigrowany do Tailscale/HTTPS. `deploy-rpi.sh` nie zmienia `HOST` ani żadnej innej wartości w live env. Wartość `HOST=127.0.0.1` z przykładu dotyczy docelowej konfiguracji dostępnej wyłącznie przez Tailscale Serve.
+Zweryfikowany Samsung łączy się przez Tailscale/HTTPS. `deploy-rpi.sh` nadal nie zmienia `HOST` ani żadnej innej wartości w live env; wartość `HOST=127.0.0.1` z przykładu trzeba ustawić ręcznie dopiero po potwierdzeniu, że żaden inny aktywny klient nie korzysta z bezpośredniego LAN.
 
 ## Router i firewall
 

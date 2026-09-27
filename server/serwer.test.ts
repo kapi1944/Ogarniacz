@@ -1,10 +1,33 @@
 import { strict as assert } from 'node:assert'
+import { createHash } from 'node:crypto'
 import { test } from 'node:test'
 import { DatabaseSync } from 'node:sqlite'
 import { otworzBaze } from './baza.ts'
 import { utworzKonfiguracjeSerwera } from './config.ts'
 import { uruchomMigracje } from './migracje.ts'
 import { utworzSerwer } from './serwer.ts'
+
+const TERAZ = '2026-09-09T12:00:00.000Z'
+const WYGASA = '2099-01-01T00:00:00.000Z'
+
+function dodajSesjeWlasciciela(baza: DatabaseSync, token = 'token-wlasciciela', csrf = 'csrf-wlasciciela'): void {
+  const hash = (wartosc: string) => createHash('sha256').update(wartosc).digest('hex')
+  baza.prepare('INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)')
+    .run('wlasciciel', 'owner@example.test', 'hash-testowy', TERAZ, TERAZ)
+  baza.prepare("INSERT INTO czlonkostwa (wlasciciel_id, uzytkownik_id, rola, status, utworzono_at, zaktualizowano_at) VALUES (?, ?, 'wlasciciel', 'aktywne', ?, ?)")
+    .run('wlasciciel', 'wlasciciel', TERAZ, TERAZ)
+  baza.prepare('INSERT INTO sesje (token_hash, uzytkownik_id, aktywny_wlasciciel_id, csrf_hash, wygasa_at, ostatnia_aktywnosc_at, utworzono_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .run(hash(token), 'wlasciciel', 'wlasciciel', hash(csrf), WYGASA, TERAZ, TERAZ)
+}
+
+function naglowkiSynchronizacji(instalacja: string, csrf?: string): Record<string, string> {
+  return {
+    cookie: 'ogarniacz_sesja=token-wlasciciela',
+    'x-ogarniacz-installation-id': instalacja,
+    'content-type': 'application/json',
+    ...(csrf ? { 'x-ogarniacz-csrf': csrf } : {}),
+  }
+}
 
 test('konfiguracja odrzuca niepoprawny port', () => {
   assert.throws(() => utworzKonfiguracjeSerwera({ PORT: '70000' }), /PORT/)
@@ -81,19 +104,15 @@ test('endpoint Echo bez providera zwraca kontrolowany tryb ograniczony', async (
 test('sync przenosi rekord z instalacji A do instalacji B', async () => {
   const baza = new DatabaseSync(':memory:')
   uruchomMigracje(baza)
-  const konfiguracja = utworzKonfiguracjeSerwera({
-    PORT: '8788',
-    DATABASE_PATH: ':memory:',
-    SYNC_USER_ID: 'wlasciciel',
-    SYNC_ACCESS_KEY: 'sekretny-klucz-testowy',
-  })
+  dodajSesjeWlasciciela(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({ PORT: '8788', DATABASE_PATH: ':memory:' })
   const serwer = utworzSerwer(konfiguracja, baza)
   await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
   const adres = serwer.address()
   assert.ok(adres && typeof adres === 'object')
   const url = `http://127.0.0.1:${adres.port}/api/sync/changes`
   const rekord = { id: 'zadanie-a', createdAt: '2026-09-01T08:00:00.000Z', updatedAt: '2026-09-01T09:00:00.000Z', tytul: 'Z urządzenia A' }
-  const naglowkiA = { authorization: 'Bearer sekretny-klucz-testowy', 'x-ogarniacz-installation-id': 'instalacja-a', 'content-type': 'application/json' }
+  const naglowkiA = naglowkiSynchronizacji('instalacja-a', 'csrf-wlasciciela')
   const paczka = { od: '1970-01-01T00:00:00.000Z', installationId: 'instalacja-a', zmiany: [{ zmianaId: 'zmiana-idempotentna-a', tabela: 'zadania', rekord, installationId: 'instalacja-a' }] }
   const wyslanie = await fetch(url, { method: 'POST', headers: naglowkiA, body: JSON.stringify(paczka) })
   assert.equal(wyslanie.status, 200)
@@ -102,7 +121,7 @@ test('sync przenosi rekord z instalacji A do instalacji B', async () => {
   assert.equal(baza.prepare('SELECT version FROM rekordy_synchronizacji WHERE rekord_id = ?').get('zadanie-a')?.version, 1)
   assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM przetworzone_zmiany_synchronizacji').get()?.liczba, 1)
 
-  const pobranie = await fetch(`${url}?od=1970-01-01T00%3A00%3A00.000Z`, { headers: { authorization: 'Bearer sekretny-klucz-testowy', 'x-ogarniacz-installation-id': 'instalacja-b' } })
+  const pobranie = await fetch(`${url}?od=1970-01-01T00%3A00%3A00.000Z`, { headers: naglowkiSynchronizacji('instalacja-b') })
   assert.equal(pobranie.status, 200)
   const pobraneDane = await pobranie.json() as { zmiany: unknown[]; synchronizowanoDo: string }
   assert.deepEqual(pobraneDane.zmiany, [{ tabela: 'zadania', rekord, installationId: 'instalacja-a' }])
@@ -115,26 +134,18 @@ test('sync przenosi rekord z instalacji A do instalacji B', async () => {
 test('sync przenosi konta finansowe i miejsca przez serwer między urządzeniami wraz z aktualizacją i tombstone', async () => {
   const baza = new DatabaseSync(':memory:')
   uruchomMigracje(baza)
-  const konfiguracja = utworzKonfiguracjeSerwera({
-    PORT: '8788',
-    DATABASE_PATH: ':memory:',
-    SYNC_USER_ID: 'wlasciciel',
-    SYNC_ACCESS_KEY: 'sekretny-klucz-testowy',
-  })
+  dodajSesjeWlasciciela(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({ PORT: '8788', DATABASE_PATH: ':memory:' })
   const serwer = utworzSerwer(konfiguracja, baza)
   await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
   const adres = serwer.address()
   assert.ok(adres && typeof adres === 'object')
   const url = `http://127.0.0.1:${adres.port}/api/sync/changes`
-  const naglowki = (instalacja: string) => ({
-    authorization: 'Bearer sekretny-klucz-testowy',
-    'x-ogarniacz-installation-id': instalacja,
-    'content-type': 'application/json',
-  })
+  const naglowki = (instalacja: string, csrf?: string) => naglowkiSynchronizacji(instalacja, csrf)
   const wyslij = async (instalacja: string, tabela: string, rekord: Record<string, unknown>, zmianaId: string, bazowyUpdatedAt?: string) => {
     const odpowiedz = await fetch(url, {
       method: 'POST',
-      headers: naglowki(instalacja),
+      headers: naglowki(instalacja, 'csrf-wlasciciela'),
       body: JSON.stringify({
         od: '1970-01-01T00:00:00.000Z',
         installationId: instalacja,
@@ -193,13 +204,13 @@ test('sync obsługuje preflight CORS wyłącznie dla aplikacji Capacitor', async
     headers: {
       origin: 'https://localhost',
       'access-control-request-method': 'POST',
-      'access-control-request-headers': 'authorization,content-type,x-ogarniacz-installation-id',
+      'access-control-request-headers': 'content-type,x-ogarniacz-installation-id,x-ogarniacz-csrf',
     },
   })
   assert.equal(preflight.status, 204)
   assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://localhost')
   assert.equal(preflight.headers.get('access-control-allow-methods'), 'GET, POST, OPTIONS')
-  assert.equal(preflight.headers.get('access-control-allow-headers'), 'Authorization, Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF')
+  assert.equal(preflight.headers.get('access-control-allow-headers'), 'Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF')
   assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true')
 
   const obcePochodzenie = await fetch(url, { method: 'OPTIONS', headers: { origin: 'https://obca-strona.example' } })
@@ -212,7 +223,8 @@ test('sync obsługuje preflight CORS wyłącznie dla aplikacji Capacitor', async
 test('sync odrzuca ciche nadpisanie nowszej wersji z innej instalacji', async () => {
   const baza = new DatabaseSync(':memory:')
   uruchomMigracje(baza)
-  const konfiguracja = utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:', SYNC_USER_ID: 'wlasciciel', SYNC_ACCESS_KEY: 'sekretny-klucz-testowy' })
+  dodajSesjeWlasciciela(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:' })
   const serwer = utworzSerwer(konfiguracja, baza)
   await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
   const adres = serwer.address()
@@ -220,7 +232,7 @@ test('sync odrzuca ciche nadpisanie nowszej wersji z innej instalacji', async ()
   const url = `http://127.0.0.1:${adres.port}/api/sync/changes`
   const wyslij = (instalacja: string, tytul: string, updatedAt: string) => fetch(url, {
     method: 'POST',
-    headers: { authorization: 'Bearer sekretny-klucz-testowy', 'x-ogarniacz-installation-id': instalacja, 'content-type': 'application/json' },
+    headers: naglowkiSynchronizacji(instalacja, 'csrf-wlasciciela'),
     body: JSON.stringify({
       od: '1970-01-01T00:00:00.000Z',
       installationId: instalacja,

@@ -4,12 +4,12 @@ import { extname, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { KonfiguracjaSerwera } from './config.ts'
 import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } from './echo.ts'
-import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, pobierzKontekstSynchronizacji, sprawdzCsrf } from './konta.ts'
+import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, sprawdzCsrf } from './konta.ts'
 import { utworzAktualizacjeRpi, type AktualizacjeRpi } from './aktualizacje-rpi.ts'
 import { odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
 
 const METODY_SYNCHRONIZACJI = 'GET, POST, OPTIONS'
-const NAGLOWKI_SYNCHRONIZACJI = 'Authorization, Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF'
+const NAGLOWKI_SYNCHRONIZACJI = 'Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF'
 
 function ustawNaglowkiBezpieczenstwa(odpowiedz: ServerResponse): void {
   odpowiedz.setHeader('strict-transport-security', 'max-age=31536000')
@@ -154,7 +154,7 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
         odpowiedz.end()
         return
       }
-      const kontekst = pobierzKontekstSynchronizacji(zadanie, baza, konfiguracja)
+      const kontekst = pobierzKontekstDostepu(zadanie, baza)
       if (!kontekst) {
         odpowiedzJson(odpowiedz, 401, { error: 'Brak dostępu do synchronizacji.' })
         return

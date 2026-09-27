@@ -42,4 +42,4 @@ Produkcyjny Node nasłuchuje wyłącznie na `127.0.0.1:8787`. Tailscale Serve ud
 
 Systemd uruchamia aplikację po restarcie, restartuje ją po błędzie, wysyła logi do journald i ogranicza zapis procesu do katalogu bazy. Procedurę instalacji, healthchecki i test restartu opisuje [RASPBERRY_PI.md](./RASPBERRY_PI.md).
 
-Sekrety pozostają wyłącznie w `/etc/ogarniacz/ogarniacz.env` z ograniczonymi prawami. `VITE_*` zawiera tylko publiczny adres serwera. Stary `SYNC_ACCESS_KEY` jest opcjonalnym mostem migracyjnym dla zainstalowanego APK 1.0.7 i należy go usunąć po zalogowaniu urządzeń.
+Sekrety pozostają wyłącznie w `/etc/ogarniacz/ogarniacz.env` z ograniczonymi prawami. `VITE_*` zawiera tylko publiczny adres serwera. Synchronizacja korzysta wyłącznie z konta, sesji, roli lub grantów oraz CSRF dla zapisów.

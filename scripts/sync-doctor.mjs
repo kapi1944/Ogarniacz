@@ -10,7 +10,6 @@ const opcje = Object.fromEntries(process.argv.slice(2).filter((argument) => argu
 }))
 const konfiguracja = pobierzKonfiguracjeSynchronizacji(katalogRepozytorium)
 const adresTekstowy = typeof opcje.url === 'string' ? opcje.url : konfiguracja.adresApi
-const kluczDostepu = konfiguracja.kluczDostepu
 let blad
 
 function wynik(nazwa, stan, szczegoly) {
@@ -61,19 +60,9 @@ try {
   wynik('CORS origin', preflight.headers.get('access-control-allow-origin') === origin ? 'OK' : 'BŁĄD', origin)
   wynik('CORS headers', corsPoprawny ? 'OK' : 'BŁĄD', wymaganeNaglowki.join(', '))
 
-  if (!kluczDostepu) {
-    const sesja = await pobierz(new URL('/api/auth/session', adres), { headers: { Accept: 'application/json' } })
-    wynik('Sesje kont', sesja.status === 401 ? 'OK' : 'BŁĄD', `HTTP ${sesja.status}; logowanie jest wykonywane interaktywnie w aplikacji`)
-    wynik('Sync API', 'POMINIĘTO', 'wymaga zalogowanej sesji HttpOnly')
-  } else {
-    const odpowiedzSync = await pobierz(new URL('/api/sync/changes?od=1970-01-01T00%3A00%3A00.000Z', adres), {
-      headers: {
-        Authorization: `Bearer ${kluczDostepu}`,
-        'X-Ogarniacz-Installation-Id': 'sync-doctor-diagnostyka',
-      },
-    })
-    wynik('Sync API', odpowiedzSync.ok ? 'OK' : 'BŁĄD', `HTTP ${odpowiedzSync.status}`)
-  }
+  const sesja = await pobierz(new URL('/api/auth/session', adres), { headers: { Accept: 'application/json' } })
+  wynik('Sesje kont', sesja.status === 401 ? 'OK' : 'BŁĄD', `HTTP ${sesja.status}; logowanie jest wykonywane interaktywnie w aplikacji`)
+  wynik('Sync API', 'POMINIĘTO', 'wymaga zalogowanej sesji HttpOnly')
 } catch (wyjatek) {
   wynik('Server URL', 'BŁĄD', wyjatek instanceof Error ? wyjatek.message : 'nieznany błąd konfiguracji')
 }

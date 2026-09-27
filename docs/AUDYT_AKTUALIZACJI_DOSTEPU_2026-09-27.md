@@ -1,6 +1,6 @@
 # Audyt aktualizacji, kont i dostępu — 2026-09-27
 
-Zakres: lokalny `main` (`e8685a9`) i pliki repozytorium. Nie sprawdzono stanu działającego Raspberry, zainstalowanych APK, jednostek `/etc/systemd/system/` ani konfiguracji GitHub. Wnioski o usuwaniu zgodności zależą od tych odczytów.
+Zakres: lokalny `main` oraz pliki repozytorium po potwierdzonej weryfikacji sesyjnej synchronizacji na fizycznym Androidzie. Nie edytowano konfiguracji `/etc/ogarniacz/ogarniacz.env` na działającym Raspberry.
 
 ## Aktualizacje: przed → po
 
@@ -22,8 +22,8 @@ Zakres: lokalny `main` (`e8685a9`) i pliki repozytorium. Nie sprawdzono stanu dz
 | Konta, sesje i role | `uzytkownicy`, `czlonkostwa`, `sesje` i `granty_dostepu` w SQLite; sesja w cookie HttpOnly, token w bazie jako hash. Właściciel pełny dostęp, Edytor przez grant modułu. | Jedyny docelowy system użytkownika i uprawnień serwera. Lokalny „Podgląd jako Edytor” nie uwierzytelnia na serwerze. |
 | CSRF | Osobny token sesji; wymagany przy zapisach kont/sync oraz akcjach Raspberry. | Pozostaje. |
 | `OWNER_BOOTSTRAP_TOKEN` | Tylko pierwsze konto Właściciela na pustym serwerze; po bootstrapie nie tworzy kolejnego. | Jednorazowy klucz instalacyjny; usunąć z live env po utworzeniu konta. |
-| `SYNC_USER_ID` i `SYNC_ACCESS_KEY` | Opcjonalny Bearer wyłącznie na `/api/sync/*`, poza sesją i CSRF; daje uprawnienia Właściciela. `SYNC_USER_ID` może też zachować identyfikator danych podczas pierwszego bootstrapu konta. Klient ma jeszcze obsługę `VITE_SYNC_ACCESS_KEY`. | Legacy migracyjne tylko dla aktywnego starszego APK. Zachować do potwierdzenia logowania wszystkich urządzeń i powiązania danych; potem usunąć obie zmienne z live env, zmienną klienta i kod Bearer z obu stron. Nie wkładać klucza do nowego publicznego bundle. |
-| Sync API | Sesja albo legacy Bearer, `installationId`, filtr tabel i grantów; zapis sesyjny wymaga CSRF. | Docelowo tylko sesja. Legacy wyłączyć po sprawdzeniu urządzeń. |
+| Stara autoryzacja synchronizacji | Ścieżka migracyjna została usunięta po weryfikacji aktywnego Androida. | Brak alternatywnego uwierzytelnienia synchronizacji. |
+| Sync API | Sesja, `installationId`, filtr tabel i grantów; każdy zapis wymaga CSRF. | Wyłącznie konto i sesja. |
 | API aktualizacji Raspberry | Tylko sesja Właściciela, CSRF, lokalne połączenie do Node i dozwolony origin. | Pozostaje. Dopuszcza dokładny origin Tailscale z `CORS_ALLOWED_ORIGINS`, aby panel pod prywatnym HTTPS działał. |
 | APK i Web OTA | Publiczne manifesty/artefakty HTTPS; APK sprawdza wersję i SHA, Web OTA także podpis i zgodność natywną. | Bez logowania do pobrania; autoryzację publikacji zapewniają workflow i GitHub. |
 
@@ -32,13 +32,13 @@ Zakres: lokalny `main` (`e8685a9`) i pliki repozytorium. Nie sprawdzono stanu dz
 | Droga | Użycie i konflikt | Docelowy stan |
 | --- | --- | --- |
 | Prywatne HTTPS przez Tailscale Serve | Serve przekazuje do `127.0.0.1:8787`; ten sam origin obsługuje Web/PWA i API. `VITE_SYNC_API_URL` wskazuje go w Androidzie; `CORS_ALLOWED_ORIGINS` dopuszcza dokładny origin PWA oraz `https://localhost` Capacitor. | Preferowana droga. `PUBLIC_URL` nie miało odbiorcy poza parsowaniem env, więc usunięto je z konfiguracji. |
-| Surowe HTTP LAN | Historyczny APK może mieć zapisany adres `http://192.168.0.116:8787`; wymaga `HOST=0.0.0.0` i wygenerowanego wyjątku Android Network Security Config dla dokładnego prywatnego hosta. | Tymczasowo tylko dla zweryfikowanego urządzenia. Po migracji APK na HTTPS ustaw `HOST=127.0.0.1`, usuń stary origin LAN i wyjątek z kolejnego APK. Nie dodano wyjątków. |
+| Surowe HTTP LAN | Historyczny APK mógł mieć zapisany prywatny adres i wymagać `HOST=0.0.0.0`. Zweryfikowany produkcyjny Android korzysta już z HTTPS Tailscale. | Nie jest potrzebne dla zweryfikowanego klienta. Ręczne przełączenie live `HOST=127.0.0.1` wymaga osobnego potwierdzenia pozostałych klientów. |
 | Własny origin Capacitor | `https://localhost` w WebView wywołuje to samo API przez `VITE_SYNC_API_URL`; cookie i CSRF. | Pozostaje koniecznym originem klienta Android. |
 
 Równoległe drogi do tego samego API istnieją, gdy `HOST=0.0.0.0` oraz Serve są jednocześnie aktywne: przeglądarka i APK mogą używać zarówno LAN HTTP, jak i HTTPS Tailscale. Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL` utrwalone natywnie w APK; zmiana builda nie przełącza już zainstalowanego starego APK. `CORS_ALLOWED_ORIGINS` nie jest adresem API, tylko listą originów dopuszczonych do wywołań przeglądarkowych.
 
-## Warunki dalszego usunięcia legacy
+## Stan po usunięciu zgodności migracyjnej
 
 1. Na Pi odczytać jednostki, timery i crontab oraz potwierdzić brak uruchomień starego `update.sh` i `deploy-rpi.sh`; dopiero wtedy usunąć ich pozostałości.
-2. Na każdym aktywnym Androidzie potwierdzić wersję, adres HTTPS Tailscale, zalogowaną sesję i udaną synchronizację bez Bearer. Potem wyłączyć `SYNC_ACCESS_KEY` i usunąć most z kodu.
+2. Aktywny Android został potwierdzony na HTTPS Tailscale, zalogowanej sesji, synchronizacji w obu kierunkach i odtworzeniu sesji po restarcie. Alternatywna autoryzacja sync została usunięta z kodu i przykładów konfiguracji.
 3. Po migracji ostatniego APK z LAN przełączyć live `HOST` na loopback i potwierdzić dostęp wyłącznie przez Serve.

@@ -11,7 +11,7 @@ test('produkcyjny serwer RPi jest dostępny tylko przez loopback i utwardzony pr
   const env = await readFile(new URL('../deploy/rpi/ogarniacz.env.example', import.meta.url), 'utf8')
   const usluga = await readFile(new URL('../deploy/rpi/ogarniacz.service', import.meta.url), 'utf8')
   assert.match(env, /^HOST=127\.0\.0\.1$/m)
-  assert.doesNotMatch(env, /^SYNC_ACCESS_KEY=.+$/m)
+  assert.doesNotMatch(env, /^SYNC_(?:USER_ID|ACCESS_KEY)=/m)
   assert.match(usluga, /^NoNewPrivileges=true$/m)
   assert.match(usluga, /^ProtectSystem=strict$/m)
   assert.match(usluga, /^ReadWritePaths=\/home\/kacper\/apps\/Ogarniacz\/data$/m)
@@ -48,7 +48,7 @@ test('deploy RPi aktualizuje zmienioną jednostkę, zachowuje enable i dopiero p
 test('deploy RPi nie kopiuje env, a brakujące nazwy odczytuje bez ujawniania wartości', async () => {
   const skrypt = await readFile(sciezkaSkryptuWdrozenia, 'utf8')
   assert.match(skrypt, /brakujace_zmienne=\(\)/)
-  assert.match(skrypt, /opcjonalne_zmienne=" OWNER_BOOTSTRAP_TOKEN SYNC_USER_ID SYNC_ACCESS_KEY "/)
+  assert.match(skrypt, /opcjonalne_zmienne=" OWNER_BOOTSTRAP_TOKEN "/)
   assert.match(skrypt, /sudo grep --quiet --extended-regexp/)
   assert.doesNotMatch(skrypt, /install[^\n]+ogarniacz\.env/)
   assert.doesNotMatch(skrypt, /cat[^\n]+plik_env_systemowy/)

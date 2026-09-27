@@ -2,7 +2,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 const pochodzenieCapacitor = 'https://localhost'
-const dozwoloneNaglowkiSynchronizacji = ['Authorization', 'Content-Type', 'X-Ogarniacz-Installation-Id', 'X-Ogarniacz-CSRF']
+const dozwoloneNaglowkiSynchronizacji = ['Content-Type', 'X-Ogarniacz-Installation-Id', 'X-Ogarniacz-CSRF']
 
 function odczytajWartoscEnv(nazwa, katalogRepozytorium, env) {
   if (env[nazwa]?.trim()) return env[nazwa].trim()
@@ -29,10 +29,7 @@ function czyPrywatnyAdresIpv4(host) {
 }
 
 export function pobierzKonfiguracjeSynchronizacji(katalogRepozytorium, env = process.env) {
-  return {
-    adresApi: odczytajWartoscEnv('VITE_SYNC_API_URL', katalogRepozytorium, env),
-    kluczDostepu: odczytajWartoscEnv('VITE_SYNC_ACCESS_KEY', katalogRepozytorium, env),
-  }
+  return { adresApi: odczytajWartoscEnv('VITE_SYNC_API_URL', katalogRepozytorium, env) }
 }
 
 export function pobierzProdukcyjnaKonfiguracjeSynchronizacji(env = process.env) {

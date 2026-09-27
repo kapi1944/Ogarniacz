@@ -71,6 +71,22 @@ function tokenZCookie(odpowiedz: Response): string {
   return decodeURIComponent(token)
 }
 
+test('sync odrzuca GET, POST i Bearer bez normalnej sesji', async () => {
+  await zSerwerem(async (adres) => {
+    const url = `${adres}/api/sync/changes`
+    const naglowkiInstalacji = { 'x-ogarniacz-installation-id': 'instalacja-testowa' }
+    assert.equal((await fetch(`${url}?od=${encodeURIComponent(TERAZ)}`, { headers: naglowkiInstalacji })).status, 401)
+    assert.equal((await fetch(url, {
+      method: 'POST',
+      headers: { ...naglowkiInstalacji, 'content-type': 'application/json' },
+      body: JSON.stringify({ od: TERAZ, installationId: 'instalacja-testowa', zmiany: [] }),
+    })).status, 401)
+    assert.equal((await fetch(`${url}?od=${encodeURIComponent(TERAZ)}`, {
+      headers: { ...naglowkiInstalacji, Authorization: 'Bearer cokolwiek' },
+    })).status, 401)
+  })
+})
+
 test('bootstrap przyjmuje hasło od 8 znaków i pozostaje jednorazowy', async () => {
   await zSerwerem(async (adres, baza) => {
     const statusPrzed = await fetch(`${adres}/api/auth/bootstrap/status`)

@@ -201,19 +201,6 @@ export function pobierzKontekstDostepu(zadanie: IncomingMessage, baza: DatabaseS
   }
 }
 
-export function pobierzKontekstSynchronizacji(
-  zadanie: IncomingMessage,
-  baza: DatabaseSync,
-  konfiguracja: KonfiguracjaSerwera,
-): KontekstDostepu | undefined {
-  const sesja = pobierzKontekstDostepu(zadanie, baza)
-  if (sesja) return sesja
-  if (!konfiguracja.syncAccessKey || !konfiguracja.syncUserId) return undefined
-  const naglowek = zadanie.headers.authorization
-  if (!naglowek?.startsWith('Bearer ') || !porownajSekrety(naglowek.slice(7), konfiguracja.syncAccessKey)) return undefined
-  return { uzytkownikId: konfiguracja.syncUserId, wlascicielId: konfiguracja.syncUserId, rola: 'wlasciciel' }
-}
-
 export function czyDozwolonaTabela(
   baza: DatabaseSync,
   kontekst: KontekstDostepu,
@@ -307,8 +294,7 @@ export async function obsluzKonta(
       const email = normalizujEmail(dane.email)
       const hasloHash = hashujHaslo(tekst(dane.haslo))
       const teraz = new Date().toISOString()
-      const istniejacyId = konfiguracja.syncUserId && baza.prepare('SELECT id FROM uzytkownicy WHERE id = ?').get(konfiguracja.syncUserId)
-      const uzytkownikId = istniejacyId ? konfiguracja.syncUserId! : konfiguracja.syncUserId ?? randomUUID()
+      const uzytkownikId = randomUUID()
       baza.exec('BEGIN')
       try {
         baza.prepare(`INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)

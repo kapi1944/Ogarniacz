@@ -8,13 +8,13 @@
 
 UI zna wyłącznie `SyncEngine` i kontrakt `RepozytoriumZdalne`. `RepozytoriumZdalneHttp` łączy ten kontrakt z `/api/sync/changes`, a serwer zapisuje rekordy trwale w istniejącym SQLite. `RepozytoriumZdalneInMemory` pozostaje wyłącznie providerem testowym.
 
-Serwer wyznacza właściciela danych z zalogowanej sesji `HttpOnly`, nie z danych przesłanych przez klienta. Każde urządzenie przekazuje wyłącznie własny `installationId`. Opcjonalne `SYNC_ACCESS_KEY` i `SYNC_USER_ID` pozostają tylko mostem migracyjnym dla już zainstalowanego APK; po zalogowaniu urządzeń klucz należy usunąć z serwera.
+Serwer wyznacza właściciela danych z zalogowanej sesji `HttpOnly`, nie z danych przesłanych przez klienta. Każde urządzenie przekazuje wyłącznie własny `installationId`. Synchronizacja nie ma alternatywnej ścieżki uwierzytelnienia poza kontem i sesją.
 
 ## Endpoint i diagnostyka
 
 Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL`. Sesja jest losowym, hashowanym po stronie bazy tokenem w cookie `HttpOnly; Secure; SameSite=None`, a zapisy wymagają osobnego tokenu CSRF. Przy `http://` skrypt Androida generuje wyjątek wyłącznie dla dokładnego prywatnego hosta; wdrożenie internetowe używa HTTPS i nie wymaga wyjątku Androida.
 
-`npm run sync:doctor` wykonuje wyłącznie odczyty: waliduje URL, DNS/IP, `/health`, preflight CORS i dostępność endpointu sesji. Uwierzytelniony sync sprawdza tylko w trybie migracyjnym z lokalnym kluczem; zwykła sesja wymaga interaktywnego logowania. `CORS_ALLOWED_ORIGINS` ogranicza originy i zezwala na credentials wyłącznie dla wpisanych adresów.
+`npm run sync:doctor` wykonuje wyłącznie odczyty: waliduje URL, DNS/IP, `/health`, preflight CORS i dostępność endpointu sesji. Uwierzytelniony sync wymaga interaktywnego logowania w aplikacji. `CORS_ALLOWED_ORIGINS` ogranicza originy i zezwala na credentials wyłącznie dla wpisanych adresów.
 
 ## Konflikty
 
@@ -54,4 +54,4 @@ W prostym języku:
 
 Urządzenie pozostające offline może nadal mieć wcześniej pobraną lokalną kopię — cofnięcie dostępu nie jest zdalnym kasowaniem pamięci urządzenia. Po odzyskaniu sieci serwer nie zwróci już danych ani nie przyjmie kolejnych zmian cofniętego Edytora.
 
-Klient wymaga `VITE_SYNC_API_URL`. `VITE_SYNC_ACCESS_KEY` nie jest wymagany i nie może być traktowany jako sekret w publicznym bundle. Dane `Blob` korzystają z istniejącego kodowania transportowego backupu. Historia i pamięć Echo oraz lokalne tabele sterujące synchronizacją nie są wysyłane.
+Klient wymaga wyłącznie publicznego adresu `VITE_SYNC_API_URL`; uwierzytelnienie zapewnia sesja. Dane `Blob` korzystają z istniejącego kodowania transportowego backupu. Historia i pamięć Echo oraz lokalne tabele sterujące synchronizacją nie są wysyłane.

@@ -1,7 +1,5 @@
-import { timingSafeEqual } from 'node:crypto'
 import type { IncomingMessage } from 'node:http'
 import type { DatabaseSync } from 'node:sqlite'
-import type { KonfiguracjaSerwera } from './config.ts'
 
 const MAKSYMALNY_ROZMIAR_PACZKI = 25 * 1024 * 1024
 const POCZATEK_SYNCHRONIZACJI = '1970-01-01T00:00:00.000Z'
@@ -38,15 +36,6 @@ interface PaczkaSynchronizacji {
 
 function poprawnyIso(wartosc: unknown): wartosc is string {
   return typeof wartosc === 'string' && !Number.isNaN(Date.parse(wartosc))
-}
-
-export function czyDostepDoSynchronizacji(zadanie: IncomingMessage, konfiguracja: KonfiguracjaSerwera): boolean {
-  if (!konfiguracja.syncAccessKey || !konfiguracja.syncUserId) return false
-  const naglowek = zadanie.headers.authorization
-  if (!naglowek?.startsWith('Bearer ')) return false
-  const otrzymany = Buffer.from(naglowek.slice(7))
-  const oczekiwany = Buffer.from(konfiguracja.syncAccessKey)
-  return otrzymany.length === oczekiwany.length && timingSafeEqual(otrzymany, oczekiwany)
 }
 
 export function pobierzInstallationIdZNaglowka(zadanie: IncomingMessage): string | undefined {

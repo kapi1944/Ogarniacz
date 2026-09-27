@@ -31,7 +31,7 @@ if [[ ! -f "$plik_env_systemowy" ]]; then
 fi
 
 brakujace_zmienne=()
-opcjonalne_zmienne=" OWNER_BOOTSTRAP_TOKEN SYNC_USER_ID SYNC_ACCESS_KEY "
+opcjonalne_zmienne=" OWNER_BOOTSTRAP_TOKEN "
 while IFS= read -r nazwa_zmiennej; do
   if [[ "$opcjonalne_zmienne" == *" $nazwa_zmiennej "* ]]; then
     continue

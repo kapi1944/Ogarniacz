@@ -100,7 +100,7 @@ Po zbudowaniu nowego APK z jawną, procesową zmienną `VITE_SYNC_API_URL` wskaz
 
 `401` oznacza brak albo wygaśnięcie sesji i wymaga ponownego logowania. `403` z informacją o CSRF oznacza, że klient odświeża sesję i ponawia zapis; jeśli błąd pozostaje, zatrzymaj migrację. Konflikt synchronizacji ma status „wymaga decyzji” oraz kartę konfliktu w tym panelu — wybierz wersję lokalną albo zdalną dopiero po sprawdzeniu obu rekordów.
 
-Bearer można usunąć dopiero, gdy powyższy scenariusz przejdzie na każdym aktywnym Androidzie, oba kierunki synchronizacji są potwierdzone, restart zachowuje sesję, a nie ma 401/utrwalonego 403 CSRF ani nierozstrzygniętych konfliktów. Zatrzymaj migrację przy HTTP/LAN/innym hoście, `niezalogowany` po restarcie, braku CSRF, 401, powtarzalnym 403 CSRF, braku rekordu po sync albo konflikcie bez świadomego rozstrzygnięcia.
+Po przejściu tego scenariusza na wszystkich aktywnych Androidach stara ścieżka uwierzytelnienia synchronizacji została usunięta. Zatrzymaj kolejne wdrożenie przy HTTP/LAN/innym hoście, `niezalogowany` po restarcie, braku CSRF, 401, powtarzalnym 403 CSRF, braku rekordu po sync albo konflikcie bez świadomego rozstrzygnięcia.
 
 W **Ustawienia → Informacje o aplikacji** przycisk **Sprawdź aktualizacje** pobiera `latest.json`, porównuje `versionCode`, pobiera nowszy APK do prywatnej pamięci podręcznej, sprawdza SHA-256 i otwiera systemowy instalator przez `content://` z `FileProvider`. Android wymaga potwierdzenia instalacji. Przy pierwszej próbie może też otworzyć zgodę **Instaluj nieznane aplikacje** dla Ogarniacza; zgoda nie jest żądana przy starcie aplikacji.
 
