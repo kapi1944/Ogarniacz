@@ -44,18 +44,16 @@ jobs:
       - name: Web OTA tests
         run: npm run web-ota:test
 
+      - name: Android release tests
+        run: npm run android:release:test
+
       - name: Build
         run: npm run build
 
   android:
-    name: Android (tylko zmiany natywne)
+    name: Android (JDK 21 / updater / build)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: |
-      github.event_name == 'push' && (
-        contains(join(github.event.commits.*.modified, ','), 'android/') ||
-        contains(join(github.event.commits.*.modified, ','), 'capacitor.config')
-      )
     steps:
       - uses: actions/checkout@v4
 
@@ -67,10 +65,17 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - run: npm ci
 
+      - name: Przygotuj projekt Capacitor
+        run: npm run build && npx cap sync android
+
+      - name: Testy natywnego updatera
+        working-directory: android
+        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.AktualizacjeWebPluginTest' --no-daemon
+
       - name: Gradle assembleDebug
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: bash ./gradlew assembleDebug --no-daemon

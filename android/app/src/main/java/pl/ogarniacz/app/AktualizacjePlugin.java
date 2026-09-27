@@ -160,10 +160,8 @@ public class AktualizacjePlugin extends Plugin {
             if (instalator == null) { StanInstalacjiApk.zapiszBrakSystemowegoInstalatora(getContext(), "Android nie udostępnia PackageInstaller."); wywolanie.reject("Android nie udostępnia systemowego instalatora.", KOD_BRAK_INSTALATORA); return; }
             sesja = instalator.createSession(parametry);
             StanInstalacjiApk.zapiszInstalowanie(getContext(), sesja);
-            try (PackageInstaller.Session otwartaSesja = instalator.openSession(sesja); InputStream wejscie = new FileInputStream(plik); OutputStream wyjscie = otwartaSesja.openWrite("base.apk", 0, plik.length())) {
-                byte[] bufor = new byte[64 * 1024]; int liczba;
-                while ((liczba = wejscie.read(bufor)) != -1) wyjscie.write(bufor, 0, liczba);
-                otwartaSesja.fsync(wyjscie);
+            try (PackageInstaller.Session otwartaSesja = instalator.openSession(sesja)) {
+                zapiszApkWSesji(plik, otwartaSesja.openWrite("base.apk", 0, plik.length()), otwartaSesja::fsync);
                 Intent wynikSesji = new Intent(getContext(), WynikInstalacjiApkReceiver.class).setAction("pl.ogarniacz.app.WYNIK_INSTALACJI_APK");
                 wynikSesji.putExtra("wersjaDocelowa", wersjaDocelowa).putExtra("versionCodeDocelowy", versionCodeDocelowy).putExtra("sessionId", sesja);
                 int flagi = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
@@ -177,6 +175,17 @@ public class AktualizacjePlugin extends Plugin {
             String komunikat = bezpiecznyKomunikat(blad, "Nie udało się uruchomić instalatora Androida. Spróbuj ponownie.");
             StanInstalacjiApk.zapiszBladUruchomienia(getContext(), komunikat);
             wywolanie.reject(komunikat, KOD_BRAK_INSTALATORA);
+        }
+    }
+
+    interface SynchronizacjaStrumienia { void wykonaj(OutputStream strumien) throws Exception; }
+
+    static void zapiszApkWSesji(File plik, OutputStream strumien, SynchronizacjaStrumienia synchronizacja) throws Exception {
+        // Android wymaga zamknięcia openWrite przed zatwierdzeniem sesji.
+        try (OutputStream wyjscie = strumien; InputStream wejscie = new FileInputStream(plik)) {
+            byte[] bufor = new byte[64 * 1024]; int liczba;
+            while ((liczba = wejscie.read(bufor)) != -1) wyjscie.write(bufor, 0, liczba);
+            synchronizacja.wykonaj(wyjscie);
         }
     }
 

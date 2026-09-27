@@ -3,7 +3,11 @@ package pl.ogarniacz.app;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertThrows;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
@@ -14,6 +18,43 @@ import org.junit.Test;
 public class AktualizacjePluginTest {
     private static final long GIB = 1024L * 1024L * 1024L;
     private static final long MIB = 1024L * 1024L;
+
+    @Test public void zapisSesjiZamykaStrumienPrzedZatwierdzeniemIZachowujeApkDoRetry() throws Exception {
+        File plik = File.createTempFile("ogarniacz-sesja-", ".apk");
+        byte[] dane = new byte[150_000];
+        new java.util.Random(13).nextBytes(dane);
+        zapisz(plik, dane);
+        StrumienSesji strumien = new StrumienSesji();
+        try {
+            AktualizacjePlugin.zapiszApkWSesji(plik, strumien, (wyjscie) -> {
+                assertFalse(strumien.zamkniety);
+                assertArrayEquals(dane, strumien.toByteArray());
+                strumien.zsynchronizowany = true;
+            });
+            assertTrue(strumien.zamkniety);
+            assertTrue(strumien.zsynchronizowany);
+            assertArrayEquals(dane, Files.readAllBytes(plik.toPath()));
+        } finally { plik.delete(); }
+    }
+
+    @Test public void bladZapisuSesjiZamykaStrumienIZachowujeApkDoRetry() throws Exception {
+        File plik = File.createTempFile("ogarniacz-sesja-", ".apk");
+        zapisz(plik, new byte[] {1, 2, 3});
+        StrumienSesji strumien = new StrumienSesji();
+        try {
+            assertThrows(IOException.class, () -> AktualizacjePlugin.zapiszApkWSesji(plik, strumien, (wyjscie) -> {
+                throw new IOException("Brak miejsca podczas fsync");
+            }));
+            assertTrue(strumien.zamkniety);
+            assertTrue(plik.isFile());
+        } finally { plik.delete(); }
+    }
+
+    private static final class StrumienSesji extends ByteArrayOutputStream {
+        boolean zamkniety;
+        boolean zsynchronizowany;
+        @Override public void close() throws IOException { zamkniety = true; super.close(); }
+    }
 
     @Test public void malaIloscMiejscaBlokujePobieranie() {
         assertFalse(AktualizacjePlugin.czyJestWystarczajacoMiejsca(100L * MIB, 30L * MIB));

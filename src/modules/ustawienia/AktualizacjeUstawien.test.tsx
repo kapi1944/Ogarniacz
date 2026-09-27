@@ -176,3 +176,38 @@ it('nie pozostawia sprawdzania bez końca po utracie konfiguracji', async () => 
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Źródło aktualizacji nie jest skonfigurowane'))
   expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeEnabled()
 })
+
+it('po przerwaniu pobierania pokazuje retry i uruchamia instalator dopiero po poprawnym pobraniu', async () => {
+  pobierzApk.mockRejectedValueOnce({ code: 'BLAD_POBIERANIA' })
+    .mockResolvedValueOnce({ nazwaPliku: 'Ogarniacz-1.0.12-release.apk', sha256: 'a'.repeat(64) })
+  uruchomInstalator.mockResolvedValue({ status: 'INSTALOWANIE', wymagaZgody: false })
+  render(<PanelAktualizacji />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Pobierz i zainstaluj' }))
+  await screen.findByRole('button', { name: 'Ponów pobieranie' })
+  expect(uruchomInstalator).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Ponów pobieranie' }))
+  await waitFor(() => expect(uruchomInstalator).toHaveBeenCalledTimes(1))
+  expect(pobierzApk).toHaveBeenCalledTimes(2)
+})
+
+it('błędny SHA blokuje instalator i pozwala ponowić pobranie', async () => {
+  pobierzApk.mockRejectedValueOnce({ code: 'BLEDNY_SHA' })
+  render(<PanelAktualizacji />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Pobierz i zainstaluj' }))
+  await screen.findByRole('button', { name: 'Ponów pobieranie' })
+  expect(screen.getByRole('alert')).toHaveTextContent('nie przeszedł weryfikacji SHA-256')
+  expect(uruchomInstalator).not.toHaveBeenCalled()
+})
+
+it('po ponownym otwarciu panelu i anulowaniu instalacji ponawia zachowany APK bez pobierania', async () => {
+  vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockResolvedValueOnce({
+    status: 'ANULOWANO', wymagaZgody: false, maZweryfikowanyApk: true, moznaPonowicInstalacje: true,
+    nazwaPliku: 'Ogarniacz-1.0.12-release.apk', sha256: 'a'.repeat(64),
+  })
+  const ponow = vi.fn().mockResolvedValue({ status: 'INSTALOWANIE', wymagaZgody: false })
+  platforma.aktualizacje.ponowInstalacje = ponow
+  render(<PanelAktualizacji />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Ponów instalację' }))
+  await waitFor(() => expect(ponow).toHaveBeenCalledTimes(1))
+  expect(pobierzApk).not.toHaveBeenCalled()
+})

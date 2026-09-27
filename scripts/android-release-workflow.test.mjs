@@ -111,4 +111,9 @@ test('workflow wydania wymaga Environment, buduje APK raz i publikuje gotowy art
   assert.match(skrypt, /'dump', 'badging'/)
   assert.match(skrypt, /packageMatch\[1\] !== 'pl\.ogarniacz\.app'/)
   assert.match(skrypt, /manifest\.apkUrl !== oczekiwanaNazwa/)
+  const ci = await readFile('.github/workflows/ci.yml', 'utf8')
+  const wersjaJdk = workflow.match(/java-version: '([^']+)'/)?.[1]
+  assert.equal(wersjaJdk, '21')
+  assert.equal(ci.match(/java-version: '([^']+)'/)?.[1], wersjaJdk)
+  assert.ok(workflow.indexOf('Sprawdź natywny updater') < workflow.indexOf('Zapisz wersję dopiero'))
 })

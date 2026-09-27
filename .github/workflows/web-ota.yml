@@ -80,6 +80,21 @@ jobs:
             exit 0
           fi
 
+          # Tag powstaje przed publikacją APK; sam nie potwierdza udanego wydania.
+          wydanie_apk="$(gh api "repos/${{ github.repository }}/releases/tags/$tag_zgodnego_apk")"
+          WYDANIE_APK="$wydanie_apk" KOD_APK="$kod_zgodnego_apk" node --input-type=module <<'NODE'
+          import { walidujManifestAktualizacji } from './scripts/android-wspolne.mjs'
+          const wydanie = JSON.parse(process.env.WYDANIE_APK)
+          if (wydanie.draft || wydanie.prerelease) throw new Error('Zgodne APK nie jest publicznym wydaniem produkcyjnym.')
+          const plikManifestu = wydanie.assets.find((plik) => plik.name === 'latest.json')
+          if (!plikManifestu) throw new Error('Wydanie APK nie zawiera latest.json.')
+          const odpowiedz = await fetch(plikManifestu.browser_download_url)
+          if (!odpowiedz.ok) throw new Error('Publiczny manifest APK jest niedostępny.')
+          const manifest = walidujManifestAktualizacji(await odpowiedz.json())
+          if (manifest.versionCode !== Number(process.env.KOD_APK)) throw new Error('Wydanie APK nie odpowiada punktowi zgodności.')
+          if (!wydanie.assets.some((plik) => plik.name === manifest.apkUrl && plik.size === manifest.size)) throw new Error('Brak zgodnego artefaktu APK.')
+          NODE
+
           if odpowiedz_release="$(gh api "repos/${{ github.repository }}/releases/tags/web-ota" 2>&1)"; then
             :
           elif grep -q "HTTP 404" <<<"$odpowiedz_release"; then
@@ -94,6 +109,7 @@ jobs:
           fi
 
           commit_ci="${{ needs.bramka_ci.outputs.commit_ci }}"
+          git merge-base --is-ancestor "$tag_zgodnego_apk" "$commit_ci" || { echo 'Bundle nie pochodzi z linii zgodnego APK.' >&2; exit 1; }
           mapfile -d '' pliki < <(git diff --name-only -z "$tag_zgodnego_apk" "$commit_ci")
           if wynik="$(node scripts/web-ota-klasyfikacja.mjs "${pliki[@]}")"; then
             echo "$wynik"
@@ -125,6 +141,8 @@ jobs:
     steps:
       - name: Pobierz repozytorium
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.ocena.outputs.commit_bundla }}
 
       - name: Pobierz zgodne zrodlo bundle
         uses: actions/checkout@v4

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import test from 'node:test'
+import { spawnSync } from 'node:child_process'
 import {
   odczytajMinNativeVersionCode,
   SCIEZKA_ZGODNOSCI_WEB_OTA,
@@ -39,4 +40,34 @@ test('generator i workflow nie maja drugiego zrodla minNativeVersionCode', async
   assert.match(workflow, /VITE_SYNC_API_URL: ''/)
   assert.match(workflow, /Zweryfikuj lokalny ZIP i manifest/)
   assert.match(workflow, /Pobierz i zweryfikuj ZIP przed publikacja manifestu/)
+  assert.match(workflow, /name: Pobierz repozytorium\s+uses: actions\/checkout@v4\s+with:\s+ref: \$\{\{ needs\.ocena\.outputs\.commit_bundla \}\}/)
+})
+
+test('bramka publikacji wymaga publicznego APK odpowiadającego punktowi zgodności', async () => {
+  const workflow = await readFile('.github/workflows/web-ota.yml', 'utf8')
+  const kod = workflow.match(/node --input-type=module <<'NODE'\r?\n([\s\S]*?)\r?\n\s*NODE/)?.[1]
+  assert.ok(kod, 'Brak wykonywalnej bramki wydanego APK')
+  const manifest = { versionName: '1.0.13', versionCode: 1000013, apkUrl: 'Ogarniacz-1.0.13-release.apk', sha256: 'a'.repeat(64), size: 123 }
+  const wydanie = { draft: false, prerelease: false, assets: [
+    { name: 'latest.json', browser_download_url: 'https://example.test/latest.json' },
+    { name: manifest.apkUrl, size: manifest.size },
+  ] }
+  const przypadki = [
+    { nazwa: 'publiczne zgodne APK', wydanie, manifest, poprawny: true },
+    { nazwa: 'tag z draftem', wydanie: { ...wydanie, draft: true }, manifest },
+    { nazwa: 'prerelease', wydanie: { ...wydanie, prerelease: true }, manifest },
+    { nazwa: 'brak APK', wydanie: { ...wydanie, assets: wydanie.assets.slice(0, 1) }, manifest },
+    { nazwa: 'brak manifestu', wydanie: { ...wydanie, assets: wydanie.assets.slice(1) }, manifest },
+    { nazwa: 'inne APK', wydanie, manifest: { ...manifest, versionName: '1.0.12', versionCode: 1000012 } },
+    { nazwa: 'niepełny upload', wydanie, manifest: { ...manifest, size: 124 } },
+    { nazwa: 'manifest niedostępny publicznie', wydanie, manifest, niedostepny: true },
+  ]
+  for (const przypadek of przypadki) {
+    const przygotowanie = `globalThis.fetch = async () => ({ ok: ${!przypadek.niedostepny}, json: async () => (${JSON.stringify(przypadek.manifest)}) });\n`
+    const wynik = spawnSync(process.execPath, ['--input-type=module', '--eval', przygotowanie + kod], {
+      encoding: 'utf8',
+      env: { ...process.env, WYDANIE_APK: JSON.stringify(przypadek.wydanie), KOD_APK: '1000013' },
+    })
+    assert.equal(wynik.status === 0, Boolean(przypadek.poprawny), `${przypadek.nazwa}: ${wynik.stderr}`)
+  }
 })

@@ -114,6 +114,9 @@ jobs:
       - name: Zainstaluj zależności
         run: npm ci
 
+      - name: Sprawdź reguły release i Web OTA
+        run: npm run android:release:test && npm run web-ota:test
+
       - name: Zapisz opcjonalne release notes
         if: inputs.release_notes != ''
         shell: bash
@@ -130,6 +133,10 @@ jobs:
             argumenty+=(--release-notes-file "$RUNNER_TEMP/release-notes.md")
           fi
           npm run android:release -- "${argumenty[@]}"
+
+      - name: Sprawdź natywny updater przed zapisaniem wersji
+        working-directory: android
+        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.AktualizacjeWebPluginTest' --no-daemon
 
       - name: Zapisz wersję dopiero po udanym buildzie
         shell: bash
