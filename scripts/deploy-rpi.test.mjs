@@ -59,10 +59,48 @@ test('deploy RPi ponawia healthcheck, waliduje kontrakt JSON i pokazuje journal 
   assert.match(skrypt, /liczba_prob_health=15/)
   assert.match(skrypt, /for \(\(numer_proby = 1; numer_proby <= liczba_prob_health; numer_proby\+\+\)\)/)
   assert.match(skrypt, /"\$kod_http" == "200"/)
+  assert.match(skrypt, /curl --silent --max-time 2/)
   assert.match(skrypt, /health\.status !== "ok"/)
   assert.match(skrypt, /health\.service !== "ogarniacz-api"/)
   assert.match(skrypt, /health\.database !== "connected"/)
   assert.match(skrypt, /journalctl -u ogarniacz -n 100 --no-pager/)
+  const instrukcja = await readFile(new URL('../docs/RASPBERRY_PI.md', import.meta.url), 'utf8')
+  assert.match(instrukcja, /for proba in \{1\.\.15\}/)
+  assert.match(instrukcja, /wynik\.status==="ok"&&wynik\.service==="ogarniacz-api"&&wynik\.database==="connected"/)
+})
+
+test('deploy RPi czeka po restarcie na poprawny kontrakt health', async (t) => {
+  const bash = process.platform === 'win32' ? 'C:\\Program Files\\Git\\bin\\bash.exe' : 'bash'
+  if (process.platform === 'win32' && !existsSync(bash)) return t.skip('Brak Git Bash')
+  const skrypt = await readFile(sciezkaSkryptuWdrozenia, 'utf8')
+  const poczatek = skrypt.indexOf('plik_odpowiedzi_health="$(mktemp)"')
+  const koniec = skrypt.indexOf('sudo systemctl --no-pager', poczatek)
+  assert.ok(poczatek >= 0 && koniec > poczatek)
+  const petla = skrypt.slice(poczatek, koniec)
+  const kod = `set -euo pipefail
+adres_health=http://127.0.0.1:8787/health
+liczba_prob_health=4
+odstep_prob_health=0
+plik_prob="$(mktemp)"
+printf 0 > "$plik_prob"
+trap 'rm -f "$plik_prob"' EXIT
+curl() {
+  proby=$(( $(cat "$plik_prob") + 1 ))
+  printf '%s' "$proby" > "$plik_prob"
+  while [[ "$1" != "--output" ]]; do shift; done
+  shift
+  plik="$1"
+  if (( proby == 1 )); then printf 'brak json' > "$plik"
+  elif (( proby == 2 )); then printf '{"status":"ok","service":"ogarniacz-api","database":"disconnected"}' > "$plik"
+  else printf '{"status":"ok","service":"ogarniacz-api","database":"connected"}' > "$plik"; fi
+  printf 200
+}
+sleep() { :; }
+${petla}
+[[ "$health_ok" == true && "$(cat "$plik_prob")" == 3 ]]
+rm -f "$plik_prob"`
+  const wynik = spawnSync(bash, ['-c', kod], { encoding: 'utf8' })
+  assert.equal(wynik.status, 0, wynik.stderr)
 })
 
 test('deploy RPi ma poprawną składnię Bash', (t) => {

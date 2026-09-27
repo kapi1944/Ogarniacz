@@ -60,7 +60,7 @@ plik_odpowiedzi_health="$(mktemp)"
 trap 'rm -f "$plik_odpowiedzi_health"' EXIT
 health_ok=false
 for ((numer_proby = 1; numer_proby <= liczba_prob_health; numer_proby++)); do
-  kod_http="$(curl --silent --output "$plik_odpowiedzi_health" --write-out '%{http_code}' "$adres_health" || true)"
+  kod_http="$(curl --silent --max-time 2 --output "$plik_odpowiedzi_health" --write-out '%{http_code}' "$adres_health" || true)"
   if [[ "$kod_http" == "200" ]] && node -e '
     const fs = require("node:fs");
     const health = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));

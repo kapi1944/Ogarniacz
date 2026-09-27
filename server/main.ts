@@ -16,8 +16,26 @@ serwer.listen(konfiguracja.port, konfiguracja.host, () => {
   console.log(`Ogarniacz API nasłuchuje na ${konfiguracja.host}:${konfiguracja.port}`)
 })
 
+let zamykanie = false
 function zamknij(): void {
-  serwer.close(() => otwartaBaza.baza.close())
+  if (zamykanie) return
+  zamykanie = true
+  const limitZamykania = setTimeout(() => {
+    console.error('Przekroczono limit zamykania serwera.')
+    serwer.closeAllConnections()
+    process.exit(1)
+  }, 10_000)
+  serwer.close(() => {
+    clearTimeout(limitZamykania)
+    try {
+      otwartaBaza.baza.close()
+    } catch (blad) {
+      console.error('Nie udało się zamknąć bazy:', blad)
+      process.exitCode = 1
+    }
+    process.exit()
+  })
+  serwer.closeAllConnections()
 }
 
 process.on('SIGINT', zamknij)

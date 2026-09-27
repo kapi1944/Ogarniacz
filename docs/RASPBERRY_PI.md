@@ -47,7 +47,12 @@ Jednostka `ogarniacz.service` startuje automatycznie, czeka na sieć i Tailscale
 sudo systemctl status ogarniacz tailscaled
 sudo tailscale serve status
 journalctl -u ogarniacz -n 100 --no-pager
-curl --fail http://127.0.0.1:8787/health
+zdrowy=false
+for proba in {1..15}; do
+  if curl --silent --fail --max-time 2 http://127.0.0.1:8787/health | node -e 'let dane="";process.stdin.on("data",czesc=>dane+=czesc);process.stdin.on("end",()=>{try{const wynik=JSON.parse(dane);process.exit(wynik.status==="ok"&&wynik.service==="ogarniacz-api"&&wynik.database==="connected"?0:1)}catch{process.exit(1)}})'; then zdrowy=true; break; fi
+  sleep 1
+done
+test "$zdrowy" = true
 curl --fail https://NAZWA-URZADZENIA.TAILNET.ts.net/health
 ```
 
