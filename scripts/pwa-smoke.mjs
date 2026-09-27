@@ -46,6 +46,9 @@ try {
   const serviceWorker = await fetch(`${ADRES}/sw.js`).then((odpowiedz) => odpowiedz.text())
   zapewnij(serviceWorker.includes('NetworkOnly'), 'Service worker nie wymusza dostępu sieciowego dla API.')
   zapewnij(serviceWorker.includes('/api/'), 'Service worker nie zawiera reguły wykluczającej cache API.')
+  zapewnij(/denylist:\[[^\]]*health/.test(serviceWorker), 'Service worker kieruje healthcheck do fallbacku HTML.')
+  zapewnij(/health[\s\S]{0,120}NetworkOnly/.test(serviceWorker), 'Service worker może cache’ować healthcheck.')
+  zapewnij(/assets\/[\w-]+-[\w-]+\.js/.test(serviceWorker), 'Service worker nie zawiera assetów z hashami.')
   console.log('PWA smoke: routing, manifest i service worker — OK')
 } finally {
   serwer.kill()

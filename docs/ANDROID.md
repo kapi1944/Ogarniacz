@@ -108,20 +108,17 @@ W **Ustawienia → Informacje o aplikacji** przycisk **Sprawdź aktualizacje** p
 
 Kolejne OTA muszą mieć wyższy `versionCode`, ten sam `applicationId` i podpis z tego samego stałego keystore. Publikuj najpierw APK, a `latest.json` jako ostatni plik, aby manifest nigdy nie wskazywał niegotowego artefaktu. Aktualizacja nie odinstalowuje aplikacji i zachowuje IndexedDB oraz pozostałe dane prywatne.
 
-### Pierwsze prawdziwe OTA przez GitHub Releases
+### Test opublikowanego APK przez GitHub Releases
 
 Warunkiem jest zainstalowana bazowa wersja **release** Ogarniacza, podpisana tym samym stałym keystore i z wbudowanym adresem GitHub z `.env.production`. Jeśli telefon ma wersję debug albo starszy build bez tego adresu, wykonaj jednorazowe przejście opisane w sekcji D.
 
-1. Na komputerze upewnij się, że `main` jest czysty, a `android/keystore.properties` wskazuje dokładnie ten sam zachowany keystore, którym podpisano wersję na Galaxy S23+.
-2. Podbij wersję, np. `npm run version:patch`. Nowy `versionCode` musi być większy od opublikowanego w `latest.json`.
-3. Ustaw prywatnie `VITE_SYNC_API_URL` na HTTPS serwera kont, bez sekretu w `VITE_*`, a następnie uruchom `npm run android:release -- --publish --release-notes-file .\informacje-o-wydaniu.md`. Skrypt przed buildem pobiera aktualny manifest i zatrzymuje się, jeśli versionCode nie rośnie; przed publikacją weryfikuje applicationId, wersję, podpis, nazwę, rozmiar, SHA-256 oraz zgodność `latest.json` z APK. Tworzy tag i draft release, wysyła APK oraz sumę, wysyła `latest.json` jako ostatni asset, publikuje release i odczytuje publiczny manifest/APK.
-4. Do publikacji `--publish` używa istniejącego poświadczenia `origin` z git credential helper; nie przyjmuje ani nie wypisuje tokenu w argumentach.
-5. Gdy `--publish` nie jest podane, trzy zweryfikowane pliki pozostają lokalnie w `android/app/build/outputs/apk/release/` do ręcznego audytu.
-6. Na Galaxy S23+ otwórz **Ogarniacz → Ustawienia → Informacje o aplikacji → Sprawdź aktualizacje**. Panel pokaże dostępną wersję i informacje o wydaniu.
-7. Wybierz **Pobierz i zainstaluj**. Ogarniacz pokaże postęp, pobierze APK i sprawdzi SHA-256.
-8. Jeśli Android otworzy ekran **Instaluj nieznane aplikacje**, zezwól Ogarniaczowi, wróć do aplikacji i wybierz **Uruchom instalator**.
-9. W systemowym instalatorze potwierdź aktualizację. Cicha instalacja nie jest używana.
-10. Po instalacji uruchom Ogarniacza i sprawdź w panelu, czy widoczna jest nowa wersja. Komputer, ADB i Raspberry Pi nie uczestniczą w krokach 6–10.
+Publikację wykonuje workflow opisany w `docs/ANDROID_RELEASE.md`. Przygotowuje razem wersję APK i punkt zgodności Web OTA; ręczne podbicie samej wersji nie wystarcza.
+
+1. Po zatwierdzonym wydaniu na Galaxy S23+ otwórz **Ogarniacz → Ustawienia → Informacje o aplikacji → Sprawdź aktualizacje**. Panel pokaże dostępną wersję i informacje o wydaniu.
+2. Wybierz **Pobierz i zainstaluj**. Ogarniacz pokaże postęp, pobierze APK i sprawdzi SHA-256.
+3. Jeśli Android otworzy ekran **Instaluj nieznane aplikacje**, zezwól Ogarniaczowi, wróć do aplikacji i wybierz **Uruchom instalator**.
+4. W systemowym instalatorze potwierdź aktualizację. Cicha instalacja nie jest używana.
+5. Po instalacji uruchom Ogarniacza i sprawdź w panelu nową wersję. Komputer, ADB i Raspberry Pi nie uczestniczą w tych krokach.
 
 ## D. Jednorazowe przejście debug → release
 

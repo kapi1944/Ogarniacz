@@ -95,22 +95,9 @@ jobs:
           if (!wydanie.assets.some((plik) => plik.name === manifest.apkUrl && plik.size === manifest.size)) throw new Error('Brak zgodnego artefaktu APK.')
           NODE
 
-          if odpowiedz_release="$(gh api "repos/${{ github.repository }}/releases/tags/web-ota" 2>&1)"; then
-            :
-          elif grep -q "HTTP 404" <<<"$odpowiedz_release"; then
-            commit_bundla="$(git rev-list -n 1 "$tag_zgodnego_apk")"
-            echo "publikuj=true" >> "$GITHUB_OUTPUT"
-            echo "commit_bundla=$commit_bundla" >> "$GITHUB_OUTPUT"
-            echo "Pierwsza publikacja Web OTA z bazowego bundle $tag_zgodnego_apk ($commit_bundla)."
-            exit 0
-          else
-            echo "$odpowiedz_release" >&2
-            exit 1
-          fi
-
           commit_ci="${{ needs.bramka_ci.outputs.commit_ci }}"
           git merge-base --is-ancestor "$tag_zgodnego_apk" "$commit_ci" || { echo 'Bundle nie pochodzi z linii zgodnego APK.' >&2; exit 1; }
-          mapfile -d '' pliki < <(git diff --name-only -z "$tag_zgodnego_apk" "$commit_ci")
+          mapfile -d '' pliki < <(git log --format= --name-only -z "$tag_zgodnego_apk..$commit_ci")
           if wynik="$(node scripts/web-ota-klasyfikacja.mjs "${pliki[@]}")"; then
             echo "$wynik"
             echo "publikuj=true" >> "$GITHUB_OUTPUT"
@@ -179,6 +166,7 @@ jobs:
         run: npm run build
         working-directory: zrodlo-bundla
         env:
+          GITHUB_SHA: ${{ needs.ocena.outputs.commit_bundla }}
           VITE_SYNC_API_URL: ''
           VITE_ANDROID_UPDATE_MANIFEST_URL: ''
           VITE_ANDROID_WEB_UPDATE_MANIFEST_URL: ''

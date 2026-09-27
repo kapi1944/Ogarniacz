@@ -1,5 +1,9 @@
 # Produkcyjne wydanie Androida
 
+## Granice kanałów
+
+APK jest pełną aktualizacją Androida: dostarcza kod natywny, Capacitor, manifest, konfigurację sieci i uprawnień, pluginy, bazowy frontend oraz nowy `versionName`/`versionCode` z `package.json`. `latest.json` opisuje wyłącznie ten podpisany artefakt. Web OTA dostarcza tylko podpisany, zgodny z `minNativeVersionCode` bundle webowy przez osobny `web-ota.json`; nie zastępuje APK. Service worker Web/PWA zarządza cache i proponuje odświeżenie frontendu serwowanego przez Raspberry. Nie publikuje osobnego wydania ani nie obsługuje instalacji Androida. `/api/*` i `/health` pozostają poza cache.
+
 ## Jednorazowo w GitHub
 
 W **Settings → Environments → New environment** utwórz `android-production`. W nim ustaw:

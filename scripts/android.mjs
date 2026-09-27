@@ -588,9 +588,6 @@ async function wykonajRelease(opcje) {
   if (adresManifestuWeb === adresManifestu || new URL(adresManifestuWeb).pathname.includes('/releases/latest/')) {
     throw new Error('Web OTA musi używać osobnego kanału; /releases/latest pozostaje wyłącznie dla OTA APK.')
   }
-  if (adresManifestuWeb === adresManifestu || new URL(adresManifestuWeb).pathname.includes('/releases/latest/')) {
-    throw new Error('Web OTA musi używać osobnego kanału i nie może korzystać z /releases/latest.')
-  }
   const konfiguracjaSynchronizacji = pobierzProdukcyjnaKonfiguracjeSynchronizacji()
   if (!konfiguracjaSynchronizacji.adresApi) {
     throw new Error('Release wymaga jawnej zmiennej procesu VITE_SYNC_API_URL, aby nie użyć nieaktualnego pliku .env.')

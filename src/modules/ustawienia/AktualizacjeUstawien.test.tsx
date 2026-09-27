@@ -6,7 +6,7 @@ import { komunikatBleduAktualizacji, PanelAktualizacji } from './PanelAktualizac
 import { PodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
 import { SekcjaPolaczeniaIAktualizacji } from './SekcjaPolaczeniaIAktualizacji'
 
-vi.mock('./PanelAktualizacjiRaspberry', () => ({ PanelAktualizacjiRaspberry: () => null }))
+vi.mock('./PanelAktualizacjiRaspberry', () => ({ PanelAktualizacjiRaspberry: () => <div>Aktualizacja Raspberry</div> }))
 
 const { nasluchujKontroli, pobierzApk, pobierzStan, pobierzStanKontroli, sprawdzAktualizacjeApk, uruchomInstalator } = vi.hoisted(() => ({
   nasluchujKontroli: vi.fn(() => () => undefined),
@@ -48,6 +48,7 @@ vi.mock('../../services/KontrolaAktualizacjiAplikacji', () => ({
 }))
 
 beforeEach(() => {
+  platforma.natywna = true
   stanKontroli = { sprawdzono: true, wynikApk: dostepnaAktualizacja }
   pobierzStanKontroli.mockImplementation(() => stanKontroli)
   pobierzStan.mockResolvedValue(stanWeb)
@@ -57,6 +58,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  platforma.natywna = true
   wyczysc()
   vi.clearAllMocks()
 })
@@ -130,6 +132,14 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
     const tekst = container.textContent ?? ''
     expect(tekst.indexOf('Synchronizacja')).toBeLessThan(tekst.indexOf('Aktualizacja aplikacji'))
     expect(tekst.indexOf('Aktualizacja aplikacji')).toBeLessThan(tekst.indexOf('Szybkie poprawki'))
+  })
+
+  it('na Web/PWA pokazuje wyłącznie panel Raspberry, bez instalatorów Androida', () => {
+    platforma.natywna = false
+    render(<SekcjaPolaczeniaIAktualizacji synchronizacjaSkonfigurowana dzieci={<h2>Synchronizacja</h2>} />)
+    expect(screen.getByText('Aktualizacja Raspberry')).toBeInTheDocument()
+    expect(screen.queryByText('Szybkie poprawki')).not.toBeInTheDocument()
+    expect(screen.queryByText('Aktualizacja aplikacji')).not.toBeInTheDocument()
   })
 
   it('promuje dostępne APK ponad szybką poprawkę', () => {
