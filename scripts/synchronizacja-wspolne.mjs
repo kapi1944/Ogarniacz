@@ -35,6 +35,10 @@ export function pobierzKonfiguracjeSynchronizacji(katalogRepozytorium, env = pro
   }
 }
 
+export function pobierzProdukcyjnaKonfiguracjeSynchronizacji(env = process.env) {
+  return { adresApi: env.VITE_SYNC_API_URL?.trim() }
+}
+
 export function sprawdzAdresSynchronizacji(adresApi) {
   if (!adresApi?.trim()) throw new Error('Brak VITE_SYNC_API_URL.')
   let adres
@@ -57,6 +61,10 @@ export function sprawdzProdukcyjnyAdresSynchronizacji(adresApi) {
   const adres = sprawdzAdresSynchronizacji(adresApi)
   if (adres.protocol !== 'https:') {
     throw new Error('Produkcyjny VITE_SYNC_API_URL musi używać prywatnego HTTPS, np. Tailscale Serve.')
+  }
+  const host = adres.hostname.toLowerCase()
+  if (host === 'localhost' || host.endsWith('.local') || czyPrywatnyAdresIpv4(host)) {
+    throw new Error('Produkcyjny VITE_SYNC_API_URL nie może wskazywać localhost ani prywatnej sieci LAN.')
   }
   return adres
 }

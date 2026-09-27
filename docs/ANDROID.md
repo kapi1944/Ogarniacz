@@ -85,6 +85,23 @@ W GitHub Release dodaj wszystkie trzy pliki jako assets. Względny `apkUrl` z ma
 
 ## C. OTA bez kabla
 
+### Weryfikacja sesyjnej synchronizacji na fizycznym Samsungu
+
+Po zbudowaniu nowego APK z jawną, procesową zmienną `VITE_SYNC_API_URL` wskazującą prywatny HTTPS Tailscale:
+
+1. Zainstaluj nowy APK jako aktualizację; nie odinstalowuj działającej aplikacji ani nie czyść jej danych.
+2. Uruchom Ogarniacza i zaloguj konto Właściciela.
+3. Wejdź w **Ustawienia → Synchronizacja → Diagnostyka synchronizacji**. Potwierdź: `Android`, host Tailscale, `HTTPS`, `zalogowany`, `Właściciel`, CSRF `dostępny` i autoryzację klienta `sesja`.
+4. Utwórz na telefonie testowe zadanie i użyj **Synchronizuj teraz**.
+5. Potwierdź pojawienie się zadania w Ogarniaczu na Raspberry Pi lub w Web.
+6. Utwórz drugi testowy rekord w Web i użyj synchronizacji; potwierdź rekord na telefonie.
+7. Zamknij aplikację całkowicie z ekranu ostatnich aplikacji.
+8. Uruchom ją ponownie. Diagnostyka musi ponownie wskazać `zalogowany`, CSRF `dostępny` oraz `sesja`; wykonaj **Synchronizuj teraz** bez ponownego logowania.
+
+`401` oznacza brak albo wygaśnięcie sesji i wymaga ponownego logowania. `403` z informacją o CSRF oznacza, że klient odświeża sesję i ponawia zapis; jeśli błąd pozostaje, zatrzymaj migrację. Konflikt synchronizacji ma status „wymaga decyzji” oraz kartę konfliktu w tym panelu — wybierz wersję lokalną albo zdalną dopiero po sprawdzeniu obu rekordów.
+
+Bearer można usunąć dopiero, gdy powyższy scenariusz przejdzie na każdym aktywnym Androidzie, oba kierunki synchronizacji są potwierdzone, restart zachowuje sesję, a nie ma 401/utrwalonego 403 CSRF ani nierozstrzygniętych konfliktów. Zatrzymaj migrację przy HTTP/LAN/innym hoście, `niezalogowany` po restarcie, braku CSRF, 401, powtarzalnym 403 CSRF, braku rekordu po sync albo konflikcie bez świadomego rozstrzygnięcia.
+
 W **Ustawienia → Informacje o aplikacji** przycisk **Sprawdź aktualizacje** pobiera `latest.json`, porównuje `versionCode`, pobiera nowszy APK do prywatnej pamięci podręcznej, sprawdza SHA-256 i otwiera systemowy instalator przez `content://` z `FileProvider`. Android wymaga potwierdzenia instalacji. Przy pierwszej próbie może też otworzyć zgodę **Instaluj nieznane aplikacje** dla Ogarniacza; zgoda nie jest żądana przy starcie aplikacji.
 
 Źródło powinno udostępniać manifest oraz APK przez HTTPS. To stały release key pozwala Androidowi potwierdzić, że nowy APK jest aktualizacją tej samej aplikacji; SHA-256 dodatkowo wykrywa uszkodzenie pobranego pliku. Przy błędnej sumie plik tymczasowy jest usuwany, a instalator nie zostaje uruchomiony.

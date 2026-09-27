@@ -16,11 +16,15 @@ import { pobierzInstallationId } from '../../services/InstallationService'
 import { pobierzKonfliktySynchronizacji, pobierzStanSynchronizacji } from '../../services/SyncEngine'
 import { czySynchronizacjaSkonfigurowana, rozstrzygnijKonfliktSynchronizacji, synchronizujTeraz as uruchomSynchronizacje } from '../../services/SynchronizacjaAplikacji'
 import { useAplikacja } from '../../app/KontekstAplikacji'
+import { useKonto } from '../../app/DostawcaKonta'
 import { platforma } from '../../platform/platforma'
 import type { StanPowiadomienPlatformy, StanZgody } from '../../platform/typy'
 import { PanelUstawienAplikacji } from './PanelUstawienAplikacji'
 import { KartaKonfliktuSynchronizacji } from './KonfliktSynchronizacji'
 import { SekcjaPolaczeniaIAktualizacji } from './SekcjaPolaczeniaIAktualizacji'
+import { utworzDiagnostykeSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
+import { pobierzKonfiguracjeSynchronizacji } from '../../services/KonfiguracjaSynchronizacji'
+import { pobierzCsrfKonta } from '../../services/KontaService'
 
 const modulyUprawnien: { wartosc: NazwaModulu; etykieta: string }[] = [
   ['zadania', 'Zadania'], ['projekty', 'Projekty'], ['skrzynka', 'Poczekalnia'], ['planer', 'Planer'], ['grafik', 'Grafik'], ['nawyki', 'Nawyki'], ['leki', 'Leki'], ['wizyty', 'Wizyty'], ['przypomnienia', 'Przypomnienia'], ['zakupy', 'Zakupy'], ['rachunki', 'Rachunki'], ['miasto', 'Sprawy na mieście'], ['cele', 'Cele'], ['notatki', 'Notatki'], ['pomysly', 'Pomysły'], ['na_pozniej', 'Na później'], ['kontakty', 'Kontakty'], ['dokumenty', 'Dokumenty'], ['finanse', 'Finanse'], ['samochod', 'Samochód'], ['terminy', 'Terminy'],
@@ -52,6 +56,7 @@ const wariantSynchronizacji = (stan?: StatusSynchronizacji): 'neutralny' | 'sukc
 
 export function WidokUstawien() {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
+  const { konto } = useKonto()
   const { dane: pamiec, repozytorium: repoPamieci } = useRepozytorium('pamiecEcho')
   const { dane: edytorzy, repozytorium: repoEdytorow } = useRepozytorium('edytorzy')
   const { dane: uprawnienia, repozytorium: repoUprawnien } = useRepozytorium('uprawnienia')
@@ -75,6 +80,13 @@ export function WidokUstawien() {
   const [stanPowiadomien, ustawStanPowiadomien] = useState<StanPowiadomienPlatformy>()
   const installationId = pobierzInstallationId()
   const synchronizacjaSkonfigurowana = czySynchronizacjaSkonfigurowana()
+  const diagnostykaSynchronizacji = utworzDiagnostykeSynchronizacji({
+    czyAndroid: platforma.rodzaj === 'android',
+    adresApi: pobierzKonfiguracjeSynchronizacji().adresApi,
+    konto,
+    csrfDostepny: Boolean(pobierzCsrfKonta()),
+    installationId,
+  })
 
   useEffect(() => {
     let aktywny = true
@@ -256,7 +268,7 @@ export function WidokUstawien() {
 
     <section className="siatka-dwie-kolumny siatka-dwie-kolumny--rowne"><Karta><h2>Dane demonstracyjne</h2><p>Przykładowe rekordy można wczytać tylko do całkowicie pustej bazy, aby nie mieszać ich z prawdziwymi danymi.</p><button type="button" className="przycisk przycisk--drugorzedny" disabled={!moznaDemo} onClick={async () => { try { await wczytajDaneDemonstracyjne(); ustawMoznaDemo(false); ustawKomunikat('Dane demonstracyjne zostały wczytane.') } catch (e) { ustawBlad(e instanceof Error ? e.message : 'Błąd danych demonstracyjnych.') } }}>Wczytaj dane demonstracyjne</button>{!moznaDemo && <p className="tekst-pomocniczy">Baza zawiera już dane — opcja jest wyłączona.</p>}</Karta><Karta klasa="karta--niebezpieczna"><h2>Wyczyść dane lokalne</h2><p>Operacja trwale usuwa całą bazę na tym urządzeniu. Najpierw wykonaj backup.</p><button type="button" className="przycisk przycisk--niebezpieczny" onClick={() => ustawCzyszczenie(true)}>Wyczyść wszystkie dane</button></Karta></section>
     <SekcjaPolaczeniaIAktualizacji synchronizacjaSkonfigurowana={synchronizacjaSkonfigurowana} dzieci={<>
-    <Karta><div className="naglowek-karty"><div><h2><Cloud aria-hidden="true" /> Synchronizacja</h2><p>Lokalne dane są wymieniane z serwerem Ogarniacza, gdy jest to potrzebne.</p></div><Znacznik wariant={wariantSynchronizacji(stanSynchronizacji?.stan)}>{etykietySynchronizacji[stanSynchronizacji?.stan ?? 'zsynchronizowano']}</Znacznik></div><div className="lista-kompaktowa"><div><span>Ostatni udany sync</span><strong>{stanSynchronizacji?.ostatniSync ? new Date(stanSynchronizacji.ostatniSync).toLocaleString('pl-PL') : 'jeszcze nie wykonano'}</strong></div><div><span>Oczekujące zmiany</span><strong>{stanSynchronizacji?.liczbaOczekujacych ?? 0}</strong></div><div><span>Konflikty</span><strong>{konfliktySynchronizacji.length}</strong></div></div>{stanSynchronizacji?.ostatniBlad && <p className="tekst-pomocniczy">Ostatni błąd: {stanSynchronizacji.ostatniBlad}</p>}<p className="tekst-pomocniczy">{synchronizacjaSkonfigurowana ? 'Synchronizacja działa przy starcie, wznowieniu, odzyskaniu sieci i po lokalnych zmianach.' : 'Synchronizacja nie jest skonfigurowana na tym urządzeniu. Konfiguracja runtime aplikacji jest niepełna.'}</p><button type="button" className="przycisk przycisk--glowny" disabled={!synchronizacjaSkonfigurowana || stanSynchronizacji?.stan === 'synchronizacja'} onClick={synchronizujTeraz}><RefreshCw aria-hidden="true" />{stanSynchronizacji?.stan === 'synchronizacja' ? 'Synchronizowanie…' : stanSynchronizacji?.stan === 'blad' ? 'Ponów synchronizację' : 'Synchronizuj teraz'}</button>{konfliktySynchronizacji.length > 0 && <div className="podglad-manifestu"><h3>Konflikty wymagające decyzji</h3><div className="lista-konfliktow-synchronizacji">{konfliktySynchronizacji.map((konflikt) => <KartaKonfliktuSynchronizacji key={konflikt.id} konflikt={konflikt} rozstrzygnij={rozstrzygnijKonflikt} />)}</div></div>}</Karta>
+    <Karta><div className="naglowek-karty"><div><h2><Cloud aria-hidden="true" /> Synchronizacja</h2><p>Lokalne dane są wymieniane z serwerem Ogarniacza, gdy jest to potrzebne.</p></div><Znacznik wariant={wariantSynchronizacji(stanSynchronizacji?.stan)}>{etykietySynchronizacji[stanSynchronizacji?.stan ?? 'zsynchronizowano']}</Znacznik></div><div className="lista-kompaktowa"><div><span>Ostatni udany sync</span><strong>{stanSynchronizacji?.ostatniSync ? new Date(stanSynchronizacji.ostatniSync).toLocaleString('pl-PL') : 'jeszcze nie wykonano'}</strong></div><div><span>Oczekujące zmiany</span><strong>{stanSynchronizacji?.liczbaOczekujacych ?? 0}</strong></div><div><span>Konflikty</span><strong>{konfliktySynchronizacji.length}</strong></div></div>{stanSynchronizacji?.ostatniBlad && <p className="tekst-pomocniczy">Ostatni błąd: {stanSynchronizacji.ostatniBlad}</p>}<details className="podglad-manifestu"><summary>Diagnostyka synchronizacji</summary><div className="lista-kompaktowa"><div><span>Środowisko</span><strong>{diagnostykaSynchronizacji.srodowisko}</strong></div><div><span>Host API</span><strong>{diagnostykaSynchronizacji.hostApi}</strong></div><div><span>Protokół</span><strong>{diagnostykaSynchronizacji.protokolApi}</strong></div><div><span>Sesja</span><strong>{diagnostykaSynchronizacji.stanSesji}</strong></div><div><span>Rola</span><strong>{diagnostykaSynchronizacji.rola}</strong></div><div><span>CSRF</span><strong>{diagnostykaSynchronizacji.csrf}</strong></div><div><span>Installation ID</span><strong>{diagnostykaSynchronizacji.installationId}</strong></div><div><span>Autoryzacja klienta</span><strong>{diagnostykaSynchronizacji.trybAutoryzacji}</strong></div></div></details><p className="tekst-pomocniczy">{synchronizacjaSkonfigurowana ? 'Synchronizacja działa przy starcie, wznowieniu, odzyskaniu sieci i po lokalnych zmianach.' : 'Synchronizacja nie jest skonfigurowana na tym urządzeniu. Konfiguracja runtime aplikacji jest niepełna.'}</p><button type="button" className="przycisk przycisk--glowny" disabled={!synchronizacjaSkonfigurowana || stanSynchronizacji?.stan === 'synchronizacja'} onClick={synchronizujTeraz}><RefreshCw aria-hidden="true" />{stanSynchronizacji?.stan === 'synchronizacja' ? 'Synchronizowanie…' : stanSynchronizacji?.stan === 'blad' ? 'Ponów synchronizację' : 'Synchronizuj teraz'}</button>{konfliktySynchronizacji.length > 0 && <div className="podglad-manifestu"><h3>Konflikty wymagające decyzji</h3><div className="lista-konfliktow-synchronizacji">{konfliktySynchronizacji.map((konflikt) => <KartaKonfliktuSynchronizacji key={konflikt.id} konflikt={konflikt} rozstrzygnij={rozstrzygnijKonflikt} />)}</div></div>}</Karta>
     </>} />
 
     {potwierdzeniePrzywracania && <ModalPotwierdzenia tytul="Przywrócić wybrane dane?" opis={`Wybrane sekcje (${sekcjePrzywracania.length}) zastąpią bieżące dane tych kategorii. Pozostałe kategorie nie zostaną zmienione. Przed zapisem system utworzy pełną kopię before-restore.`} etykietaAkcji="Utwórz kopię i przywróć" niebezpieczne anuluj={() => ustawPotwierdzeniePrzywracania(false)} potwierdz={wykonajPrzywracanie} />}

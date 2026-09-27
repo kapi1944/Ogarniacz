@@ -22,7 +22,7 @@ import {
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
-import { pobierzKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
+import { pobierzKonfiguracjeSynchronizacji, pobierzProdukcyjnaKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
 
 const katalogRepozytorium = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const katalogAndroida = join(katalogRepozytorium, 'android')
@@ -590,9 +590,9 @@ async function wykonajRelease(opcje) {
   if (adresManifestuWeb === adresManifestu || new URL(adresManifestuWeb).pathname.includes('/releases/latest/')) {
     throw new Error('Web OTA musi używać osobnego kanału i nie może korzystać z /releases/latest.')
   }
-  const konfiguracjaSynchronizacji = pobierzKonfiguracjeSynchronizacji(katalogRepozytorium)
+  const konfiguracjaSynchronizacji = pobierzProdukcyjnaKonfiguracjeSynchronizacji()
   if (!konfiguracjaSynchronizacji.adresApi) {
-    throw new Error('Release wymaga VITE_SYNC_API_URL, aby nie opublikować APK bez połączenia z kontem i synchronizacją.')
+    throw new Error('Release wymaga jawnej zmiennej procesu VITE_SYNC_API_URL, aby nie użyć nieaktualnego pliku .env.')
   }
   sprawdzProdukcyjnyAdresSynchronizacji(konfiguracjaSynchronizacji.adresApi)
   const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu)

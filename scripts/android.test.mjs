@@ -14,7 +14,7 @@ import {
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
-import { sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
+import { pobierzProdukcyjnaKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
 
 test('oblicza rosnący versionCode z wersji package.json', () => {
   assert.equal(obliczKodWersji('1.0.1'), 1_000_001)
@@ -44,11 +44,22 @@ test('zachowuje globalną blokadę HTTP i wyjątek wyłącznie dla endpointu LAN
   assert.throws(() => sprawdzAdresSynchronizacji('http://example.com'), /wyłącznie/)
 })
 
-test('produkcyjny Android wymaga HTTPS dla endpointu synchronizacji', () => {
+test('produkcyjny Android wymaga publicznego HTTPS dla endpointu synchronizacji', () => {
   assert.equal(sprawdzProdukcyjnyAdresSynchronizacji('https://raspberrypi.tailnet.ts.net').protocol, 'https:')
   assert.throws(
     () => sprawdzProdukcyjnyAdresSynchronizacji('http://192.168.0.116:8787'),
     /prywatnego HTTPS/,
+  )
+  assert.throws(() => sprawdzProdukcyjnyAdresSynchronizacji('https://192.168.0.116:8787'), /prywatnej sieci LAN/)
+  assert.throws(() => sprawdzProdukcyjnyAdresSynchronizacji('https://localhost:8787'), /localhost/)
+  assert.throws(() => sprawdzProdukcyjnyAdresSynchronizacji(''), /Brak VITE_SYNC_API_URL/)
+})
+
+test('release czyta endpoint wyłącznie z jawnej zmiennej procesu', () => {
+  assert.deepEqual(pobierzProdukcyjnaKonfiguracjeSynchronizacji({}), { adresApi: undefined })
+  assert.deepEqual(
+    pobierzProdukcyjnaKonfiguracjeSynchronizacji({ VITE_SYNC_API_URL: 'https://raspberrypi.tailnet.ts.net' }),
+    { adresApi: 'https://raspberrypi.tailnet.ts.net' },
   )
 })
 
