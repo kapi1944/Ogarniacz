@@ -33,6 +33,16 @@ export interface KontoUzytkownika {
   kodyOdzyskiwania?: string[]
 }
 
+export interface StatusAktualizacjiRaspberry {
+  wersja: string
+  commit: string
+  originMain: string | null
+  dostepnosc: 'aktualna' | 'dostepna' | 'blad' | 'nieznana'
+  stan: 'idle' | 'checking' | 'downloading/fetching' | 'installing' | 'building' | 'restarting' | 'success' | 'rollback' | 'error'
+  komunikat: string
+  moznaPrzywrocic: boolean
+}
+
 interface OdpowiedzBledu {
   error?: string
 }
@@ -147,4 +157,12 @@ export async function cofnijGrant(id: string): Promise<void> {
 
 export async function cofnijEdytora(editorId: string): Promise<void> {
   await wykonaj('POST', '/api/account/editors/revoke', { editorId }, true)
+}
+
+export async function pobierzStatusAktualizacjiRaspberry(): Promise<StatusAktualizacjiRaspberry> {
+  return wykonaj<StatusAktualizacjiRaspberry>('GET', '/api/rpi-update/status')
+}
+
+export async function uruchomAktualizacjeRaspberry(akcja: 'check' | 'start' | 'rollback'): Promise<void> {
+  await wykonaj('POST', `/api/rpi-update/${akcja}`, {}, true)
 }

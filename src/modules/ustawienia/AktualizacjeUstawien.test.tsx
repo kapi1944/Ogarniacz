@@ -6,6 +6,8 @@ import { komunikatBleduAktualizacji, PanelAktualizacji } from './PanelAktualizac
 import { PodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
 import { SekcjaPolaczeniaIAktualizacji } from './SekcjaPolaczeniaIAktualizacji'
 
+vi.mock('./PanelAktualizacjiRaspberry', () => ({ PanelAktualizacjiRaspberry: () => null }))
+
 const { nasluchujKontroli, pobierzApk, pobierzStan, pobierzStanKontroli, sprawdzAktualizacjeApk, uruchomInstalator } = vi.hoisted(() => ({
   nasluchujKontroli: vi.fn(() => () => undefined),
   pobierzApk: vi.fn(),

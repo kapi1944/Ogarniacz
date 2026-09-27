@@ -72,7 +72,7 @@ Skrypt `scripts/aktualizuj-rpi.sh` używa `flock` w `data/aktualizacja-rpi/` i z
 
 Pierwszą instalację pomocniczych jednostek oraz sudoers wykonaj ręcznie na Pi. Skrypt nadal wymaga uprawnień użytkownika `kacper` do repo; nie uruchamiaj go jako root. Diagnostyka: `journalctl -u ogarniacz-update.service -u ogarniacz-update-check.service -u ogarniacz-update-rollback.service --no-pager`. Log podaje etapy i stałe komunikaty, bez treści sesji ani wartości sekretów.
 
-`scripts/deploy-rpi.sh` pozostaje wyłącznie przejściową drogą ręcznego wdrożenia przed włączeniem `RPI_UPDATE_ENABLED=1`. Po włączeniu aktualizatora skrypt zatrzymuje się przed `git pull`; kolejne aktualizacje i rollback uruchamiaj tylko przez API. Panel Raspberry w Ustawieniach nie jest jeszcze zaimplementowany. Nie uruchamiaj starego `update.sh` ani timera systemd równolegle z tym mechanizmem.
+`scripts/deploy-rpi.sh` pozostaje wyłącznie przejściową drogą ręcznego wdrożenia przed włączeniem `RPI_UPDATE_ENABLED=1`. Po włączeniu aktualizatora skrypt zatrzymuje się przed `git pull`; kolejne aktualizacje i rollback uruchamiaj tylko przez API albo panel Ustawień dostępny dla zalogowanego Właściciela. Nie uruchamiaj starego `update.sh` ani timera systemd równolegle z tym mechanizmem.
 
 Skrypt zatrzymuje się wyłącznie przy zmianach w śledzonych plikach Git; ignorowane dane lokalne, w tym `data/`, nie blokują aktualizacji. Następnie używa `git pull --ff-only`, wykonuje `npm ci` i produkcyjny build frontendu oraz serwera.
 

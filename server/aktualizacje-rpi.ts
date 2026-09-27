@@ -5,6 +5,7 @@ import { promisify } from 'node:util'
 const wykonaj = promisify(execFile)
 const KATALOG = '/home/kacper/apps/Ogarniacz'
 const PLIK_STANU = `${KATALOG}/data/aktualizacja-rpi/status`
+const PLIK_POPRZEDNI = `${KATALOG}/data/aktualizacja-rpi/poprzedni`
 const JEDNOSTKI = {
   check: 'ogarniacz-update-check.service',
   start: 'ogarniacz-update.service',
@@ -14,7 +15,7 @@ const JEDNOSTKI = {
 const STANY = new Set(['idle', 'checking', 'downloading/fetching', 'installing', 'building', 'restarting', 'success', 'rollback', 'error'])
 
 export interface AktualizacjeRpi {
-  odczytaj(): Promise<{ wersja: string; commit: string; originMain: string | null; dostepnosc: 'aktualna' | 'dostepna' | 'blad' | 'nieznana'; stan: string; komunikat: string }>
+  odczytaj(): Promise<{ wersja: string; commit: string; originMain: string | null; dostepnosc: 'aktualna' | 'dostepna' | 'blad' | 'nieznana'; stan: string; komunikat: string; moznaPrzywrocic: boolean }>
   uruchom(akcja: keyof typeof JEDNOSTKI): Promise<boolean>
 }
 
@@ -25,11 +26,13 @@ export function utworzAktualizacjeRpi(): AktualizacjeRpi {
   ])
   void uruchomionaWersja.catch(() => {})
   async function odczytaj() {
-    const [[pakiet, wynik], plik] = await Promise.all([uruchomionaWersja, readFile(PLIK_STANU, 'utf8').catch(() => '')])
+    const [[pakiet, wynik], plik, poprzedniPlik] = await Promise.all([uruchomionaWersja, readFile(PLIK_STANU, 'utf8').catch(() => ''), readFile(PLIK_POPRZEDNI, 'utf8').catch(() => '')])
     const [stanSurowy, komunikatSurowy, originSurowy, dostepnoscSurowa] = plik.trim().split('|')
     const stan = STANY.has(stanSurowy) ? stanSurowy : 'idle'
     const originMain = /^[0-9a-f]{40}$/.test(originSurowy ?? '') ? originSurowy : null
     const commit = wynik.stdout.trim()
+    const [poprzedni, cel] = poprzedniPlik.trim().split(/\r?\n/)
+    const moznaPrzywrocic = /^[0-9a-f]{40}$/.test(poprzedni ?? '') && cel === commit
     const dostepnosc = dostepnoscSurowa === 'blad' ? 'blad'
       : originMain ? (originMain === commit ? 'aktualna' : 'dostepna') : 'nieznana'
     return {
@@ -39,6 +42,7 @@ export function utworzAktualizacjeRpi(): AktualizacjeRpi {
       dostepnosc: dostepnosc as 'aktualna' | 'dostepna' | 'blad' | 'nieznana',
       stan,
       komunikat: komunikatSurowy ?? '',
+      moznaPrzywrocic,
     }
   }
 

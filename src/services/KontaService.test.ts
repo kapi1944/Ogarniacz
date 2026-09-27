@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CapacitorHttp } from '@capacitor/core'
-import { pobierzCsrfKonta, pobierzSesjeKonta, zaloguj } from './KontaService'
+import { pobierzCsrfKonta, pobierzSesjeKonta, uruchomAktualizacjeRaspberry, zaloguj } from './KontaService'
 
 vi.mock('@capacitor/core', async (oryginal) => ({
   ...await oryginal<typeof import('@capacitor/core')>(),
@@ -54,6 +54,20 @@ describe('KontaService', () => {
     expect(CapacitorHttp.request).toHaveBeenCalledWith(expect.objectContaining({
       method: 'GET',
       url: 'https://raspberrypi.tailnet.ts.net/api/auth/session',
+      webFetchExtra: { credentials: 'include' },
+    }))
+  })
+
+  it('wysyła istniejący CSRF przy akcji aktualizatora Raspberry', async () => {
+    sessionStorage.setItem('ogarniacz-csrf', 'csrf-testowy')
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 202, data: { status: 'przyjeto' }, headers: {}, url: '' })
+
+    await uruchomAktualizacjeRaspberry('start')
+
+    expect(CapacitorHttp.request).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      url: 'https://raspberrypi.tailnet.ts.net/api/rpi-update/start',
+      headers: { 'content-type': 'application/json', 'x-ogarniacz-csrf': 'csrf-testowy' },
       webFetchExtra: { credentials: 'include' },
     }))
   })
