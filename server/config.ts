@@ -3,7 +3,6 @@ export interface KonfiguracjaSerwera {
   host: string
   sciezkaBazy: string
   sciezkaZasobowStatycznych: string
-  publicznyUrl?: string
   syncUserId?: string
   syncAccessKey?: string
   ownerBootstrapToken?: string
@@ -31,7 +30,6 @@ export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env):
     host: env.HOST?.trim() || '0.0.0.0',
     sciezkaBazy,
     sciezkaZasobowStatycznych: env.STATIC_DIR?.trim() || './dist',
-    publicznyUrl: env.PUBLIC_URL?.trim() || undefined,
     syncUserId: env.SYNC_USER_ID?.trim() || undefined,
     syncAccessKey: env.SYNC_ACCESS_KEY?.trim() || undefined,
     ownerBootstrapToken: env.OWNER_BOOTSTRAP_TOKEN?.trim() || undefined,

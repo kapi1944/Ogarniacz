@@ -26,7 +26,7 @@ test('API aktualizacji wymaga jawnego włączenia, sesji właściciela i CSRF', 
     uruchom: async (akcja: 'check' | 'start' | 'rollback') => { akcje.push(akcja); return true },
   }
   const uruchomSerwer = async (wlaczone: boolean) => {
-    const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ RPI_UPDATE_ENABLED: wlaczone ? '1' : '0' }), baza, undefined, aktualizacje)
+    const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ RPI_UPDATE_ENABLED: wlaczone ? '1' : '0', CORS_ALLOWED_ORIGINS: 'https://ogarniacz.tailnet.ts.net' }), baza, undefined, aktualizacje)
     await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', rozwiaz))
     const adres = serwer.address()
     assert.ok(adres && typeof adres === 'object')
@@ -44,8 +44,9 @@ test('API aktualizacji wymaga jawnego włączenia, sesji właściciela i CSRF', 
     assert.equal((await post({ cookie: 'ogarniacz_sesja=wlasciciel' })).status, 403)
     assert.equal((await post({ cookie: 'ogarniacz_sesja=wlasciciel', 'x-ogarniacz-csrf': 'csrf', origin: 'https://obca.example' })).status, 403)
     assert.equal((await post({ cookie: 'ogarniacz_sesja=edytor', 'x-ogarniacz-csrf': 'csrf' })).status, 403)
+    assert.equal((await post({ cookie: 'ogarniacz_sesja=wlasciciel', 'x-ogarniacz-csrf': 'csrf', origin: 'https://ogarniacz.tailnet.ts.net' })).status, 202)
     assert.equal((await post({ cookie: 'ogarniacz_sesja=wlasciciel', 'x-ogarniacz-csrf': 'csrf' })).status, 202)
-    assert.deepEqual(akcje, ['start'])
+    assert.deepEqual(akcje, ['start', 'start'])
   } finally {
     await new Promise<void>((rozwiaz) => wlaczony.serwer.close(() => rozwiaz()))
     baza.close()

@@ -114,7 +114,7 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
           return
         }
         const pochodzenie = zadanie.headers.origin
-        if (pochodzenie && pochodzenie !== `http://127.0.0.1:${konfiguracja.port}` && pochodzenie !== `http://localhost:${konfiguracja.port}`) {
+        if (pochodzenie && pochodzenie !== `http://127.0.0.1:${konfiguracja.port}` && pochodzenie !== `http://localhost:${konfiguracja.port}` && !konfiguracja.dozwolonePochodzeniaCors.includes(pochodzenie)) {
           odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
           return
         }

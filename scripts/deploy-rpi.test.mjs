@@ -27,6 +27,8 @@ test('konfigurator wystawia wyłącznie prywatne HTTPS Tailscale Serve i sprawdz
 
 test('deploy RPi sprawdza tylko śledzone zmiany i wykonuje pełny build', async () => {
   const skrypt = await readFile(sciezkaSkryptuWdrozenia, 'utf8')
+  assert.match(skrypt, /RPI_UPDATE_ENABLED=1/)
+  assert.ok(skrypt.indexOf('RPI_UPDATE_ENABLED=1') < skrypt.indexOf('git pull --ff-only'))
   assert.match(skrypt, /git diff --quiet/)
   assert.match(skrypt, /git diff --cached --quiet/)
   assert.doesNotMatch(skrypt, /git status --porcelain/)

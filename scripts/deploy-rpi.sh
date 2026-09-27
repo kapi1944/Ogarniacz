@@ -11,6 +11,11 @@ liczba_prob_health=15
 odstep_prob_health=1
 cd "$katalog_aplikacji"
 
+if [[ -f "$plik_env_systemowy" ]] && sudo grep --quiet --extended-regexp '^[[:space:]]*RPI_UPDATE_ENABLED=1[[:space:]]*$' "$plik_env_systemowy"; then
+  echo "Zatrzymano: aktualizator sterowany przez API jest włączony. Nie używaj deploy-rpi.sh do aktualizacji."
+  exit 1
+fi
+
 if ! git diff --quiet || ! git diff --cached --quiet; then
   echo "Zatrzymano: śledzone pliki zawierają lokalne zmiany. Zapisz je lub rozwiąż ręcznie przed wdrożeniem."
   exit 1
