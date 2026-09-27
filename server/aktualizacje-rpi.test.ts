@@ -23,7 +23,7 @@ test('API aktualizacji wymaga jawnego włączenia, sesji właściciela i CSRF', 
   const akcje: string[] = []
   const aktualizacje = {
     odczytaj: async () => ({ wersja: '1.0.13', commit: 'a'.repeat(40), originMain: null, dostepnosc: 'nieznana' as const, stan: 'idle', komunikat: '', moznaPrzywrocic: false }),
-    uruchom: async (akcja: 'check' | 'start' | 'rollback') => { akcje.push(akcja); return true },
+    uruchom: async (akcja: 'check' | 'start' | 'rollback') => { akcje.push(akcja); return akcja === 'rollback' ? 'brakRollbacku' as const : akcje.length > 2 ? 'zajete' as const : 'przyjeto' as const },
   }
   const uruchomSerwer = async (wlaczone: boolean) => {
     const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ RPI_UPDATE_ENABLED: wlaczone ? '1' : '0', CORS_ALLOWED_ORIGINS: 'https://ogarniacz.tailnet.ts.net' }), baza, undefined, aktualizacje)
@@ -46,7 +46,11 @@ test('API aktualizacji wymaga jawnego włączenia, sesji właściciela i CSRF', 
     assert.equal((await post({ cookie: 'ogarniacz_sesja=edytor', 'x-ogarniacz-csrf': 'csrf' })).status, 403)
     assert.equal((await post({ cookie: 'ogarniacz_sesja=wlasciciel', 'x-ogarniacz-csrf': 'csrf', origin: 'https://ogarniacz.tailnet.ts.net' })).status, 202)
     assert.equal((await post({ cookie: 'ogarniacz_sesja=wlasciciel', 'x-ogarniacz-csrf': 'csrf' })).status, 202)
-    assert.deepEqual(akcje, ['start', 'start'])
+    assert.equal((await post({ cookie: 'ogarniacz_sesja=wlasciciel', 'x-ogarniacz-csrf': 'csrf' })).status, 409)
+    const rollback = await fetch(`${wlaczony.url}/rollback`, { method: 'POST', headers: { cookie: 'ogarniacz_sesja=wlasciciel', 'x-ogarniacz-csrf': 'csrf' } })
+    assert.equal(rollback.status, 412)
+    assert.deepEqual(await rollback.json(), { error: 'Brak poprawnej pary commitów do rollbacku.' })
+    assert.deepEqual(akcje, ['start', 'start', 'start', 'rollback'])
   } finally {
     await new Promise<void>((rozwiaz) => wlaczony.serwer.close(() => rozwiaz()))
     baza.close()

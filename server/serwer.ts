@@ -124,7 +124,7 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
         }
         try {
           const wynik = await aktualizacjeRpi!.uruchom(akcja.slice(1) as 'check' | 'start' | 'rollback')
-          odpowiedzJson(odpowiedz, wynik ? 202 : 409, wynik ? { status: 'przyjeto' } : { error: 'Aktualizacja już trwa.' })
+          odpowiedzJson(odpowiedz, wynik === 'przyjeto' ? 202 : wynik === 'zajete' ? 409 : 412, wynik === 'przyjeto' ? { status: 'przyjeto' } : { error: wynik === 'zajete' ? 'Aktualizacja już trwa.' : 'Brak poprawnej pary commitów do rollbacku.' })
         } catch { odpowiedzJson(odpowiedz, 503, { error: 'Nie można uruchomić aktualizatora.' }) }
         return
       }

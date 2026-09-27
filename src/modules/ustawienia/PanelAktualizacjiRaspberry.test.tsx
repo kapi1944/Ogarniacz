@@ -74,6 +74,21 @@ describe('PanelAktualizacjiRaspberry', () => {
     await waitFor(() => expect(screen.getAllByText('restart')).not.toHaveLength(0))
     await waitFor(() => expect(screen.getAllByText('sukces')).not.toHaveLength(0), { timeout: 7_000 })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    const liczbaOdczytow = pobierzStatus.mock.calls.length
+    await new Promise((rozwiaz) => setTimeout(rozwiaz, 3_200))
+    expect(pobierzStatus).toHaveBeenCalledTimes(liczbaOdczytow)
+  }, 13_000)
+
+  it('po utracie odpowiedzi start nadal śledzi backend i blokuje drugą akcję', async () => {
+    uruchomAktualizacje.mockRejectedValueOnce(new Error('restart'))
+    pobierzStatus.mockReset().mockResolvedValueOnce(dostepnyStatus).mockResolvedValueOnce({ ...dostepnyStatus, stan: 'restarting' as const }).mockResolvedValue({ ...dostepnyStatus, stan: 'success' as const, komunikat: 'Aktualizacja zakończona.' })
+    render(<PanelAktualizacjiRaspberry />)
+    await screen.findByText('Aktualizacja Raspberry')
+    fireEvent.click(screen.getByRole('button', { name: 'Zainstaluj aktualizację' }))
+    await waitFor(() => expect(uruchomAktualizacje).toHaveBeenCalledTimes(1))
+    expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeDisabled()
+    await waitFor(() => expect(screen.getAllByText('sukces')).not.toHaveLength(0), { timeout: 7_000 })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   }, 9_000)
 
   it('pokazuje rollback wyłącznie, gdy backend potwierdza podstawę do rollbacku', async () => {

@@ -5,7 +5,7 @@ KATALOG=/home/kacper/apps/Ogarniacz
 KATALOG_STANU="$KATALOG/data/aktualizacja-rpi"
 mkdir -p "$KATALOG_STANU"
 exec 9>"$KATALOG_STANU/blokada"
-if ! flock -n 9; then exit 0; fi
+if ! flock -n 9; then exit 1; fi
 cd "$KATALOG"
 
 zapisz_stan() {
@@ -27,20 +27,21 @@ czyste_repo() {
 
 zbuduj() {
   zapisz_stan installing 'Instalowanie zależności.' "${CEL:-}"
-  npm ci --silent >/dev/null 2>&1 || return 1
+  npm ci --silent >/dev/null 2>&1 || { POWOD='Instalacja zależności npm ci nie przeszła.'; return 1; }
   zapisz_stan building 'Budowanie aplikacji.' "${CEL:-}"
-  npm run build:production --silent >/dev/null 2>&1
+  npm run build:production --silent >/dev/null 2>&1 || { POWOD='Build produkcyjny nie przeszedł.'; return 1; }
 }
 
 restart_i_zdrowie() {
   zapisz_stan restarting 'Restart usługi i kontrola healthchecku.' "${CEL:-}"
-  sudo -n /usr/bin/systemctl restart ogarniacz.service || return 1
+  sudo -n /usr/bin/systemctl restart ogarniacz.service || { POWOD='Restart ogarniacz.service nie przeszedł.'; return 1; }
   for ((proba=1; proba<=15; proba++)); do
     if curl --silent --fail --max-time 2 http://127.0.0.1:8787/health | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{try{const x=JSON.parse(s);process.exit(x.status==="ok"&&x.service==="ogarniacz-api"&&x.database==="connected"?0:1)}catch{process.exit(1)}})' ; then
       return 0
     fi
     sleep 1
   done
+  POWOD='Healthcheck nie wrócił po restarcie.'
   return 1
 }
 
@@ -49,8 +50,8 @@ cofnij() {
   czyste_repo
   [[ "$(git rev-parse HEAD)" == "$CEL" ]] || blad 'HEAD zmienił się po aktualizacji; rollback wymaga interwencji.'
   git reset --keep "$POPRZEDNI" >/dev/null 2>&1 || blad 'Rollback zatrzymany przez lokalne pliki; wymagana interwencja.'
-  zbuduj || blad 'Rollback przywrócił commit, ale build nie przeszedł.'
-  restart_i_zdrowie || blad 'Rollback zbudowany, ale healthcheck nadal nie przechodzi.'
+  zbuduj || blad "Rollback przywrócił commit, ale $POWOD Wymagana interwencja administratora."
+  restart_i_zdrowie || blad "Rollback zbudowany, ale $POWOD Wymagana interwencja administratora."
   zapisz_stan success 'Przywrócono poprzednią wersję.' "$CEL"
 }
 
@@ -73,12 +74,14 @@ case "${1:-}" in
     mv -f "$KATALOG_STANU/poprzedni.tmp" "$KATALOG_STANU/poprzedni"
     git merge --ff-only --quiet "$CEL" >/dev/null 2>&1 || blad 'Scalenie zatrzymane; lokalne pliki mogą kolidować z origin/main.'
     if ! zbuduj; then
+      POWOD_AKTUALIZACJI="$POWOD"
       cofnij
-      blad 'Build nowej wersji nie przeszedł; przywrócono poprzednią wersję.'
+      blad "$POWOD_AKTUALIZACJI Przywrócono poprzednią wersję."
     fi
     if ! restart_i_zdrowie; then
+      POWOD_AKTUALIZACJI="$POWOD"
       cofnij
-      blad 'Healthcheck nowej wersji nie przeszedł; przywrócono poprzednią wersję.'
+      blad "$POWOD_AKTUALIZACJI Przywrócono poprzednią wersję."
     fi
     zapisz_stan success 'Aktualizacja zakończona.' "$CEL"
     ;;
@@ -87,7 +90,9 @@ case "${1:-}" in
     mapfile -t COMMITY < "$KATALOG_STANU/poprzedni"
     POPRZEDNI="${COMMITY[0]:-}"
     CEL="${COMMITY[1]:-}"
-    [[ "$POPRZEDNI" =~ ^[0-9a-f]{40}$ && "$CEL" =~ ^[0-9a-f]{40}$ ]] || blad 'Niepoprawny zapis rollbacku.'
+    [[ "${#COMMITY[@]}" == 2 && "$POPRZEDNI" =~ ^[0-9a-f]{40}$ && "$CEL" =~ ^[0-9a-f]{40}$ && "$POPRZEDNI" != "$CEL" ]] || blad 'Niepoprawny zapis rollbacku.'
+    git cat-file -e "$POPRZEDNI^{commit}" && git cat-file -e "$CEL^{commit}" || blad 'Commity rollbacku nie istnieją; wymagana interwencja administratora.'
+    git merge-base --is-ancestor "$POPRZEDNI" "$CEL" || blad 'Commity rollbacku nie tworzą poprawnej pary; wymagana interwencja administratora.'
     cofnij
     ;;
   *) blad 'Nieznana operacja aktualizatora.' ;;

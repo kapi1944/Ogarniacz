@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { RefreshCw, RotateCcw, ServerCog } from 'lucide-react'
 import { Karta, Komunikat, Znacznik } from '../../components/Interfejs'
 import { useKonto } from '../../app/DostawcaKonta'
@@ -22,7 +22,7 @@ function opisBledu(blad: unknown, kontoDostepne: boolean): string {
   if (!(blad instanceof BladKonta)) return 'Backend Raspberry chwilowo nie odpowiada. Trwa ponawianie odczytu statusu.'
   if (blad.status === 401 || !kontoDostepne) return 'Brak sesji. Zaloguj się jako Właściciel, aby sterować aktualizacją Raspberry.'
   if (blad.status === 403) return 'Tylko Właściciel może sterować aktualizacją Raspberry.'
-  if (blad.status === 409) return 'Aktualizacja już trwa. Oczekuję na status backendu.'
+  if (blad.status === 409) return blad.message
   return blad.message
 }
 
@@ -36,29 +36,41 @@ function wariantStatusu(stan: StatusAktualizacjiRaspberry['stan']): 'neutralny' 
 export function PanelAktualizacjiRaspberry() {
   const { konto } = useKonto()
   const [dostepny, ustawDostepny] = useState<boolean>()
+  const dostepnyRef = useRef<boolean | undefined>(undefined)
   const [status, ustawStatus] = useState<StatusAktualizacjiRaspberry>()
   const [blad, ustawBlad] = useState('')
   const [trwaOperacja, ustawTrwaOperacja] = useState(false)
+  const oczekiwanieNaStan = useRef<{ podpis: string; odczyty: number; niepewna: boolean } | null>(null)
 
   const odswiezStatus = useCallback(async (podczasRestartu = false) => {
     try {
       const nowyStatus = await pobierzStatusAktualizacjiRaspberry()
+      dostepnyRef.current = true
       ustawDostepny(true)
       ustawStatus(nowyStatus)
       ustawBlad('')
-      if (!STANY_W_TRAKCIE.has(nowyStatus.stan)) ustawTrwaOperacja(false)
+      if (STANY_W_TRAKCIE.has(nowyStatus.stan)) oczekiwanieNaStan.current = null
+      else if (oczekiwanieNaStan.current) {
+        const podpis = `${nowyStatus.stan}|${nowyStatus.commit}|${nowyStatus.komunikat}`
+        if (podpis === oczekiwanieNaStan.current.podpis && oczekiwanieNaStan.current.odczyty++ < 3) return
+        if (podpis === oczekiwanieNaStan.current.podpis && oczekiwanieNaStan.current.niepewna) ustawBlad('Nie udało się potwierdzić uruchomienia aktualizatora. Sprawdź stan Raspberry.')
+        oczekiwanieNaStan.current = null
+        ustawTrwaOperacja(false)
+      } else ustawTrwaOperacja(false)
     } catch (przyczyna) {
       if (przyczyna instanceof BladKonta && przyczyna.status === 404) {
+        dostepnyRef.current = false
         ustawDostepny(false)
         return
       }
       if (przyczyna instanceof BladKonta && (przyczyna.status === 401 || przyczyna.status === 403)) {
+        dostepnyRef.current = true
         ustawDostepny(true)
         ustawBlad(opisBledu(przyczyna, Boolean(konto)))
         ustawTrwaOperacja(false)
         return
       }
-      if (dostepny !== true) {
+      if (dostepnyRef.current !== true) {
         ustawDostepny(false)
         return
       }
@@ -67,7 +79,7 @@ export function PanelAktualizacjiRaspberry() {
       ustawBlad(opisBledu(przyczyna, Boolean(konto)))
       ustawTrwaOperacja(false)
     }
-  }, [konto, dostepny])
+  }, [konto])
 
   useEffect(() => { void odswiezStatus() }, [odswiezStatus])
 
@@ -89,16 +101,21 @@ export function PanelAktualizacjiRaspberry() {
     }
     ustawBlad('')
     ustawTrwaOperacja(true)
+    oczekiwanieNaStan.current = { podpis: `${status?.stan}|${status?.commit}|${status?.komunikat}`, odczyty: 0, niepewna: false }
     try {
       await uruchomAktualizacjeRaspberry(akcja)
       await odswiezStatus(true)
     } catch (przyczyna) {
       if (przyczyna instanceof BladKonta && przyczyna.status === 409) {
         ustawBlad(opisBledu(przyczyna, true))
+        oczekiwanieNaStan.current = null
         return
       }
-      ustawTrwaOperacja(false)
-      ustawBlad(opisBledu(przyczyna, true))
+      if (przyczyna instanceof BladKonta && (przyczyna.status === 401 || przyczyna.status === 403 || przyczyna.status === 412)) {
+        oczekiwanieNaStan.current = null
+        ustawTrwaOperacja(false)
+        ustawBlad(opisBledu(przyczyna, true))
+      } else if (oczekiwanieNaStan.current) oczekiwanieNaStan.current.niepewna = true
     }
   }
 
