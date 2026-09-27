@@ -18,11 +18,27 @@ function odczytajPort(wartosc: string | undefined): number {
   return port
 }
 
-export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env): KonfiguracjaSerwera {
-  const sciezkaBazy = env.DATABASE_PATH?.trim() || './data/ogarniacz.sqlite'
-  const dozwolonePochodzeniaCors = (env.CORS_ALLOWED_ORIGINS?.split(',') ?? ['https://localhost'])
+function odczytajDozwolonePochodzeniaCors(wartosc: string | undefined): string[] {
+  const pochodzenia = (wartosc?.split(',') ?? ['https://localhost'])
     .map((pochodzenie) => pochodzenie.trim())
     .filter(Boolean)
+  for (const pochodzenie of pochodzenia) {
+    let adres: URL
+    try {
+      adres = new URL(pochodzenie)
+    } catch {
+      throw new Error('CORS_ALLOWED_ORIGINS musi zawierać pełne originy HTTPS.')
+    }
+    if (adres.protocol !== 'https:' || adres.origin !== pochodzenie || adres.hostname.includes('*')) {
+      throw new Error('CORS_ALLOWED_ORIGINS musi zawierać pełne originy HTTPS bez wildcardów.')
+    }
+  }
+  return pochodzenia
+}
+
+export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env): KonfiguracjaSerwera {
+  const sciezkaBazy = env.DATABASE_PATH?.trim() || './data/ogarniacz.sqlite'
+  const dozwolonePochodzeniaCors = odczytajDozwolonePochodzeniaCors(env.CORS_ALLOWED_ORIGINS)
   return {
     port: odczytajPort(env.PORT),
     host: env.HOST?.trim() || '0.0.0.0',

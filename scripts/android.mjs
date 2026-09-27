@@ -339,8 +339,9 @@ function zbudujFrontend(srodowisko) {
 
 function synchronizujCapacitor(srodowisko) {
   const { adresApi } = pobierzKonfiguracjeSynchronizacji(katalogRepozytorium, srodowisko)
+  if (adresApi) sprawdzAdresSynchronizacji(adresApi)
   const konfiguracjaSieci = join(katalogAndroida, 'app', 'src', 'main', 'res', 'xml', 'network_security_config.xml')
-  writeFileSync(konfiguracjaSieci, utworzKonfiguracjeBezpieczenstwaSieci(adresApi))
+  writeFileSync(konfiguracjaSieci, utworzKonfiguracjeBezpieczenstwaSieci())
   const capacitor = join(katalogRepozytorium, 'node_modules', '@capacitor', 'cli', 'bin', 'capacitor')
   wykonajEtap('Capacitor sync Android', process.execPath, [capacitor, 'sync', 'android'], { srodowisko })
 }

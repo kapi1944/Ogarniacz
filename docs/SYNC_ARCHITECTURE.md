@@ -12,7 +12,7 @@ Serwer wyznacza właściciela danych z zalogowanej sesji `HttpOnly`, nie z danyc
 
 ## Endpoint i diagnostyka
 
-Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL`. Sesja jest losowym, hashowanym po stronie bazy tokenem w cookie `HttpOnly; Secure; SameSite=None`, a zapisy wymagają osobnego tokenu CSRF. Przy `http://` skrypt Androida generuje wyjątek wyłącznie dla dokładnego prywatnego hosta; wdrożenie internetowe używa HTTPS i nie wymaga wyjątku Androida.
+Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL` i musi ono wskazywać pełny origin HTTPS Tailscale Serve. Sesja jest losowym, hashowanym po stronie bazy tokenem w cookie `HttpOnly; Secure; SameSite=None`, a zapisy wymagają osobnego tokenu CSRF. Android nie ma wyjątku cleartext; surowy HTTP LAN nie jest obsługiwaną ścieżką synchronizacji.
 
 `npm run sync:doctor` wykonuje wyłącznie odczyty: waliduje URL, DNS/IP, `/health`, preflight CORS i dostępność endpointu sesji. Uwierzytelniony sync wymaga interaktywnego logowania w aplikacji. `CORS_ALLOWED_ORIGINS` ogranicza originy i zezwala na credentials wyłącznie dla wpisanych adresów.
 

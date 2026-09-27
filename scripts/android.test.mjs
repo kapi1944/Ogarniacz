@@ -34,24 +34,17 @@ test('normalizuje fingerprint certyfikatu i odrzuca inny', () => {
   assert.notEqual(normalizujFingerprintCertyfikatu('83cba312'), oczekiwany)
 })
 
-test('zachowuje globalną blokadę HTTP i wyjątek wyłącznie dla endpointu LAN synchronizacji', () => {
-  assert.equal(sprawdzAdresSynchronizacji('http://192.168.0.116:8787').hostname, '192.168.0.116')
-  const konfiguracja = utworzKonfiguracjeBezpieczenstwaSieci('http://192.168.0.116:8787')
+test('Android nie generuje wyjątku cleartext dla synchronizacji', () => {
+  const konfiguracja = utworzKonfiguracjeBezpieczenstwaSieci()
   assert.match(konfiguracja, /<base-config cleartextTrafficPermitted="false"\s*\/>/)
-  assert.match(konfiguracja, /<domain-config cleartextTrafficPermitted="true">\s*<domain includeSubdomains="false">192\.168\.0\.116<\/domain>/)
   assert.doesNotMatch(konfiguracja, /<base-config cleartextTrafficPermitted="true"/)
-  assert.doesNotMatch(konfiguracja, /<domain-config cleartextTrafficPermitted="true">\s*<domain[^>]*>\s*<\/domain>/)
-  assert.throws(() => sprawdzAdresSynchronizacji('http://example.com'), /wyłącznie/)
+  assert.doesNotMatch(konfiguracja, /cleartextTrafficPermitted="true"/)
+  assert.throws(() => sprawdzAdresSynchronizacji('http://serwer.local'), /HTTPS/)
 })
 
 test('produkcyjny Android wymaga publicznego HTTPS dla endpointu synchronizacji', () => {
   assert.equal(sprawdzProdukcyjnyAdresSynchronizacji('https://raspberrypi.tailnet.ts.net').protocol, 'https:')
-  assert.throws(
-    () => sprawdzProdukcyjnyAdresSynchronizacji('http://192.168.0.116:8787'),
-    /prywatnego HTTPS/,
-  )
-  assert.throws(() => sprawdzProdukcyjnyAdresSynchronizacji('https://192.168.0.116:8787'), /prywatnej sieci LAN/)
-  assert.throws(() => sprawdzProdukcyjnyAdresSynchronizacji('https://localhost:8787'), /localhost/)
+  assert.throws(() => sprawdzProdukcyjnyAdresSynchronizacji('http://serwer.local'), /HTTPS/)
   assert.throws(() => sprawdzProdukcyjnyAdresSynchronizacji(''), /Brak VITE_SYNC_API_URL/)
 })
 

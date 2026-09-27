@@ -39,6 +39,13 @@ test('konfiguracja serwera domyślnie nasłuchuje w LAN i ogranicza CORS do orig
   assert.deepEqual(konfiguracja.dozwolonePochodzeniaCors, ['https://localhost'])
 })
 
+test('CORS odrzuca HTTP LAN i wildcardy, zachowując origin Capacitor oraz HTTPS Tailscale', () => {
+  const konfiguracja = utworzKonfiguracjeSerwera({ CORS_ALLOWED_ORIGINS: 'https://localhost,https://serwer.tailnet.ts.net' })
+  assert.deepEqual(konfiguracja.dozwolonePochodzeniaCors, ['https://localhost', 'https://serwer.tailnet.ts.net'])
+  assert.throws(() => utworzKonfiguracjeSerwera({ CORS_ALLOWED_ORIGINS: 'http://serwer.local' }), /HTTPS/)
+  assert.throws(() => utworzKonfiguracjeSerwera({ CORS_ALLOWED_ORIGINS: '*' }), /HTTPS/)
+})
+
 test('migracje tworzą schemat centralnej bazy idempotentnie', () => {
   const baza = new DatabaseSync(':memory:')
   assert.equal(uruchomMigracje(baza), 4)

@@ -6,7 +6,7 @@ export interface KonfiguracjaSynchronizacji {
 function sprawdzAdresApi(adresApi: string): string | undefined {
   try {
     const adres = new URL(adresApi)
-    if (!['http:', 'https:'].includes(adres.protocol) || adres.pathname !== '/' || adres.search || adres.hash) return undefined
+    if (adres.protocol !== 'https:' || adres.pathname !== '/' || adres.search || adres.hash) return undefined
     return adres.toString().replace(/\/$/, '')
   } catch {
     return undefined

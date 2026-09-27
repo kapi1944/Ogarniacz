@@ -4,7 +4,7 @@
 
 Istniejący proces Node.js obsługuje build Reacta, konta, synchronizację, Echo i `GET /health` na porcie `8787`. Docelowo `HOST=127.0.0.1` ogranicza proces do loopbacku, a Tailscale Serve przekazuje prywatny adres `https://<urządzenie>.<tailnet>.ts.net` i automatycznie zapewnia certyfikat TLS. Dostęp mają tylko urządzenia dopuszczone do tailnetu; nie używamy publicznego Tailscale Funnel ani port forwardingu.
 
-Zweryfikowany produkcyjny klient Android korzysta z HTTPS Tailscale i nie wymaga już bezpośredniego dostępu przez LAN. Aktualizacja skryptem nie zmienia `HOST`; przełączenie istniejącej konfiguracji live na `127.0.0.1` pozostaje osobną, ręczną operacją po potwierdzeniu wszystkich aktywnych klientów.
+Zweryfikowany produkcyjny klient Android korzysta z HTTPS Tailscale i nie wymaga już bezpośredniego dostępu przez LAN. Aktualizacja skryptem nie zmienia `HOST`; istniejącą konfigurację live przełącz ręcznie według procedury „Migracja live na loopback” poniżej.
 
 Ten wariant pasuje do prywatnej aplikacji jednej osoby: telefon i komputer instalują klienta Tailscale, a konto Ogarniacza nadal niezależnie egzekwuje rolę Właściciela/Edytora. Konfiguracja Serve z `--bg` jest trwała po restarcie urządzenia i `tailscale up`. Szczegóły: [Tailscale Serve](https://tailscale.com/docs/reference/tailscale-cli/serve) oraz [instalacja na Linux/Raspberry Pi OS](https://tailscale.com/docs/install/linux).
 
@@ -80,8 +80,31 @@ Przed restartem porównuje `deploy/rpi/ogarniacz.service` z `/etc/systemd/system
 
 `/etc/ogarniacz/ogarniacz.env` nigdy nie jest tworzony ani nadpisywany podczas aktualizacji. Skrypt porównuje jedynie nazwy wymaganych wpisów z plikiem przykładowym i ostrzega o brakujących nazwach bez wypisywania wartości. `OWNER_BOOTSTRAP_TOKEN` pozostaje opcjonalny i nie wywołuje ostrzeżenia. Nowe wymagane wartości trzeba uzupełnić ręcznie. Skrypt nie wykonuje resetu Git, nie usuwa `data/ogarniacz.sqlite`, konfiguracji kont ani Tailscale.
 
-Zweryfikowany Samsung łączy się przez Tailscale/HTTPS. `deploy-rpi.sh` nadal nie zmienia `HOST` ani żadnej innej wartości w live env; wartość `HOST=127.0.0.1` z przykładu trzeba ustawić ręcznie dopiero po potwierdzeniu, że żaden inny aktywny klient nie korzysta z bezpośredniego LAN.
+Zweryfikowany Samsung łączy się przez Tailscale/HTTPS. `deploy-rpi.sh` nadal nie zmienia `HOST` ani żadnej innej wartości w live env.
+
+## Migracja live na loopback
+
+Wykonaj na Raspberry Pi po potwierdzeniu, że wszystkie aktywne urządzenia korzystają z HTTPS Tailscale. Polecenia nie zmieniają originów CORS ani adresu w APK.
+
+```bash
+sudo cp -a /etc/ogarniacz/ogarniacz.env "/etc/ogarniacz/ogarniacz.env.backup-$(date +%Y%m%d-%H%M%S)"
+sudo sed -i 's/^HOST=0\.0\.0\.0$/HOST=127.0.0.1/' /etc/ogarniacz/ogarniacz.env
+sudo systemctl restart ogarniacz
+curl --fail http://127.0.0.1:8787/health
+sudo tailscale serve status
+nazwa_dns="$(sudo tailscale status --json | node -e 'let dane="";process.stdin.on("data",czesc=>dane+=czesc);process.stdin.on("end",()=>process.stdout.write(JSON.parse(dane).Self.DNSName.replace(/\.$/,"")))')"
+curl --fail "https://${nazwa_dns}/health"
+sudo ss -ltnp 'sport = :8787'
+```
+
+Ostatnie polecenie musi pokazać `127.0.0.1:8787` (lub `[::1]:8787`), nigdy adres LAN ani `0.0.0.0`. Z innego urządzenia w tym samym LAN potwierdź niedostępność surowego portu:
+
+```bash
+curl --fail --connect-timeout 3 http://ADRES_LAN_RASPBERRY:8787/health && exit 1 || true
+```
+
+Sukces oznacza, że działa wyłącznie prywatny adres HTTPS z Tailscale Serve. Jeśli lokalny healthcheck lub HTTPS nie przejdzie, przywróć zapisany plik backupu i zdiagnozuj usługę przed kolejną próbą.
 
 ## Router i firewall
 
-Nie konfiguruj port forwardingu i nie udostępniaj `8787` poza zaufanym LAN. Podczas przejściowego `HOST=0.0.0.0` ogranicz port regułami firewalla do sieci lokalnej wymaganej przez APK 1.0.8. Po migracji telefonu ustawienie `HOST=127.0.0.1` zablokuje surowy port, a Tailscale Serve oraz reguły dostępu tailnetu staną się jedyną zewnętrzną drogą do aplikacji.
+Nie konfiguruj port forwardingu ani wyjątków firewalla dla `8787`. `HOST=127.0.0.1` blokuje surowy port, a Tailscale Serve oraz reguły dostępu tailnetu są jedyną zewnętrzną drogą do aplikacji.
