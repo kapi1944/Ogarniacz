@@ -11,6 +11,10 @@ function czyBezpiecznaSciezkaWeb(sciezka) {
   const znormalizowana = normalizujSciezke(sciezka)
   if (znormalizowana === 'index.html') return true
   if (znormalizowana.startsWith('public/') && znormalizowana.length > 'public/'.length) return true
+  if (znormalizowana.startsWith('src/platform/')
+    || znormalizowana === 'src/services/RuntimeConfigService.ts'
+    || znormalizowana === 'src/services/KontrolaAktualizacjiAplikacji.ts'
+    || znormalizowana === 'src/app/PotwierdzenieGotowosciBundle.tsx') return false
   return znormalizowana.startsWith('src/') && ROZSZERZENIA_WEB.has(extname(znormalizowana).toLowerCase())
 }
 

@@ -244,7 +244,7 @@ export function PanelAktualizacji() {
   const czekaNaPotwierdzenie = stanNatywny?.status === 'OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI' && stanNatywny.maPotwierdzenieInstalacji
   const moznaPonowicInstalacje = Boolean(stanNatywny?.moznaPonowicInstalacje && maZweryfikowanyApk)
   return <><Karta>
-    <div className="naglowek-karty"><div><h2>Aktualizacja aplikacji</h2><p>Warstwa natywna Android · OTA APK</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
+    <div className="naglowek-karty"><div><h2>Android APK</h2><p>Pełna aktualizacja aplikacji, w tym kodu natywnego i bazowego interfejsu.</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
     <div className="lista-kompaktowa">
       <div><span>Aktualnie zainstalowana wersja</span><strong>{wersja}</strong></div>
       <div><span>Dostępna wersja</span><strong>{dostepna?.manifest.versionName ?? '—'}</strong></div>
@@ -252,9 +252,8 @@ export function PanelAktualizacji() {
     {dostepna?.manifest.releaseNotes && <div><h3>Informacje o wydaniu</h3><p className="tekst-pomocniczy" style={{ whiteSpace: 'pre-wrap' }}>{dostepna.manifest.releaseNotes}</p></div>}
     {komunikat && <p className="tekst-pomocniczy" role={czyEtapBledu ? 'alert' : 'status'}>{komunikat}</p>}
     {postep !== undefined && (etap === 'pobieranie' || etap === 'weryfikacja') && <progress value={postep} max="100" aria-label="Postęp pobierania aktualizacji" />}
-    {!platforma.natywna && <p className="tekst-pomocniczy">Aktualizacje APK są dostępne w aplikacji Android.</p>}
-    {platforma.natywna && <p className="tekst-pomocniczy">APK pobierane przez Ogarniacza trafia do prywatnej pamięci aplikacji, więc nie musi być widoczne w systemowym folderze „Pobrane”.</p>}
-    {platforma.natywna && !skonfigurowane && <p className="tekst-pomocniczy">{pobierzDiagnostykeRuntime() || 'Źródło aktualizacji nie jest skonfigurowane w tym APK.'}</p>}
+    <p className="tekst-pomocniczy">APK pobierane przez Ogarniacza trafia do prywatnej pamięci aplikacji, więc nie musi być widoczne w systemowym folderze „Pobrane”.</p>
+    {!skonfigurowane && <p className="tekst-pomocniczy">{pobierzDiagnostykeRuntime() || 'Źródło aktualizacji nie jest skonfigurowane w tym APK.'}</p>}
     <div className="akcje-formularza">
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={!skonfigurowane || zajete} onClick={sprawdzAktualizacje}><RefreshCw aria-hidden="true" />Sprawdź aktualizacje</button>
       {etap === 'dostepna' && !maZweryfikowanyApk && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Pobierz i zainstaluj</button>}

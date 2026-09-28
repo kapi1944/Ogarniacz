@@ -24,7 +24,7 @@ jobs:
   bramka_ci:
     name: Potwierdz zielone CI dla commita
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main')
     runs-on: ubuntu-latest
     outputs:
@@ -38,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wynik="$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=$COMMIT_CI&status=completed" --jq '.workflow_runs | any(.[]; .head_sha == env.COMMIT_CI and .conclusion == "success")')"
+          wynik="$(gh api "repos/${{ github.repository }}/actions/workflows/ci.yml/runs?head_sha=$COMMIT_CI&status=completed" --jq '.workflow_runs | any(.[]; .head_sha == env.COMMIT_CI and .head_branch == "main" and .event == "push" and .conclusion == "success")')"
           [[ "$wynik" == "true" ]] || { echo "Brak zielonego pelnego CI dla commita $COMMIT_CI." >&2; exit 1; }
           echo "commit_ci=$COMMIT_CI" >> "$GITHUB_OUTPUT"
 
@@ -82,7 +82,7 @@ jobs:
 
           # Tag powstaje przed publikacją APK; sam nie potwierdza udanego wydania.
           wydanie_apk="$(gh api "repos/${{ github.repository }}/releases/tags/$tag_zgodnego_apk")"
-          WYDANIE_APK="$wydanie_apk" KOD_APK="$kod_zgodnego_apk" node --input-type=module <<'NODE'
+          WYDANIE_APK="$wydanie_apk" KOD_APK="$kod_zgodnego_apk" TAG_APK="$tag_zgodnego_apk" node --input-type=module <<'NODE'
           import { walidujManifestAktualizacji } from './scripts/android-wspolne.mjs'
           const wydanie = JSON.parse(process.env.WYDANIE_APK)
           if (wydanie.draft || wydanie.prerelease) throw new Error('Zgodne APK nie jest publicznym wydaniem produkcyjnym.')
@@ -91,13 +91,13 @@ jobs:
           const odpowiedz = await fetch(plikManifestu.browser_download_url)
           if (!odpowiedz.ok) throw new Error('Publiczny manifest APK jest niedostępny.')
           const manifest = walidujManifestAktualizacji(await odpowiedz.json())
-          if (manifest.versionCode !== Number(process.env.KOD_APK)) throw new Error('Wydanie APK nie odpowiada punktowi zgodności.')
+          if (manifest.versionCode !== Number(process.env.KOD_APK) || `v${manifest.versionName}` !== process.env.TAG_APK) throw new Error('Wydanie APK nie odpowiada punktowi zgodności.')
           if (!wydanie.assets.some((plik) => plik.name === manifest.apkUrl && plik.size === manifest.size)) throw new Error('Brak zgodnego artefaktu APK.')
           NODE
 
           commit_ci="${{ needs.bramka_ci.outputs.commit_ci }}"
           git merge-base --is-ancestor "$tag_zgodnego_apk" "$commit_ci" || { echo 'Bundle nie pochodzi z linii zgodnego APK.' >&2; exit 1; }
-          mapfile -d '' pliki < <(git log --format= --name-only -z "$tag_zgodnego_apk..$commit_ci")
+          mapfile -d '' pliki < <(git log --no-renames --format= --name-only -z "$tag_zgodnego_apk..$commit_ci")
           if wynik="$(node scripts/web-ota-klasyfikacja.mjs "${pliki[@]}")"; then
             echo "$wynik"
             echo "publikuj=true" >> "$GITHUB_OUTPUT"
@@ -131,18 +131,15 @@ jobs:
         with:
           ref: ${{ needs.ocena.outputs.commit_bundla }}
 
-      - name: Pobierz zgodne zrodlo bundle
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.ocena.outputs.commit_bundla }}
-          path: zrodlo-bundla
+      - name: Potwierdz oceniony commit przed buildem
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "${{ needs.ocena.outputs.commit_bundla }}"
 
       - name: Przygotuj Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: zrodlo-bundla/package-lock.json
 
       - name: Sprawdz konfiguracje publikacji
         shell: bash
@@ -160,11 +157,9 @@ jobs:
 
       - name: Zainstaluj zaleznosci
         run: npm ci
-        working-directory: zrodlo-bundla
 
       - name: Zbuduj dist
         run: npm run build
-        working-directory: zrodlo-bundla
         env:
           GITHUB_SHA: ${{ needs.ocena.outputs.commit_bundla }}
           VITE_SYNC_API_URL: ''
@@ -175,9 +170,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f zrodlo-bundla/dist/index.html
+          test -f dist/index.html
           mkdir -p artifacts/web-ota
-          (cd zrodlo-bundla/dist && zip -q -r ../../artifacts/web-ota/web-ota.zip .)
+          (cd dist && zip -q -r ../artifacts/web-ota/web-ota.zip .)
 
       - name: Utworz i podpisz manifest
         shell: bash

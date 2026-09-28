@@ -130,16 +130,17 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
     pobierzStan.mockResolvedValue(stanWeb)
     const { container } = render(<SekcjaPolaczeniaIAktualizacji synchronizacjaSkonfigurowana dzieci={<h2>Synchronizacja</h2>} />)
     const tekst = container.textContent ?? ''
-    expect(tekst.indexOf('Synchronizacja')).toBeLessThan(tekst.indexOf('Aktualizacja aplikacji'))
-    expect(tekst.indexOf('Aktualizacja aplikacji')).toBeLessThan(tekst.indexOf('Szybkie poprawki'))
+    expect(tekst.indexOf('Synchronizacja')).toBeLessThan(tekst.indexOf('Android APK'))
+    expect(tekst.indexOf('Android APK')).toBeLessThan(tekst.indexOf('Android Web OTA'))
   })
 
   it('na Web/PWA pokazuje wyłącznie panel Raspberry, bez instalatorów Androida', () => {
     platforma.natywna = false
     render(<SekcjaPolaczeniaIAktualizacji synchronizacjaSkonfigurowana dzieci={<h2>Synchronizacja</h2>} />)
     expect(screen.getByText('Aktualizacja Raspberry')).toBeInTheDocument()
-    expect(screen.queryByText('Szybkie poprawki')).not.toBeInTheDocument()
-    expect(screen.queryByText('Aktualizacja aplikacji')).not.toBeInTheDocument()
+    expect(screen.queryByText('Android Web OTA')).not.toBeInTheDocument()
+    expect(screen.queryByText('Android APK')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pobierz i zainstaluj' })).not.toBeInTheDocument()
   })
 
   it('promuje dostępne APK ponad szybką poprawkę', () => {

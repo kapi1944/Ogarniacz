@@ -31,9 +31,11 @@ test('generator i workflow nie maja drugiego zrodla minNativeVersionCode', async
   assert.doesNotMatch(workflow, /min_native_version_code|github\.event\.before/)
   assert.match(workflow, /workflow_run:/)
   assert.match(workflow, /workflows: \[CI\]/)
+  assert.match(workflow, /github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/)
   assert.match(workflow, /github\.event\.workflow_run\.head_sha \|\| github\.sha/)
   assert.match(workflow, /actions\/workflows\/ci\.yml\/runs\?head_sha=\$COMMIT_CI/)
-  assert.match(workflow, /git log --format= --name-only -z "\$tag_zgodnego_apk\.\.\$commit_ci"/)
+  assert.match(workflow, /\.head_branch == "main" and \.event == "push" and \.conclusion == "success"/)
+  assert.match(workflow, /git log --no-renames --format= --name-only -z "\$tag_zgodnego_apk\.\.\$commit_ci"/)
   assert.doesNotMatch(workflow, /git diff --name-only|git rev-list -n 1/)
   assert.match(workflow, /--commit-sha "\$\{\{ needs\.ocena\.outputs\.commit_bundla \}\}"/)
   assert.match(workflow, /GITHUB_SHA: \$\{\{ needs\.ocena\.outputs\.commit_bundla \}\}/)
@@ -42,6 +44,8 @@ test('generator i workflow nie maja drugiego zrodla minNativeVersionCode', async
   assert.match(workflow, /Zweryfikuj lokalny ZIP i manifest/)
   assert.match(workflow, /Pobierz i zweryfikuj ZIP przed publikacja manifestu/)
   assert.match(workflow, /name: Pobierz repozytorium\s+uses: actions\/checkout@v4\s+with:\s+ref: \$\{\{ needs\.ocena\.outputs\.commit_bundla \}\}/)
+  assert.match(workflow, /test "\$\(git rev-parse HEAD\)" = "\$\{\{ needs\.ocena\.outputs\.commit_bundla \}\}"/)
+  assert.doesNotMatch(workflow, /zrodlo-bundla/)
 })
 
 test('bramka publikacji wymaga publicznego APK odpowiadającego punktowi zgodności', async () => {
@@ -60,6 +64,7 @@ test('bramka publikacji wymaga publicznego APK odpowiadającego punktowi zgodno�
     { nazwa: 'brak APK', wydanie: { ...wydanie, assets: wydanie.assets.slice(0, 1) }, manifest },
     { nazwa: 'brak manifestu', wydanie: { ...wydanie, assets: wydanie.assets.slice(1) }, manifest },
     { nazwa: 'inne APK', wydanie, manifest: { ...manifest, versionName: '1.0.12', versionCode: 1000012 } },
+    { nazwa: 'inna nazwa wersji przy tym samym kodzie', wydanie, manifest: { ...manifest, versionName: '1.0.013' } },
     { nazwa: 'niepełny upload', wydanie, manifest: { ...manifest, size: 124 } },
     { nazwa: 'manifest niedostępny publicznie', wydanie, manifest, niedostepny: true },
   ]
@@ -67,7 +72,7 @@ test('bramka publikacji wymaga publicznego APK odpowiadającego punktowi zgodno�
     const przygotowanie = `globalThis.fetch = async () => ({ ok: ${!przypadek.niedostepny}, json: async () => (${JSON.stringify(przypadek.manifest)}) });\n`
     const wynik = spawnSync(process.execPath, ['--input-type=module', '--eval', przygotowanie + kod], {
       encoding: 'utf8',
-      env: { ...process.env, WYDANIE_APK: JSON.stringify(przypadek.wydanie), KOD_APK: '1000013' },
+      env: { ...process.env, WYDANIE_APK: JSON.stringify(przypadek.wydanie), KOD_APK: '1000013', TAG_APK: 'v1.0.13' },
     })
     assert.equal(wynik.status === 0, Boolean(przypadek.poprawny), `${przypadek.nazwa}: ${wynik.stderr}`)
   }
