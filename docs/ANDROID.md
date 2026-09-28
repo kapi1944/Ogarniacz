@@ -60,12 +60,12 @@ $env:VITE_ANDROID_UPDATE_MANIFEST_URL='https://github.com/kapi1944/Ogarniacz/rel
 npm run android:release
 ```
 
-Późniejsza migracja na Raspberry Pi wymaga wyłącznie zmiany tego URL-a podczas budowania. Logika pobierania i instalacji pozostaje bez zmian.
+Produkcyjny manifest APK jest pobierany z GitHub Releases. Serwer Raspberry nie pośredniczy w aktualizacji APK; adres źródła można zmienić podczas budowania bez zmiany logiki instalatora.
 
 Opcjonalny absolutny `apkUrl`:
 
 ```bash
-npm run android:release -- --base-url https://ogarniacz.local/updates/
+npm run android:release -- --base-url https://example.com/updates/
 ```
 
 Informacje pokazywane w panelu aktualizacji można dodać bezpośrednio albo z pliku:

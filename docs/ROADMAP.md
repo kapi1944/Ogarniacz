@@ -1,19 +1,18 @@
 # Roadmapa po Ogarniaczu v1
 
-## Stabilizacja przed 1.0.9
+## Bieżąca walidacja wydań i wdrożenia
 
-- ręczny smoke test najważniejszych przepływów na Androidzie;
-- prawdziwy test aktualizacji APK 1.0.8 → 1.0.9;
-- weryfikacja dawkowania leków po migracji istniejących danych;
-- weryfikacja synchronizacji komputer ↔ Android;
-- sprawdzenie backupu i restore przed wydaniem;
-- zamrożenie nowych funkcji do czasu wydania 1.0.9.
+- test aktualizacji z wydanego APK 1.0.13 do następnej wersji na fizycznym Androidzie oraz osobny test poprawionego instalatora w kolejnym przejściu między wersjami;
+- potwierdzenie na Raspberry Pi instalacji jednostek aktualizatora, działania panelu, healthchecku i rollbacku; lokalne testy nie zastępują próby na urządzeniu;
+- po potwierdzeniu wszystkich aktywnych klientów na HTTPS Tailscale: ręczne przełączenie live `HOST` na loopback i wyłączenie starych timerów aktualizacji;
+- ręczne sprawdzenie najważniejszych przepływów, w tym synchronizacji, leków i backupu, przed kolejnym wydaniem.
 
 ## Synchronizacja i konta — stan wdrożony
 
 - backend Node.js + SQLite na Raspberry Pi;
 - prywatny dostęp HTTPS przez Tailscale Serve;
 - konta, logowanie, sesje HttpOnly i CSRF;
+- synchronizacja Androida wyłącznie przez sesję; legacy Bearer został usunięty;
 - jednorazowy bootstrap Właściciela;
 - zaproszenia Edytora oraz odzyskiwanie dostępu;
 - synchronizacja local-first z trwałym outboxem;
@@ -27,7 +26,7 @@ Do dalszego rozwoju pozostają UX rozwiązywania konfliktów, obserwowalność s
 
 - Android i PWA są aktywnymi platformami;
 - natywne przypomnienia Android i dokładne alarmy są wdrożone;
-- podpisane APK OTA i podpisane Web OTA są wdrożone;
+- aktualizacja podpisanego APK z weryfikacją SHA-256 oraz podpisane Web OTA są wdrożone; PWA odświeża frontend przez service worker, a Raspberry ma osobny aktualizator z panelem i rollbackiem;
 - opcjonalne opakowanie Tauri dla funkcji systemowych;
 - dalsze testy zachowania w tle na różnych urządzeniach Android.
 

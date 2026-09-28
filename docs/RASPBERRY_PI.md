@@ -2,7 +2,7 @@
 
 ## Architektura
 
-Istniejący proces Node.js obsługuje build Reacta, konta, synchronizację, Echo i `GET /health` na porcie `8787`. Docelowo `HOST=127.0.0.1` ogranicza proces do loopbacku, a Tailscale Serve przekazuje prywatny adres `https://<urządzenie>.<tailnet>.ts.net` i automatycznie zapewnia certyfikat TLS. Dostęp mają tylko urządzenia dopuszczone do tailnetu; nie używamy publicznego Tailscale Funnel ani port forwardingu.
+Istniejący proces Node.js obsługuje build Reacta, konta, synchronizację, Echo i `GET /health` na porcie `8787`. Backend domyślnie używa `HOST=127.0.0.1`, co ogranicza proces do loopbacku, a Tailscale Serve przekazuje prywatny adres `https://<urządzenie>.<tailnet>.ts.net` i automatycznie zapewnia certyfikat TLS. Dostęp mają tylko urządzenia dopuszczone do tailnetu; nie używamy publicznego Tailscale Funnel ani port forwardingu.
 
 Zweryfikowany produkcyjny klient Android korzysta z HTTPS Tailscale i nie wymaga już bezpośredniego dostępu przez LAN. Aktualizacja skryptem nie zmienia `HOST`; istniejącą konfigurację live przełącz ręcznie według procedury „Migracja live na loopback” poniżej.
 
@@ -62,7 +62,7 @@ Po restarcie Raspberry Pi sprawdź `systemctl is-active ogarniacz tailscaled`, `
 
 ### Aktualizator sterowany lokalnym API
 
-Po wdrożeniu tego commita zainstaluj trzy jednostki z `deploy/rpi/ogarniacz-update*.service` do `/etc/systemd/system/`, a plik `deploy/rpi/ogarniacz-update.sudoers` przez `visudo -cf` do `/etc/sudoers.d/ogarniacz-update` z uprawnieniami `0440`. W `/etc/ogarniacz/ogarniacz.env` ustaw `RPI_UPDATE_ENABLED=1`, wykonaj `sudo systemctl daemon-reload` i zrestartuj `ogarniacz.service`. Zweryfikuj ręcznie ścieżki `systemctl`, `bash`, `git`, `npm`, `curl`, `node` i `flock` na Raspberry. Jednostki nie są instalowane automatycznie przez API.
+Przed włączeniem aktualizatora na Raspberry Pi zainstaluj trzy jednostki z `deploy/rpi/ogarniacz-update*.service` do `/etc/systemd/system/`, a plik `deploy/rpi/ogarniacz-update.sudoers` przez `visudo -cf` do `/etc/sudoers.d/ogarniacz-update` z uprawnieniami `0440`. W `/etc/ogarniacz/ogarniacz.env` ustaw `RPI_UPDATE_ENABLED=1`, wykonaj `sudo systemctl daemon-reload` i zrestartuj `ogarniacz.service`. Zweryfikuj ręcznie ścieżki `systemctl`, `bash`, `git`, `npm`, `curl`, `node` i `flock` na Raspberry. Jednostki nie są instalowane automatycznie przez API.
 
 API: `GET /api/rpi-update/status` zwraca wersję z `package.json`, bieżący SHA, ostatnio sprawdzony `origin/main`, dostępność oraz stan. `POST /api/rpi-update/check`, `/start`, `/rollback` uruchamiają tylko stałe jednostki systemd. Wymagają sesji Właściciela i nagłówka `X-Ogarniacz-CSRF`; POST przyjmowany jest jedynie przez lokalne połączenie z originem lokalnym lub wpisanym dokładnie w `CORS_ALLOWED_ORIGINS`. Origin prywatnego HTTPS Tailscale Serve musi tam być wpisany. Reverse proxy działające na tym samym urządzeniu może także wyglądać dla API jak lokalny klient, dlatego jego dostęp musi pozostać prywatny. Android nie korzysta z tych endpointów.
 

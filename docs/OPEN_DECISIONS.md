@@ -1,6 +1,6 @@
 # Otwarte decyzje
 
-Poniższe decyzje pozostają otwarte po wdrożeniu backendu, kont, synchronizacji, Androida oraz OTA.
+Poniższe decyzje pozostają otwarte po wdrożeniu backendu, kont, sesyjnej synchronizacji Androida, Androida oraz oddzielnych kanałów APK, Web OTA, PWA i aktualizacji Raspberry.
 
 1. **Finalny układ „Dzisiaj”** — obecny układ może być dalej strojony bez zmiany modeli.
 2. **UX konfliktów synchronizacji** — serwer wykrywa konflikt wersji i klient zachowuje obie wersje; otwarty pozostaje docelowy sposób prezentacji i ręcznego scalania.
@@ -13,6 +13,12 @@ Poniższe decyzje pozostają otwarte po wdrożeniu backendu, kont, synchronizacj
 9. **Platforma Smart Home** — nie wybrano docelowej platformy.
 10. **Poczta, kalendarz, mapy i inne integracje** — pozostają późniejszym zakresem.
 11. **Rola tylko do odczytu** — obecnie odczyt bez edycji realizowany jest przez zakres grantu, a nie osobną trzecią rolę.
+
+## Weryfikacje wdrożeniowe
+
+- Test aktualizacji z APK 1.0.13 oraz późniejszy test poprawionego instalatora na fizycznym Androidzie; szczegóły w `ANDROID_RELEASE.md`.
+- Instalacja i sprawdzenie jednostek aktualizatora, panelu, healthchecku i rollbacku na działającym Raspberry Pi. Stan live nie wynika z testów lokalnych.
+- Przed wyłączeniem surowego LAN na działającym Pi: potwierdzenie wszystkich aktywnych klientów na HTTPS Tailscale, sprawdzenie starych timerów i ręczne przełączenie `HOST` na loopback.
 
 ## Ograniczenia platformowe
 
