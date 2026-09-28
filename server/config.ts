@@ -41,7 +41,7 @@ export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env):
   const dozwolonePochodzeniaCors = odczytajDozwolonePochodzeniaCors(env.CORS_ALLOWED_ORIGINS)
   return {
     port: odczytajPort(env.PORT),
-    host: env.HOST?.trim() || '0.0.0.0',
+    host: env.HOST?.trim() || '127.0.0.1',
     sciezkaBazy,
     sciezkaZasobowStatycznych: env.STATIC_DIR?.trim() || './dist',
     ownerBootstrapToken: env.OWNER_BOOTSTRAP_TOKEN?.trim() || undefined,

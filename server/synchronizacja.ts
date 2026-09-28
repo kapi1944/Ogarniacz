@@ -80,11 +80,6 @@ function walidujZmiane(zmiana: unknown, installationId: string): asserts zmiana 
 export function zapewnijProfilSynchronizacji(baza: DatabaseSync, userId: string, installationId: string): void {
   const teraz = new Date().toISOString()
   baza.prepare(`
-    INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET zaktualizowano_at = excluded.zaktualizowano_at
-  `).run(userId, `${userId}@sync.ogarniacz.local`, 'dostep-przez-klucz-serwera', teraz, teraz)
-  baza.prepare(`
     INSERT INTO instalacje (id, uzytkownik_id, ostatnia_aktywnosc_at, utworzono_at)
     VALUES (?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET ostatnia_aktywnosc_at = excluded.ostatnia_aktywnosc_at

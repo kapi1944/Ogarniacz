@@ -33,9 +33,9 @@ test('konfiguracja odrzuca niepoprawny port', () => {
   assert.throws(() => utworzKonfiguracjeSerwera({ PORT: '70000' }), /PORT/)
 })
 
-test('konfiguracja serwera domyślnie nasłuchuje w LAN i ogranicza CORS do originu Capacitor', () => {
+test('konfiguracja serwera domyślnie nasłuchuje na loopbacku i ogranicza CORS do originu Capacitor', () => {
   const konfiguracja = utworzKonfiguracjeSerwera({})
-  assert.equal(konfiguracja.host, '0.0.0.0')
+  assert.equal(konfiguracja.host, '127.0.0.1')
   assert.deepEqual(konfiguracja.dozwolonePochodzeniaCors, ['https://localhost'])
 })
 
@@ -134,6 +134,12 @@ test('sync przenosi rekord z instalacji A do instalacji B', async () => {
   assert.deepEqual(pobraneDane.zmiany, [{ tabela: 'zadania', rekord, installationId: 'instalacja-a' }])
   assert.ok(!Number.isNaN(Date.parse(pobraneDane.synchronizowanoDo)))
   assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM instalacje').get()?.liczba, 2)
+  const uzytkownicy = baza.prepare('SELECT id, email, haslo_hash, zaktualizowano_at FROM uzytkownicy').all()
+  assert.equal(uzytkownicy.length, 1)
+  assert.equal(uzytkownicy[0]?.id, 'wlasciciel')
+  assert.equal(uzytkownicy[0]?.email, 'owner@example.test')
+  assert.equal(uzytkownicy[0]?.haslo_hash, 'hash-testowy')
+  assert.equal(uzytkownicy[0]?.zaktualizowano_at, TERAZ)
   await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
   baza.close()
 })
