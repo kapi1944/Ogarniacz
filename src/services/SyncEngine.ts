@@ -27,6 +27,13 @@ interface OpcjeSyncEngine {
   opoznieniePonowieniaMs?: number
 }
 
+export type WyborWartosciKonfliktu = 'lokalny' | 'zdalny'
+
+export type RozstrzygniecieKonfliktu =
+  | { typ: 'lokalny' }
+  | { typ: 'zdalny' }
+  | { typ: 'reczny'; pola: Record<string, WyborWartosciKonfliktu> }
+
 function tabelaLokalna(nazwa: NazwaTabeliSynchronizowanej): Table<EncjaBazowa, string> {
   return baza.table(nazwa) as Table<EncjaBazowa, string>
 }
@@ -171,29 +178,58 @@ export class SyncEngine implements DostawcaSynchronizacji {
     return this.trwajacaSynchronizacja
   }
 
-  async rozstrzygnijKonflikt(id: string, wybor: 'lokalny' | 'zdalny'): Promise<void> {
+  async rozstrzygnijKonflikt(id: string, rozstrzygniecie: RozstrzygniecieKonfliktu): Promise<void> {
     const konflikt = await baza.tabela('konfliktySynchronizacji').get(id)
     if (!konflikt) return
     const tabela = konflikt.tabela as NazwaTabeliSynchronizowanej
     const stan = await pobierzStanSynchronizacji()
     const teraz = this.teraz()
-    const znacznikLokalnegoWyboru = stan.ostatniSync && teraz <= stan.ostatniSync
-      ? new Date(new Date(stan.ostatniSync).getTime() + 1).toISOString()
-      : teraz
-    const rekord = wybor === 'lokalny'
-      ? { ...konflikt.lokalny, updatedAt: znacznikLokalnegoWyboru }
-      : structuredClone(konflikt.zdalny)
-    await baza.transaction('rw', [tabelaLokalna(tabela), baza.tabela('konfliktySynchronizacji')], async () => {
+    const najnowszyZnacznik = [stan.ostatniSync, konflikt.lokalny.updatedAt, konflikt.zdalny.updatedAt]
+      .filter((wartosc): wartosc is string => Boolean(wartosc))
+      .reduce((najnowszy, wartosc) => wartosc > najnowszy ? wartosc : najnowszy, teraz)
+    const znacznikLokalnegoWyboru = teraz > najnowszyZnacznik
+      ? teraz
+      : new Date(new Date(najnowszyZnacznik).getTime() + 1).toISOString()
+    const rekord = this.przygotujRozstrzygnietyRekord(konflikt, rozstrzygniecie, znacznikLokalnegoWyboru)
+    const wyborZdalny = rozstrzygniecie.typ === 'zdalny'
+    const kolejka = tabelaKolejki()
+    await baza.transaction('rw', [tabelaLokalna(tabela), baza.tabela('konfliktySynchronizacji'), kolejka], async () => {
       await tabelaLokalna(tabela).put(rekord)
       await baza.tabela('konfliktySynchronizacji').delete(id)
+      if (wyborZdalny) {
+        const oczekujace = await kolejka.where('[tabela+rekordId]').equals([tabela, rekord.id]).primaryKeys()
+        await usunWyslaneZmiany(oczekujace)
+      } else {
+        await dodajDoKolejkiSynchronizacji(tabela, rekord, konflikt.zdalny)
+      }
     })
-    if (wybor === 'lokalny') await dodajDoKolejkiSynchronizacji(tabela, rekord, konflikt.zdalny)
-    else {
-      const oczekujace = await tabelaKolejki().where('[tabela+rekordId]').equals([tabela, rekord.id]).primaryKeys()
-      await usunWyslaneZmiany(oczekujace)
-    }
     await this.ustawStanPoKonfliktach()
     powiadomOZmianieDanych(tabela)
+  }
+
+  private przygotujRozstrzygnietyRekord(
+    konflikt: KonfliktSynchronizacji,
+    rozstrzygniecie: RozstrzygniecieKonfliktu,
+    updatedAt: string,
+  ): EncjaBazowa {
+    if (rozstrzygniecie.typ === 'zdalny') return structuredClone(konflikt.zdalny)
+    const rekord = structuredClone(konflikt.lokalny) as EncjaBazowa & Record<string, unknown>
+    if (rozstrzygniecie.typ === 'reczny') {
+      const lokalny = konflikt.lokalny as EncjaBazowa & Record<string, unknown>
+      const zdalny = konflikt.zdalny as EncjaBazowa & Record<string, unknown>
+      for (const [pole, wybor] of Object.entries(rozstrzygniecie.pola)) {
+        const prosteWartosci = [lokalny[pole], zdalny[pole]]
+          .every((wartosc) => wartosc === undefined || wartosc === null || ['string', 'number', 'boolean'].includes(typeof wartosc))
+        if (!prosteWartosci || pole === 'usunietoAt' || pole === 'id' || pole === 'createdAt' || pole === 'updatedAt' || /Ids?$/i.test(pole)) {
+          throw new Error('Tego pola nie można połączyć ręcznie.')
+        }
+        if (wybor !== 'zdalny') continue
+        if (Object.prototype.hasOwnProperty.call(zdalny, pole)) rekord[pole] = structuredClone(zdalny[pole])
+        else delete rekord[pole]
+      }
+    }
+    rekord.updatedAt = updatedAt
+    return rekord
   }
 
   private async wykonajSynchronizacje(

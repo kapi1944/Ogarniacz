@@ -5,6 +5,7 @@ import { platforma } from '../platform/platforma'
 import { pobierzKonfiguracjeSynchronizacji } from './KonfiguracjaSynchronizacji'
 import { pobierzDiagnostykeRuntime } from './RuntimeConfigService'
 import { nazwyTabelSynchronizowanych, oznaczOczekujacaSynchronizacje, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, SyncEngine } from './SyncEngine'
+import type { RozstrzygniecieKonfliktu } from './SyncEngine'
 
 const syncEngine = new SyncEngine()
 const OPOZNIENIE_PO_ZMIANIE_MS = 3_000
@@ -22,8 +23,8 @@ export function synchronizujTeraz() {
   return syncEngine.synchronizuj(repozytoriumZdalne)
 }
 
-export function rozstrzygnijKonfliktSynchronizacji(id: string, wybor: 'lokalny' | 'zdalny') {
-  return syncEngine.rozstrzygnijKonflikt(id, wybor)
+export function rozstrzygnijKonfliktSynchronizacji(id: string, rozstrzygniecie: RozstrzygniecieKonfliktu) {
+  return syncEngine.rozstrzygnijKonflikt(id, rozstrzygniecie)
 }
 
 export function czySynchronizacjaSkonfigurowana(): boolean {

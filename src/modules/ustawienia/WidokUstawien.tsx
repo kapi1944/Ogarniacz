@@ -15,6 +15,7 @@ import { pobierzNajnowszaHistorie } from '../../services/HistoriaZmianService'
 import { pobierzInstallationId } from '../../services/InstallationService'
 import { pobierzKonfliktySynchronizacji, pobierzStanSynchronizacji } from '../../services/SyncEngine'
 import { czySynchronizacjaSkonfigurowana, rozstrzygnijKonfliktSynchronizacji, synchronizujTeraz as uruchomSynchronizacje } from '../../services/SynchronizacjaAplikacji'
+import type { RozstrzygniecieKonfliktu } from '../../services/SyncEngine'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { useKonto } from '../../app/DostawcaKonta'
 import { platforma } from '../../platform/platforma'
@@ -214,11 +215,11 @@ export function WidokUstawien() {
     }
   }
 
-  const rozstrzygnijKonflikt = async (id: string, wybor: 'lokalny' | 'zdalny') => {
-    await rozstrzygnijKonfliktSynchronizacji(id, wybor)
-    ustawKomunikat(wybor === 'lokalny'
-      ? 'Wybrano wersję lokalną. Zostanie wysłana podczas następnej synchronizacji.'
-      : 'Zastosowano wersję zdalną.')
+  const rozstrzygnijKonflikt = async (id: string, rozstrzygniecie: RozstrzygniecieKonfliktu) => {
+    await rozstrzygnijKonfliktSynchronizacji(id, rozstrzygniecie)
+    ustawKomunikat(rozstrzygniecie.typ === 'zdalny'
+      ? 'Zastosowano wersję z serwera.'
+      : 'Zapisano rozwiązanie. Zostanie wysłane podczas następnej synchronizacji.')
   }
 
   const dodajEdytora = async (zdarzenie: FormEvent) => {

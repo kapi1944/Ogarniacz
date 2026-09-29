@@ -502,6 +502,9 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .konflikt-synchronizacji th, .konflikt-synchronizacji td { min-width: 140px; padding: 8px; border: 1px solid var(--obramowanie); text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
 .konflikt-synchronizacji th:first-child { min-width: 110px; }
 .konflikt-synchronizacji .tekst-pomocniczy { margin: 0; }
+.konflikt-synchronizacji__tryby .przycisk[aria-pressed="true"] { border-color: var(--akcent); box-shadow: 0 0 0 1px var(--akcent); }
+.konflikt-synchronizacji__wybor-pola { display: flex; align-items: flex-start; gap: 7px; cursor: pointer; }
+.konflikt-synchronizacji__wybor-pola input { margin-top: 2px; accent-color: var(--akcent); }
 .kopia-before-restore { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); }
 .kopia-before-restore span { flex: 1 1 220px; color: var(--tekst-2); }
 .lista-historii { display: grid; }

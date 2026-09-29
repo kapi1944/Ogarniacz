@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import type { EncjaBazowa, KonfliktSynchronizacji, NazwaTabeli } from '../../domain/typy'
+import type { RozstrzygniecieKonfliktu, WyborWartosciKonfliktu } from '../../services/SyncEngine'
 
 const NAZWY_RODZAJOW_DANYCH: Partial<Record<NazwaTabeli, string>> = {
   zadania: 'Zadanie',
@@ -68,6 +70,7 @@ interface RoznicaKonfliktu {
   etykieta: string
   lokalna: string
   zdalna: string
+  moznaPolaczyc: boolean
 }
 
 interface PrezentacjaKonfliktu {
@@ -113,6 +116,10 @@ function pokazWartosc(pole: string, wartosc: unknown): string {
   return JSON.stringify(wartosc, null, 2) ?? String(wartosc)
 }
 
+function czyProstaWartosc(wartosc: unknown): boolean {
+  return wartosc === undefined || wartosc === null || ['string', 'number', 'boolean'].includes(typeof wartosc)
+}
+
 function sformatujCzas(wartosc: string): string {
   const data = new Date(wartosc)
   return Number.isNaN(data.getTime()) ? 'czas nieznany' : data.toLocaleString('pl-PL')
@@ -152,17 +159,42 @@ function przygotujPrezentacjeKonfliktu(konflikt: KonfliktSynchronizacji): Prezen
       etykieta: ETYKIETY_POL[pole] ?? rozdzielNazweTechniczna(pole),
       lokalna: pokazWartosc(pole, lokalny[pole]),
       zdalna: pokazWartosc(pole, zdalny[pole]),
+      moznaPolaczyc: pole !== 'usunietoAt' && czyProstaWartosc(lokalny[pole]) && czyProstaWartosc(zdalny[pole]),
     })),
   }
 }
 
 interface KonfliktSynchronizacjiProps {
   konflikt: KonfliktSynchronizacji
-  rozstrzygnij: (id: string, wybor: 'lokalny' | 'zdalny') => void | Promise<void>
+  rozstrzygnij: (id: string, rozstrzygniecie: RozstrzygniecieKonfliktu) => void | Promise<void>
 }
 
 export function KartaKonfliktuSynchronizacji({ konflikt, rozstrzygnij }: KonfliktSynchronizacjiProps) {
   const prezentacja = przygotujPrezentacjeKonfliktu(konflikt)
+  const [tryb, ustawTryb] = useState<RozstrzygniecieKonfliktu['typ']>()
+  const [wybranePola, ustawWybranePola] = useState<Record<string, WyborWartosciKonfliktu>>({})
+  const moznaPolaczycRecznie = prezentacja.roznice.length > 0 && prezentacja.roznice.every(({ moznaPolaczyc }) => moznaPolaczyc)
+
+  useEffect(() => {
+    ustawTryb(undefined)
+    ustawWybranePola({})
+  }, [konflikt.id, konflikt.updatedAt])
+
+  const wybierzTryb = (nowyTryb: RozstrzygniecieKonfliktu['typ']) => {
+    ustawTryb(nowyTryb)
+    if (nowyTryb === 'reczny') {
+      ustawWybranePola(Object.fromEntries(prezentacja.roznice.map(({ pole }) => [pole, 'lokalny'])))
+    }
+  }
+
+  const zatwierdz = () => {
+    if (!tryb) return
+    const rozstrzygniecie: RozstrzygniecieKonfliktu = tryb === 'reczny'
+      ? { typ: 'reczny', pola: wybranePola }
+      : { typ: tryb }
+    void rozstrzygnij(konflikt.id, rozstrzygniecie)
+  }
+
   return <article className="konflikt-synchronizacji">
     <header>
       <span>{prezentacja.rodzajDanych}</span>
@@ -175,12 +207,20 @@ export function KartaKonfliktuSynchronizacji({ konflikt, rozstrzygnij }: Konflik
     <h5>Różniące się pola</h5>
     {prezentacja.roznice.length > 0 ? <div className="konflikt-synchronizacji__tabela"><table>
       <thead><tr><th>Pole</th><th>To urządzenie</th><th>Serwer</th></tr></thead>
-      <tbody>{prezentacja.roznice.map((roznica) => <tr key={roznica.pole}><th>{roznica.etykieta}</th><td>{roznica.lokalna}</td><td>{roznica.zdalna}</td></tr>)}</tbody>
+      <tbody>{prezentacja.roznice.map((roznica) => <tr key={roznica.pole}><th>{roznica.etykieta}</th>
+        <td>{tryb === 'reczny' ? <label className="konflikt-synchronizacji__wybor-pola"><input type="radio" name={`${konflikt.id}-${roznica.pole}`} checked={wybranePola[roznica.pole] === 'lokalny'} onChange={() => ustawWybranePola((obecne) => ({ ...obecne, [roznica.pole]: 'lokalny' }))} /><span>{roznica.lokalna}</span></label> : roznica.lokalna}</td>
+        <td>{tryb === 'reczny' ? <label className="konflikt-synchronizacji__wybor-pola"><input type="radio" name={`${konflikt.id}-${roznica.pole}`} checked={wybranePola[roznica.pole] === 'zdalny'} onChange={() => ustawWybranePola((obecne) => ({ ...obecne, [roznica.pole]: 'zdalny' }))} /><span>{roznica.zdalna}</span></label> : roznica.zdalna}</td>
+      </tr>)}</tbody>
     </table></div> : <p className="tekst-pomocniczy">Wersje różnią się tylko metadanymi technicznymi.</p>}
-    <p className="tekst-pomocniczy">Wybór zachowa całą wskazaną wersję. Wartości nie zostaną automatycznie połączone.</p>
+    <p className="tekst-pomocniczy">Obie wersje pozostaną zapisane do czasu zatwierdzenia decyzji.</p>
+    <div className="akcje-backupu konflikt-synchronizacji__tryby">
+      <button type="button" className="przycisk przycisk--drugorzedny" aria-pressed={tryb === 'lokalny'} onClick={() => wybierzTryb('lokalny')}>Wybierz wersję z tego urządzenia</button>
+      <button type="button" className="przycisk przycisk--drugorzedny" aria-pressed={tryb === 'zdalny'} onClick={() => wybierzTryb('zdalny')}>Wybierz wersję z serwera</button>
+      {moznaPolaczycRecznie && <button type="button" className="przycisk przycisk--drugorzedny" aria-pressed={tryb === 'reczny'} onClick={() => wybierzTryb('reczny')}>Połącz pola ręcznie</button>}
+    </div>
+    {tryb === 'reczny' && <p className="tekst-pomocniczy">W każdym wierszu wybierz wartość, którą chcesz zachować.</p>}
     <div className="akcje-backupu">
-      <button type="button" className="przycisk przycisk--glowny" onClick={() => void rozstrzygnij(konflikt.id, 'lokalny')}>Zachowaj wersję z tego urządzenia</button>
-      <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void rozstrzygnij(konflikt.id, 'zdalny')}>Użyj wersji z serwera</button>
+      <button type="button" className="przycisk przycisk--glowny" disabled={!tryb} onClick={zatwierdz}>Zatwierdź rozwiązanie</button>
     </div>
   </article>
 }

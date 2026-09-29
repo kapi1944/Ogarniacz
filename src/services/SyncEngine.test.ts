@@ -125,8 +125,13 @@ describe.sequential('SyncEngine', () => {
       zdalny: { tytul: 'Wersja zdalna' },
     })
 
-    await silnik.rozstrzygnijKonflikt(konflikt.id, 'zdalny')
+    expect(konflikt.lokalny).toMatchObject({ tytul: 'Wersja lokalna' })
+    expect(konflikt.zdalny).toMatchObject({ tytul: 'Wersja zdalna' })
+
+    await silnik.rozstrzygnijKonflikt(konflikt.id, { typ: 'zdalny' })
     expect(await baza.tabela('zadania').get('wspolne')).toMatchObject({ tytul: 'Wersja zdalna' })
+    expect(await baza.tabela('konfliktySynchronizacji').get(konflikt.id)).toBeUndefined()
+    expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toHaveLength(0)
   })
 
   it('po zachowaniu ostatniej wersji lokalnej czeka na wysłanie, a po opróżnieniu kolejki kończy synchronizację', async () => {
@@ -139,7 +144,7 @@ describe.sequential('SyncEngine', () => {
     await silnik.synchronizuj(zdalne)
     const konflikt = (await baza.tabela('konfliktySynchronizacji').toArray())[0]
 
-    await silnik.rozstrzygnijKonflikt(konflikt.id, 'lokalny')
+    await silnik.rozstrzygnijKonflikt(konflikt.id, { typ: 'lokalny' })
 
     expect(await pobierzStanSynchronizacji()).toMatchObject({
       stan: 'oczekuje',
@@ -154,6 +159,46 @@ describe.sequential('SyncEngine', () => {
       liczbaKonfliktow: 0,
       liczbaOczekujacych: 0,
     })
+    expect((await zdalne.pobierzWszystkie())[0].rekord).toMatchObject({ tytul: 'Wersja z tego urządzenia' })
+  })
+
+  it('łączy wybrane proste pola i ponownie wysyła pełne rozwiązanie bez utraty wcześniejszych wersji', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const lokalne = { ...zadanie('reczny-wybor', 'Tytuł lokalny', '2026-08-23T10:00:00.000Z'), opis: 'Opis lokalny' }
+    const zdalneZadanie = { ...zadanie('reczny-wybor', 'Tytuł zdalny', '2026-08-24T10:00:00.000Z'), opis: 'Opis zdalny' }
+    await baza.tabela('zadania').put(lokalne)
+    await zdalne.ustawZmiany([{ tabela: 'zadania', rekord: zdalneZadanie, installationId: 'instalacja-zdalna' }])
+    const silnik = utworzSilnik()
+    await silnik.synchronizuj(zdalne)
+    const konflikt = (await baza.tabela('konfliktySynchronizacji').toArray())[0]
+
+    expect(await baza.tabela('zadania').get(lokalne.id)).toMatchObject(lokalne)
+    expect(konflikt.lokalny).toMatchObject({ tytul: 'Tytuł lokalny', opis: 'Opis lokalny' })
+    expect(konflikt.zdalny).toMatchObject({ tytul: 'Tytuł zdalny', opis: 'Opis zdalny' })
+
+    await silnik.rozstrzygnijKonflikt(konflikt.id, {
+      typ: 'reczny',
+      pola: { tytul: 'lokalny', opis: 'zdalny' },
+    })
+
+    expect(await baza.tabela('zadania').get(lokalne.id)).toMatchObject({
+      tytul: 'Tytuł lokalny',
+      opis: 'Opis zdalny',
+    })
+    expect(await baza.tabela('konfliktySynchronizacji').get(konflikt.id)).toBeUndefined()
+    expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toMatchObject([{
+      rekordId: lokalne.id,
+      bazowyUpdatedAt: zdalneZadanie.updatedAt,
+      rekord: { tytul: 'Tytuł lokalny', opis: 'Opis zdalny' },
+    }])
+
+    await silnik.synchronizuj(zdalne)
+
+    expect((await zdalne.pobierzWszystkie())[0].rekord).toMatchObject({
+      tytul: 'Tytuł lokalny',
+      opis: 'Opis zdalny',
+    })
+    expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toHaveLength(0)
   })
 
   it('zachowuje edycję i tombstone jako jawny konflikt', async () => {
