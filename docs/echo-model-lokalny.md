@@ -4,18 +4,19 @@ Echo zachowuje `AgentEcho`, `KontekstRozmowyEcho`, rejestr, politykę ryzyka, wa
 
 ## Uruchomienie
 
-Bez konfiguracji działa dotychczasowy ograniczony provider offline. Swobodna interpretacja języka przez model wymaga uruchomionego lokalnie Ollama i pobranego modelu obsługującego polski oraz odpowiedzi JSON. Sam adapter nie instaluje modelu. Wybierz model dostępny lokalnie i odpowiedni do pamięci urządzenia.
+Bez skonfigurowanego backendu działa dotychczasowy ograniczony provider offline. Swobodna interpretacja języka przez model wymaga uruchomionego lokalnie na Raspberry Pi Ollama i pobranego modelu obsługującego polski oraz odpowiedzi JSON. Sam adapter nie instaluje modelu. Wybierz model dostępny lokalnie i odpowiedni do pamięci urządzenia.
 
-W `.env.local` ustaw przed uruchomieniem Vite lub buildem:
+W prywatnym pliku środowiskowym backendu, np. `/etc/ogarniacz/ogarniacz.env`, ustaw:
 
 ```dotenv
-VITE_ECHO_MODEL_URL=http://localhost:11434/api/chat
-VITE_ECHO_MODEL=nazwa-zainstalowanego-modelu
+ECHO_MODEL_URL=http://127.0.0.1:11434/api/chat
+ECHO_MODEL=nazwa-zainstalowanego-modelu
+ECHO_MODEL_TIMEOUT_MS=15000
 ```
 
-Adres musi być osiągalny z urządzenia, na którym działa aplikacja. Na telefonie `localhost` oznacza telefon. Dla PWA na HTTPS potrzebny jest zgodny z polityką przeglądarki adres HTTPS lokalnego serwera oraz dopuszczenie pochodzenia aplikacji w konfiguracji Ollama. Nie umieszczaj w tych zmiennych sekretów. Rozmowa, preferencje i odczytane dane trafiają do skonfigurowanego serwera modelu.
+`ECHO_MODEL_URL` przyjmuje wyłącznie adres loopback. Ollama nie jest wystawiana przez Tailscale ani publiczny port. Web i Android wysyłają zadanie modelu do prywatnego backendu Ogarniacza przez `POST /api/echo/model`; endpoint wymaga sesji, CSRF i dozwolonego originu. Backend dodaje nazwę modelu i wykonuje żądanie HTTP do Ollama. Adres oraz nazwa modelu nie trafiają do bundla przeglądarki ani APK.
 
-Adapter używa [strukturalnych odpowiedzi Ollama](https://docs.ollama.com/capabilities/structured-outputs) i waliduje je ponownie w Zod. Brak połączenia lub niepoprawna odpowiedź kończy krok komunikatem, bez automatycznego ponawiania zapisu przez innego providera.
+Adapter używa strukturalnych odpowiedzi Ollama i waliduje je ponownie w istniejącym schemacie Zod. Brak sesji, połączenia lub niepoprawna odpowiedź kończy krok kontrolowanym komunikatem, bez automatycznego ponawiania zapisu przez innego providera. `POST /api/echo/message` zachowuje dotychczasowy kontrakt wiadomości całego Echo; `/api/echo/model` jest wyłącznie wewnętrzną granicą transportu modelu używaną przez istniejący `ProviderModeluEcho`.
 
 ## Przepływ
 
@@ -29,6 +30,6 @@ Sprawdzenie duplikatów zadań i przypomnień działa także offline, w wykonawc
 
 ## Weryfikacja i Etap 2
 
-Testy automatyczne używają kontrolowanych odpowiedzi modelu: weryfikują kontrakt, walidację, kontekst, blokady, wybór i realne repozytoria testowe. Nie dowodzą jakości językowej konkretnego modelu. W tym środowisku nie wykryto polecenia `ollama`; nie wykonano rozmowy z rzeczywistym modelem ani testu na telefonie.
+Testy automatyczne używają kontrolowanych odpowiedzi modelu: weryfikują kontrakt, walidację, sesję, origin, limity, anulowanie, kontekst, blokady, wybór i realne repozytoria testowe. Nie dowodzą jakości językowej konkretnego modelu ani łączności z rzeczywistym Ollama na Raspberry Pi.
 
 Etap 2: uruchomienie i ocena konkretnego darmowego modelu na docelowym sprzęcie oraz dopracowanie doprecyzowania w wielu turach: zmiana tematu, anulowanie, wybór spośród kolejnych wyników, korekty godzin i niepełnych dat. Provider offline pozostaje ograniczony; nie deklarujemy, że rozumie dowolną potoczną wypowiedź. Gwarancje wykonawcy nie są gwarancją bezbłędnej interpretacji ani swobodnej odpowiedzi każdego modelu.

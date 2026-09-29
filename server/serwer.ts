@@ -4,6 +4,7 @@ import { extname, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { KonfiguracjaSerwera } from './config.ts'
 import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } from './echo.ts'
+import { BladModeluEcho, odczytajZadanieModeluEcho, utworzObslugeModeluEcho, type ObslugaModeluEcho } from './model-echo.ts'
 import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, sprawdzCsrf } from './konta.ts'
 import { utworzAktualizacjeRpi, type AktualizacjeRpi } from './aktualizacje-rpi.ts'
 import { odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
@@ -82,7 +83,13 @@ async function odpowiedzZasobemStatycznym(zadanie: IncomingMessage, odpowiedz: S
     odpowiedzJson(odpowiedz, 503, { error: 'Build aplikacji nie jest dostępny na serwerze.' })
   }
 }
-export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSync, obslugaEcho: ObslugaEchoApi = niedostepnaObslugaEcho, aktualizacje?: AktualizacjeRpi) {
+export function utworzSerwer(
+  konfiguracja: KonfiguracjaSerwera,
+  baza: DatabaseSync,
+  obslugaEcho: ObslugaEchoApi = niedostepnaObslugaEcho,
+  aktualizacje?: AktualizacjeRpi,
+  obslugaModeluEcho: ObslugaModeluEcho = utworzObslugeModeluEcho(konfiguracja),
+) {
   const aktualizacjeRpi = aktualizacje ?? (konfiguracja.aktualizacjeRpi ? utworzAktualizacjeRpi() : undefined)
   return createServer(async (zadanie: IncomingMessage, odpowiedz: ServerResponse) => {
     ustawNaglowkiBezpieczenstwa(odpowiedz)
@@ -193,6 +200,48 @@ export function utworzSerwer(konfiguracja: KonfiguracjaSerwera, baza: DatabaseSy
       } catch (blad) {
         const konflikt = blad instanceof Error && blad.message.startsWith('KONFLIKT_SYNC:')
         odpowiedzJson(odpowiedz, konflikt ? 409 : 400, { error: konflikt ? 'Serwer wykrył nowszą wersję rekordu. Pobierz zmiany i rozstrzygnij konflikt.' : 'Niepoprawne dane synchronizacji.' })
+      }
+      return
+    }
+    if (zadanie.url === '/api/echo/model') {
+      const czyDozwolonePochodzenie = ustawCorsSynchronizacji(zadanie, odpowiedz, konfiguracja)
+      if (zadanie.method === 'OPTIONS') {
+        if (!czyDozwolonePochodzenie) odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
+        else {
+          odpowiedz.writeHead(204)
+          odpowiedz.end()
+        }
+        return
+      }
+      if (zadanie.method !== 'POST') {
+        odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu.' })
+        return
+      }
+      if (!czyDozwolonePochodzenie) {
+        odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
+        return
+      }
+      const kontekst = pobierzKontekstDostepu(zadanie, baza)
+      if (!kontekst) {
+        odpowiedzJson(odpowiedz, 401, { error: 'Wymagana aktywna sesja Ogarniacza.' })
+        return
+      }
+      if (!sprawdzCsrf(zadanie, kontekst)) {
+        odpowiedzJson(odpowiedz, 403, { error: 'Sesja wymaga odświeżenia.' })
+        return
+      }
+      const kontroler = new AbortController()
+      zadanie.on('aborted', () => kontroler.abort())
+      odpowiedz.on('close', () => {
+        if (!odpowiedz.writableEnded) kontroler.abort()
+      })
+      try {
+        const zadanieModelu = await odczytajZadanieModeluEcho(zadanie)
+        odpowiedzJson(odpowiedz, 200, await obslugaModeluEcho(zadanieModelu, kontroler.signal))
+      } catch (blad) {
+        if (odpowiedz.destroyed) return
+        if (blad instanceof BladModeluEcho) odpowiedzJson(odpowiedz, blad.statusHttp, { error: blad.message })
+        else odpowiedzJson(odpowiedz, 503, { error: 'Lokalny model Echo jest niedostępny.' })
       }
       return
     }

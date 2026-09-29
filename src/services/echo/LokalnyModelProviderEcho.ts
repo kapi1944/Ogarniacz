@@ -1,5 +1,6 @@
 import { noweId } from '../../domain/fabryki'
 import { z } from 'zod'
+import { pobierzCsrfKonta } from '../KontaService'
 import type { DecyzjaModeluEcho, ProviderModeluEcho, ZadanieModeluEcho } from './typyEcho'
 
 const tekst = z.string().max(2000)
@@ -60,20 +61,28 @@ const INSTRUKCJE_SEMANTYCZNE = [
   'Sukces działania wolno opisać wyłącznie po wyniku wykonane z bieżącej tury. Null lub pusta lista oznacza brak danych. Błąd lub blokada nie oznacza sukcesu.',
 ]
 
-/** Adapter lokalnego serwera Ollama. Nie wymaga klucza ani płatnej usługi. */
+/** Adapter prywatnego modelu udostępnionego przez backend Ogarniacza. */
 export class LokalnyModelProviderEcho implements ProviderModeluEcho {
   readonly nazwa = 'lokalny-model'
   readonly tryb = 'pelny_agent' as const
 
-  constructor(private readonly adres: string, private readonly model: string, private readonly pobierz: typeof fetch = fetch) {}
+  constructor(
+    private readonly adres: string,
+    private readonly pobierz: typeof fetch = fetch,
+    private readonly pobierzCsrf: () => string | undefined = pobierzCsrfKonta,
+  ) {}
 
   async odpowiedz(zadanie: ZadanieModeluEcho, sygnal: AbortSignal): Promise<DecyzjaModeluEcho> {
     sygnal.throwIfAborted()
     try {
+      const csrf = this.pobierzCsrf()
       const odpowiedz = await this.pobierz(this.adres, {
-        method: 'POST', signal: sygnal, headers: { 'Content-Type': 'application/json' },
+        method: 'POST', signal: sygnal, credentials: 'include', headers: {
+          'Content-Type': 'application/json',
+          ...(csrf ? { 'X-Ogarniacz-CSRF': csrf } : {}),
+        },
         body: JSON.stringify({
-          model: this.model, stream: false, format: z.toJSONSchema(schematDecyzji), options: { temperature: 0 },
+          format: z.toJSONSchema(schematDecyzji),
           messages: [
             { role: 'system', content: [...zadanie.instrukcjeSystemowe, ...INSTRUKCJE_SEMANTYCZNE].join('\n') },
             { role: 'user', content: JSON.stringify(zadanie) },

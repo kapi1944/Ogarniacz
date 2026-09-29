@@ -29,6 +29,15 @@ function naglowkiSynchronizacji(instalacja: string, csrf?: string): Record<strin
   }
 }
 
+function naglowkiModelu(csrf = 'csrf-wlasciciela'): Record<string, string> {
+  return {
+    cookie: 'ogarniacz_sesja=token-wlasciciela',
+    origin: 'https://localhost',
+    'content-type': 'application/json',
+    'x-ogarniacz-csrf': csrf,
+  }
+}
+
 test('konfiguracja odrzuca niepoprawny port', () => {
   assert.throws(() => utworzKonfiguracjeSerwera({ PORT: '70000' }), /PORT/)
 })
@@ -37,6 +46,17 @@ test('konfiguracja serwera domyślnie nasłuchuje na loopbacku i ogranicza CORS 
   const konfiguracja = utworzKonfiguracjeSerwera({})
   assert.equal(konfiguracja.host, '127.0.0.1')
   assert.deepEqual(konfiguracja.dozwolonePochodzeniaCors, ['https://localhost'])
+})
+
+test('konfiguracja modelu Echo pozostaje kompletna i wskazuje wyłącznie loopback', () => {
+  const konfiguracja = utworzKonfiguracjeSerwera({
+    ECHO_MODEL_URL: 'http://127.0.0.1:11434/api/chat',
+    ECHO_MODEL: 'model-testowy',
+  })
+  assert.equal(konfiguracja.adresModeluEcho, 'http://127.0.0.1:11434/api/chat')
+  assert.equal(konfiguracja.nazwaModeluEcho, 'model-testowy')
+  assert.throws(() => utworzKonfiguracjeSerwera({ ECHO_MODEL: 'model-testowy' }), /ustawione razem/)
+  assert.throws(() => utworzKonfiguracjeSerwera({ ECHO_MODEL_URL: 'http://192.168.1.10:11434/api/chat', ECHO_MODEL: 'model-testowy' }), /loopback/)
 })
 
 test('CORS odrzuca HTTP LAN i wildcardy, zachowując origin Capacitor oraz HTTPS Tailscale', () => {
@@ -104,6 +124,58 @@ test('endpoint Echo bez providera zwraca kontrolowany tryb ograniczony', async (
   const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/api/echo/message`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wiadomosc: 'Cześć' }) })
   assert.equal(odpowiedz.status, 503)
   assert.deepEqual(await odpowiedz.json(), { status: 'niedostepny', tryb: 'ograniczony_lokalny', odpowiedz: 'Pełna rozmowa z Echo nie jest jeszcze dostępna.' })
+  await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+  baza.close()
+})
+
+test('transport modelu Echo wymaga sesji, CSRF i dozwolonego originu', async () => {
+  const baza = new DatabaseSync(':memory:')
+  uruchomMigracje(baza)
+  dodajSesjeWlasciciela(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({ CORS_ALLOWED_ORIGINS: 'https://localhost' })
+  let liczbaWywolan = 0
+  const serwer = utworzSerwer(konfiguracja, baza, undefined, undefined, async () => {
+    liczbaWywolan += 1
+    return { message: { content: '{"typ":"odpowiedz"}' } }
+  })
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const url = `http://127.0.0.1:${adres.port}/api/echo/model`
+  const tresc = JSON.stringify({ format: { type: 'object' }, messages: [{ role: 'user', content: 'Cześć' }] })
+
+  const bezSesji = await fetch(url, { method: 'POST', headers: { origin: 'https://localhost', 'content-type': 'application/json', 'x-ogarniacz-csrf': 'csrf-wlasciciela' }, body: tresc })
+  assert.equal(bezSesji.status, 401)
+  const zlyOrigin = await fetch(url, { method: 'POST', headers: { ...naglowkiModelu(), origin: 'https://zly.test' }, body: tresc })
+  assert.equal(zlyOrigin.status, 403)
+  const zlyCsrf = await fetch(url, { method: 'POST', headers: naglowkiModelu('zly-csrf'), body: tresc })
+  assert.equal(zlyCsrf.status, 403)
+  const poprawne = await fetch(url, { method: 'POST', headers: naglowkiModelu(), body: tresc })
+  assert.equal(poprawne.status, 200)
+  assert.deepEqual(await poprawne.json(), { message: { content: '{"typ":"odpowiedz"}' } })
+  assert.equal(liczbaWywolan, 1)
+
+  await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+  baza.close()
+})
+
+test('transport modelu Echo odrzuca zbyt duże żądanie', async () => {
+  const baza = new DatabaseSync(':memory:')
+  uruchomMigracje(baza)
+  dodajSesjeWlasciciela(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({ CORS_ALLOWED_ORIGINS: 'https://localhost' })
+  const serwer = utworzSerwer(konfiguracja, baza, undefined, undefined, async () => ({ message: { content: '{}' } }))
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+
+  const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/api/echo/model`, {
+    method: 'POST',
+    headers: naglowkiModelu(),
+    body: JSON.stringify({ format: { type: 'object' }, messages: [{ role: 'user', content: 'x'.repeat(512 * 1024) }] }),
+  })
+  assert.equal(odpowiedz.status, 413)
+
   await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
   baza.close()
 })

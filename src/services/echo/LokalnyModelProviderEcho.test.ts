@@ -24,7 +24,7 @@ function zadanie(): ZadanieModeluEcho {
 
 function utworzProvider(wynik: unknown) {
   const pobierz = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ message: { content: JSON.stringify(wynik) } })))
-  return { model: new LokalnyModelProviderEcho('http://localhost:11434/api/chat', 'model-testowy', pobierz), pobierz }
+  return { model: new LokalnyModelProviderEcho('https://ogarniacz.test/api/echo/model', pobierz, () => 'csrf-testowy'), pobierz }
 }
 
 describe('Lokalny model Echo — kontrakt i granica danych', () => {
@@ -37,7 +37,11 @@ describe('Lokalny model Echo — kontrakt i granica danych', () => {
     expect(wyslane.format.type).toBe('object')
     expect(wyslane.messages[1].content).toContain('Nie, yy jednak na piątek.')
     expect(wyslane.messages[1].content).toContain('zadanie-1')
-    expect(wyslane.stream).toBe(false)
+    expect(wyslane).not.toHaveProperty('model')
+    expect(pobierz).toHaveBeenCalledWith('https://ogarniacz.test/api/echo/model', expect.objectContaining({
+      credentials: 'include',
+      headers: expect.objectContaining({ 'X-Ogarniacz-CSRF': 'csrf-testowy' }),
+    }))
   })
 
   it('zwraca uporządkowany plan kilku istniejących narzędzi z zależnościami', async () => {
@@ -93,8 +97,26 @@ describe('Lokalny model Echo — kontrakt i granica danych', () => {
     if (wynik.typ === 'pytanie') expect(wynik.tresc).toContain('3. Spotkanie 3')
   })
 
-  it('odrzuca niepoprawny JSON i nie przełącza po cichu wykonawcy', async () => {
+  it('odrzuca odpowiedź niezgodną ze schematem i nie przełącza po cichu wykonawcy', async () => {
     expect(await utworzProvider({ typ: 'narzedzie' }).model.odpowiedz(zadanie(), new AbortController().signal)).toMatchObject({ typ: 'odpowiedz', tresc: expect.stringContaining('niepoprawną odpowiedź') })
+  })
+
+  it('odrzuca niepoprawny JSON backendu kontrolowanym komunikatem', async () => {
+    const pobierz = vi.fn<typeof fetch>().mockResolvedValue(new Response('{nie-json'))
+    const model = new LokalnyModelProviderEcho('https://ogarniacz.test/api/echo/model', pobierz)
+    expect(await model.odpowiedz(zadanie(), new AbortController().signal)).toMatchObject({
+      typ: 'odpowiedz',
+      tresc: expect.stringContaining('niepoprawną odpowiedź'),
+    })
+  })
+
+  it('zwraca kontrolowany komunikat, gdy backend modelu jest niedostępny', async () => {
+    const pobierz = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 503 }))
+    const model = new LokalnyModelProviderEcho('https://ogarniacz.test/api/echo/model', pobierz)
+    expect(await model.odpowiedz(zadanie(), new AbortController().signal)).toMatchObject({
+      typ: 'odpowiedz',
+      tresc: expect.stringContaining('nie jest teraz dostępny'),
+    })
   })
 
   it('anulowana prośba nie uruchamia modelu', async () => {

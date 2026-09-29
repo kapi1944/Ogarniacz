@@ -3,6 +3,7 @@ import { KontekstRozmowyEcho } from './KontekstRozmowyEcho'
 import { pobierzKontekstPlanowaniaEcho } from './KontekstPlanowaniaEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import { LokalnyModelProviderEcho } from './LokalnyModelProviderEcho'
+import { pobierzKonfiguracjeSynchronizacji } from '../KonfiguracjaSynchronizacji'
 import { instrukcjaTrybuRozmowyEcho, KonfiguracjaRozmowyEcho, rozpoznajZmianeAutomatycznegoOdczytuEcho, rozpoznajZmianeTempaEcho, rozpoznajZmianeTrybuRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 import { rozpoznajTrwalaPreferencjeEcho } from './PamiecPreferencjiEcho'
 import { PolitykaPamieciEcho } from './PolitykaDzialanEcho'
@@ -124,8 +125,9 @@ export class AgentEcho {
   private wynikiBiezacejTury: import('./typyEcho').WynikNarzedziaEcho[] = []
 
   constructor(opcje: OpcjeAgentaEcho = {}) {
-    this.provider = opcje.provider ?? (import.meta.env.VITE_ECHO_MODEL && import.meta.env.VITE_ECHO_MODEL_URL
-      ? new LokalnyModelProviderEcho(import.meta.env.VITE_ECHO_MODEL_URL, import.meta.env.VITE_ECHO_MODEL)
+    const adresApi = pobierzKonfiguracjeSynchronizacji().adresApi
+    this.provider = opcje.provider ?? (adresApi
+      ? new LokalnyModelProviderEcho(`${adresApi}/api/echo/model`)
       : new LokalnySemantycznyProviderEcho())
     this.kontekst = opcje.kontekst ?? new KontekstRozmowyEcho()
     this.rejestr = opcje.rejestr ?? utworzDomyslnyRejestrNarzedziEcho()
