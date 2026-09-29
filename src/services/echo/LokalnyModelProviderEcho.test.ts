@@ -14,9 +14,23 @@ function zadanie(): ZadanieModeluEcho {
   return {
     instrukcjeSystemowe: [], trybRozmowy: 'szybki', kontekstCzasu: { teraz: '2026-09-06T12:00:00Z', dataLokalna: '2026-09-06', strefaCzasowa: 'Europe/Warsaw' },
     kontekstRozmowy: kontekst.migawka(), pamiecPreferencji: [],
+    kontekstPlanowania: {
+      praca: { od: '07:45', do: '16:00', polowa: '11:52:30', zrodlo: 'grafik' },
+      zajetePrzedzialy: [],
+      dni: [{
+        data: '2026-09-07', pracuje: true, jestWyjatkiem: true,
+        praca: { od: '2026-09-07T08:30:00', do: '2026-09-07T15:30:00', polowa: '2026-09-07T12:00:00', zrodlo: 'wyjatek' },
+        przedPraca: { od: '2026-09-07T07:00:00', do: '2026-09-07T08:30:00' },
+        poPracy: { od: '2026-09-07T15:30:00', do: '2026-09-07T22:00:00' },
+        wolneOkna: [{ poczatek: '2026-09-07T16:40:00', koniec: '2026-09-07T18:00:00', minuty: 80 }],
+        zajetePrzedzialy: [],
+      }],
+    },
     narzedzia: [
       { nazwa: 'update_task', opis: 'Zmień zadanie', rodzaj: 'zapis', ryzyko: 'niskie', schematArgumentow: {} },
       { nazwa: 'search_tasks', opis: 'Znajdź zadania', rodzaj: 'odczyt', ryzyko: 'niskie', schematArgumentow: {} },
+      { nazwa: 'find_free_slots', opis: 'Znajdź wolne okna', rodzaj: 'odczyt', ryzyko: 'niskie', schematArgumentow: {} },
+      { nazwa: 'list_calendar', opis: 'Sprawdź kalendarz', rodzaj: 'odczyt', ryzyko: 'niskie', schematArgumentow: {} },
     ],
     wynikiBiezacejTury: [{ wywolanieId: 'odczyt', nazwa: 'search_tasks', status: 'wykonane', dane: [{ id: 'zadanie-1', tytul: 'Spotkanie z Kubą' }] }],
   }
@@ -37,11 +51,54 @@ describe('Lokalny model Echo — kontrakt i granica danych', () => {
     expect(wyslane.format.type).toBe('object')
     expect(wyslane.messages[1].content).toContain('Nie, yy jednak na piątek.')
     expect(wyslane.messages[1].content).toContain('zadanie-1')
+    expect(wyslane.messages[1].content).toContain('2026-09-07T16:40:00')
+    expect(wyslane.messages[1].content).toContain('2026-09-07T12:00:00')
+    expect(wyslane.messages[0].content).toContain('wyliczonej połowy pracy')
+    expect(wyslane.messages[0].content).toContain('find_free_slots')
+    expect(wyslane.messages[0].content).toContain('list_calendar')
+    expect(wyslane.messages[0].content).toContain('Pusta lista wolnych okien')
     expect(wyslane).not.toHaveProperty('model')
     expect(pobierz).toHaveBeenCalledWith('https://ogarniacz.test/api/echo/model', expect.objectContaining({
       credentials: 'include',
       headers: expect.objectContaining({ 'X-Ogarniacz-CSRF': 'csrf-testowy' }),
     }))
+  })
+
+  it('pozwala modelowi wywołać istniejące narzędzie wolnych okien dla wybranego dnia', async () => {
+    const decyzjaTerminu = {
+      intencja: { ...intencja, typ: 'znajdz_wolny_termin', wartosci: [{ pole: 'data', wartosc: '2026-09-07', zrodlo: 'kontekst' }] },
+      typ: 'narzedzie', tresc: '', narzedzie: 'find_free_slots',
+      argumenty: JSON.stringify({ data: '2026-09-07', minuty: 30 }), kandydaci: [],
+    }
+
+    expect(await utworzProvider(decyzjaTerminu).model.odpowiedz(zadanie(), new AbortController().signal)).toMatchObject({
+      typ: 'narzedzia',
+      wywolania: [{ nazwa: 'find_free_slots', argumenty: { data: '2026-09-07', minuty: 30 } }],
+    })
+  })
+
+  it('jawna korekta zastępuje wcześniejszą propozycję terminu w decyzji modelu', async () => {
+    const dane = zadanie()
+    dane.kontekstRozmowy.oczekujacaAkcja = { intencja: 'przeloz_zadanie', dane: { proponowanaGodzina: '16:40' } }
+    dane.kontekstRozmowy.tury.push({ rola: 'uzytkownik', tresc: 'Nie, ustaw 17:30.', znacznikCzasu: '2026-09-06T12:05:00.000Z' })
+    const poprawiona = {
+      ...decyzja,
+      intencja: {
+        ...intencja,
+        wartosci: [{ pole: 'godzina', wartosc: '17:30', zrodlo: 'wypowiedz' }],
+        korekta: true,
+      },
+    }
+    const { model, pobierz } = utworzProvider(poprawiona)
+
+    const wynik = await model.odpowiedz(dane, new AbortController().signal)
+    const wyslane = JSON.parse(String(pobierz.mock.calls[0][1]?.body))
+
+    expect(wyslane.messages[1].content).toContain('16:40')
+    expect(wyslane.messages[1].content).toContain('Nie, ustaw 17:30.')
+    expect(wynik.aktualizacjaKontekstu?.intencjaSemantyczna?.wartosci).toEqual([
+      { pole: 'godzina', wartosc: '17:30', zrodlo: 'wypowiedz' },
+    ])
   })
 
   it('zwraca uporządkowany plan kilku istniejących narzędzi z zależnościami', async () => {

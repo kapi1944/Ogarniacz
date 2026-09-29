@@ -166,6 +166,45 @@ describe("Agent Echo", () => {
     expect(narzedzie?.rodzaj).toBe("odczyt");
   });
 
+  it("przekazuje pusty wynik wolnych okien do tej samej tury i nie wymyśla zapisu", async () => {
+    const zapisz = vi.fn(async () => ({ id: "zadanie-1" }));
+    const rejestr = new RejestrNarzedziEcho()
+      .zarejestruj({
+        nazwa: "find_free_slots",
+        rodzaj: "odczyt",
+        opis: "Wolne okna",
+        schematArgumentow: z.object({ data: z.string(), minuty: z.number() }),
+        ryzyko: "niskie",
+        wykonaj: async () => [],
+      })
+      .zarejestruj({
+        nazwa: "update_task",
+        rodzaj: "zapis",
+        opis: "Przenieś zadanie",
+        schematArgumentow: z.object({ id: z.string(), termin: z.string() }),
+        ryzyko: "umiarkowane",
+        wykonaj: zapisz,
+      });
+    const provider = new ProviderSkryptowy([
+      { typ: "narzedzia", wywolania: [{ id: "wolne-1", nazwa: "find_free_slots", argumenty: { data: "2026-09-07", minuty: 30 } }] },
+      { typ: "pytanie", tresc: "Jutro nie ma wolnego okna na 30 minut. Sprawdzić inny dzień?" },
+    ]);
+    const agent = new AgentEcho({
+      provider,
+      rejestr,
+      wykonawca: utworzWykonawce(rejestr),
+      pobierzKontekstPlanowania: async () => ({ zajetePrzedzialy: [], dni: [] }),
+    });
+
+    const odpowiedz = await agent.obsluz("Znajdź mi jutro pół godziny na telefon.");
+
+    expect(provider.zadania[1]?.wynikiBiezacejTury).toEqual([
+      expect.objectContaining({ nazwa: "find_free_slots", status: "wykonane", dane: [] }),
+    ]);
+    expect(odpowiedz).toMatchObject({ tekst: expect.stringContaining("nie ma wolnego okna"), oczekujeDoprecyzowania: true });
+    expect(zapisz).not.toHaveBeenCalled();
+  });
+
   it("lokalnie dodaje dwie pozycje zakupów i przypomnienie w jednej intencji", async () => {
     await Promise.all([
       baza.tabela("listyZakupow").clear(),
