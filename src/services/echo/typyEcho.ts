@@ -33,9 +33,19 @@ export interface WartoscDomyslnaEcho {
 }
 
 export interface KontekstPlanowaniaEcho {
-  praca?: { od: string; do: string; zrodlo: 'grafik' }
+  praca?: { od: string; do: string; polowa?: string; zrodlo: 'grafik' | 'wyjatek' }
   zajetePrzedzialy: { tytul: string; od: string; do: string; zrodlo: 'blok_czasu' | 'wizyta' }[]
   preferowanaGodzinaObiadu?: { godzina: string; zrodlo: 'preferencja' }
+  dni?: {
+    data: string
+    pracuje: boolean
+    jestWyjatkiem: boolean
+    praca?: { od: string; do: string; polowa: string; zrodlo: 'grafik' | 'wyjatek' }
+    przedPraca?: { od: string; do: string }
+    poPracy?: { od: string; do: string }
+    wolneOkna: { poczatek: string; koniec: string; minuty: number }[]
+    zajetePrzedzialy: { tytul: string; od: string; do: string; zrodlo: 'blok_czasu' | 'wizyta' }[]
+  }[]
 }
 
 export interface OczekujaceDoprecyzowanieEcho {

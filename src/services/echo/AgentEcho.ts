@@ -17,6 +17,7 @@ const INSTRUKCJE_SYSTEMOWE = [
   'Nie zgaduj danych użytkownika. Pobieraj tylko potrzebne dane za pomocą dostępnych narzędzi.',
   'Wyraźnie rozróżniaj fakty z danych, preferencje użytkownika, wartości wyliczone, założenia i sugestie. Nie zapisuj sugestii ani założeń jako faktów bez akceptacji.',
   'Przy niejasnym czasie najpierw zaproponuj wartość wynikającą z grafiku, planu lub jawnej preferencji. Zadaj jedno krótkie pytanie tylko wtedy, gdy brak wpływa na rezultat.',
+  'Dla określeń przed pracą, po pracy, w połowie pracy i dla jutra używaj wyliczonych danych odpowiedniego dnia z kontekstPlanowania.dni. Wolne terminy odczytuj z wolneOkna albo przez find_free_slots; nie obliczaj przedziałów samodzielnie.',
   'Przed zmianą kolidującą z istniejącym planem wskaż konflikt i zaproponuj najmniej ingerujący wolny termin. Nie przesuwaj istniejących danych po cichu.',
   'Nie znasz implementacji bazy i nie możesz wykonywać kodu, SQL ani poleceń systemowych.',
   'Jeśli brakuje istotnej informacji, zadaj jedno naturalne pytanie. Jeśli danych nie ma, powiedz wprost, że ich nie ma.',

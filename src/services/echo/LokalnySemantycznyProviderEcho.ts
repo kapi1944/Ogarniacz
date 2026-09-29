@@ -650,11 +650,16 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
     if (czyUtworzeniePrzypomnienia && czyPolowaPracy) {
       const tytul = zbudujTytul(lista, czas.indeksy).replace(/\b(?:w\s+)?połowie\s+pracy\b/gi, '').replace(/\s+/g, ' ').trim();
       if (!tytul) return this.pytanie({ intencja: 'utworz_przypomnienie', brakujacePola: ['tytul'], zebrane: {} });
-      const praca = zadanie.kontekstPlanowania?.praca;
-      if (!praca) return this.pytanie({ intencja: 'utworz_przypomnienie', brakujacePola: ['godzina'], zebrane: { tytul, data: czas.data ?? zadanie.kontekstCzasu.dataLokalna } });
       const data = czas.data ?? zadanie.kontekstCzasu.dataLokalna;
+      const kontekstDnia = zadanie.kontekstPlanowania?.dni?.find((dzien) => dzien.data === data);
+      const praca = kontekstDnia?.praca
+        ? { od: kontekstDnia.praca.od.slice(11, 16), do: kontekstDnia.praca.do.slice(11, 16) }
+        : zadanie.kontekstPlanowania?.praca;
+      if (!praca) return this.pytanie({ intencja: 'utworz_przypomnienie', brakujacePola: ['godzina'], zebrane: { tytul, data: czas.data ?? zadanie.kontekstCzasu.dataLokalna } });
       const srodek = polowaPracy(praca.od, praca.do);
-      const konflikt = znajdzKonflikt(data, srodek, zadanie.kontekstPlanowania);
+      const konflikt = kontekstDnia
+        ? kontekstDnia.zajetePrzedzialy.find((przedzial) => przedzial.od <= `${data}T${srodek}:00` && `${data}T${srodek}:00` < przedzial.do)
+        : znajdzKonflikt(data, srodek, zadanie.kontekstPlanowania);
       const godzina = konflikt ? najblizszaGodzinaPoKonflikcie(konflikt.do) : srodek;
       const opis = konflikt
         ? `Pracujesz ${praca.od}–${praca.do}, więc połowa wypada około ${srodek}. Masz wtedy „${konflikt.tytul}” ${rozlozCzasIso(konflikt.od).godzina}–${rozlozCzasIso(konflikt.do).godzina}; proponuję ${godzina}.`

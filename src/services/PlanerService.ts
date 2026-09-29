@@ -1,6 +1,6 @@
 import type { RepozytoriumElementow, ElementOgarniacza } from '../domain/elementyOgarniacza'
 import { zadanieLegacyNaElement } from '../domain/adapterZadania'
-import type { Zadanie } from '../domain/typy'
+import type { BlokCzasu, Wizyta, Zadanie } from '../domain/typy'
 import { czyZadanieZablokowane } from './ZadaniaService'
 import type { HarmonogramDnia } from '../modules/pulpit/logikaOsiCzasu'
 import { minutyDnia } from '../modules/pulpit/logikaOsiCzasu'
@@ -63,6 +63,13 @@ export interface WolneOknoPlanera {
   minuty: number
 }
 
+export interface DaneCzasuDniaPlanera {
+  praca?: { od: string; do: string; polowa: string }
+  przedPraca?: { od: string; do: string }
+  poPracy?: { od: string; do: string }
+  wolneOkna: WolneOknoPlanera[]
+}
+
 export const DOMYSLNE_PREFERENCJE_PLANOWANIA: PreferencjePlanowania = {
   preferowanaDlugoscBlokuMinuty: 60,
   minimalnaPrzerwaMinuty: 10,
@@ -95,6 +102,13 @@ function naGodzine(minuty: number): string {
 
 function isoDnia(data: string, minuty: number): string {
   return `${data}T${naGodzine(minuty)}:00`
+}
+
+function isoDniaZSekundami(data: string, sekundy: number): string {
+  const godzina = Math.floor(sekundy / 3600)
+  const minuta = Math.floor((sekundy % 3600) / 60)
+  const sekunda = sekundy % 60
+  return `${data}T${String(godzina).padStart(2, '0')}:${String(minuta).padStart(2, '0')}:${String(sekunda).padStart(2, '0')}`
 }
 
 function odejmijPrzedzial(zrodlo: readonly Przedzial[], zajety: Przedzial): Przedzial[] {
@@ -281,15 +295,82 @@ export function generujPlan(dane: DanePlanera): WynikPlanera {
 
 export function znajdzWolneOkna(dane: DanePlanera, wymaganeMinuty: number, limit = 3): WolneOknoPlanera[] {
   if (!Number.isFinite(wymaganeMinuty) || wymaganeMinuty <= 0) return []
-  const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }
-  return przedzialyDostepne(dane, preferencje)
-    .filter((przedzial) => przedzial.do - przedzial.od >= wymaganeMinuty)
+  return wyznaczWolnePrzedzialy(dane)
+    .filter((przedzial) => przedzial.minuty >= wymaganeMinuty)
     .slice(0, Math.max(0, limit))
     .map((przedzial) => ({
-      poczatek: isoDnia(dane.data, przedzial.od),
-      koniec: isoDnia(dane.data, przedzial.od + wymaganeMinuty),
+      poczatek: przedzial.poczatek,
+      koniec: isoDnia(dane.data, minutyDnia(przedzial.poczatek.slice(11, 16)) + wymaganeMinuty),
       minuty: wymaganeMinuty,
     }))
+}
+
+export function wyznaczWolnePrzedzialy(dane: DanePlanera): WolneOknoPlanera[] {
+  const preferencje = { ...DOMYSLNE_PREFERENCJE_PLANOWANIA, ...dane.preferencje }
+  return przedzialyDostepne(dane, preferencje).map((przedzial) => ({
+    poczatek: isoDnia(dane.data, przedzial.od),
+    koniec: isoDnia(dane.data, przedzial.do),
+    minuty: przedzial.do - przedzial.od,
+  }))
+}
+
+export function wyznaczDaneCzasuDniaPlanera(dane: DanePlanera): DaneCzasuDniaPlanera {
+  const wolneOkna = wyznaczWolnePrzedzialy(dane)
+  if (!dane.harmonogram.pracuje) return { wolneOkna }
+
+  const odPracy = minutyDnia(dane.harmonogram.odPracy)
+  const doPracy = minutyDnia(dane.harmonogram.doPracy)
+  return {
+    praca: {
+      od: isoDnia(dane.data, odPracy),
+      do: isoDnia(dane.data, doPracy),
+      polowa: isoDniaZSekundami(dane.data, (odPracy + doPracy) * 30),
+    },
+    ...(POCZATEK_DNIA_PLANERA < odPracy
+      ? { przedPraca: { od: isoDnia(dane.data, POCZATEK_DNIA_PLANERA), do: isoDnia(dane.data, odPracy) } }
+      : {}),
+    ...(doPracy < KONIEC_DNIA_PLANERA
+      ? { poPracy: { od: isoDnia(dane.data, doPracy), do: isoDnia(dane.data, KONIEC_DNIA_PLANERA) } }
+      : {}),
+    wolneOkna,
+  }
+}
+
+export function utworzWydarzeniaPlanera(
+  data: string,
+  bloki: readonly BlokCzasu[],
+  wizyty: readonly Wizyta[],
+): ElementOgarniacza[] {
+  return [
+    ...bloki
+      .filter((blok) => blok.status !== 'odrzucony' && blok.poczatek.startsWith(data))
+      .map((blok) => ({
+        id: `blok:${blok.id}`,
+        typ: 'planer' as const,
+        tytul: blok.tytul,
+        data,
+        godzina: blok.poczatek.slice(11, 16),
+        czasTrwaniaMinuty: Math.max(1, (new Date(blok.koniec).getTime() - new Date(blok.poczatek).getTime()) / 60_000),
+        trybTerminu: 'o_godzinie' as const,
+        status: blok.status === 'wykonany' ? 'wykonany' as const : 'otwarty' as const,
+        createdAt: blok.createdAt,
+        updatedAt: blok.updatedAt,
+      })),
+    ...wizyty
+      .filter((wizyta) => wizyta.data === data && wizyta.godzina && !['odbyta', 'anulowana'].includes(wizyta.status))
+      .map((wizyta) => ({
+        id: `wizyta:${wizyta.id}`,
+        typ: 'wizyta' as const,
+        tytul: wizyta.nazwa,
+        data,
+        godzina: wizyta.godzina,
+        czasTrwaniaMinuty: 60,
+        trybTerminu: 'o_godzinie' as const,
+        status: 'otwarty' as const,
+        createdAt: wizyta.createdAt,
+        updatedAt: wizyta.updatedAt,
+      })),
+  ]
 }
 
 export function generujPrzeplanowanie(dane: DanePlanera): WynikPlanera {

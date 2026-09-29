@@ -38,6 +38,7 @@ import {
   DOMYSLNE_PREFERENCJE_PLANOWANIA,
   generujPlan,
   generujPrzeplanowanie,
+  utworzWydarzeniaPlanera,
   znajdzWolneOkna,
   zatwierdzPlan,
   type PreferencjePlanowania,
@@ -1443,48 +1444,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     const wyjatek = [...wyjatki]
       .filter((x) => x.data === data)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-    const wydarzenia = [
-      ...bloki
-        .filter((x) => x.status !== "odrzucony" && x.poczatek.startsWith(data))
-        .map((x) => ({
-          id: `blok:${x.id}`,
-          typ: "planer" as const,
-          tytul: x.tytul,
-          data,
-          godzina: x.poczatek.slice(11, 16),
-          czasTrwaniaMinuty: Math.max(
-            1,
-            (new Date(x.koniec).getTime() - new Date(x.poczatek).getTime()) /
-              60_000,
-          ),
-          trybTerminu: "o_godzinie" as const,
-          status:
-            x.status === "wykonany"
-              ? ("wykonany" as const)
-              : ("otwarty" as const),
-          createdAt: x.createdAt,
-          updatedAt: x.updatedAt,
-        })),
-      ...wizyty
-        .filter(
-          (x) =>
-            x.data === data &&
-            x.godzina &&
-            !["odbyta", "anulowana"].includes(x.status),
-        )
-        .map((x) => ({
-          id: `wizyta:${x.id}`,
-          typ: "wizyta" as const,
-          tytul: x.nazwa,
-          data,
-          godzina: x.godzina,
-          czasTrwaniaMinuty: 60,
-          trybTerminu: "o_godzinie" as const,
-          status: "otwarty" as const,
-          createdAt: x.createdAt,
-          updatedAt: x.updatedAt,
-        })),
-    ];
+    const wydarzenia = utworzWydarzeniaPlanera(data, bloki, wizyty);
     const preferencjeZPamieci = await opcje.pobierzPreferencjePlanowania?.();
     return {
       data,
