@@ -245,13 +245,43 @@ export function utworzSerwer(
       }
       return
     }
-    if (zadanie.method === 'POST' && zadanie.url === '/api/echo/message') {
+    if (zadanie.url === '/api/echo/message') {
+      const czyDozwolonePochodzenie = ustawCorsSynchronizacji(zadanie, odpowiedz, konfiguracja)
+      if (zadanie.method === 'OPTIONS') {
+        if (!czyDozwolonePochodzenie) odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
+        else {
+          odpowiedz.writeHead(204)
+          odpowiedz.end()
+        }
+        return
+      }
+      if (zadanie.method !== 'POST') {
+        odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu.' })
+        return
+      }
+      if (!czyDozwolonePochodzenie) {
+        odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
+        return
+      }
+      const kontekst = pobierzKontekstDostepu(zadanie, baza)
+      if (!kontekst) {
+        odpowiedzJson(odpowiedz, 401, { error: 'Wymagana aktywna sesja Ogarniacza.' })
+        return
+      }
+      if (!sprawdzCsrf(zadanie, kontekst)) {
+        odpowiedzJson(odpowiedz, 403, { error: 'Sesja wymaga odświeżenia.' })
+        return
+      }
       const kontroler = new AbortController()
       zadanie.on('aborted', () => kontroler.abort())
+      odpowiedz.on('close', () => {
+        if (!odpowiedz.writableEnded) kontroler.abort()
+      })
       try {
         const wiadomosc = await odczytajWiadomoscEcho(zadanie)
         odpowiedzJson(odpowiedz, 200, await obslugaEcho(wiadomosc, kontroler.signal))
       } catch (blad) {
+        if (odpowiedz.destroyed) return
         if (blad instanceof Error && blad.message === 'MODEL_ECHO_NIEDOSTEPNY') {
           odpowiedzJson(odpowiedz, 503, { status: 'niedostepny', tryb: 'ograniczony_lokalny', odpowiedz: 'Pełna rozmowa z Echo nie jest jeszcze dostępna.' })
         } else {

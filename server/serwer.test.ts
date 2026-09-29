@@ -29,7 +29,7 @@ function naglowkiSynchronizacji(instalacja: string, csrf?: string): Record<strin
   }
 }
 
-function naglowkiModelu(csrf = 'csrf-wlasciciela'): Record<string, string> {
+function naglowkiEcho(csrf = 'csrf-wlasciciela'): Record<string, string> {
   return {
     cookie: 'ogarniacz_sesja=token-wlasciciela',
     origin: 'https://localhost',
@@ -98,32 +98,99 @@ test('healthcheck nie ujawnia konfiguracji ani sekretów', async () => {
   baza.close()
 })
 
-test('endpoint Echo realizuje kontrakt bez dostępu klienta do modelu', async () => {
+test('endpoint Echo wymaga sesji, CSRF i dozwolonego originu, zachowując kontrakt', async () => {
   const baza = new DatabaseSync(':memory:')
-  const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ PORT: '8788', DATABASE_PATH: ':memory:' }), baza, async (wiadomosc) => ({
+  uruchomMigracje(baza)
+  dodajSesjeWlasciciela(baza)
+  let liczbaWywolan = 0
+  const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ CORS_ALLOWED_ORIGINS: 'https://localhost' }), baza, async (wiadomosc) => ({
     rozmowaId: wiadomosc.rozmowaId ?? 'nowa-rozmowa',
     tryb: 'pelny_agent',
-    odpowiedz: `Przyjęto przez ${wiadomosc.zrodlo}.`,
+    odpowiedz: `Przyjęto przez ${wiadomosc.zrodlo} (${++liczbaWywolan}).`,
   }))
   await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
   const adres = serwer.address()
   assert.ok(adres && typeof adres === 'object')
-  const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/api/echo/message`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wiadomosc: 'Co mam jutro?', zrodlo: 'stt' }) })
-  assert.equal(odpowiedz.status, 200)
-  assert.deepEqual(await odpowiedz.json(), { rozmowaId: 'nowa-rozmowa', tryb: 'pelny_agent', odpowiedz: 'Przyjęto przez stt.' })
+  const url = `http://127.0.0.1:${adres.port}/api/echo/message`
+  const tresc = JSON.stringify({ wiadomosc: 'Co mam jutro?', zrodlo: 'stt' })
+
+  const bezSesji = await fetch(url, { method: 'POST', headers: { origin: 'https://localhost', 'content-type': 'application/json', 'x-ogarniacz-csrf': 'csrf-wlasciciela' }, body: tresc })
+  assert.equal(bezSesji.status, 401)
+  const zlyOrigin = await fetch(url, { method: 'POST', headers: { ...naglowkiEcho(), origin: 'https://zly.test' }, body: tresc })
+  assert.equal(zlyOrigin.status, 403)
+  const naglowkiBezCsrf = naglowkiEcho()
+  delete naglowkiBezCsrf['x-ogarniacz-csrf']
+  const bezCsrf = await fetch(url, { method: 'POST', headers: naglowkiBezCsrf, body: tresc })
+  assert.equal(bezCsrf.status, 403)
+  const zlyCsrf = await fetch(url, { method: 'POST', headers: naglowkiEcho('zly-csrf'), body: tresc })
+  assert.equal(zlyCsrf.status, 403)
+  const poprawne = await fetch(url, { method: 'POST', headers: naglowkiEcho(), body: tresc })
+  assert.equal(poprawne.status, 200)
+  assert.deepEqual(await poprawne.json(), { rozmowaId: 'nowa-rozmowa', tryb: 'pelny_agent', odpowiedz: 'Przyjęto przez stt (1).' })
+  assert.equal(liczbaWywolan, 1)
+
+  const preflight = await fetch(url, { method: 'OPTIONS', headers: { origin: 'https://localhost', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type,x-ogarniacz-csrf' } })
+  assert.equal(preflight.status, 204)
+  assert.equal(preflight.headers.get('access-control-allow-origin'), 'https://localhost')
+  assert.equal(preflight.headers.get('access-control-allow-methods'), 'GET, POST, OPTIONS')
+  assert.equal(preflight.headers.get('access-control-allow-headers'), 'Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF')
+  assert.equal(preflight.headers.get('access-control-allow-credentials'), 'true')
+  const obcePochodzenie = await fetch(url, { method: 'OPTIONS', headers: { origin: 'https://zly.test' } })
+  assert.equal(obcePochodzenie.status, 403)
+  assert.equal(obcePochodzenie.headers.get('access-control-allow-origin'), null)
+
   await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
   baza.close()
 })
 
 test('endpoint Echo bez providera zwraca kontrolowany tryb ograniczony', async () => {
   const baza = new DatabaseSync(':memory:')
+  uruchomMigracje(baza)
+  dodajSesjeWlasciciela(baza)
   const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ PORT: '8788', DATABASE_PATH: ':memory:' }), baza)
   await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
   const adres = serwer.address()
   assert.ok(adres && typeof adres === 'object')
-  const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/api/echo/message`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wiadomosc: 'Cześć' }) })
+  const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/api/echo/message`, { method: 'POST', headers: naglowkiEcho(), body: JSON.stringify({ wiadomosc: 'Cześć' }) })
   assert.equal(odpowiedz.status, 503)
   assert.deepEqual(await odpowiedz.json(), { status: 'niedostepny', tryb: 'ograniczony_lokalny', odpowiedz: 'Pełna rozmowa z Echo nie jest jeszcze dostępna.' })
+  await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+  baza.close()
+})
+
+test('endpoint Echo anuluje obsługę po zamknięciu połączenia', { timeout: 2_000 }, async () => {
+  const baza = new DatabaseSync(':memory:')
+  uruchomMigracje(baza)
+  dodajSesjeWlasciciela(baza)
+  let rozpocznij!: () => void
+  let potwierdzAnulowanie!: () => void
+  const rozpoczecie = new Promise<void>((rozwiaz) => { rozpocznij = rozwiaz })
+  const anulowanie = new Promise<void>((rozwiaz) => { potwierdzAnulowanie = rozwiaz })
+  const serwer = utworzSerwer(utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:' }), baza, async (_wiadomosc, sygnal) => {
+    rozpocznij()
+    await new Promise<never>((_rozwiaz, odrzuc) => {
+      sygnal.addEventListener('abort', () => {
+        potwierdzAnulowanie()
+        odrzuc(new DOMException('Anulowano', 'AbortError'))
+      }, { once: true })
+    })
+  })
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', () => rozwiaz()))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const kontroler = new AbortController()
+  const zadanieKlienta = fetch(`http://127.0.0.1:${adres.port}/api/echo/message`, {
+    method: 'POST',
+    headers: naglowkiEcho(),
+    body: JSON.stringify({ wiadomosc: 'Przerwij mnie' }),
+    signal: kontroler.signal,
+  })
+
+  await rozpoczecie
+  kontroler.abort()
+  await assert.rejects(zadanieKlienta, { name: 'AbortError' })
+  await anulowanie
+
   await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
   baza.close()
 })
@@ -146,11 +213,11 @@ test('transport modelu Echo wymaga sesji, CSRF i dozwolonego originu', async () 
 
   const bezSesji = await fetch(url, { method: 'POST', headers: { origin: 'https://localhost', 'content-type': 'application/json', 'x-ogarniacz-csrf': 'csrf-wlasciciela' }, body: tresc })
   assert.equal(bezSesji.status, 401)
-  const zlyOrigin = await fetch(url, { method: 'POST', headers: { ...naglowkiModelu(), origin: 'https://zly.test' }, body: tresc })
+  const zlyOrigin = await fetch(url, { method: 'POST', headers: { ...naglowkiEcho(), origin: 'https://zly.test' }, body: tresc })
   assert.equal(zlyOrigin.status, 403)
-  const zlyCsrf = await fetch(url, { method: 'POST', headers: naglowkiModelu('zly-csrf'), body: tresc })
+  const zlyCsrf = await fetch(url, { method: 'POST', headers: naglowkiEcho('zly-csrf'), body: tresc })
   assert.equal(zlyCsrf.status, 403)
-  const poprawne = await fetch(url, { method: 'POST', headers: naglowkiModelu(), body: tresc })
+  const poprawne = await fetch(url, { method: 'POST', headers: naglowkiEcho(), body: tresc })
   assert.equal(poprawne.status, 200)
   assert.deepEqual(await poprawne.json(), { message: { content: '{"typ":"odpowiedz"}' } })
   assert.equal(liczbaWywolan, 1)
@@ -171,7 +238,7 @@ test('transport modelu Echo odrzuca zbyt duże żądanie', async () => {
 
   const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/api/echo/model`, {
     method: 'POST',
-    headers: naglowkiModelu(),
+    headers: naglowkiEcho(),
     body: JSON.stringify({ format: { type: 'object' }, messages: [{ role: 'user', content: 'x'.repeat(512 * 1024) }] }),
   })
   assert.equal(odpowiedz.status, 413)
