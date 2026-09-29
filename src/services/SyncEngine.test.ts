@@ -221,6 +221,51 @@ describe.sequential('SyncEngine', () => {
       .toMatchObject({ usunietoAt: '2026-08-24T10:00:00.000Z' })
   })
 
+  it('nie pozwala ręcznie połączyć tombstone nawet przy zgodnym znaczniku usunięcia', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const usunietoAt = '2026-08-24T10:00:00.000Z'
+    const lokalne = zadanie('dwa-usuniecia', 'Usunięcie lokalne', '2026-08-25T10:00:00.000Z', usunietoAt)
+    const zdalneZadanie = zadanie('dwa-usuniecia', 'Usunięcie zdalne', '2026-08-26T10:00:00.000Z', usunietoAt)
+    await baza.tabela('zadania').put(lokalne)
+    await zdalne.ustawZmiany([{ tabela: 'zadania', rekord: zdalneZadanie, installationId: 'instalacja-zdalna' }])
+    const silnik = utworzSilnik()
+    await silnik.synchronizuj(zdalne)
+    const konflikt = (await baza.tabela('konfliktySynchronizacji').toArray())[0]
+
+    await expect(silnik.rozstrzygnijKonflikt(konflikt.id, {
+      typ: 'reczny',
+      pola: { tytul: 'zdalny' },
+    })).rejects.toThrow('Usunięcia nie można połączyć ręcznie.')
+    expect(await baza.tabela('konfliktySynchronizacji').get(konflikt.id)).toBeDefined()
+  })
+
+  it('utrzymuje liczniki i stan przy kilku konfliktach rozstrzyganych po kolei', async () => {
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const lokalnePierwsze = zadanie('konflikt-pierwszy', 'Lokalny pierwszy', '2026-08-23T10:00:00.000Z')
+    const lokalneDrugie = zadanie('konflikt-drugi', 'Lokalny drugi', '2026-08-23T11:00:00.000Z')
+    await baza.tabela('zadania').bulkPut([lokalnePierwsze, lokalneDrugie])
+    await zdalne.ustawZmiany([
+      { tabela: 'zadania', rekord: zadanie('konflikt-pierwszy', 'Zdalny pierwszy', '2026-08-24T10:00:00.000Z'), installationId: 'instalacja-zdalna' },
+      { tabela: 'zadania', rekord: zadanie('konflikt-drugi', 'Zdalny drugi', '2026-08-24T11:00:00.000Z'), installationId: 'instalacja-zdalna' },
+    ])
+    const silnik = utworzSilnik()
+    await silnik.synchronizuj(zdalne)
+
+    await silnik.rozstrzygnijKonflikt('zadania:konflikt-pierwszy', { typ: 'zdalny' })
+    expect(await pobierzStanSynchronizacji()).toMatchObject({
+      stan: 'konflikt',
+      liczbaKonfliktow: 1,
+      liczbaOczekujacych: 1,
+    })
+
+    await silnik.rozstrzygnijKonflikt('zadania:konflikt-drugi', { typ: 'lokalny' })
+    expect(await pobierzStanSynchronizacji()).toMatchObject({
+      stan: 'oczekuje',
+      liczbaKonfliktow: 0,
+      liczbaOczekujacych: 1,
+    })
+  })
+
   it('po konflikcie 409 pobiera nowszą wersję i zapisuje konflikt zamiast zwykłego błędu', async () => {
     const lokalne = zadanie('wyscig-409', 'Edycja lokalna', '2026-08-23T10:00:00.000Z')
     const zdalne = zadanie('wyscig-409', 'Edycja zdalna', '2026-08-24T10:00:00.000Z')

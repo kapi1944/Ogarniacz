@@ -1,4 +1,4 @@
-import { cleanup as wyczysc, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup as wyczysc, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { KonfliktSynchronizacji } from '../../domain/typy'
 import { KartaKonfliktuSynchronizacji } from './KonfliktSynchronizacji'
@@ -93,5 +93,29 @@ describe('prezentacja konfliktu synchronizacji', () => {
 
     expect(screen.queryByRole('button', { name: 'Połącz pola ręcznie' })).not.toBeInTheDocument()
     expect(screen.getByText(/rekord usunięty/)).toBeInTheDocument()
+  })
+
+  it('nie oferuje ręcznego łączenia dwóch usuniętych wersji', () => {
+    const konflikt = utworzKonflikt()
+    konflikt.lokalny.usunietoAt = '2026-09-01T10:00:00.000Z'
+    konflikt.zdalny.usunietoAt = '2026-09-01T10:00:00.000Z'
+    render(<KartaKonfliktuSynchronizacji konflikt={konflikt} rozstrzygnij={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: 'Połącz pola ręcznie' })).not.toBeInTheDocument()
+  })
+
+  it('pokazuje błąd rozstrzygnięcia i pozwala ponowić próbę', async () => {
+    const konflikt = utworzKonflikt()
+    const rozstrzygnij = vi.fn()
+      .mockRejectedValueOnce(new Error('Błąd zapisu'))
+      .mockResolvedValueOnce(undefined)
+    render(<KartaKonfliktuSynchronizacji konflikt={konflikt} rozstrzygnij={rozstrzygnij} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Wybierz wersję z serwera' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Zatwierdź rozwiązanie' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nie udało się zapisać rozwiązania konfliktu')
+    fireEvent.click(screen.getByRole('button', { name: 'Zatwierdź rozwiązanie' }))
+    await waitFor(() => expect(rozstrzygnij).toHaveBeenCalledTimes(2))
   })
 })

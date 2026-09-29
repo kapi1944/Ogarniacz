@@ -213,6 +213,9 @@ export class SyncEngine implements DostawcaSynchronizacji {
     updatedAt: string,
   ): EncjaBazowa {
     if (rozstrzygniecie.typ === 'zdalny') return structuredClone(konflikt.zdalny)
+    if (rozstrzygniecie.typ === 'reczny' && (konflikt.lokalny.usunietoAt || konflikt.zdalny.usunietoAt)) {
+      throw new Error('Usunięcia nie można połączyć ręcznie.')
+    }
     const rekord = structuredClone(konflikt.lokalny) as EncjaBazowa & Record<string, unknown>
     if (rozstrzygniecie.typ === 'reczny') {
       const lokalny = konflikt.lokalny as EncjaBazowa & Record<string, unknown>

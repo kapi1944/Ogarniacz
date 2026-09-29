@@ -173,11 +173,18 @@ export function KartaKonfliktuSynchronizacji({ konflikt, rozstrzygnij }: Konflik
   const prezentacja = przygotujPrezentacjeKonfliktu(konflikt)
   const [tryb, ustawTryb] = useState<RozstrzygniecieKonfliktu['typ']>()
   const [wybranePola, ustawWybranePola] = useState<Record<string, WyborWartosciKonfliktu>>({})
-  const moznaPolaczycRecznie = prezentacja.roznice.length > 0 && prezentacja.roznice.every(({ moznaPolaczyc }) => moznaPolaczyc)
+  const [rozstrzyganie, ustawRozstrzyganie] = useState(false)
+  const [bladRozstrzygania, ustawBladRozstrzygania] = useState('')
+  const moznaPolaczycRecznie = !konflikt.lokalny.usunietoAt
+    && !konflikt.zdalny.usunietoAt
+    && prezentacja.roznice.length > 0
+    && prezentacja.roznice.every(({ moznaPolaczyc }) => moznaPolaczyc)
 
   useEffect(() => {
     ustawTryb(undefined)
     ustawWybranePola({})
+    ustawRozstrzyganie(false)
+    ustawBladRozstrzygania('')
   }, [konflikt.id, konflikt.updatedAt])
 
   const wybierzTryb = (nowyTryb: RozstrzygniecieKonfliktu['typ']) => {
@@ -187,12 +194,20 @@ export function KartaKonfliktuSynchronizacji({ konflikt, rozstrzygnij }: Konflik
     }
   }
 
-  const zatwierdz = () => {
+  const zatwierdz = async () => {
     if (!tryb) return
     const rozstrzygniecie: RozstrzygniecieKonfliktu = tryb === 'reczny'
       ? { typ: 'reczny', pola: wybranePola }
       : { typ: tryb }
-    void rozstrzygnij(konflikt.id, rozstrzygniecie)
+    ustawRozstrzyganie(true)
+    ustawBladRozstrzygania('')
+    try {
+      await rozstrzygnij(konflikt.id, rozstrzygniecie)
+    } catch {
+      ustawBladRozstrzygania('Nie udało się zapisać rozwiązania konfliktu. Spróbuj ponownie.')
+    } finally {
+      ustawRozstrzyganie(false)
+    }
   }
 
   return <article className="konflikt-synchronizacji">
@@ -219,8 +234,9 @@ export function KartaKonfliktuSynchronizacji({ konflikt, rozstrzygnij }: Konflik
       {moznaPolaczycRecznie && <button type="button" className="przycisk przycisk--drugorzedny" aria-pressed={tryb === 'reczny'} onClick={() => wybierzTryb('reczny')}>Połącz pola ręcznie</button>}
     </div>
     {tryb === 'reczny' && <p className="tekst-pomocniczy">W każdym wierszu wybierz wartość, którą chcesz zachować.</p>}
+    {bladRozstrzygania && <p className="komunikat komunikat--blad" role="alert">{bladRozstrzygania}</p>}
     <div className="akcje-backupu">
-      <button type="button" className="przycisk przycisk--glowny" disabled={!tryb} onClick={zatwierdz}>Zatwierdź rozwiązanie</button>
+      <button type="button" className="przycisk przycisk--glowny" disabled={!tryb || rozstrzyganie} onClick={() => void zatwierdz()}>{rozstrzyganie ? 'Zapisywanie…' : 'Zatwierdź rozwiązanie'}</button>
     </div>
   </article>
 }

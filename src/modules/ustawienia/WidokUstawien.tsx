@@ -216,10 +216,19 @@ export function WidokUstawien() {
   }
 
   const rozstrzygnijKonflikt = async (id: string, rozstrzygniecie: RozstrzygniecieKonfliktu) => {
-    await rozstrzygnijKonfliktSynchronizacji(id, rozstrzygniecie)
-    ustawKomunikat(rozstrzygniecie.typ === 'zdalny'
-      ? 'Zastosowano wersję z serwera.'
-      : 'Zapisano rozwiązanie. Zostanie wysłane podczas następnej synchronizacji.')
+    ustawBlad('')
+    try {
+      await rozstrzygnijKonfliktSynchronizacji(id, rozstrzygniecie)
+      ustawKomunikat(rozstrzygniecie.typ === 'zdalny'
+        ? 'Zastosowano wersję z serwera.'
+        : 'Zapisano rozwiązanie. Zostanie wysłane podczas następnej synchronizacji.')
+    } catch (bladRozstrzygania) {
+      ustawKomunikat('')
+      ustawBlad(bladRozstrzygania instanceof Error
+        ? bladRozstrzygania.message
+        : 'Nie udało się zapisać rozwiązania konfliktu.')
+      throw bladRozstrzygania
+    }
   }
 
   const dodajEdytora = async (zdarzenie: FormEvent) => {

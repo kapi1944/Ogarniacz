@@ -16,11 +16,11 @@
 - jednorazowy bootstrap Właściciela;
 - zaproszenia Edytora oraz odzyskiwanie dostępu;
 - synchronizacja local-first z trwałym outboxem;
-- idempotencja, tombstones oraz jawne konflikty HTTP 409;
+- idempotencja, tombstones oraz jawne konflikty HTTP 409 z wyborem pełnej wersji lub ręcznym scalaniem prostych pól;
 - serwerowe egzekwowanie grantów Właściciela i Edytora;
 - synchronizacja m.in. kont finansowych i miejsc.
 
-Do dalszego rozwoju pozostają UX rozwiązywania konfliktów, obserwowalność synchronizacji oraz ewentualne dalsze utwardzenie polityki bezpieczeństwa.
+Do dalszego rozwoju pozostają obserwowalność synchronizacji oraz ewentualne dalsze utwardzenie polityki bezpieczeństwa.
 
 ## Warstwy platformowe
 
