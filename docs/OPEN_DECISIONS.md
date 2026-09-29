@@ -9,7 +9,7 @@ Poniższe decyzje pozostają otwarte po wdrożeniu backendu, kont, sesyjnej sync
 5. **Automatyczne kategorie pamięci Echo** — docelowa automatyzacja pamięci nie została jeszcze ustalona.
 6. **Poziomy proaktywności i cisza nocna** — istnieją podstawowe mechanizmy, ale ich finalna polityka pozostaje otwarta.
 7. **Finalne STT/TTS i słowo wybudzające** — mechanizmy głosowe działają warstwowo; docelowy wake word wymaga prywatnej konfiguracji Picovoice.
-8. **Platforma Smart Home** — nie wybrano docelowej platformy.
+8. **Dalszy zakres Smart Home** — pierwszy neutralny provider i adapter Home Assistant są opisane w `SMART_HOME.md`; otwarte pozostają wdrożenie, zakres przyszłych poleceń Echo i szczegółowa polityka ryzyka kolejnych akcji.
 9. **Poczta, kalendarz, mapy i inne integracje** — pozostają późniejszym zakresem.
 10. **Rola tylko do odczytu** — obecnie odczyt bez edycji realizowany jest przez zakres grantu, a nie osobną trzecią rolę.
 

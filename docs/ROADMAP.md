@@ -44,6 +44,6 @@ Do dalszego rozwoju pozostają obserwowalność synchronizacji oraz ewentualne d
 - audyt dostępności z czytnikiem ekranu;
 - dalsze strojenie „Dzisiaj” na podstawie realnego użycia;
 - bardziej rozbudowana edycja relacji encji;
-- Smart Home po wyborze platformy i polityki ryzyka;
+- walidacja połączenia z Home Assistant, a dopiero potem osobny zakres wysokopoziomowych poleceń i polityki ryzyka;
 - integracje z kalendarzem, pocztą i mapami;
 - planer podróży jako osobny późniejszy moduł.
