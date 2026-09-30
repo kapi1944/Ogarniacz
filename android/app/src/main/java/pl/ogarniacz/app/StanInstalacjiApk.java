@@ -127,11 +127,15 @@ final class StanInstalacjiApk {
         if (statusAndroida != Integer.MIN_VALUE) wynik.put("statusAndroida", statusAndroida);
         wynik.put("komunikatAndroida", p.getString("komunikat", null));
         wynik.put("nazwaPliku", p.getString("nazwaPliku", null)); wynik.put("sha256", p.getString("sha256", null));
-        wynik.put("maZweryfikowanyApk", !POBRANO.equals(status) && p.getString("sha256", null) != null && p.getString("nazwaPliku", null) != null);
+        wynik.put("maZweryfikowanyApk", czyMaZweryfikowanyApk(status, p.getString("nazwaPliku", null), p.getString("sha256", null)));
         wynik.put("komunikatUzytkownika", komunikatDlaUzytkownika(status));
         wynik.put("maPotwierdzenieInstalacji", p.getString("potwierdzenie", null) != null);
         wynik.put("moznaPonowicInstalacje", czyMoznaPonowicInstalacje(status));
         return wynik;
+    }
+
+    static boolean czyMaZweryfikowanyApk(String status, String nazwaPliku, String sha256) {
+        return !POBRANO.equals(status) && !SUKCES.equals(status) && sha256 != null && nazwaPliku != null;
     }
 
     static long kodDocelowy(Context kontekst) { return prefs(kontekst).getLong("kodWersji", 0); }

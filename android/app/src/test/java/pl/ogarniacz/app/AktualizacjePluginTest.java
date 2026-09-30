@@ -19,6 +19,58 @@ public class AktualizacjePluginTest {
     private static final long GIB = 1024L * 1024L * 1024L;
     private static final long MIB = 1024L * 1024L;
 
+    @Test public void sukcesPoprzedniejInstalacjiNieBlokujePobraniaKolejnejWersji() {
+        String nazwa = "Ogarniacz-1.0.14-release.apk", sha = "a".repeat(64);
+        assertFalse(StanInstalacjiApk.czyMaZweryfikowanyApk(StanInstalacjiApk.SUKCES, nazwa, sha));
+        assertFalse(StanInstalacjiApk.czyMaZweryfikowanyApk(StanInstalacjiApk.POBRANO, nazwa, sha));
+        assertTrue(StanInstalacjiApk.czyMaZweryfikowanyApk(StanInstalacjiApk.ZWERYFIKOWANO, nazwa, sha));
+        assertTrue(StanInstalacjiApk.czyMaZweryfikowanyApk(StanInstalacjiApk.ANULOWANO, nazwa, sha));
+        assertTrue(StanInstalacjiApk.czyMaZweryfikowanyApk(StanInstalacjiApk.NIEZNANY_BLAD, nazwa, sha));
+        assertFalse(StanInstalacjiApk.czyMaZweryfikowanyApk(StanInstalacjiApk.NIEPRAWIDLOWY_APK, null, null));
+    }
+
+    @Test public void restartPrzedCommitPorzucaNiedokonczonaSesjeIZachowujeApkDoRetry() throws Exception {
+        File plik = File.createTempFile("ogarniacz-przerwana-sesja-", ".apk");
+        byte[] dane = new byte[] {1, 2, 3};
+        zapisz(plik, dane);
+        java.util.List<String> dzialania = new java.util.ArrayList<>();
+        String[] status = { StanInstalacjiApk.INSTALOWANIE };
+        try {
+            AktualizacjePlugin.uzgodnijPrzerwanaSesje(status[0], true, false,
+                () -> dzialania.add("porzucenie"),
+                () -> { dzialania.add("przerwanie"); status[0] = StanInstalacjiApk.NIEZNANY_BLAD; });
+            assertEquals(java.util.List.of("porzucenie", "przerwanie"), dzialania);
+            assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(status[0]));
+            assertArrayEquals(dane, Files.readAllBytes(plik.toPath()));
+        } finally { plik.delete(); }
+    }
+
+    @Test public void brakSesjiPoRestarcieOdblokowujeRetryBezPorzucaniaNieistniejacejSesji() {
+        for (String poprzedni : new String[] { StanInstalacjiApk.INSTALOWANIE, StanInstalacjiApk.OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI }) {
+            String[] status = { poprzedni };
+            AktualizacjePlugin.uzgodnijPrzerwanaSesje(status[0], false, false,
+                () -> { throw new AssertionError("Nie wolno porzucać nieistniejącej sesji."); },
+                () -> status[0] = StanInstalacjiApk.NIEZNANY_BLAD);
+            assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(status[0]));
+        }
+    }
+
+    @Test public void restartNiePrzerywaZatwierdzonejInstalacjiAniInnychStanow() {
+        Runnable niedozwolone = () -> { throw new AssertionError("Nie wolno zmieniać tego stanu."); };
+        AktualizacjePlugin.uzgodnijPrzerwanaSesje(StanInstalacjiApk.INSTALOWANIE, true, true, niedozwolone, niedozwolone);
+        AktualizacjePlugin.uzgodnijPrzerwanaSesje(StanInstalacjiApk.OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI, true, true, niedozwolone, niedozwolone);
+        for (String status : new String[] { StanInstalacjiApk.SUKCES, StanInstalacjiApk.ZWERYFIKOWANO, StanInstalacjiApk.ANULOWANO }) {
+            AktualizacjePlugin.uzgodnijPrzerwanaSesje(status, false, false, niedozwolone, niedozwolone);
+        }
+    }
+
+    @Test public void bladPorzuceniaSesjiNieUdajeGotowosciDoNowejInstalacji() {
+        assertThrows(IllegalStateException.class, () -> AktualizacjePlugin.uzgodnijPrzerwanaSesje(
+            StanInstalacjiApk.INSTALOWANIE, true, false,
+            () -> { throw new IllegalStateException("System nie pozwolił porzucić sesji."); },
+            () -> { throw new AssertionError("Nie wolno zgłosić przerwania bez porzucenia sesji."); }));
+    }
+
     @Test public void zapisSesjiZamykaStrumienPrzedZatwierdzeniemIZachowujeApkDoRetry() throws Exception {
         File plik = File.createTempFile("ogarniacz-sesja-", ".apk");
         byte[] dane = new byte[150_000];

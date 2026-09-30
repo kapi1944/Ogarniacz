@@ -63,6 +63,29 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+it('po sukcesie 1.0.14 i sprzątnięciu starego APK pozwala pobrać następną wersję', async () => {
+  const nastepna = { ...dostepnaAktualizacja, adresApk: 'https://example.test/Ogarniacz-1.0.15-release.apk',
+    manifest: { ...dostepnaAktualizacja.manifest, versionName: '1.0.15', versionCode: 1_000_015, apkUrl: 'Ogarniacz-1.0.15-release.apk' } }
+  stanKontroli = { sprawdzono: true, wynikApk: nastepna }
+  sprawdzAktualizacjeApk.mockResolvedValueOnce(nastepna)
+  vi.mocked(platforma.aktualizacje.pobierzInformacje).mockResolvedValueOnce({ wersja: '1.0.14', kod: 1_000_014 })
+  vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockResolvedValueOnce({
+    status: 'SUKCES', wymagaZgody: false, maZweryfikowanyApk: false, moznaPonowicInstalacje: false,
+    wersjaDocelowa: '1.0.14', versionCodeDocelowy: 1_000_014,
+    nazwaPliku: 'Ogarniacz-1.0.14-release.apk', sha256: 'a'.repeat(64),
+  })
+  pobierzApk.mockResolvedValue({ nazwaPliku: 'Ogarniacz-1.0.15-release.apk', sha256: 'a'.repeat(64) })
+  uruchomInstalator.mockResolvedValue({ status: 'INSTALOWANIE', wymagaZgody: false })
+  render(<PanelAktualizacji />)
+  await screen.findByText('Aktualizacja zakończona.')
+  fireEvent.click(screen.getByRole('button', { name: 'Sprawdź aktualizacje' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Pobierz i zainstaluj' }))
+  await waitFor(() => expect(uruchomInstalator).toHaveBeenCalledWith(
+    { nazwaPliku: 'Ogarniacz-1.0.15-release.apk', sha256: 'a'.repeat(64) }, nastepna.manifest,
+  ))
+  expect(pobierzApk).toHaveBeenCalledTimes(1)
+})
+
 const stanWeb = {
   aktualny: { bundleVersion: '1.0.9', commitSha: 'a'.repeat(40), installedAt: '2026-09-14T10:00:00.000Z', source: 'web-ota' as const },
   odrzucone: [],

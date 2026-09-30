@@ -35,17 +35,37 @@ Weryfikacja pobiera manifest i APK z `/releases/download/vX.Y.Z/`, sprawdza pola
 
 CI i release używają JDK 21 oraz uruchamiają celowane testy updatera APK i Web OTA. Web OTA wymaga publicznego wydania produkcyjnego z manifestem i APK zgodnymi z `minNativeVersionCode`; sam tag lub draft nie wystarcza. Konfiguracja podpisywanego manifestu pochodzi z tego samego commita co bundle.
 
-## Test ręczny na Samsungu: 1.0.13 → następny patch
+## Przygotowanie telefonu
 
-Wykonaj dopiero po osobno zatwierdzonym wydaniu następnego patcha. Ta poprawka nie publikuje APK ani Web OTA.
+Zapisz model Samsunga, Android/One UI, ilość wolnego miejsca oraz wersję z **Ustawienia → Android APK → Aktualnie zainstalowana wersja**. Wykonaj eksport danych i zanotuj przykładowe zadanie, wpis Rejestru, lek, harmonogram i ostatnią przyjętą dawkę. Nie odinstalowuj aplikacji ani nie czyść jej danych. Do synchronizacji włącz dotychczasowy Tailscale i użyj własnego konta.
 
-**Ograniczenie 1.0.13:** zainstalowany updater zatwierdza sesję przed zamknięciem strumienia APK. Android może odrzucić tę operację. Poprawka natywna zacznie działać dopiero w nowym APK; Web OTA nie naprawi starego instalatora. Jeśli przejście z 1.0.13 zatrzyma się na uruchomieniu instalatora, pobierz oficjalny APK z wydania GitHub i otwórz go systemowo (bez odinstalowania Ogarniacza). Nie traktuj tego obejścia jako zaliczenia testu updatera. Pełny test poprawionego instalatora wymaga potem przejścia z poprawionego APK do kolejnego wyższego `versionCode`.
+## TEST A — Samsung 1.0.13 → 1.0.14
 
-1. Zanotuj wersję 1.0.13 (1000013), wersję Androida/One UI i przykładowe zapisane dane. Sprawdź wykrycie następnego patcha w Ustawieniach.
-2. Wyłącz sieć podczas pobierania: ma być błąd i „Ponów pobieranie”. Włącz sieć, ponów; sprawdź postęp i etap SHA-256. Weryfikację uszkodzonego APK wykonuj wyłącznie z kontrolowanym artefaktem testowym: instalator nie może się otworzyć.
-3. Wyłącz dla Ogarniacza „Instaluj nieznane aplikacje”. Po pobraniu przejdź do ustawień, wróć najpierw bez zgody, potem ze zgodą i wybierz „Ponów instalację”. Poprawny APK nie powinien być pobierany ponownie.
-4. Otwórz systemowe potwierdzenie, anuluj instalację, ponów również po ponownym uruchomieniu aplikacji. Sprawdź brak ponownego pobierania oraz zachowanie danych.
-5. Na urządzeniu testowym z małą ilością wolnego miejsca sprawdź czytelny błąd przed pobieraniem/instalacją; po zwolnieniu miejsca ponów. Nie usuwaj danych Ogarniacza.
-6. Zatwierdź instalację. Po uruchomieniu sprawdź nową wersję, wyższy `versionCode`, zachowane dane i brak propozycji starszego APK. Web OTA wymagające wyższego kodu APK ma pozostać zablokowane.
+1. Potwierdź `1.0.13 (1000013)` w aplikacji i wersję w systemowych informacjach o Ogarniaczu.
+2. Wybierz **Sprawdź aktualizacje**. Oczekiwany wynik: dostępne `1.0.14`; manifest i APK pochodzą z oficjalnego wydania GitHub.
+3. Wybierz **Pobierz i zainstaluj**. Oczekiwany wynik: postęp pobierania i etap weryfikacji SHA-256 przed uruchomieniem instalacji.
+4. Jeśli system wymaga zgody „Instaluj nieznane aplikacje”, udziel jej dla Ogarniacza, wróć do niego i ponów instalację. Jeśli pojawi się **Potwierdź instalację**, wybierz je, a następnie zatwierdź aktualizację na ekranie systemowym. Zapisz również przypadek, gdy Android wykona dozwoloną aktualizację bez osobnego ekranu.
+5. **Znane ograniczenie 1.0.13:** jego updater wywołuje `commit()` przed zamknięciem strumienia. Jeśli instalator nie startuje, pobierz `Ogarniacz-1.0.14-release.apk` bezpośrednio z oficjalnego release i otwórz go systemowo. Zgoda dotyczy wtedy przeglądarki lub aplikacji Pliki. To obejście, a nie zaliczony test instalatora Ogarniacza. Przy żądaniu odinstalowania lub konflikcie podpisu zatrzymaj test.
+6. Po zakończeniu otwórz Ogarniacza ponownie. Oczekiwany wynik: `1.0.14 (1000014)`, zachowane konto i wszystkie zanotowane dane. Sam powrót z instalatora nie oznacza sukcesu.
+7. Otwórz Pulpit, Dzisiaj, Zadania, Rejestr, Planer i Zdrowie. Oczekiwany wynik: brak błędów oraz zgodność danych; nie używaj importu demonstracyjnego.
+8. Sprawdź synchronizację przez istniejący prywatny HTTPS: zmień testowe zadanie, zsynchronizuj i potwierdź zmianę na drugim kliencie własnego konta. Oczekiwany wynik: brak utraty lub duplikacji danych; ewentualne konflikty są jawne.
+9. W Lekach sprawdź zachowanie leków, dawek i historii. Na osobnym testowym leku sprawdź oznaczenie dawki; nie zmieniaj rzeczywistego przyjęcia tylko na potrzeby testu.
+10. Zamknij aplikację, usuń ją z ostatnich aplikacji i uruchom ponownie; następnie uruchom telefon ponownie. Oczekiwany wynik: nadal `1.0.14`, zachowane dane i sesja oraz brak propozycji starszej aktualizacji. Sprawdź także przypomnienie testowego leku przy rzeczywistych ustawieniach powiadomień/baterii Samsunga.
 
-Zapisz oddzielnie wyniki testu 1.0.13, ewentualnego obejścia systemowym instalatorem i testu poprawionego updatera. Testy jednostkowe nie potwierdzają zachowania PackageInstaller ani uprawnień na fizycznym Samsungu.
+## TEST B — przyszły 1.0.14 → 1.0.15+
+
+Wykonaj dopiero po osobno zatwierdzonym i opublikowanym wyższym APK. Brak nowszej wersji oznacza **NIETESTOWANE**, nie sukces. Nie publikuj nowego wydania tylko w celu odhaczenia tej listy.
+
+**Granica dowodu:** `1.0.14` zawiera naprawę zamykania strumienia, ale nie zawiera późniejszej naprawy odzyskiwania przerwanej sesji ani flagi APK po `SUKCES`. Przejście B sprawdza instalator dostarczony w `1.0.14`; pełna kontrola późniejszych poprawek wymaga potem przejścia z APK, które je zawiera, do kolejnej wyższej wersji. Web OTA nie zmieni tych natywnych zachowań.
+
+1. Potwierdź `1.0.14 (1000014)`, eksport danych i integralność przyszłego release; jego `versionCode` musi być wyższy. **Sprawdź aktualizacje** ma pokazać wyższą wersję i umożliwić jej pobranie. Jeżeli po zapisanym `SUKCES` brak przycisku pobrania, zapisz znaną usterkę `1.0.14`; ręczna instalacja nie zalicza tego kroku.
+2. Przerwij sieć podczas pobierania. Oczekiwany wynik: czytelny błąd i ponowienie pobrania; instalator nie otwiera się przed poprawnym SHA-256.
+3. Po poprawnym pobraniu przetestuj brak zgody na nieznane źródła, powrót bez zgody i ze zgodą. Oczekiwany wynik: instalacja ponawiana z zachowanego APK, bez ponownego pobrania. Można to sprawdzić po wyłączeniu sieci, gdy APK jest już pobrane.
+4. Jeśli dostępny jest ekran systemowego potwierdzenia, anuluj, wróć do aplikacji i wybierz **Ponów instalację**. Powtórz po ponownym uruchomieniu aplikacji. Oczekiwany wynik: czytelny stan anulowania i retry zachowanego, ponownie zweryfikowanego pliku. Jeśli system nie wymaga potwierdzenia, test anulowania oznacz **NIETESTOWANE**.
+5. Na urządzeniu testowym sprawdź małą ilość wolnego miejsca. Oczekiwany wynik: czytelny błąd bez utraty danych; po zwolnieniu miejsca można ponowić operację. Nie usuwaj danych Ogarniacza.
+6. W kontrolowanym teście przerwij proces przed zatwierdzeniem sesji, uruchom aplikację i sprawdź brak wiecznego „Instalowanie…”. Ten scenariusz jest znanym ograniczeniem `1.0.14`; poprawione odzyskiwanie trzeba sprawdzić także z przyszłego APK zawierającego tę naprawę. Nie przerywaj celowo systemowej instalacji na telefonie z jedyną kopią danych.
+7. Dokończ aktualizację. Sprawdź wyższą zainstalowaną wersję, dane, moduły, synchronizację, leki i restart jak w krokach A6–A10. Nie uznawaj statusu „Instalowanie…” za dowód sukcesu.
+
+Systemowe zgody, ekran instalatora, skutki zabicia procesu, blokady One UI/Auto Blocker, rzeczywisty brak miejsca, zachowanie danych po aktualizacji, synchronizacja i przypomnienia wymagają fizycznego telefonu. Testy automatyczne nie dowodzą tych zachowań. Uszkodzony APK, inny podpis i downgrade testuj wyłącznie na kontrolowanym urządzeniu z kopią danych, bez wyłączania zabezpieczeń produkcyjnych.
+
+Zapisz osobno wynik każdego kroku: **PASS / FAIL / NIETESTOWANE**, rzeczywistą wersję źródłową/docelową i użycie obejścia. Przy błędzie zachowaj zrzut komunikatu, godzinę, wolne miejsce, zgody źródła/Auto Blocker oraz status/sessionId i log PackageInstaller (bez sekretów i danych użytkownika).
