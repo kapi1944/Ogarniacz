@@ -1,9 +1,10 @@
 import { z } from "zod";
-import { pobierzRepozytorium } from "../../data/Repozytorium";
+import { pobierzRepozytorium, type Repozytorium } from "../../data/Repozytorium";
 import { noweId, utworzMetadane } from "../../domain/fabryki";
 import { zadanieLegacyNaElement } from "../../domain/adapterZadania";
 import type {
   DziennikEcho,
+  EncjaBazowa,
   DziennikNawyku,
   NazwaModulu,
   Projekt,
@@ -157,7 +158,25 @@ async function zapiszDziennikEcho(
   });
 }
 
+class BladZapisuTworzeniaEcho extends Error {}
+
+async function zapiszTworzonaEncjeEcho<T extends EncjaBazowa>(repozytorium: Repozytorium<T>, encja: T): Promise<void> {
+  try {
+    await repozytorium.zapisz(encja);
+  } catch {
+    let zapisana: T | undefined;
+    try {
+      zapisana = await repozytorium.pobierz(encja.id);
+    } catch {
+      throw new BladZapisuTworzeniaEcho('Nie mogę potwierdzić wyniku zapisu. Sprawdź dane przed ponowieniem polecenia.');
+    }
+    if (!zapisana) throw new BladZapisuTworzeniaEcho('Nie zapisano danych. Spróbuj ponownie.');
+  }
+}
+
 export class WykonawcaNarzedziEcho {
+  private kolejkaTworzenia: Promise<unknown> = Promise.resolve();
+  private readonly zakonczoneTworzenie = new Map<string, WynikNarzedziaEcho>();
   constructor(
     private readonly rejestr: RejestrNarzedziEcho,
     private readonly polityka = new PolitykaDzialanEcho(),
@@ -169,6 +188,20 @@ export class WykonawcaNarzedziEcho {
     wywolanie: WywolanieNarzedziaEcho,
     potwierdzone = false,
   ): Promise<WynikNarzedziaEcho> {
+    if (!['create_task', 'create_reminder'].includes(wywolanie.nazwa)) return this.wykonajNarzedzie(wywolanie, potwierdzone);
+    const klucz = JSON.stringify([wywolanie.id, wywolanie.nazwa, wywolanie.argumenty]);
+    const wykonanie = this.kolejkaTworzenia.then(async () => {
+      const poprzednie = this.zakonczoneTworzenie.get(klucz);
+      if (poprzednie) return poprzednie;
+      const wynik = await this.wykonajNarzedzie(wywolanie, potwierdzone);
+      if (wynik.status === 'wykonane') this.zakonczoneTworzenie.set(klucz, wynik);
+      return wynik;
+    });
+    this.kolejkaTworzenia = wykonanie.catch(() => undefined);
+    return wykonanie;
+  }
+
+  private async wykonajNarzedzie(wywolanie: WywolanieNarzedziaEcho, potwierdzone: boolean): Promise<WynikNarzedziaEcho> {
     const narzedzie = this.rejestr.pobierz(wywolanie.nazwa);
     if (!narzedzie)
       return {
@@ -220,30 +253,34 @@ export class WykonawcaNarzedziEcho {
         komunikat: narzedzie.opis,
       };
       const dane = await narzedzie.wykonaj(walidacja.data);
-      await this.zapiszDziennik(
+      const zapisDziennika = this.zapiszDziennik(
         `Echo wykonało narzędzie ${narzedzie.nazwa}.`,
         narzedzie.nazwa,
         narzedzie.ryzyko,
         "wykonane",
       );
+      if (['create_task', 'create_reminder'].includes(narzedzie.nazwa)) await zapisDziennika.catch(() => undefined);
+      else await zapisDziennika;
       return {
         wywolanieId: wywolanie.id,
         nazwa: wywolanie.nazwa,
         status: "wykonane",
         dane,
       };
-    } catch {
-      await this.zapiszDziennik(
+    } catch (blad) {
+      const zapisBledu = this.zapiszDziennik(
         `Błąd narzędzia Echo ${narzedzie.nazwa}.`,
         narzedzie.nazwa,
         narzedzie.ryzyko,
         "blad",
       );
+      if (['create_task', 'create_reminder'].includes(narzedzie.nazwa)) await zapisBledu.catch(() => undefined);
+      else await zapisBledu;
       return {
         wywolanieId: wywolanie.id,
         nazwa: wywolanie.nazwa,
         status: "blad",
-        komunikat: "Narzędzie nie mogło zakończyć działania.",
+        komunikat: blad instanceof BladZapisuTworzeniaEcho ? blad.message : "Narzędzie nie mogło zakończyć działania.",
       };
     }
   }
@@ -406,7 +443,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
             }
           : {}),
       };
-      await pobierzRepozytorium("zadania").zapisz(zadanie);
+      await zapiszTworzonaEncjeEcho(pobierzRepozytorium("zadania"), zadanie);
       return { id: zadanie.id, tytul: zadanie.tytul };
     },
   });
@@ -564,7 +601,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
         stan: "nowe",
         eskalacja: false,
       };
-      await pobierzRepozytorium("przypomnienia").zapisz(przypomnienie);
+      await zapiszTworzonaEncjeEcho(pobierzRepozytorium("przypomnienia"), przypomnienie);
       return { id: przypomnienie.id, tytul, czas };
     },
   });

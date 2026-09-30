@@ -209,6 +209,7 @@ export class AgentEcho {
     const wynik = await this.wykonawca.wykonaj(wywolanie, true)
     this.wynikiBiezacejTury = [wynik]
     this.kontekst.dodajWynikNarzedzia(wynik)
+    if (wynik.status !== 'wykonane' && ['create_task', 'create_reminder'].includes(wywolanie.nazwa)) return this.uruchomPetle(sygnalZewnetrzny)
     if (wynik.status !== 'wykonane') return this.odpowiedz('Nie udało się bezpiecznie wykonać tej zmiany.', akcja.ryzyko)
     this.kontekst.ustawOstatniaAkcje(wywolanie.nazwa, wywolanie.argumenty)
     this.zapamietajEncjeWyniku(wywolanie.nazwa, wynik.dane)

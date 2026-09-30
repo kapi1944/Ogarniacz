@@ -49,7 +49,7 @@ export interface KontekstPlanowaniaEcho {
 }
 
 export interface OczekujaceDoprecyzowanieEcho {
-  intencja: 'utworz_przypomnienie' | 'przeloz_przypomnienie' | 'edytuj_zadanie' | 'wykonaj_zadanie' | 'usun_zadanie' | 'utworz_wizyte' | 'utworz_skierowanie' | 'utworz_recepte' | 'dodaj_wpis_terapii'
+  intencja: 'utworz_zadanie' | 'utworz_przypomnienie' | 'przeloz_przypomnienie' | 'edytuj_zadanie' | 'wykonaj_zadanie' | 'usun_zadanie' | 'utworz_wizyte' | 'utworz_skierowanie' | 'utworz_recepte' | 'dodaj_wpis_terapii'
   brakujacePola: ('tytul' | 'data' | 'godzina' | 'encja' | 'cel' | 'pozycje' | 'terapia')[]
   zebrane: {
     tytul?: string

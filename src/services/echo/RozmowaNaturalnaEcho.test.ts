@@ -25,25 +25,24 @@ function utworzAgenta(kontekstPlanowania: KontekstPlanowaniaEcho, trybRozmowy: '
 }
 
 describe('naturalne planowanie Echo', () => {
-  it('wylicza „w połowie pracy” z grafiku i najpierw prosi o akceptację sugestii', async () => {
+  it('zapisuje „w połowie pracy” dokładnie z grafiku bez zbędnego potwierdzenia', async () => {
     const { agent, zapisz } = utworzAgenta({ praca: { od: '07:45', do: '16:00', zrodlo: 'grafik' }, zajetePrzedzialy: [] })
-    const propozycja = await agent.obsluz('Przypomnij mi zadzwonić w połowie pracy.')
-    expect(propozycja.tekst).toContain('Pracujesz 07:45–16:00')
-    expect(propozycja.tekst).toContain('12:00')
-    expect(zapisz).not.toHaveBeenCalled()
-    await agent.obsluz('Tak')
-    expect(new Date(zapisz.mock.calls[0][0].czas).getHours()).toBe(12)
+    const odpowiedz = await agent.obsluz('Przypomnij mi zadzwonić w połowie pracy.')
+    expect(odpowiedz.tekst).toContain('11:52:30')
+    expect(zapisz).toHaveBeenCalledOnce()
+    expect(new Date(zapisz.mock.calls[0][0].czas).getHours()).toBe(11)
+    expect(new Date(zapisz.mock.calls[0][0].czas).getMinutes()).toBe(52)
+    expect(new Date(zapisz.mock.calls[0][0].czas).getSeconds()).toBe(30)
   })
 
-  it('wskazuje konflikt i proponuje termin bez przesuwania istniejącego planu', async () => {
+  it('nie przesuwa jawnie wybranej godziny przypomnienia z powodu zajętego kalendarza', async () => {
     const { agent, zapisz } = utworzAgenta({
       zajetePrzedzialy: [{ tytul: 'Dentysta', od: '2026-09-07T15:00:00', do: '2026-09-07T16:00:00', zrodlo: 'blok_czasu' }],
     })
     const odpowiedz = await agent.obsluz('Przypomnij mi o raporcie dzisiaj o 15.')
-    expect(odpowiedz.tekst).toContain('Dentysta')
-    expect(odpowiedz.tekst).toContain('16:15')
-    expect(odpowiedz.tekst).toContain('bez przesuwania')
-    expect(zapisz).not.toHaveBeenCalled()
+    expect(odpowiedz.tekst).toContain('dodałem')
+    expect(new Date(zapisz.mock.calls[0][0].czas).getHours()).toBe(15)
+    expect(zapisz).toHaveBeenCalledOnce()
   })
 
   it('zadaje jedno krótkie pytanie, gdy bez grafiku nie da się wyliczyć połowy pracy', async () => {
@@ -51,10 +50,10 @@ describe('naturalne planowanie Echo', () => {
     expect((await agent.obsluz('Przypomnij mi zadzwonić w połowie pracy.')).tekst).toBe('O której?')
   })
 
-  it('w trybie swobodnym nazywa wartość wyliczoną sugestią zamiast zapisywać ją po cichu', async () => {
+  it('tryb swobodny również wykonuje kompletne polecenie bez zbędnego pytania', async () => {
     const { agent, zapisz } = utworzAgenta({ praca: { od: '08:00', do: '16:00', zrodlo: 'grafik' }, zajetePrzedzialy: [] }, 'swobodny')
     const odpowiedz = await agent.obsluz('Przypomnij mi o raporcie w połowie pracy.')
-    expect(odpowiedz.tekst).toContain('To sugestia, nie zapisany fakt')
-    expect(zapisz).not.toHaveBeenCalled()
+    expect(odpowiedz.tekst).toContain('dodałem')
+    expect(zapisz).toHaveBeenCalledOnce()
   })
 })
