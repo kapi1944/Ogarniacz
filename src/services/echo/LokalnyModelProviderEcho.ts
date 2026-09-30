@@ -1,6 +1,7 @@
 import { noweId } from '../../domain/fabryki'
 import { z } from 'zod'
 import { pobierzCsrfKonta } from '../KontaService'
+import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import type { DecyzjaModeluEcho, ProviderModeluEcho, ZadanieModeluEcho } from './typyEcho'
 
 const tekst = z.string().max(2000)
@@ -69,6 +70,7 @@ const INSTRUKCJE_SEMANTYCZNE = [
 export class LokalnyModelProviderEcho implements ProviderModeluEcho {
   readonly nazwa = 'lokalny-model'
   readonly tryb = 'pelny_agent' as const
+  private readonly tworzenie = new LokalnySemantycznyProviderEcho()
 
   constructor(
     private readonly adres: string,
@@ -78,6 +80,7 @@ export class LokalnyModelProviderEcho implements ProviderModeluEcho {
 
   async odpowiedz(zadanie: ZadanieModeluEcho, sygnal: AbortSignal): Promise<DecyzjaModeluEcho> {
     sygnal.throwIfAborted()
+    if (this.tworzenie.czyObslugujeTworzenie(zadanie)) return this.tworzenie.odpowiedz(zadanie, sygnal)
     try {
       const csrf = this.pobierzCsrf()
       const odpowiedz = await this.pobierz(this.adres, {
