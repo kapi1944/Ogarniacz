@@ -13,6 +13,7 @@ import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeS
 import { utworzMetadane } from '../domain/fabryki'
 import type { EncjaBazowa, KonfliktSynchronizacji, StanSynchronizacji } from '../domain/typy'
 import { pobierzInstallationId } from './InstallationService'
+import { komunikatyBledowSynchronizacji, sklasyfikujBladSynchronizacji } from './DiagnostykaSynchronizacji'
 
 const POCZATEK_SYNCHRONIZACJI = '1970-01-01T00:00:00.000Z'
 export const nazwyTabelSynchronizowanych = nazwyTabel.filter(
@@ -104,7 +105,7 @@ export async function pobierzStanSynchronizacji(): Promise<StanSynchronizacji> {
     liczbaOczekujacych: 0,
     kolejkaZmigrowana: false,
   }
-  return { ...stan, liczbaOczekujacych: await tabelaKolejki().count() }
+  return { ...stan, liczbaOczekujacych: await tabelaKolejki().count(), liczbaKonfliktow: await baza.tabela('konfliktySynchronizacji').count() }
 }
 
 export async function pobierzKonfliktySynchronizacji(): Promise<KonfliktSynchronizacji[]> {
@@ -125,10 +126,10 @@ export async function oznaczOczekujacaSynchronizacje(online = typeof navigator =
 
 export async function oznaczSynchronizacjeOffline(): Promise<void> {
   const obecny = await pobierzStanSynchronizacji()
-  if (obecny.stan === 'konflikt') return
   await baza.tabela('stanSynchronizacji').put({
     ...obecny,
-    stan: 'offline',
+    stan: obecny.stan === 'konflikt' ? 'konflikt' : 'offline',
+    polaczenie: 'offline',
     ostatniBlad: undefined,
     updatedAt: new Date().toISOString(),
   })
@@ -239,8 +240,9 @@ export class SyncEngine implements DostawcaSynchronizacji {
     repozytoriumZdalne: RepozytoriumZdalne,
     poKonflikcieSerwera = false,
   ): Promise<WynikSynchronizacji> {
+    await this.zapiszStan({ ostatniaProba: this.teraz() })
     if (!this.czyOnline()) {
-      await this.zapiszStan({ stan: 'offline', ostatniBlad: undefined })
+      await this.zapiszStan({ stan: 'offline', polaczenie: 'offline', ostatniBlad: undefined })
       return { wyslane: 0, pobrane: 0, konflikty: 0, stan: 'offline' }
     }
 
@@ -259,6 +261,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
         this.zPonowieniami(() => repozytoriumZdalne.pobierzZmiany(od)),
       ])
       walidujZmianyZdalne(wszystkieZdalne)
+      await this.zapiszStan({ ostatniPull: this.teraz(), polaczenie: 'dostepne', sesjaWymagaLogowania: false })
       const zdalne = wszystkieZdalne.filter((zmiana) => zmiana.installationId !== installationId)
       const lokalnePoKluczu = new Map(lokalne.map((zmiana) => [kluczZmiany(zmiana), zmiana]))
       const zdalnePoKluczu = new Map(zdalne.map((zmiana) => [kluczZmiany(zmiana), zmiana]))
@@ -284,6 +287,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
 
       if (doWyslania.length > 0) {
         await this.zPonowieniami(() => repozytoriumZdalne.wyslijZmiany(doWyslania, od))
+        await this.zapiszStan({ ostatniPush: this.teraz(), polaczenie: 'dostepne', sesjaWymagaLogowania: false })
         await usunWyslaneZmiany(doWyslania.flatMap((zmiana) => zmiana.zmianaId ? [zmiana.zmianaId] : []))
       }
       await usunWyslaneZmiany([...zgodneKlucze].flatMap((klucz) => lokalnePoKluczu.get(klucz)?.zmianaId ? [lokalnePoKluczu.get(klucz)!.zmianaId!] : []))
@@ -295,10 +299,18 @@ export class SyncEngine implements DostawcaSynchronizacji {
       })
       return { wyslane: doWyslania.length, pobrane: doPobrania.length, konflikty: konflikty.length, stan }
     } catch (blad) {
+      const kod = sklasyfikujBladSynchronizacji(blad)
+      const komunikat = komunikatyBledowSynchronizacji[kod]
+      await this.zapiszStan({
+        kodOstatniegoBledu: kod,
+        czasOstatniegoBledu: this.teraz(),
+        ...(kod === 'brak_polaczenia' ? { polaczenie: 'niedostepne' as const } : {}),
+        ...(kod === 'sesja_wygasla' || kod === 'csrf' || kod === 'konflikt' ? { polaczenie: 'dostepne' as const } : {}),
+        ...(kod === 'brak_sesji' || kod === 'sesja_wygasla' || kod === 'csrf' ? { sesjaWymagaLogowania: true } : {}),
+      })
       if (blad instanceof BladKonfliktuSynchronizacji && !poKonflikcieSerwera) {
         return this.wykonajSynchronizacje(repozytoriumZdalne, true)
       }
-      const komunikat = blad instanceof Error ? blad.message : 'Nieznany błąd synchronizacji.'
       await zapiszBladKolejki((await pobierzKolejkeSynchronizacji()).map((zmiana) => zmiana.id), komunikat)
       await this.zapiszStan({
         stan: 'blad',

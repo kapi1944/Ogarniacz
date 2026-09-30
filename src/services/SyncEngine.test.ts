@@ -8,6 +8,8 @@ import type { KontoFinansowe, Miejsce } from '../domain/typy'
 import { utworzMetadane } from '../domain/fabryki'
 import { utworzZadanie } from './ZadaniaService'
 import { nazwyTabelSynchronizowanych, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
+import { BladSynchronizacjiHttp } from '../data/RepozytoriumZdalneHttp'
+import { utworzDiagnostykeSynchronizacji } from './DiagnostykaSynchronizacji'
 
 const CZAS_SYNCHRONIZACJI = '2026-09-01T12:00:00.000Z'
 
@@ -63,6 +65,66 @@ describe.sequential('SyncEngine', () => {
     expect(nazwyTabelSynchronizowanych).not.toContain('dziennikEcho')
   })
 
+  it('zapamiętuje czasy udanego pull i push niezależnie od kursora serwera, także po ponownym otwarciu bazy', async () => {
+    await pobierzRepozytorium('zadania').zapisz(zadanie('diagnostyka', 'Prywatna treść', CZAS_SYNCHRONIZACJI))
+    const zdalne: RepozytoriumZdalne = { pobierzZmiany: async () => [], wyslijZmiany: async () => {}, pobierzKursor: () => '2026-08-01T00:00:00.000Z' }
+    await utworzSilnik().synchronizuj(zdalne)
+    baza.close()
+    await baza.open()
+    expect(await pobierzStanSynchronizacji()).toMatchObject({
+      ostatniaProba: CZAS_SYNCHRONIZACJI, ostatniPull: CZAS_SYNCHRONIZACJI, ostatniPush: CZAS_SYNCHRONIZACJI,
+      ostatniSync: '2026-08-01T00:00:00.000Z', polaczenie: 'dostepne', liczbaOczekujacych: 0,
+    })
+    await utworzSilnik().synchronizuj(zdalne)
+    expect((await pobierzStanSynchronizacji()).ostatniPush).toBe(CZAS_SYNCHRONIZACJI)
+  })
+
+  it.each(['brak_sesji', 'sesja_wygasla', 'brak_polaczenia', 'blad_synchronizacji'] as const)('bezpiecznie diagnozuje %s i pozostawia outbox', async (rodzaj) => {
+    const sekret = 'cookie=sekret; csrf=sekret; haslo=sekret; prywatny-rekord'
+    await pobierzRepozytorium('zadania').zapisz(zadanie('diagnostyka', sekret, CZAS_SYNCHRONIZACJI))
+    const zdalne: RepozytoriumZdalne = {
+      pobierzZmiany: async () => { throw new BladSynchronizacjiHttp(rodzaj, sekret) },
+      wyslijZmiany: async () => {},
+    }
+    await expect(utworzSilnik().synchronizuj(zdalne)).rejects.toThrow(sekret)
+    const stan = await pobierzStanSynchronizacji()
+    const diagnostyka = utworzDiagnostykeSynchronizacji({
+      czyAndroid: true, adresApi: `https://user:${sekret}@example.test?token=${sekret}#${sekret}`,
+      installationId: '12345678-calosc-id', csrfDostepny: true,
+      konto: { zalogowany: true, uzytkownikId: sekret, wlascicielId: sekret, email: sekret, csrf: sekret, rola: 'wlasciciel', granty: [], edytorzy: [] },
+      stan,
+    })
+    expect(diagnostyka).toMatchObject({ liczbaOczekujacych: 1, ostatniaProba: CZAS_SYNCHRONIZACJI, ostatniBlad: { kod: rodzaj } })
+    expect(diagnostyka.wymaganeLogowanie).toBe(rodzaj === 'brak_sesji' || rodzaj === 'sesja_wygasla')
+    if (rodzaj === 'brak_polaczenia') expect(diagnostyka.stanPolaczenia).toBe('niedostępne')
+    expect(JSON.stringify(diagnostyka)).not.toContain(sekret)
+    expect(JSON.stringify(stan)).not.toContain(sekret)
+    expect((await baza.tabela('kolejkaSynchronizacji').toArray())[0].ostatniBlad).not.toContain(sekret)
+    await utworzSilnik().synchronizuj({ pobierzZmiany: async () => [], wyslijZmiany: async () => {} })
+    expect(await pobierzStanSynchronizacji()).toMatchObject({ sesjaWymagaLogowania: false, polaczenie: 'dostepne', liczbaOczekujacych: 0 })
+  })
+
+  it('rejestruje udany pull mimo nieudanego push i diagnozuje powtarzające się HTTP 409 bez ujawniania odpowiedzi', async () => {
+    await pobierzRepozytorium('zadania').zapisz(zadanie('409', 'Prywatne', CZAS_SYNCHRONIZACJI))
+    const zdalne: RepozytoriumZdalne = {
+      pobierzZmiany: async () => [],
+      wyslijZmiany: async () => { throw new BladKonfliktuSynchronizacji('sekretna odpowiedź 409') },
+    }
+    await expect(utworzSilnik().synchronizuj(zdalne)).rejects.toThrow('sekretna odpowiedź 409')
+    const stan = await pobierzStanSynchronizacji()
+    expect(stan).toMatchObject({ ostatniPull: CZAS_SYNCHRONIZACJI, kodOstatniegoBledu: 'konflikt', liczbaOczekujacych: 1 })
+    expect(stan.ostatniPush).toBeUndefined()
+    expect(JSON.stringify(stan)).not.toContain('sekretna odpowiedź')
+  })
+
+  it('odczytuje aktualny outbox bez dodatkowego uruchomienia silnika', async () => {
+    await utworzSilnik().synchronizuj({ pobierzZmiany: async () => [], wyslijZmiany: async () => {} })
+    expect((await pobierzStanSynchronizacji()).liczbaOczekujacych).toBe(0)
+    await pobierzRepozytorium('zadania').zapisz(zadanie('czekajace', 'Lokalne', CZAS_SYNCHRONIZACJI))
+    expect((await pobierzStanSynchronizacji()).liczbaOczekujacych).toBe(1)
+    expect((await pobierzStanSynchronizacji()).ostatniPush).toBeUndefined()
+  })
+
   it('wysyła lokalną zmianę przy synchronizacji przyrostowej', async () => {
     const zdalne = new RepozytoriumZdalneInMemory()
     await baza.tabela('zadania').put(zadanie('lokalne', 'Lokalne', '2026-08-20T10:00:00.000Z'))
@@ -116,6 +178,7 @@ describe.sequential('SyncEngine', () => {
     const wynik = await silnik.synchronizuj(zdalne)
 
     expect(wynik.stan).toBe('konflikt')
+    expect(await pobierzStanSynchronizacji()).toMatchObject({ liczbaKonfliktow: 1, liczbaOczekujacych: 1, ostatniPull: CZAS_SYNCHRONIZACJI })
     expect(await baza.tabela('zadania').get('wspolne')).toMatchObject({ tytul: 'Wersja lokalna' })
     const konflikt = (await baza.tabela('konfliktySynchronizacji').toArray())[0]
     expect(konflikt).toMatchObject({
@@ -132,6 +195,7 @@ describe.sequential('SyncEngine', () => {
     expect(await baza.tabela('zadania').get('wspolne')).toMatchObject({ tytul: 'Wersja zdalna' })
     expect(await baza.tabela('konfliktySynchronizacji').get(konflikt.id)).toBeUndefined()
     expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toHaveLength(0)
+    expect((await pobierzStanSynchronizacji()).liczbaKonfliktow).toBe(0)
   })
 
   it('po zachowaniu ostatniej wersji lokalnej czeka na wysłanie, a po opróżnieniu kolejki kończy synchronizację', async () => {

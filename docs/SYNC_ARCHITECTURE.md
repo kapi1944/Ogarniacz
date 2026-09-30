@@ -16,6 +16,12 @@ Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL` i musi ono wskazywać
 
 `npm run sync:doctor` wykonuje wyłącznie odczyty: waliduje URL, DNS/IP, `/health`, preflight CORS i dostępność endpointu sesji. Uwierzytelniony sync wymaga interaktywnego logowania w aplikacji. `CORS_ALLOWED_ORIGINS` ogranicza originy i zezwala na credentials wyłącznie dla wpisanych adresów.
 
+Ustawienia → Synchronizacja → Diagnostyka synchronizacji pokazują ostatni wynik połączenia z backendem, stan sesji, czasy udanego pull i push oraz ostatniej próby, bieżące liczby rekordów outboxu i konfliktów, kontrolowany ostatni błąd, protokół/host endpointu i skrócony installationId. Podsumowanie połączenia wskazuje wymagane logowanie, decyzję o konflikcie lub oczekujące zmiany. Stan połączenia jest wynikiem ostatniej operacji, nie osobnym sprawdzaniem zdrowia serwera.
+
+Opcjonalne metadane diagnostyczne są dopisywane do istniejącego lokalnego `stanSynchronizacji`, bez zmiany indeksów Dexie, encji synchronizowanych ani protokołu. Starsze zapisy pozostają zgodne: brak czasu oznacza „jeszcze nie wykonano”, a kursora `ostatniSync` nie interpretuje się jako czasu pull/push. Czasy odnoszą się do poprawnej odpowiedzi providera; pusty pull jest udany, natomiast push bez wysyłanych zmian nie tworzy nowego czasu. Metadane przeżywają ponowne otwarcie bazy. Liczniki są odczytywane z istniejących tabel przez `useLiveQuery`, bez pollingu UI. Ostatni kontrolowany błąd pozostaje historią także po udanej ponownej synchronizacji; udana odpowiedź usuwa wymóg ponownego logowania.
+
+Diagnostyka nie kopiuje rekordów, treści odpowiedzi, stack trace, emaila konta, cookies, haseł ani tokenów. Komunikaty błędów pochodzą wyłącznie ze słownika kontrolowanych kategorii; starszy surowy błąd nie jest wyświetlany. Endpoint pomija credentials, ścieżkę, query i fragment, a CSRF pokazuje wyłącznie dostępność.
+
 ## Konflikty
 
 Jeżeli lokalna i zdalna wersja tego samego rekordu zmieniły się od ostatniego sync i nie są identyczne, żadna nie nadpisuje drugiej. Obie wersje oraz identyfikatory instalacji trafiają do lokalnego rejestru konfliktów. Ustawienia pozwalają wybrać wersję lokalną albo zdalną. Nie zastosowano CRDT.

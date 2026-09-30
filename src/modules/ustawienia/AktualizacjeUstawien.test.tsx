@@ -5,6 +5,8 @@ import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 import { komunikatBleduAktualizacji, PanelAktualizacji } from './PanelAktualizacji'
 import { PodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
 import { SekcjaPolaczeniaIAktualizacji } from './SekcjaPolaczeniaIAktualizacji'
+import { utworzDiagnostykeSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
+import { utworzMetadane } from '../../domain/fabryki'
 
 vi.mock('./PanelAktualizacjiRaspberry', () => ({ PanelAktualizacjiRaspberry: () => <div>Aktualizacja Raspberry</div> }))
 
@@ -61,6 +63,30 @@ afterEach(() => {
   platforma.natywna = true
   wyczysc()
   vi.clearAllMocks()
+})
+
+it.each([
+  { sesjaWymagaLogowania: true, liczbaKonfliktow: 0, liczbaOczekujacych: 1, tytul: 'Synchronizacja wymaga logowania' },
+  { sesjaWymagaLogowania: false, liczbaKonfliktow: 1, liczbaOczekujacych: 1, tytul: 'Synchronizacja wymaga decyzji' },
+  { sesjaWymagaLogowania: false, liczbaKonfliktow: 0, liczbaOczekujacych: 2, tytul: 'Zmiany czekają na synchronizację' },
+])('pokazuje przyczynę braku synchronizacji: $tytul', ({ tytul, ...dane }) => {
+  const diagnostyka = utworzDiagnostykeSynchronizacji({
+    czyAndroid: true, adresApi: 'https://example.test', installationId: '12345678', csrfDostepny: true,
+    konto: { zalogowany: true, uzytkownikId: 'konto', wlascicielId: 'konto', email: 'konto@example.test', rola: 'wlasciciel', granty: [], edytorzy: [] },
+    stan: { ...utworzMetadane('glowny'), stan: 'oczekuje', ...dane },
+  })
+  render(<PodsumowaniePolaczeniaIAktualizacji synchronizacjaSkonfigurowana diagnostyka={diagnostyka} />)
+  expect(screen.getByRole('heading', { name: tytul })).toBeInTheDocument()
+})
+
+it('pokazuje brak połączenia nawet przy pustym outboxie', () => {
+  const diagnostyka = utworzDiagnostykeSynchronizacji({
+    czyAndroid: true, adresApi: 'https://example.test', installationId: '12345678', csrfDostepny: true,
+    konto: { zalogowany: true, uzytkownikId: 'konto', wlascicielId: 'konto', email: 'konto@example.test', rola: 'wlasciciel', granty: [], edytorzy: [] },
+    stan: { ...utworzMetadane('glowny'), stan: 'blad', polaczenie: 'niedostepne', liczbaOczekujacych: 0, liczbaKonfliktow: 0 },
+  })
+  render(<PodsumowaniePolaczeniaIAktualizacji synchronizacjaSkonfigurowana diagnostyka={diagnostyka} />)
+  expect(screen.getByRole('heading', { name: 'Brak połączenia z backendem' })).toBeInTheDocument()
 })
 
 it('po sukcesie 1.0.14 i sprzątnięciu starego APK pozwala pobrać następną wersję', async () => {

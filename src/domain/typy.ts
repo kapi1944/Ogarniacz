@@ -565,6 +565,13 @@ export interface StanSynchronizacji extends EncjaBazowa {
   stan: StatusSynchronizacji
   ostatniSync?: string
   ostatniBlad?: string
+  ostatniPull?: string
+  ostatniPush?: string
+  ostatniaProba?: string
+  polaczenie?: 'dostepne' | 'niedostepne' | 'offline'
+  kodOstatniegoBledu?: 'brak_sesji' | 'sesja_wygasla' | 'csrf' | 'brak_polaczenia' | 'konflikt' | 'blad_synchronizacji'
+  czasOstatniegoBledu?: string
+  sesjaWymagaLogowania?: boolean
   liczbaKonfliktow: number
   liczbaOczekujacych: number
   kolejkaZmigrowana?: boolean
