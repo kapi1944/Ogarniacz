@@ -17,11 +17,11 @@ import {
   czyZgodnyJdk,
   normalizujFingerprintCertyfikatu,
   parsujUrzadzeniaAdb,
-  pobierzPublicznyManifestPoPublikacji,
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
 } from './android-wspolne.mjs'
+import { zapewnijRelease, sprawdzPublikacje } from './android-release-publikacja.mjs'
 import { pobierzKonfiguracjeSynchronizacji, pobierzProdukcyjnaKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
 
 const katalogRepozytorium = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -475,62 +475,20 @@ function pobierzTokenGitHub() {
   return pola.password
 }
 
-async function zadanieGitHub(url, token, opcje = {}) {
-  const odpowiedz = await fetch(url, {
-    ...opcje,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...opcje.headers,
-    },
-  })
-  if (!odpowiedz.ok) throw new Error(`GitHub API zwróciło HTTP ${odpowiedz.status}.`)
-  return odpowiedz
-}
-
-async function opublikujReleaseGitHub({ manifest, sciezkaApk, sciezkaSkrotu, sciezkaManifestu, adresManifestu, notatkiWydania }) {
+async function opublikujReleaseGitHub({ manifest, sciezkaApk, sciezkaSkrotu, sciezkaManifestu, adresManifestu }) {
   const repozytorium = pobierzRepozytoriumGitHub()
   const tag = `v${manifest.versionName}`
-  const istniejeTag = wykonajPrzechwytywanie('git', ['ls-remote', '--exit-code', '--tags', 'origin', `refs/tags/${tag}`])
-  if (istniejeTag.status === 0) throw new Error(`Tag ${tag} już istnieje na origin; publikacja nie nadpisze wydania.`)
-  if (istniejeTag.status !== 2) throw new Error('Nie udało się sprawdzić tagów origin przed publikacją.')
-  const token = pobierzTokenGitHub()
-  wykonajEtap(`Git tag ${tag}`, 'git', ['tag', tag])
-  wykonajEtap(`Git push tag ${tag}`, 'git', ['push', 'origin', tag])
-  const api = `https://api.github.com/repos/${repozytorium}`
-  const utworzone = await zadanieGitHub(`${api}/releases`, token, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      tag_name: tag,
-      name: tag,
-      body: notatkiWydania?.trim() || `Ogarniacz ${manifest.versionName}`,
-      draft: true,
-      prerelease: false,
-    }),
-  })
-  const release = await utworzone.json()
-  const adresWysylki = String(release.upload_url ?? '').replace(/\{\?name,label\}$/, '')
-  if (!adresWysylki) throw new Error('GitHub nie zwrócił adresu wysyłania assets release.')
-  for (const sciezka of [sciezkaApk, sciezkaSkrotu, sciezkaManifestu]) {
-    const dane = readFileSync(sciezka)
-    await zadanieGitHub(`${adresWysylki}?name=${encodeURIComponent(basename(sciezka))}`, token, {
-      method: 'POST',
-      headers: { 'Content-Type': sciezka.endsWith('.json') ? 'application/json' : 'application/octet-stream' },
-      body: dane,
-    })
-  }
-  await zadanieGitHub(`${api}/releases/${release.id}`, token, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ draft: false }),
-  })
-
-  const opublikowany = await pobierzPublicznyManifestPoPublikacji({ adresManifestu, oczekiwanyManifest: manifest })
-  const adresApk = new URL(opublikowany.apkUrl, adresManifestu)
-  const odpowiedzApk = await fetch(adresApk, { method: 'HEAD' })
-  if (!odpowiedzApk.ok) throw new Error(`Publiczny APK po publikacji zwrócił HTTP ${odpowiedzApk.status}.`)
+  const istniejeTag = wykonajPrzechwytywanie('git', ['ls-remote', '--exit-code', '--tags', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`])
+  const commit = wykonajPrzechwytywanie('git', ['rev-parse', 'HEAD']).stdout.trim()
+  if (istniejeTag.status === 0) {
+    if (istniejeTag.stdout.trim().split('\n').at(-1).split(/\s+/)[0] !== commit) throw new Error('Istniejący tag wskazuje inny commit; nie nadpisano tagu.')
+  } else if (istniejeTag.status === 2) {
+    wykonajEtap(`Git tag ${tag}`, 'git', ['tag', tag])
+    wykonajEtap(`Git push tag ${tag}`, 'git', ['push', 'origin', tag])
+  } else throw new Error('Nie udało się sprawdzić tagów origin.')
+  const release = await zapewnijRelease({ repozytorium, token: pobierzTokenGitHub(), manifest,
+    pliki: [sciezkaApk, sciezkaSkrotu, sciezkaManifestu].map((sciezka) => [basename(sciezka), readFileSync(sciezka)]) })
+  await sprawdzPublikacje({ repozytorium, manifest, adresManifestu })
   console.log(`\nGITHUB RELEASE: OK — ${release.html_url}`)
 }
 
@@ -562,7 +520,7 @@ async function sprawdzArtefaktRelease({ sciezkaApk, manifest, adresManifestu, di
   if (manifest.apkUrl !== oczekiwanaNazwa || basename(adresApk.pathname) !== oczekiwanaNazwa) throw new Error('latest.json musi wskazywać względny asset bieżącego wydania GitHub.')
 }
 
-async function sprawdzMonotonicznoscWydania(adresManifestu) {
+async function sprawdzMonotonicznoscWydania(adresManifestu, wznowienie = false) {
   let odpowiedz
   try {
     odpowiedz = await fetch(adresManifestu, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } })
@@ -572,7 +530,7 @@ async function sprawdzMonotonicznoscWydania(adresManifestu) {
   if (!odpowiedz.ok) throw new Error(`Obecny latest.json zwrócił HTTP ${odpowiedz.status}.`)
   const obecny = walidujManifestAktualizacji(await odpowiedz.json())
   const nastepnyKod = obliczKodWersji(pakiet.version)
-  if (nastepnyKod <= obecny.versionCode) {
+  if (nastepnyKod < obecny.versionCode || (nastepnyKod === obecny.versionCode && !wznowienie)) {
     throw new Error(`versionCode ${nastepnyKod} nie jest większy od opublikowanego ${obecny.versionCode} (${obecny.versionName}).`)
   }
   return obecny
@@ -593,8 +551,8 @@ async function wykonajRelease(opcje) {
     throw new Error('Release wymaga jawnej zmiennej procesu VITE_SYNC_API_URL, aby nie użyć nieaktualnego pliku .env.')
   }
   sprawdzProdukcyjnyAdresSynchronizacji(konfiguracjaSynchronizacji.adresApi)
-  const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu)
-  console.log(`\nVERSION: OK — ${pakiet.version} (${obliczKodWersji(pakiet.version)}) > ${obecnyManifest.versionName} (${obecnyManifest.versionCode})`)
+  const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu, opcje['publish-existing'] === true)
+  console.log(`\nVERSION: OK — ${pakiet.version} (${obliczKodWersji(pakiet.version)}); publiczna ${obecnyManifest.versionName} (${obecnyManifest.versionCode})`)
   const { diagnostyka, srodowisko } = wymagajSrodowiska()
   const publikujIstniejace = opcje['publish-existing'] === true
   if (!publikujIstniejace) {

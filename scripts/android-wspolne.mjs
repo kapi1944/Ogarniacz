@@ -93,19 +93,45 @@ export async function pobierzPublicznyManifestPoPublikacji({
   oczekiwanyManifest,
   pobierz = fetch,
   odczekaj = (czasMs) => new Promise((rozwiaz) => setTimeout(rozwiaz, czasMs)),
-  maksymalnaLiczbaProb = 6,
+  maksymalnaLiczbaProb = 24,
   opoznienieMs = 5_000,
+  limitCzasuMs = 120_000,
+  teraz = Date.now,
+  raportuj = console.log,
+  nazwaZasobu = 'Publiczny latest.json',
+  timeoutZadaniaMs = 10_000,
 }) {
+  const poczatek = teraz()
+  let powod = 'opóźnienie propagacji'
   for (let numerProby = 1; numerProby <= maksymalnaLiczbaProb; numerProby += 1) {
-    const odpowiedz = await pobierz(adresManifestu, { headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } })
-    if (!odpowiedz.ok) throw new Error(`Publiczny latest.json po publikacji zwrócił HTTP ${odpowiedz.status}.`)
-    const opublikowany = walidujManifestAktualizacji(await odpowiedz.json())
-    if (czyToSamArtefaktAktualizacji(opublikowany, oczekiwanyManifest)) {
-      return opublikowany
+    const pozostalo = limitCzasuMs - (teraz() - poczatek)
+    if (pozostalo <= 0) break
+    let odpowiedz
+    try {
+      odpowiedz = await pobierz(adresManifestu, { signal: AbortSignal.timeout(Math.min(timeoutZadaniaMs, pozostalo)), headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' } })
+    } catch (blad) {
+      powod = `przejściowa niedostępność: ${blad.message}`
     }
-    if (numerProby < maksymalnaLiczbaProb) await odczekaj(opoznienieMs)
+    if (odpowiedz && !odpowiedz.ok) {
+      if (![404, 408, 429, 500, 502, 503, 504].includes(odpowiedz.status)) throw new Error(`${nazwaZasobu} HTTP ${odpowiedz.status}.`)
+      powod = `przejściowa niedostępność HTTP ${odpowiedz.status}`
+    }
+    if (odpowiedz?.ok) {
+      let opublikowany
+      try { opublikowany = walidujManifestAktualizacji(await odpowiedz.json()) }
+      catch (blad) { powod = `niespójność lub przejściowy błąd odczytu manifestu: ${blad.message}` }
+      if (opublikowany) {
+        if (czyToSamArtefaktAktualizacji(opublikowany, oczekiwanyManifest)) return opublikowany
+        powod = opublikowany.versionCode < oczekiwanyManifest.versionCode
+          ? `opóźnienie propagacji: stara wersja ${opublikowany.versionName}`
+          : `rzeczywista niespójność artefaktu: ${['versionName', 'versionCode', 'apkUrl', 'sha256', 'size'].filter((pole) => opublikowany[pole] !== oczekiwanyManifest[pole]).join(', ')}`
+      }
+    }
+    raportuj(`${nazwaZasobu} próba ${numerProby}/${maksymalnaLiczbaProb}: ${powod}`)
+    const przerwa = Math.min(opoznienieMs, limitCzasuMs - (teraz() - poczatek))
+    if (numerProby < maksymalnaLiczbaProb && przerwa > 0) await odczekaj(przerwa)
   }
-  throw new Error('Publiczny latest.json nie odpowiada zweryfikowanemu artefaktowi release.')
+  throw new Error(`${nazwaZasobu} nie odpowiada zweryfikowanemu artefaktowi release. Limit ${limitCzasuMs} ms / ${maksymalnaLiczbaProb} prób: ${powod}.`)
 }
 
 export function parsujUrzadzeniaAdb(tekst) {

@@ -3,6 +3,19 @@ name: Produkcyjne wydanie Androida
 on:
   workflow_dispatch:
     inputs:
+      new_release:
+        description: Jawnie przygotuj NOWĄ wersję zamiast wznowienia
+        required: true
+        default: false
+        type: boolean
+      resume_version:
+        description: Wznów dokładnie tę wersję (X.Y.Z), bez bumpa i builda
+        required: false
+        type: string
+      resume_run_id:
+        description: Run z zachowanym oryginalnym APK, gdy brakuje go w release
+        required: false
+        type: string
       version_bump:
         description: Rodzaj kolejnej wersji
         required: true
@@ -15,6 +28,7 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: android-production-release
@@ -38,9 +52,20 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Zablokuj ponowne uruchomienie produkcyjnego release
-        if: github.run_attempt > 1
+        if: github.run_attempt > 1 && inputs.resume_version == ''
         run: |
           echo 'Nie używaj Re-run dla produkcyjnego release. Uruchom nowy workflow_dispatch z aktualnego main.' >&2
+          exit 1
+
+      - name: Wymagaj jednoznacznego trybu publikacji
+        env:
+          NOWE: ${{ inputs.new_release }}
+          WZNOWIENIE: ${{ inputs.resume_version }}
+        run: |
+          if [[ "$NOWE" == true && -z "$WZNOWIENIE" ]] || [[ "$NOWE" == false && "$WZNOWIENIE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            exit 0
+          fi
+          echo 'Wskaż resume_version albo jawnie zaznacz new_release, nigdy oba.' >&2
           exit 1
 
       - uses: actions/checkout@v4
@@ -58,7 +83,17 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Pobierz oryginalne artefakty wznowienia
+        if: inputs.resume_version != '' && inputs.resume_run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: android/app/build/outputs/apk/release
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.resume_run_id }}
+
       - name: Sprawdź jednorazową konfigurację środowiska
+        if: inputs.resume_version == ''
         shell: bash
         run: |
           set -euo pipefail
@@ -79,6 +114,7 @@ jobs:
           [[ "$VITE_SYNC_API_URL" == https://* ]] || { echo 'ANDROID_SYNC_API_URL musi używać prywatnego HTTPS.' >&2; exit 1; }
 
       - name: Odtwórz stały klucz i konfigurację signing
+        if: inputs.resume_version == ''
         shell: bash
         run: |
           set -euo pipefail
@@ -102,14 +138,16 @@ jobs:
           [[ "$faktyczny" == "$oczekiwany" ]] || { echo 'Fingerprint produkcyjnego keystore nie zgadza się z config/android-release.json.' >&2; exit 1; }
 
       - name: Odczytaj ostatnią opublikowaną wersję
+        if: inputs.resume_version == ''
         id: opublikowana
         shell: bash
         run: |
           set -euo pipefail
-          wersja="$(node --input-type=module -e "const r=await fetch(process.env.VITE_ANDROID_UPDATE_MANIFEST_URL,{headers:{Accept:'application/json'}}); if(!r.ok) throw new Error('latest.json HTTP '+r.status); const m=await r.json(); if(!/^\\d+\\.\\d+\\.\\d+$/.test(m.versionName ?? '')) throw new Error('latest.json nie zawiera versionName'); process.stdout.write(m.versionName)")"
+          wersja="$(node --input-type=module -e "const r=await fetch('https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/releases/latest',{signal:AbortSignal.timeout(10000),headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+process.env.GITHUB_TOKEN}}); if(!r.ok) throw new Error('GitHub latest release HTTP '+r.status); const m=await r.json(); if(!/^v\\d+\\.\\d+\\.\\d+$/.test(m.tag_name ?? '')) throw new Error('Release nie zawiera tagu wersji'); process.stdout.write(m.tag_name.slice(1))")"
           echo "wersja=$wersja" >> "$GITHUB_OUTPUT"
 
       - name: Przygotuj wersję i punkt zgodności Web OTA
+        if: inputs.resume_version == ''
         run: node scripts/android-release-przygotowanie.mjs --version-bump "${{ inputs.version_bump }}" --published-version "${{ steps.opublikowana.outputs.wersja }}"
 
       - name: Zainstaluj zależności
@@ -117,6 +155,12 @@ jobs:
 
       - name: Sprawdź reguły release i Web OTA
         run: npm run android:release:test && npm run web-ota:test
+
+      - name: Wznów wskazane wydanie bez nowej wersji
+        if: inputs.resume_version != ''
+        env:
+          WERSJA_WZNOWIENIA: ${{ inputs.resume_version }}
+        run: node scripts/android-release-publikacja.mjs "$WERSJA_WZNOWIENIA"
 
       - name: Zapisz opcjonalne release notes
         if: inputs.release_notes != ''
@@ -126,6 +170,7 @@ jobs:
         run: printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
 
       - name: Zbuduj, podpisz i zweryfikuj artefakty przed commitem wersji
+        if: inputs.resume_version == ''
         shell: bash
         run: |
           set -euo pipefail
@@ -136,10 +181,24 @@ jobs:
           npm run android:release -- "${argumenty[@]}"
 
       - name: Sprawdź natywny updater przed zapisaniem wersji
+        if: inputs.resume_version == ''
         working-directory: android
         run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.AktualizacjeWebPluginTest' --no-daemon
 
+      - name: Zachowaj zweryfikowane artefakty przed commitem i tagiem
+        if: inputs.resume_version == ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: |
+            android/app/build/outputs/apk/release/Ogarniacz-*-release.apk
+            android/app/build/outputs/apk/release/Ogarniacz-*-release.apk.sha256
+            android/app/build/outputs/apk/release/latest.json
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Zapisz wersję dopiero po udanym buildzie
+        if: inputs.resume_version == ''
         shell: bash
         run: |
           set -euo pipefail
@@ -153,6 +212,7 @@ jobs:
           fi
 
       - name: Zapewnij wykonywalność Gradle Wrappera
+        if: inputs.resume_version == ''
         shell: bash
         run: |
           set -euo pipefail
@@ -160,10 +220,12 @@ jobs:
           test -x android/gradlew
 
       - name: Opublikuj tylko po przygotowaniu artefaktów
+        if: inputs.resume_version == ''
         shell: bash
         run: npm run android:release -- --publish-existing
 
       - name: Sprawdź tag i punkt zgodności Web OTA
+        if: inputs.resume_version == ''
         shell: bash
         run: |
           set -euo pipefail

@@ -17,11 +17,21 @@ W **Settings → Actions → General → Workflow permissions** włącz odczyt i
 
 ## Każde kolejne wydanie
 
-Wejdź w **Actions → Produkcyjne wydanie Androida → Run workflow**, wybierz `patch`, `minor` albo `major`, opcjonalnie wpisz release notes i kliknij **Run workflow**.
+Wejdź w **Actions → Produkcyjne wydanie Androida → Run workflow**, jawnie zaznacz `new_release`, wybierz `patch`, `minor` albo `major`, opcjonalnie wpisz release notes i kliknij **Run workflow**. Domyślnie nowa wersja nie jest tworzona.
 
 Workflow wylicza wersję i `versionCode`, aktualizuje punkt zgodności Web OTA, buduje oraz weryfikuje podpisane APK, a dopiero potem tworzy tag i publiczny GitHub Release z APK, SHA-256 i `latest.json`.
 
 Nie publikuje przy tym Web OTA; nowy tag jest tylko kontrolowaną bazą dla jego osobnego workflowu.
+
+## Wznowienie częściowo udanej publikacji
+
+Uruchom nowy workflow z aktualnego `main`, pozostaw `new_release=false` i wpisz dokładną `resume_version`, np. `1.0.14`. Ten tryb nie podbija wersji ani nie buduje APK. Re-run jest dozwolony tylko dla takiego jawnego wznowienia; Re-run nowego wydania pozostaje zablokowany.
+
+Wznowienie odnajduje commit wersji na `origin/main`, sprawdza punkt zgodności Web OTA i istniejący tag. Tworzy wyłącznie brakujący tag, wskazując ten commit. Pobiera istniejące assety, sprawdza metadane, podpis, SHA-256 i rozmiar APK. Istniejących assetów nie nadpisuje; niezgodność przerywa operację. Brakujące manifest i plik SHA odtwarza z oryginalnego zweryfikowanego APK, uzupełnia brakujące assety i upublicznia draft dopiero po ich sprawdzeniu.
+
+Nowe wydania zachowują zweryfikowane artefakty w Actions jako `android-release` przez 30 dni, przed zapisem commitu i tagu. Jeśli APK nie dotarło do release, wpisz `resume_run_id` pierwotnego runu. Bez dostępnego oryginalnego APK wznowienie zatrzyma się z diagnostyką, zamiast budować inny artefakt lub tworzyć kolejną wersję. Starsze runy sprzed tej poprawki nie mają tego archiwum.
+
+Weryfikacja pobiera manifest i APK z `/releases/download/vX.Y.Z/`, sprawdza pola `versionName`, `versionCode`, `apkUrl`, SHA-256 i rozmiar, a następnie czeka na zgodność publicznego `/releases/latest/download/latest.json`. Każdy z trzech odczytów ma limit 120 sekund i 24 prób (łącznie do 360 sekund), z przerwami do 5 sekund i timeoutem żądania do 10 sekund dla manifestu lub 30 sekund dla APK. Log rozróżnia starą wersję, 404/przejściową niedostępność i niezgodne pola. Po limicie nadal niezgodny manifest lub APK oznacza błąd. Publikacja pozostaje na GitHub do diagnostyki i bezpiecznego wznowienia.
 
 CI i release używają JDK 21 oraz uruchamiają celowane testy updatera APK i Web OTA. Web OTA wymaga publicznego wydania produkcyjnego z manifestem i APK zgodnymi z `minNativeVersionCode`; sam tag lub draft nie wystarcza. Konfiguracja podpisywanego manifestu pochodzi z tego samego commita co bundle.
 
