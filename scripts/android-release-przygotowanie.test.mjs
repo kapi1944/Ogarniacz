@@ -7,51 +7,26 @@ test('wyznacza patch, minor i major bez ręcznego versionCode', () => {
   assert.equal(wyznaczNastepnaWersje('1.0.9', 'minor'), '1.1.0')
   assert.equal(wyznaczNastepnaWersje('1.0.9', 'major'), '2.0.0')
 })
-
-test('aktualizuje package, lock i punkt zgodności Web OTA jedną wersją', () => {
+test('aktualizuje tylko package i lock, bez zgodności Web OTA', () => {
   const wynik = przygotujWydanie({
     pakiet: { name: 'ogarniacz-v1', version: '1.0.9' },
-    lock: { name: 'ogarniacz-v1', version: '1.0.9', packages: { '': { version: '1.0.9' } } },
-    zgodnosc: { minNativeVersionCode: 1_000_009 },
-    rodzajWersji: 'patch',
-    wersjaOpublikowana: '1.0.9',
+    lock: { version: '1.0.9', packages: { '': { version: '1.0.9' } } },
+    rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9',
   })
   assert.equal(wynik.wersja, '1.0.10')
   assert.equal(wynik.kodWersji, 1_000_010)
   assert.equal(wynik.pakiet.version, wynik.lock.packages[''].version)
-  assert.equal(wynik.zgodnosc.minNativeVersionCode, wynik.kodWersji)
+  assert.equal(wynik.zgodnosc, undefined)
 })
-
-test('bazuje na nowszej wersji opublikowanej, gdy checkout jest opóźniony', () => {
-  const wynik = przygotujWydanie({
-    pakiet: { version: '1.0.9' }, lock: { packages: { '': {} } },
-    zgodnosc: { minNativeVersionCode: 1_000_009 }, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.10',
-  })
+test('bazuje na nowszej wersji opublikowanej', () => {
+  const wynik = przygotujWydanie({ pakiet: { version: '1.0.9' }, lock: {}, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.10' })
   assert.equal(wynik.wersja, '1.0.11')
-  assert.equal(wynik.kodWersji, 1_000_011)
 })
-
-test('wznawia przygotowane, ale nieopublikowane wydanie', () => {
-  const wynik = przygotujWydanie({
-    pakiet: { version: '1.0.10' }, lock: { packages: { '': { version: '1.0.10' } } },
-    zgodnosc: { minNativeVersionCode: 1_000_010 }, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9', wersjaMaTag: false,
-  })
-  assert.equal(wynik.wersja, '1.0.10')
-  assert.equal(wynik.tryb, 'wznowienie')
+test('nieopublikowana wersja wymaga jawnego wznowienia bez kolejnego bumpa', () => {
+  assert.throws(() => przygotujWydanie({ pakiet: { version: '1.0.10' }, lock: {}, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9' }), /jawnego wznowienia/)
 })
-
-test('podbija wersję, gdy wersja repozytorium jest już publiczna', () => {
-  const wynik = przygotujWydanie({
-    pakiet: { version: '1.0.10' }, lock: { packages: { '': { version: '1.0.10' } } },
-    zgodnosc: { minNativeVersionCode: 1_000_010 }, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.10',
-  })
+test('opublikowana wersja otrzymuje następny versionCode', () => {
+  const wynik = przygotujWydanie({ pakiet: { version: '1.0.10' }, lock: {}, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.10', wersjaMaTag: true })
   assert.equal(wynik.wersja, '1.0.11')
   assert.equal(wynik.tryb, 'nowe')
-})
-
-test('nie pozwala przygotować wydania bez wzrostu punktu zgodności', () => {
-  assert.throws(() => przygotujWydanie({
-    pakiet: { version: '1.0.9' }, lock: { packages: { '': {} } },
-    zgodnosc: { minNativeVersionCode: 1_000_010 }, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9',
-  }), /większy/)
 })

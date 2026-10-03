@@ -122,9 +122,7 @@ gradle.taskGraph.whenReady { grafZadan ->
     if (czyPowstajeArtefaktRelease && !rootProject.file(wlasciwosciPodpisu.getProperty('storeFile')).exists()) {
         throw new GradleException('Nie znaleziono pliku stałego release keystore wskazanego w android/keystore.properties.')
     }
-    if (czyPowstajeArtefaktRelease && !plikKluczaWebOta.exists()) {
-        throw new GradleException('Brak android/web-ota-public-key.pem. Release z Web OTA wymaga publicznego klucza podpisu bundle.')
-    }
+
 }
 
 android.applicationVariants.all { wariant ->

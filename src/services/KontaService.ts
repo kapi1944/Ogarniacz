@@ -36,7 +36,7 @@ export interface KontoUzytkownika {
 export interface StatusAktualizacjiRaspberry {
   wersja: string
   commit: string
-  originMain: string | null
+  originStable: string | null
   dostepnosc: 'aktualna' | 'dostepna' | 'blad' | 'nieznana'
   stan: 'idle' | 'checking' | 'downloading/fetching' | 'installing' | 'building' | 'restarting' | 'success' | 'rollback' | 'error'
   komunikat: string

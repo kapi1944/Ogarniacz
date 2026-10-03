@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { readFile } from 'node:fs/promises'
+import { readFile, access } from 'node:fs/promises'
 import { promisify } from 'node:util'
 
 const wykonaj = promisify(execFile)
@@ -14,10 +14,10 @@ const JEDNOSTKI = {
 
 const STANY = new Set(['idle', 'checking', 'downloading/fetching', 'installing', 'building', 'restarting', 'success', 'rollback', 'error'])
 const STANY_W_TRAKCIE = new Set(['checking', 'downloading/fetching', 'installing', 'building', 'restarting', 'rollback'])
-const NAZWY_JEDNOSTEK = Object.values(JEDNOSTKI)
+const NAZWY_JEDNOSTEK = [...Object.values(JEDNOSTKI), 'ogarniacz-update-auto.service']
 
 export interface AktualizacjeRpi {
-  odczytaj(): Promise<{ wersja: string; commit: string; originMain: string | null; dostepnosc: 'aktualna' | 'dostepna' | 'blad' | 'nieznana'; stan: string; komunikat: string; moznaPrzywrocic: boolean }>
+  odczytaj(): Promise<{ wersja: string; commit: string; originStable: string | null; dostepnosc: 'aktualna' | 'dostepna' | 'blad' | 'nieznana'; stan: string; komunikat: string; moznaPrzywrocic: boolean }>
   uruchom(akcja: keyof typeof JEDNOSTKI): Promise<'przyjeto' | 'zajete' | 'brakRollbacku'>
 }
 
@@ -44,24 +44,31 @@ export function utworzAktualizacjeRpi(): AktualizacjeRpi {
       stan = 'error'
       komunikat = 'Aktualizator przerwano przed zakończeniem; wymagana interwencja administratora.'
     }
-    const originMain = /^[0-9a-f]{40}$/.test(originSurowy ?? '') ? originSurowy : null
+    const originStable = /^[0-9a-f]{40}$/.test(originSurowy ?? '') ? originSurowy : null
     const commit = wynik.stdout.trim()
     const commity = poprzedniPlik.trim().split(/\r?\n/)
     const [poprzedni, cel] = commity
     let moznaPrzywrocic = commity.length === 2 && /^[0-9a-f]{40}$/.test(poprzedni ?? '') && /^[0-9a-f]{40}$/.test(cel ?? '') && poprzedni !== cel && cel === commit
     if (moznaPrzywrocic) {
       try {
+        const znacznik = await readFile(`${KATALOG}/data/aktualizacja-rpi/uruchomiono`, 'utf8')
+        const snapshot = (await readFile(`${KATALOG}/data/aktualizacja-rpi/snapshot`, 'utf8')).trim()
+        if (znacznik.trim() !== cel || !snapshot.startsWith(`${poprzedni}-`) || !/^[a-f0-9]{40}-[^/\\]+\.sqlite$/.test(snapshot)) throw new Error('Brak stanu rollbacku')
+        await access(`${KATALOG}/data/aktualizacja-rpi/backups/${snapshot}`)
+        await access(`${KATALOG}/data/aktualizacja-rpi/runtime-poprzedni/dist-server/main.js`)
+        await access(`${KATALOG}/data/aktualizacja-rpi/runtime-poprzedni/dist/index.html`)
+        await access(`${KATALOG}/data/aktualizacja-rpi/runtime-poprzedni/node_modules`)
         await wykonaj('git', ['cat-file', '-e', `${poprzedni}^{commit}`], { cwd: KATALOG, timeout: 5000 })
         await wykonaj('git', ['merge-base', '--is-ancestor', poprzedni, cel], { cwd: KATALOG, timeout: 5000 })
       }
       catch { moznaPrzywrocic = false }
     }
     const dostepnosc = dostepnoscSurowa === 'blad' ? 'blad'
-      : originMain ? (originMain === commit ? 'aktualna' : 'dostepna') : 'nieznana'
+      : originStable ? (originStable === commit ? 'aktualna' : 'dostepna') : 'nieznana'
     return {
       wersja: String((JSON.parse(pakiet) as { version: string }).version),
       commit,
-      originMain,
+      originStable,
       dostepnosc: dostepnosc as 'aktualna' | 'dostepna' | 'blad' | 'nieznana',
       stan,
       komunikat,

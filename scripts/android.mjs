@@ -539,13 +539,6 @@ async function sprawdzMonotonicznoscWydania(adresManifestu, wznowienie = false) 
 async function wykonajRelease(opcje) {
   const podpisWstepny = sprawdzKonfiguracjePodpisu()
   const adresManifestu = wymagajAdresuHttps('VITE_ANDROID_UPDATE_MANIFEST_URL', odczytajZmiennaBudowania('VITE_ANDROID_UPDATE_MANIFEST_URL'))
-  const adresManifestuWeb = wymagajAdresuHttps(
-    'VITE_ANDROID_WEB_UPDATE_MANIFEST_URL',
-    odczytajZmiennaBudowania('VITE_ANDROID_WEB_UPDATE_MANIFEST_URL'),
-  )
-  if (adresManifestuWeb === adresManifestu || new URL(adresManifestuWeb).pathname.includes('/releases/latest/')) {
-    throw new Error('Web OTA musi używać osobnego kanału; /releases/latest pozostaje wyłącznie dla OTA APK.')
-  }
   const konfiguracjaSynchronizacji = pobierzProdukcyjnaKonfiguracjeSynchronizacji()
   if (!konfiguracjaSynchronizacji.adresApi) {
     throw new Error('Release wymaga jawnej zmiennej procesu VITE_SYNC_API_URL, aby nie użyć nieaktualnego pliku .env.')

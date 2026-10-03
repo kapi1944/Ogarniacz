@@ -47,7 +47,7 @@ npm run version:major
 
 ### Signed release i manifest
 
-Build aplikacji przeznaczonej do aktualizacji musi znać pełne adresy HTTPS manifestów APK, Web OTA oraz serwera synchronizacji. Gradle zapisuje je w `BuildConfig` APK, a `RuntimeConfig` przekazuje je frontendowi przez natywny bridge. Dzięki temu aktywacja Web OTA nie może zmienić konfiguracji infrastrukturalnej Androida. Wersja webowa może dostarczyć równoważne wartości przez `window.__OGARNIACZ_RUNTIME_CONFIG__`; zmienne `VITE_*` pozostają fallbackiem developmentu.
+Build aplikacji musi znać pełne adresy HTTPS manifestu APK oraz serwera synchronizacji. Gradle zapisuje je w `BuildConfig`, a `RuntimeConfig` przekazuje je frontendowi przez natywny bridge. Android Web OTA jest wycofany. Wersja webowa może dostarczyć równoważne wartości przez `window.__OGARNIACZ_RUNTIME_CONFIG__`; zmienne `VITE_*` pozostają fallbackiem developmentu.
 
 ```powershell
 VITE_ANDROID_UPDATE_MANIFEST_URL=https://github.com/kapi1944/Ogarniacz/releases/latest/download/latest.json
@@ -112,7 +112,7 @@ Kolejne OTA muszą mieć wyższy `versionCode`, ten sam `applicationId` i podpis
 
 Warunkiem jest zainstalowana bazowa wersja **release** Ogarniacza, podpisana tym samym stałym keystore i z wbudowanym adresem GitHub z `.env.production`. Jeśli telefon ma wersję debug albo starszy build bez tego adresu, wykonaj jednorazowe przejście opisane w sekcji D.
 
-Publikację wykonuje workflow opisany w `docs/ANDROID_RELEASE.md`. Przygotowuje razem wersję APK i punkt zgodności Web OTA; ręczne podbicie samej wersji nie wystarcza.
+Publikację wykonuje workflow opisany w `docs/ANDROID_RELEASE.md`. Klasyfikuje zmiany obu kanałów; wersję APK przygotowuje tylko wtedy, gdy Android wymaga publikacji.
 
 1. Po zatwierdzonym wydaniu na Galaxy S23+ otwórz **Ogarniacz → Ustawienia → Informacje o aplikacji → Sprawdź aktualizacje**. Panel pokaże dostępną wersję i informacje o wydaniu.
 2. Wybierz **Pobierz i zainstaluj**. Ogarniacz pokaże postęp, pobierze APK i sprawdzi SHA-256.

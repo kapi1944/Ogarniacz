@@ -66,14 +66,13 @@ export function ustalPunktWznowienia(wersja, git) {
   const kandydaci = git('log', 'origin/main', '--format=%H', '--fixed-strings', `--grep=Przygotuj wydanie Androida ${wersja}`).split('\n').filter(Boolean)
   const commit = kandydaci.find((sha) => JSON.parse(git('show', `${sha}:package.json`)).version === wersja)
   if (!commit) throw new Error('Brak commitu wersji na origin/main; nie tworzę nowej wersji.')
-  const zgodnosc = JSON.parse(git('show', `${commit}:config/web-ota-compatibility.json`))
   const tag = `v${wersja}`
   const tagi = git('ls-remote', '--tags', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`)
   if (tagi) {
     const sha = tagi.split('\n').at(-1).split(/\s+/)[0]
     if (sha !== commit) throw new Error('Istniejący tag wskazuje inny commit; przerwano wznowienie.')
   }
-  return { commit, tag, tagi, zgodnosc }
+  return { commit, tag, tagi }
 }
 
 export async function wznowWydanie(wersja, katalog = 'android/app/build/outputs/apk/release') {
@@ -81,7 +80,7 @@ export async function wznowWydanie(wersja, katalog = 'android/app/build/outputs/
   const repozytorium = process.env.GITHUB_REPOSITORY
   const token = process.env.GITHUB_TOKEN
   if (!repozytorium || !token) throw new Error('Brak konfiguracji GitHub wznowienia.')
-  const { commit, tag, tagi, zgodnosc } = ustalPunktWznowienia(wersja, git)
+  const { commit, tag, tagi } = ustalPunktWznowienia(wersja, git)
   await mkdir(katalog, { recursive: true })
   const api = `https://api.github.com/repos/${repozytorium}/releases/tags/${tag}`
   const odpowiedz = await fetch(api, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) })
@@ -102,7 +101,6 @@ export async function wznowWydanie(wersja, katalog = 'android/app/build/outputs/
   try { manifest = JSON.parse(await readFile(resolve(katalog, 'latest.json'), 'utf8')) }
   catch (blad) { if (blad.code !== 'ENOENT') throw blad; manifest = wygenerowany }
   walidujManifestAktualizacji(manifest)
-  if (zgodnosc.minNativeVersionCode !== manifest.versionCode) throw new Error('Commit wersji ma niezgodny punkt zgodności Web OTA.')
   if (!czyToSamArtefaktAktualizacji(manifest, wygenerowany)) throw new Error('Manifest wznowienia nie odpowiada oryginalnemu APK.')
   const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT
   if (!sdk) throw new Error('Brak Android SDK do weryfikacji oryginalnego APK.')

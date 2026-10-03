@@ -7,7 +7,7 @@ import { SekcjaPolaczeniaIAktualizacji } from './SekcjaPolaczeniaIAktualizacji'
 import { utworzDiagnostykeSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
 import { utworzMetadane } from '../../domain/fabryki'
 
-vi.mock('./PanelAktualizacjiRaspberry', () => ({ PanelAktualizacjiRaspberry: () => <div>Aktualizacja Raspberry</div> }))
+vi.mock('./PanelAktualizacjiRaspberry', () => ({ PanelAktualizacjiRaspberry: () => <div>Raspberry / serwer</div> }))
 
 const { nasluchujKontroli, pobierzApk, pobierzStan, pobierzStanKontroli, sprawdzAktualizacjeApk, uruchomInstalator } = vi.hoisted(() => ({
   nasluchujKontroli: vi.fn(() => () => undefined),
@@ -186,7 +186,7 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
   it('na Web/PWA pokazuje wyłącznie panel Raspberry, bez instalatorów Androida', () => {
     platforma.natywna = false
     render(<SekcjaPolaczeniaIAktualizacji synchronizacjaSkonfigurowana dzieci={<h2>Synchronizacja</h2>} />)
-    expect(screen.getByText('Aktualizacja Raspberry')).toBeInTheDocument()
+    expect(screen.getByText('Raspberry / serwer')).toBeInTheDocument()
     expect(screen.queryByText('Android Web OTA')).not.toBeInTheDocument()
     expect(screen.queryByText('Android APK')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Pobierz i zainstaluj' })).not.toBeInTheDocument()

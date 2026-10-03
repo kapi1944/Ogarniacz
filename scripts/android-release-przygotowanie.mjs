@@ -25,35 +25,22 @@ export function wyznaczNastepnaWersje(wersja, rodzaj) {
   throw new Error('version_bump musi mieć wartość patch, minor albo major.')
 }
 
-export function przygotujWydanie({ pakiet, lock, zgodnosc, rodzajWersji, wersjaOpublikowana, wersjaMaTag = false }) {
-  if (!pakiet?.version || !lock || !zgodnosc) throw new Error('Brak plików wymaganych do przygotowania wydania.')
-  const porownanieZOpublikowana = wersjaOpublikowana ? porownajWersje(pakiet.version, wersjaOpublikowana) : 0
-  const kodPakietu = obliczKodWersji(pakiet.version)
-  const wydanieDoWznowienia = porownanieZOpublikowana > 0
-    && zgodnosc.minNativeVersionCode === kodPakietu
-    && !wersjaMaTag
-  if (porownanieZOpublikowana > 0 && !wydanieDoWznowienia) {
-    throw new Error('Repozytorium zawiera nieopublikowaną wersję w niejednoznacznym stanie. Przywróć zgodność wersji i tagu przed kolejną próbą.')
+export function przygotujWydanie({ pakiet, lock, rodzajWersji, wersjaOpublikowana, wersjaMaTag = false }) {
+  if (!pakiet?.version || !lock) throw new Error('Brak plików wymaganych do przygotowania wydania.')
+  if (wersjaOpublikowana && porownajWersje(pakiet.version, wersjaOpublikowana) > 0) {
+    throw new Error('Repozytorium zawiera nieopublikowaną wersję. Użyj jawnego wznowienia zamiast kolejnego wydania.')
   }
-  if (wydanieDoWznowienia) {
-    return { wersja: pakiet.version, kodWersji: kodPakietu, pakiet, lock, zgodnosc, tryb: 'wznowienie' }
-  }
+  if (wersjaMaTag && !wersjaOpublikowana) throw new Error('Istniejący tag wymaga potwierdzenia opublikowanej wersji.')
   const wersjaBazowa = wersjaOpublikowana && porownajWersje(wersjaOpublikowana, pakiet.version) > 0
-    ? wersjaOpublikowana
-    : pakiet.version
+    ? wersjaOpublikowana : pakiet.version
   const wersja = wyznaczNastepnaWersje(wersjaBazowa, rodzajWersji)
   const kodWersji = obliczKodWersji(wersja)
-  if (!Number.isInteger(zgodnosc.minNativeVersionCode) || zgodnosc.minNativeVersionCode >= kodWersji) {
-    throw new Error('Nowy versionCode musi być większy od obecnego minNativeVersionCode Web OTA.')
-  }
   const nowyPakiet = { ...pakiet, version: wersja }
   const nowyLock = {
-    ...lock,
-    version: wersja,
+    ...lock, version: wersja,
     packages: lock.packages ? { ...lock.packages, '': { ...lock.packages[''], version: wersja } } : lock.packages,
   }
-  const nowaZgodnosc = { ...zgodnosc, minNativeVersionCode: kodWersji }
-  return { wersja, kodWersji, pakiet: nowyPakiet, lock: nowyLock, zgodnosc: nowaZgodnosc, tryb: 'nowe' }
+  return { wersja, kodWersji, pakiet: nowyPakiet, lock: nowyLock, tryb: 'nowe' }
 }
 
 function czyWersjaMaTag(wersja, katalog) {
@@ -87,16 +74,14 @@ function pobierzArgumenty(argumenty) {
 }
 
 export async function uruchomPrzygotowanie(opcje, katalog = process.cwd()) {
-  const [tekstPakietu, tekstLocka, tekstZgodnosci] = await Promise.all([
+  const [tekstPakietu, tekstLocka] = await Promise.all([
     readFile(resolve(katalog, SCIEZKA_PAKIETU), 'utf8'),
     readFile(resolve(katalog, SCIEZKA_LOCK), 'utf8'),
-    readFile(resolve(katalog, SCIEZKA_ZGODNOSCI), 'utf8'),
   ])
   const pakiet = JSON.parse(tekstPakietu)
   const wynik = przygotujWydanie({
     pakiet,
     lock: JSON.parse(tekstLocka),
-    zgodnosc: JSON.parse(tekstZgodnosci),
     rodzajWersji: opcje['version-bump'],
     wersjaOpublikowana: opcje['published-version'],
     wersjaMaTag: czyWersjaMaTag(pakiet.version, katalog),
@@ -105,7 +90,6 @@ export async function uruchomPrzygotowanie(opcje, katalog = process.cwd()) {
     await Promise.all([
       writeFile(resolve(katalog, SCIEZKA_PAKIETU), `${JSON.stringify(wynik.pakiet, null, 2)}\n`),
       writeFile(resolve(katalog, SCIEZKA_LOCK), `${JSON.stringify(wynik.lock, null, 2)}\n`),
-      writeFile(resolve(katalog, SCIEZKA_ZGODNOSCI), `${JSON.stringify(wynik.zgodnosc, null, 2)}\n`),
     ])
   }
   return wynik

@@ -22,7 +22,7 @@ test('API aktualizacji wymaga jawnego włączenia, sesji właściciela i CSRF', 
   }
   const akcje: string[] = []
   const aktualizacje = {
-    odczytaj: async () => ({ wersja: '1.0.13', commit: 'a'.repeat(40), originMain: null, dostepnosc: 'nieznana' as const, stan: 'idle', komunikat: '', moznaPrzywrocic: false }),
+    odczytaj: async () => ({ wersja: '1.0.13', commit: 'a'.repeat(40), originStable: null, dostepnosc: 'nieznana' as const, stan: 'idle', komunikat: '', moznaPrzywrocic: false }),
     uruchom: async (akcja: 'check' | 'start' | 'rollback') => { akcje.push(akcja); return akcja === 'rollback' ? 'brakRollbacku' as const : akcje.length > 2 ? 'zajete' as const : 'przyjeto' as const },
   }
   const uruchomSerwer = async (wlaczone: boolean) => {

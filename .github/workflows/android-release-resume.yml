@@ -1,0 +1,50 @@
+name: Wznów częściowe wydanie Android APK
+on:
+  workflow_dispatch:
+    inputs:
+      resume_version:
+        description: Dokładna wersja X.Y.Z istniejącego commita wydania
+        required: true
+        type: string
+      resume_run_id:
+        description: Run z oryginalnymi artefaktami, jeśli brakuje ich w release
+        required: false
+        type: string
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: android-production-release
+  cancel-in-progress: false
+jobs:
+  wznowienie:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: android-production
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      VITE_ANDROID_UPDATE_MANIFEST_URL: ${{ vars.ANDROID_UPDATE_MANIFEST_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        if: inputs.resume_run_id != ''
+        with:
+          name: android-release
+          path: android/app/build/outputs/apk/release
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.resume_run_id }}
+      - name: Wznów bez builda i zmiany wersji
+        env:
+          WERSJA: ${{ inputs.resume_version }}
+        run: node scripts/android-release-publikacja.mjs "$WERSJA"
+      # Wznowienie naprawia tylko APK; nie zatwierdza arbitralnego main dla Raspberry.

@@ -1,6 +1,9 @@
 name: CI
 
 on:
+  # Umożliwia zweryfikowanie commita wersji zapisanego tokenem workflow,
+  # którego push nie uruchamia kolejnego CI automatycznie.
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -46,6 +49,9 @@ jobs:
 
       - name: Android release tests
         run: npm run android:release:test
+
+      - name: Klasyfikacja publikacji i bezpieczny updater Raspberry
+        run: node --test scripts/publikacja-klasyfikacja.test.mjs scripts/rpi-bezpieczenstwo.test.mjs scripts/aktualizuj-rpi.test.mjs
 
       - name: Build
         run: npm run build

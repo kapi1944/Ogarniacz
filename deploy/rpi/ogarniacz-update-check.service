@@ -8,7 +8,7 @@ Group=kacper
 WorkingDirectory=/home/kacper/apps/Ogarniacz
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=npm_config_cache=/home/kacper/apps/Ogarniacz/data/aktualizacja-rpi/npm-cache
-ExecStart=/usr/bin/bash /home/kacper/apps/Ogarniacz/scripts/aktualizuj-rpi.sh check
+ExecStart=/usr/bin/bash /home/kacper/apps/Ogarniacz/data/aktualizacja-rpi/aktualizuj-rpi.sh check
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/home/kacper/apps/Ogarniacz

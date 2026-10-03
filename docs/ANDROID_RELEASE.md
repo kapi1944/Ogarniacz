@@ -1,39 +1,66 @@
-# Produkcyjne wydanie Androida
+# Publikuj Ogarniacza
 
-## Granice kanałów
+Dwa kanały produkcyjne: podpisany Android APK oraz Raspberry (frontend i backend
+razem). Web OTA jest wycofany; PWA/service worker pozostają dla przeglądarki.
 
-APK jest pełną aktualizacją Androida: dostarcza kod natywny, Capacitor, manifest, konfigurację sieci i uprawnień, pluginy, bazowy frontend oraz nowy `versionName`/`versionCode` z `package.json`. `latest.json` opisuje wyłącznie ten podpisany artefakt. Web OTA dostarcza tylko podpisany, zgodny z `minNativeVersionCode` bundle webowy przez osobny `web-ota.json`; nie zastępuje APK. Service worker Web/PWA zarządza cache i proponuje odświeżenie frontendu serwowanego przez Raspberry. Nie publikuje osobnego wydania ani nie obsługuje instalacji Androida. `/api/*` i `/health` pozostają poza cache.
+## Jeden workflow normalnego wydania
 
-## Jednorazowo w GitHub
+**Actions → Publikuj Ogarniacza → Run workflow**, gałąź `main`.
+Wejścia: `version_bump` (patch domyślnie, minor lub major) i opcjonalne `release_notes`.
+Nie ma `new_release`. Workflow sprawdza dokładny SHA checkoutu, aktualny main oraz
+zakończone sukcesem CI typu push lub workflow_dispatch dla tego samego SHA. Brak zielonego CI zatrzymuje
+publikację przed przygotowaniem wersji i artefaktów.
 
-W **Settings → Environments → New environment** utwórz `android-production`. W nim ustaw:
+Klasyfikator `scripts/publikacja-klasyfikacja.mjs` porównuje historię osobno:
+Android od tagu ostatniego publicznego APK, Raspberry od `rpi-stable`.
+Testy, dokumentacja i jawne metadane developerskie nie wymagają publikacji;
+nieznane pliki runtime wymagają obu kanałów. Brak punktu odniesienia wymaga
+pierwszego zatwierdzenia. Rozbieżna historia zatrzymuje publikację.
 
-- **Secrets**: `ANDROID_RELEASE_KEYSTORE_BASE64` (Base64 istniejącego stałego `.jks`), `ANDROID_RELEASE_STORE_PASSWORD`, `ANDROID_RELEASE_KEY_PASSWORD`, `ANDROID_RELEASE_KEY_ALIAS`.
-- **Variables**: `ANDROID_SYNC_API_URL`, `ANDROID_UPDATE_MANIFEST_URL`, `ANDROID_WEB_UPDATE_MANIFEST_URL`, `ANDROID_WEB_OTA_PUBLIC_KEY_PEM`.
+Jeżeli Android=false, package/lock nie zmieniają wersji i nie powstaje APK.
+Jeżeli Android=true, istniejące skrypty przygotowują wersję, budują i weryfikują
+APK (stały signing/fingerprint, metadane Androida, versionCode, SHA-256,
+latest.json). Artefakty są archiwizowane przed commitem i tagiem. Dopiero po
+udanym buildzie powstaje commit wersji na main, a następnie tag i publiczny release.
+Nie są wymagane manifest, klucz ani minNativeVersionCode Web OTA.
 
-Adresy aktualizacji muszą być HTTPS. Wartości publiczne są konfiguracją runtime APK; nie wpisuj tu tokenów ani kluczy prywatnych. Klucz `.jks` i hasła muszą być dokładnie tymi samymi, którymi podpisano już zainstalowane APK.
+Jeżeli Raspberry=true, workflow buduje frontend i backend. Po powodzeniu
+wszystkich wymaganych kroków, w tym weryfikacji publicznego APK, przesuwa
+`rpi-stable` do dokładnego finalnego commita (również commita wersji APK).
+Jeżeli Raspberry=false, gałąź pozostaje bez zmian. Pierwsze zatwierdzenie może
+utworzyć `rpi-stable`; kolejne muszą być fast-forward, bez force-pusha.
+Równoległe przesunięcie main podczas przygotowania wersji blokuje zapis wersji.
 
-W **Settings → Actions → General → Workflow permissions** włącz odczyt i zapis dla workflowów. Jeśli `main` ma ochronę gałęzi, zezwól `github-actions[bot]` na zapis wersji przygotowanej przez ten workflow.
+## Konfiguracja GitHub
 
-## Każde kolejne wydanie
+Environment `android-production`:
+- Secrets: `ANDROID_RELEASE_KEYSTORE_BASE64`, `ANDROID_RELEASE_STORE_PASSWORD`,
+  `ANDROID_RELEASE_KEY_PASSWORD`, `ANDROID_RELEASE_KEY_ALIAS` — istniejący klucz.
+- Variables: `ANDROID_SYNC_API_URL`, `ANDROID_UPDATE_MANIFEST_URL` — pełne HTTPS.
 
-Wejdź w **Actions → Produkcyjne wydanie Androida → Run workflow**, jawnie zaznacz `new_release`, wybierz `patch`, `minor` albo `major`, opcjonalnie wpisz release notes i kliknij **Run workflow**. Domyślnie nowa wersja nie jest tworzona.
+Workflow potrzebuje `contents: write` i `actions: read`. Ochrona main musi dopuszczać
+zapis commita wersji przez workflow; ochrona rpi-stable musi dopuszczać wyłącznie
+zatwierdzający workflow. Nie dopuszczaj force-pusha tego kanału.
 
-Workflow wylicza wersję i `versionCode`, aktualizuje punkt zgodności Web OTA, buduje oraz weryfikuje podpisane APK, a dopiero potem tworzy tag i publiczny GitHub Release z APK, SHA-256 i `latest.json`.
+## Jawne wznowienie częściowego APK
 
-Nie publikuje przy tym Web OTA; nowy tag jest tylko kontrolowaną bazą dla jego osobnego workflowu.
+**Actions → Wznów częściowe wydanie Android APK**: podaj `resume_version` X.Y.Z
+oraz opcjonalnie `resume_run_id` z oryginalnymi artefaktami `android-release`.
+Ten workflow nie buduje APK ani nie podbija wersji. Wyszukuje commit wersji na
+origin/main, weryfikuje tag, signing, metadane, SHA-256 i istniejące assety.
+Nie nadpisuje niezgodnych artefaktów. Brak oryginalnego APK zatrzymuje wznowienie.
+Archiwum Actions jest zachowane przez 30 dni.
 
-## Wznowienie częściowo udanej publikacji
+Wznowienie naprawia wyłącznie publikację APK i nie zatwierdza arbitralnego main
+na Raspberry. Zatwierdzenie Raspberry wykonuje normalny workflow po zielonym CI
+aktualnego main. Jeśli commit wersji zapisany tokenem workflow nie ma CI, uruchom
+Actions → CI → Run workflow na main, a po sukcesie normalny workflow publikacji.
+Opublikowany już APK nie otrzyma wtedy ponownego bumpa. Nie używaj Re-run
+do tworzenia nowej wersji.
 
-Uruchom nowy workflow z aktualnego `main`, pozostaw `new_release=false` i wpisz dokładną `resume_version`, np. `1.0.14`. Ten tryb nie podbija wersji ani nie buduje APK. Re-run jest dozwolony tylko dla takiego jawnego wznowienia; Re-run nowego wydania pozostaje zablokowany.
-
-Wznowienie odnajduje commit wersji na `origin/main`, sprawdza punkt zgodności Web OTA i istniejący tag. Tworzy wyłącznie brakujący tag, wskazując ten commit. Pobiera istniejące assety, sprawdza metadane, podpis, SHA-256 i rozmiar APK. Istniejących assetów nie nadpisuje; niezgodność przerywa operację. Brakujące manifest i plik SHA odtwarza z oryginalnego zweryfikowanego APK, uzupełnia brakujące assety i upublicznia draft dopiero po ich sprawdzeniu.
-
-Nowe wydania zachowują zweryfikowane artefakty w Actions jako `android-release` przez 30 dni, przed zapisem commitu i tagu. Jeśli APK nie dotarło do release, wpisz `resume_run_id` pierwotnego runu. Bez dostępnego oryginalnego APK wznowienie zatrzyma się z diagnostyką, zamiast budować inny artefakt lub tworzyć kolejną wersję. Starsze runy sprzed tej poprawki nie mają tego archiwum.
-
-Weryfikacja pobiera manifest i APK z `/releases/download/vX.Y.Z/`, sprawdza pola `versionName`, `versionCode`, `apkUrl`, SHA-256 i rozmiar, a następnie czeka na zgodność publicznego `/releases/latest/download/latest.json`. Każdy z trzech odczytów ma limit 120 sekund i 24 prób (łącznie do 360 sekund), z przerwami do 5 sekund i timeoutem żądania do 10 sekund dla manifestu lub 30 sekund dla APK. Log rozróżnia starą wersję, 404/przejściową niedostępność i niezgodne pola. Po limicie nadal niezgodny manifest lub APK oznacza błąd. Publikacja pozostaje na GitHub do diagnostyki i bezpiecznego wznowienia.
-
-CI i release używają JDK 21 oraz uruchamiają celowane testy updatera APK i Web OTA. Web OTA wymaga publicznego wydania produkcyjnego z manifestem i APK zgodnymi z `minNativeVersionCode`; sam tag lub draft nie wystarcza. Konfiguracja podpisywanego manifestu pochodzi z tego samego commita co bundle.
+Weryfikacja publiczna używa przypiętych URL `/releases/download/vX.Y.Z/` oraz
+ograniczonych ponowień ruchomego `latest.json`. Testy lokalne nie publikują release,
+nie tworzą produkcyjnych tagów i nie zastępują testu na fizycznym Samsungu.
 
 ## Przygotowanie telefonu
 

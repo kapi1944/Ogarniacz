@@ -1,0 +1,10 @@
+[Unit]
+Description=Sprawdzanie rpi-stable co 30 minut
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=30min
+Unit=ogarniacz-update-auto.service
+
+[Install]
+WantedBy=timers.target

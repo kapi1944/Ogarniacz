@@ -15,7 +15,7 @@ vi.mock('../../services/KontaService', async (importOryginalu) => {
   return { ...oryginal, pobierzStatusAktualizacjiRaspberry: pobierzStatus, uruchomAktualizacjeRaspberry: uruchomAktualizacje }
 })
 
-const dostepnyStatus = { wersja: '1.0.13', commit: 'abcdef0123456789', originMain: 'b'.repeat(40), dostepnosc: 'dostepna' as const, stan: 'idle' as const, komunikat: 'Dostępna jest nowsza wersja.', moznaPrzywrocic: false }
+const dostepnyStatus = { wersja: '1.0.13', commit: 'abcdef0123456789', originStable: 'b'.repeat(40), dostepnosc: 'dostepna' as const, stan: 'idle' as const, komunikat: 'Dostępna jest nowsza wersja.', moznaPrzywrocic: false }
 
 beforeEach(() => {
   vi.useRealTimers()
@@ -29,22 +29,22 @@ afterEach(() => { vi.useRealTimers(); cleanup(); vi.clearAllMocks() })
 describe('PanelAktualizacjiRaspberry', () => {
   it('pokazuje panel tylko przy dostępnym API', async () => {
     render(<PanelAktualizacjiRaspberry />)
-    expect(await screen.findByText('Aktualizacja Raspberry')).toBeInTheDocument()
+    expect(await screen.findByText('Raspberry / serwer')).toBeInTheDocument()
     expect(screen.getByText('abcdef01')).toBeInTheDocument()
     pobierzStatus.mockRejectedValueOnce(new BladKonta(404, 'wyłączone'))
     cleanup()
     render(<PanelAktualizacjiRaspberry />)
-    await waitFor(() => expect(screen.queryByText('Aktualizacja Raspberry')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('Raspberry / serwer')).not.toBeInTheDocument())
     pobierzStatus.mockRejectedValueOnce(new Error('brak połączenia'))
     cleanup()
     render(<PanelAktualizacjiRaspberry />)
-    await waitFor(() => expect(screen.queryByText('Aktualizacja Raspberry')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.queryByText('Raspberry / serwer')).not.toBeInTheDocument())
   })
 
   it('Właściciel wysyła CSRF-zabezpieczone akcje API', async () => {
     pobierzStatus.mockReset().mockResolvedValueOnce(dostepnyStatus).mockResolvedValueOnce({ ...dostepnyStatus, stan: 'checking' as const, dostepnosc: 'nieznana' as const })
     render(<PanelAktualizacjiRaspberry />)
-    await screen.findByText('Aktualizacja Raspberry')
+    await screen.findByText('Raspberry / serwer')
     fireEvent.click(screen.getByRole('button', { name: 'Sprawdź aktualizacje' }))
     await waitFor(() => expect(uruchomAktualizacje).toHaveBeenCalledWith('check'))
     expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeDisabled()
@@ -69,7 +69,7 @@ describe('PanelAktualizacjiRaspberry', () => {
   it('odświeża stan podczas update i toleruje chwilowy restart backendu', async () => {
     pobierzStatus.mockReset().mockResolvedValueOnce(dostepnyStatus).mockResolvedValueOnce({ ...dostepnyStatus, stan: 'restarting' as const, dostepnosc: 'nieznana' as const }).mockRejectedValueOnce(new Error('restart')).mockResolvedValue({ ...dostepnyStatus, stan: 'success' as const, dostepnosc: 'aktualna' as const, komunikat: 'Aktualizacja zakończona.' })
     render(<PanelAktualizacjiRaspberry />)
-    await screen.findByText('Aktualizacja Raspberry')
+    await screen.findByText('Raspberry / serwer')
     fireEvent.click(screen.getByRole('button', { name: 'Zainstaluj aktualizację' }))
     await waitFor(() => expect(screen.getAllByText('restart')).not.toHaveLength(0))
     await waitFor(() => expect(screen.getAllByText('sukces')).not.toHaveLength(0), { timeout: 7_000 })
@@ -83,7 +83,7 @@ describe('PanelAktualizacjiRaspberry', () => {
     uruchomAktualizacje.mockRejectedValueOnce(new Error('restart'))
     pobierzStatus.mockReset().mockResolvedValueOnce(dostepnyStatus).mockResolvedValueOnce({ ...dostepnyStatus, stan: 'restarting' as const }).mockResolvedValue({ ...dostepnyStatus, stan: 'success' as const, komunikat: 'Aktualizacja zakończona.' })
     render(<PanelAktualizacjiRaspberry />)
-    await screen.findByText('Aktualizacja Raspberry')
+    await screen.findByText('Raspberry / serwer')
     fireEvent.click(screen.getByRole('button', { name: 'Zainstaluj aktualizację' }))
     await waitFor(() => expect(uruchomAktualizacje).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeDisabled()

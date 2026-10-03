@@ -58,31 +58,89 @@ curl --fail https://NAZWA-URZADZENIA.TAILNET.ts.net/health
 
 Po restarcie Raspberry Pi sprawdź `systemctl is-active ogarniacz tailscaled`, `tailscale serve status` oraz oba healthchecki. SQLite pozostaje w `data/ogarniacz.sqlite`; restart usług nie usuwa danych.
 
-## Aktualizacja instancji
+## Aktualizacja instancji — rpi-stable
 
-### Aktualizator sterowany lokalnym API
+Repozytorium robocze pozostaje na lokalnym `main`, ale aktualizator pobiera wyłącznie
+`origin/rpi-stable`. Brak tej gałęzi daje czytelny błąd; nie ma fallbacku do main.
+Kanał zatwierdza workflow **Publikuj Ogarniacza** opisany w `ANDROID_RELEASE.md`.
+Nie konfiguruj Pi do aktualizowania się po każdym commicie main. Przy pierwszej
+migracji lokalny HEAD musi być przodkiem zatwierdzonego rpi-stable.
 
-Przed włączeniem aktualizatora na Raspberry Pi zainstaluj trzy jednostki z `deploy/rpi/ogarniacz-update*.service` do `/etc/systemd/system/`, a plik `deploy/rpi/ogarniacz-update.sudoers` przez `visudo -cf` do `/etc/sudoers.d/ogarniacz-update` z uprawnieniami `0440`. W `/etc/ogarniacz/ogarniacz.env` ustaw `RPI_UPDATE_ENABLED=1`, wykonaj `sudo systemctl daemon-reload` i zrestartuj `ogarniacz.service`. Zweryfikuj ręcznie ścieżki `systemctl`, `bash`, `git`, `npm`, `curl`, `node` i `flock` na Raspberry. Jednostki nie są instalowane automatycznie przez API.
+Jedna ścieżka: `scripts/aktualizuj-rpi.sh check|update|rollback|auto`, z `flock`,
+czystym tracked working tree, kontrolą istniejącego targetu i fast-forward only.
+`data/`, pliki użytkownika i `/etc/ogarniacz/ogarniacz.env` nie są czyszczone.
+API Właściciela z sesją/CSRF pozostaje domyślnie wyłączone (`RPI_UPDATE_ENABLED=1`
+włącza panel ręczny). Status zwraca SHA wdrożenia, `originStable`, dostępność i etap.
+UI pokazuje **Raspberry / serwer**; numer package.json jest tylko informacyjny.
 
-API: `GET /api/rpi-update/status` zwraca wersję z `package.json`, bieżący SHA, ostatnio sprawdzony `origin/main`, dostępność oraz stan. `POST /api/rpi-update/check`, `/start`, `/rollback` uruchamiają tylko stałe jednostki systemd. Wymagają sesji Właściciela i nagłówka `X-Ogarniacz-CSRF`; POST przyjmowany jest jedynie przez lokalne połączenie z originem lokalnym lub wpisanym dokładnie w `CORS_ALLOWED_ORIGINS`. Origin prywatnego HTTPS Tailscale Serve musi tam być wpisany. Reverse proxy działające na tym samym urządzeniu może także wyglądać dla API jak lokalny klient, dlatego jego dostęp musi pozostać prywatny. Android nie korzysta z tych endpointów.
+### Preflight, build i rollback
 
-Skrypt `scripts/aktualizuj-rpi.sh` używa `flock` w `data/aktualizacja-rpi/` i zapisuje tam stan oraz parę SHA do rollbacku. Odrzuca zmiany śledzonych plików, wymaga gałęzi `main` oraz tego, aby `origin/main` był następcą HEAD. `git merge --ff-only` sam zatrzyma się również przy kolizji z nieśledzonym plikiem. Po `npm ci` i `npm run build:production` restartuje usługę, a następnie sprawdza `/health`. Przy błędzie builda lub healthchecku przywraca poprzedni commit przez `git reset --keep`, ponownie instaluje zależności, buduje i restartuje usługę. Gdy automatyczny powrót zawiedzie, `POST /rollback` może ponowić próbę tylko wtedy, gdy HEAD nadal wskazuje zapamiętany commit docelowy. Skrypt nigdy nie wykonuje `npm audit fix`.
+Przed przełączeniem aktualizator dwukrotnie sprawdza konfigurację i stan obecnego
+backendu: istniejący env, HOST=127.0.0.1, port 8787, pełne HTTPS CORS bez wildcardów,
+origin https://localhost, zgodność ścieżek bazy i dist, aktywny tailscaled oraz
+prywatny Tailscale Serve kierujący HTTPS do http://127.0.0.1:8787.
+Log nie wypisuje wartości sekretów. Build odbywa się z dokładnego target SHA w
+izolowanym katalogu w data/aktualizacja-rpi. Błąd preflightu/npm/builda nie zmienia
+commita, dotychczasowego dist, danych ani działającej usługi.
 
-Kontrakt statusu: `idle` oznacza zakończone sprawdzanie (również brak aktualizacji), `checking`, `downloading/fetching`, `installing`, `building`, `restarting` i `rollback` oznaczają pracę jednostki, a `success` i `error` kończą polling panelu. Status i para SHA są zastępowane atomowo. Niepełny status daje `error`; stan pracy pozostawiony przez przerwany oneshot daje `error` z żądaniem interwencji. `moznaPrzywrocic` jest prawdziwe wyłącznie dla pary dwóch istniejących commitów w relacji przodek–następca, gdy bieżący HEAD jest jej commitem docelowym. Równoległe żądanie dostaje HTTP 409, a rollback bez takiej pary HTTP 412. Awaria `npm ci`, builda, restartu lub healthchecku uruchamia automatyczny rollback; jeśli ponowny build albo restart starej wersji nie powiedzie się, konieczna jest interwencja administratora na Pi.
+Po udanym buildzie i końcowym preflighcie stary backend zostaje zatrzymany.
+SQLite backup API w Node 24 tworzy spójny snapshot data/ogarniacz.sqlite, również
+ze stronami WAL, i sprawdza integralność. Snapshot jest utrwalony w
+`data/aktualizacja-rpi/backups/<stary-SHA>-<czas>-<id>.sqlite`; pozostają 3 ostatnie.
+Brak snapshotu wznawia stary backend i blokuje przełączenie.
 
-`data/`, `.env`, ewentualny stary `update.sh` spoza repozytorium oraz konfiguracja w `/etc/ogarniacz/` nie są czyszczone. Przed włączeniem nowego aktualizatora wyłącz na Raspberry wszystkie stare timery i jednostki wywołujące `update.sh`; ich stan trzeba sprawdzić na urządzeniu. Lokalne zmiany w `scripts/configure-tailscale-rpi.sh` blokują aktualizację z czytelnym stanem błędu. Wymagana jest ręczna decyzja o ich zachowaniu i scaleniu. Jeżeli awaria nastąpi podczas ponownego builda starej wersji, ręczna naprawa na Raspberry pozostaje konieczna; stan `error` i dziennik jednostki wskazują etap. Sam odczyt stanu nie wykonuje fetch; uruchom `/check`, aby odświeżyć informację o `origin/main`.
+Dopiero potem następuje fast-forward kodu, zamiana gotowego dist/dist-server/
+node_modules i start nowego backendu. Stary runtime pozostaje w prywatnym katalogu
+runtime-poprzedni. Nieudany restart/healthcheck zatrzymuje usługę, przywraca snapshot
+bazy, poprzedni commit i runtime, a następnie uruchamia stary backend. Przed próbą
+startu nowego kodu rollback nie przywraca bazy. Ręczny rollback wymaga kompletnego
+zapisanego stanu; brak snapshotu lub runtime wymaga interwencji, zamiast ryzyka
+uruchomienia starego kodu na zmigrowanej bazie.
 
-Pierwszą instalację pomocniczych jednostek oraz sudoers wykonaj ręcznie na Pi. Skrypt nadal wymaga uprawnień użytkownika `kacper` do repo; nie uruchamiaj go jako root. Diagnostyka: `journalctl -u ogarniacz-update.service -u ogarniacz-update-check.service -u ogarniacz-update-rollback.service --no-pager`. Log podaje etapy i stałe komunikaty, bez treści sesji ani wartości sekretów.
+Snapshot oznacza powrót danych do momentu przełączenia. Ręczny rollback po dłuższej
+pracy nowej wersji cofa również późniejsze zapisy; wykonuj go świadomie. Twarde
+przerwanie procesu podczas przełączenia wymaga kontroli stanu i interwencji na Pi.
+Statusy checking/downloading/installing/building/restarting/rollback oraz idle/
+success/error pozostają. Healthcheck ma dotychczasowy kontrakt i 15 prób.
 
-`scripts/deploy-rpi.sh` pozostaje wyłącznie przejściową drogą ręcznego wdrożenia przed włączeniem `RPI_UPDATE_ENABLED=1`. Po włączeniu aktualizatora skrypt zatrzymuje się przed `git pull`; kolejne aktualizacje i rollback uruchamiaj tylko przez API albo panel Ustawień dostępny dla zalogowanego Właściciela. Nie uruchamiaj starego `update.sh` ani timera systemd równolegle z tym mechanizmem.
+### Instalacja jednostek i automatyka
 
-Skrypt zatrzymuje się wyłącznie przy zmianach w śledzonych plikach Git; ignorowane dane lokalne, w tym `data/`, nie blokują aktualizacji. Następnie używa `git pull --ff-only`, wykonuje `npm ci` i produkcyjny build frontendu oraz serwera.
+Po wdrożeniu kodu na Pi zainstaluj `ogarniacz-update*.service`, nowy timer i sudoers
+(zawiera teraz także stałe polecenie stop backendu):
 
-Przed restartem porównuje `deploy/rpi/ogarniacz.service` z `/etc/systemd/system/ogarniacz.service`. Zmienioną jednostkę instaluje z trybem `0644`, wykonuje `systemctl daemon-reload`, zapewnia `systemctl enable ogarniacz` i restartuje usługę. Healthcheck jest ponawiany maksymalnie 15 razy co sekundę. Sukces wymaga HTTP 200 oraz JSON-u z `status: ok`, `service: ogarniacz-api` i `database: connected`; po niepowodzeniu skrypt pokazuje ostatnie 100 wpisów `journalctl -u ogarniacz`.
+```bash
+mkdir -p data/aktualizacja-rpi
+install -m 0750 scripts/aktualizuj-rpi.sh data/aktualizacja-rpi/aktualizuj-rpi.sh
+install -m 0640 scripts/rpi-bezpieczenstwo.mjs data/aktualizacja-rpi/rpi-bezpieczenstwo.mjs
+sudo install -m 0644 deploy/rpi/ogarniacz-update*.service /etc/systemd/system/
+sudo install -m 0644 deploy/rpi/ogarniacz-update-auto.timer /etc/systemd/system/
+sudo visudo -cf deploy/rpi/ogarniacz-update.sudoers
+sudo install -m 0440 deploy/rpi/ogarniacz-update.sudoers /etc/sudoers.d/ogarniacz-update
+sudo systemctl daemon-reload
+```
 
-`/etc/ogarniacz/ogarniacz.env` nigdy nie jest tworzony ani nadpisywany podczas aktualizacji. Skrypt porównuje jedynie nazwy wymaganych wpisów z plikiem przykładowym i ostrzega o brakujących nazwach bez wypisywania wartości. `OWNER_BOOTSTRAP_TOKEN` pozostaje opcjonalny i nie wywołuje ostrzeżenia. Nowe wymagane wartości trzeba uzupełnić ręcznie. Skrypt nie wykonuje resetu Git, nie usuwa `data/ogarniacz.sqlite`, konfiguracji kont ani Tailscale.
+Jednostki uruchamiają zachowaną kopię tego samego aktualizatora w data/aktualizacja-rpi.
+Po sukcesie jest odświeżana z zatwierdzonego repozytorium. Dzięki temu rollback kodu
+sprzed wprowadzenia rpi-stable nie przywraca aktualizowania z main ani nie odbiera
+obsługi snapshotów. Nie jest to drugi algorytm aktualizacji.
 
-Zweryfikowany Samsung łączy się przez Tailscale/HTTPS. `deploy-rpi.sh` nadal nie zmienia `HOST` ani żadnej innej wartości w live env.
+Env powinien mieć właściciela root:kacper i tryb 0640. Nie jest automatycznie
+nadpisywany. W /etc/ogarniacz/ogarniacz.env ustaw `RPI_AUTO_UPDATE=1`, następnie:
+
+```bash
+sudo systemctl enable --now ogarniacz-update-auto.timer
+```
+
+Timer sprawdza co 30 minut tylko rpi-stable, uruchamia ten sam updater i korzysta
+z tej samej blokady flock. Brak flagi lub 0 daje brak działania automatycznego.
+Ręczne aktualizacje nadal działają. Wyłączenie: RPI_AUTO_UPDATE=0 lub
+`sudo systemctl disable --now ogarniacz-update-auto.timer`.
+Wyłącz stare timery i update.sh; deploy-rpi.sh pozostaje drogą pierwszego bootstrapu,
+a nie równoległym aktualizatorem produkcyjnym.
+
+Weryfikacja live jest osobnym krokiem: systemd, tailscaled, Serve, prawdziwy env,
+uprawnienia sudoers, flock, snapshot/rollback i oba healthchecki na Pi. Lokalne
+testy z atrapami systemd/Tailscale nie są dowodem działającej instalacji.
 
 ## Migracja live na loopback
 
