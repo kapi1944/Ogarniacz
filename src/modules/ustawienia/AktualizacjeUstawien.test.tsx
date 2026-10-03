@@ -1,7 +1,6 @@
 import { platforma } from '../../platform/platforma'
 import { cleanup as wyczysc, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 import { komunikatBleduAktualizacji, PanelAktualizacji } from './PanelAktualizacji'
 import { PodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
 import { SekcjaPolaczeniaIAktualizacji } from './SekcjaPolaczeniaIAktualizacji'
@@ -175,12 +174,13 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
     expect(pobierzApk).toHaveBeenCalledTimes(1)
   })
 
-  it('układa Synchronizację przed aktualizacją aplikacji i szybkimi poprawkami', () => {
+  it('układa Synchronizację przed jedynym kanałem Android APK', () => {
     pobierzStan.mockResolvedValue(stanWeb)
     const { container } = render(<SekcjaPolaczeniaIAktualizacji synchronizacjaSkonfigurowana dzieci={<h2>Synchronizacja</h2>} />)
     const tekst = container.textContent ?? ''
     expect(tekst.indexOf('Synchronizacja')).toBeLessThan(tekst.indexOf('Android APK'))
-    expect(tekst.indexOf('Android APK')).toBeLessThan(tekst.indexOf('Android Web OTA'))
+    expect(tekst).not.toContain('Android Web OTA')
+    expect(tekst).not.toContain('szybka poprawka')
   })
 
   it('na Web/PWA pokazuje wyłącznie panel Raspberry, bez instalatorów Androida', () => {
@@ -200,28 +200,7 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
     expect(screen.getAllByText('Dostępna nowa wersja aplikacji')).not.toHaveLength(0)
   })
 
-  it('pokazuje dostępną szybką poprawkę dla zgodnego APK', () => {
-    render(<PodsumowaniePolaczeniaIAktualizacji synchronizacjaSkonfigurowana stan={{
-      sprawdzono: true,
-      wynikWeb: { czyDostepna: true, czyOdrzucona: false, wymagaNowszegoApk: false, stan: stanWeb, manifest: { ...stanWeb.aktualny, url: 'https://example.test/web.zip', sha256: 'a'.repeat(64), signature: 'c2ln', minNativeVersionCode: 1, publishedAt: '2026-09-14T10:00:00.000Z' } },
-    }} />)
-    expect(screen.getAllByText('Dostępna szybka poprawka')).not.toHaveLength(0)
-  })
 
-  it('wymaga nowego APK, gdy szybka poprawka nie jest zgodna', () => {
-    render(<PodsumowaniePolaczeniaIAktualizacji synchronizacjaSkonfigurowana stan={{
-      sprawdzono: true,
-      wynikWeb: { czyDostepna: true, czyOdrzucona: false, wymagaNowszegoApk: true, stan: stanWeb, manifest: { ...stanWeb.aktualny, url: 'https://example.test/web.zip', sha256: 'a'.repeat(64), signature: 'c2ln', minNativeVersionCode: 2, publishedAt: '2026-09-14T10:00:00.000Z' } },
-    }} />)
-    expect(screen.getAllByText('Dostępna nowa wersja aplikacji')).not.toHaveLength(0)
-  })
-
-  it('wyjaśnia awaryjne przywrócenie wersji wbudowanej', async () => {
-    pobierzStan.mockResolvedValue(stanWeb)
-    render(<PanelAktualizacjiWeb />)
-    await waitFor(() => expect(screen.getByText('Przywróć wersję wbudowaną w APK')).toBeInTheDocument())
-    expect(screen.getByText('Nie zmienia wersji APK ani danych. Przywraca tylko interfejs dostarczony razem z aktualnie zainstalowaną aplikacją.')).toBeInTheDocument()
-  })
 })
 
 it('pokazuje błąd odczytu instalatora bez odrzucenia Promise poza panelem', async () => {
@@ -272,4 +251,12 @@ it('po ponownym otwarciu panelu i anulowaniu instalacji ponawia zachowany APK be
   fireEvent.click(await screen.findByRole('button', { name: 'Ponów instalację' }))
   await waitFor(() => expect(ponow).toHaveBeenCalledTimes(1))
   expect(pobierzApk).not.toHaveBeenCalled()
+})
+
+it('pokazuje wersję i versionCode w jedynym panelu Android APK', async () => {
+  render(<PanelAktualizacji />)
+  expect(screen.getByRole('heading', { name: 'Android APK' })).toBeInTheDocument()
+  await screen.findByText('1.0.11 (versionCode: 1000011)')
+  expect(screen.getByText('1.0.12')).toBeInTheDocument()
+  expect(screen.queryByText('Android Web OTA')).not.toBeInTheDocument()
 })

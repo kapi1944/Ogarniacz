@@ -32,17 +32,14 @@ export function ustalPodsumowaniePolaczeniaIAktualizacji(
   if (synchronizacjaSkonfigurowana && diagnostyka && !diagnostyka.ostatniPull) {
     return { tytul: 'Nie potwierdzono synchronizacji', opis: 'Brak zapisanego udanego pobrania danych. Sprawdź ostatnią próbę lub wybierz „Synchronizuj teraz”.', wariant: 'informacja' as const }
   }
-  if (stan.wynikApk?.czyNowsza || stan.wynikWeb?.wymagaNowszegoApk) {
-    return { tytul: 'Dostępna nowa wersja aplikacji', opis: 'Zaktualizuj aplikację Android, zanim zastosujesz szybkie poprawki.', wariant: 'ostrzezenie' as const }
-  }
-  if (stan.wynikWeb?.czyDostepna && !stan.wynikWeb.czyOdrzucona) {
-    return { tytul: 'Dostępna szybka poprawka', opis: 'Możesz bezpiecznie zastosować zgodną poprawkę interfejsu.', wariant: 'informacja' as const }
+  if (stan.wynikApk?.czyNowsza) {
+    return { tytul: 'Dostępna nowa wersja aplikacji', opis: 'Zainstaluj nowe podpisane APK aplikacji Android.', wariant: 'ostrzezenie' as const }
   }
   if (!synchronizacjaSkonfigurowana) {
     return { tytul: 'Wymagana konfiguracja synchronizacji', opis: 'Konfiguracja tego urządzenia jest niepełna. Sprawdź szczegóły synchronizacji poniżej.', wariant: 'ostrzezenie' as const }
   }
-  if (stan.bladApk || stan.bladWeb) {
-    return { tytul: 'Nie udało się sprawdzić aktualizacji', opis: stan.bladApk ?? stan.bladWeb ?? 'Sprawdź połączenie z serwerem.', wariant: 'blad' as const }
+  if (stan.bladApk) {
+    return { tytul: 'Nie udało się sprawdzić aktualizacji', opis: stan.bladApk ?? 'Sprawdź połączenie z serwerem.', wariant: 'blad' as const }
   }
   return { tytul: 'Ogarniacz jest aktualny', opis: 'Synchronizacja i aktualizacje są sprawdzane w tle.', wariant: 'sukces' as const }
 }

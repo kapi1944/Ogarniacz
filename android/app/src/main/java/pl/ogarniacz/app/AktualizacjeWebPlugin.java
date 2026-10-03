@@ -25,6 +25,7 @@ import java.util.Locale;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+// Legacy: kanał wycofany, plugin nie jest rejestrowany w MainActivity.
 @CapacitorPlugin(name = "AktualizacjeWeb")
 public class AktualizacjeWebPlugin extends Plugin {
     private static final long MAKSYMALNY_ROZMIAR_ZIP = 50L * 1024L * 1024L;

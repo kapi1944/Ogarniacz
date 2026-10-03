@@ -5,7 +5,6 @@ import { inicjalizujBaze } from './data/BazaOgarniacza'
 import { repozytoriumUstawien } from './data/RepozytoriumUstawien'
 import { zastosujUstawieniaInterfejsu } from './domain/ustawienia'
 import { inicjalizujPlatforme } from './platform/platforma'
-import { PotwierdzenieGotowosciBundle } from './app/PotwierdzenieGotowosciBundle'
 import { inicjalizujWidgetSnapshotService } from './services/WidgetSnapshotService'
 import { inicjalizujSynchronizacjeAplikacji } from './services/SynchronizacjaAplikacji'
 import { inicjalizujKontroleAktualizacjiAplikacji } from './services/KontrolaAktualizacjiAplikacji'
@@ -26,7 +25,7 @@ try {
   )
   inicjalizujWidgetSnapshotService()
   korzen.render(
-    <StrictMode><KomunikatBleduAsynchronicznego /><GranicaBledu><App /><AktualizacjaPwa /><PotwierdzenieGotowosciBundle /></GranicaBledu></StrictMode>,
+    <StrictMode><KomunikatBleduAsynchronicznego /><GranicaBledu><App /><AktualizacjaPwa /></GranicaBledu></StrictMode>,
   )
   void inicjalizujSynchronizacjeAplikacji()
   void inicjalizujKontroleAktualizacjiAplikacji()

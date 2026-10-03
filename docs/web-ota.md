@@ -1,3 +1,20 @@
+# Android Web OTA — kanał wycofany
+
+Od 2026-10-03 Android jest aktualizowany wyłącznie podpisanym APK.
+Przed inicjalizacją Capacitor migracja usuwa stan Web OTA (active, pending,
+previous, rejected), klucz serverBasePath i pliki wyłącznie z files/web-ota.
+Nie korzysta ze ścieżek usuwania zapisanych w metadanych. Nie czyści danych
+IndexedDB/Dexie, konta, sesji, innych ustawień ani plików użytkownika.
+Migracja jest idempotentna. Błąd zapisu resetu blokuje start WebView;
+czyszczenie pozostawionych plików jest ponawiane przy kolejnym starcie.
+Capacitor startuje z domyślnych assets public. Plugin nie jest rejestrowany,
+a frontend nie udostępnia Web OTA. Workflow nie publikuje nawet ręcznie.
+Raspberry aktualizuje frontend i backend razem z repozytorium; jego PWA
+oraz service worker pozostają bez zmian. Fizyczny test migracji Samsunga
+wymaga przyszłego podpisanego APK i nie jest zastąpiony testami lokalnymi.
+
+## Historyczna dokumentacja i skrypty (legacy)
+
 # Web OTA Android
 
 Web OTA publikuje wyłącznie gotowy ZIP z zawartością `dist`. Kanał jest niezależny od `latest.json` OTA APK i używa stałego tagu GitHub Release `web-ota`.

@@ -132,3 +132,11 @@ test('zgłasza status unauthorized i offline bez wyboru starego APK', () => {
   assert.throws(() => wybierzUrzadzenieAdb(nieautoryzowane), /unauthorized/)
   assert.throws(() => wybierzUrzadzenieAdb(offline), /offline/)
 })
+
+// Regresja kolejności inicjalizacji: stary frontend nie może załadować się przed migracją.
+test('Android resetuje Web OTA i wybiera public przed inicjalizacją WebView', () => {
+  const aktywnosc = readFileSync(new URL('../android/app/src/main/java/pl/ogarniacz/app/MainActivity.java', import.meta.url), 'utf8')
+  assert.ok(aktywnosc.indexOf('MagazynAktualizacjiWeb.przygotujStart(this)') < aktywnosc.indexOf('super.onCreate('))
+  assert.ok(aktywnosc.indexOf('new ServerPath(ServerPath.PathType.ASSET_PATH, "public")') < aktywnosc.indexOf('super.onCreate('))
+  assert.doesNotMatch(aktywnosc, /registerPlugin\(AktualizacjeWebPlugin|zastosujPoStarcie|setServerBasePath/)
+})

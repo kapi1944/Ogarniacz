@@ -1,14 +1,12 @@
 import { platforma } from '../platform/platforma'
-import type { WynikSprawdzeniaAktualizacji, WynikSprawdzeniaAktualizacjiWeb } from '../platform/typy'
+import type { WynikSprawdzeniaAktualizacji } from '../platform/typy'
 
 const OKRES_AUTOMATYCZNEJ_KONTROLI_MS = 4 * 60 * 60 * 1000
 const KLUCZ_OSTATNIEJ_KONTROLI = 'ogarniacz:ostatnia-kontrola-aktualizacji'
 
 export interface StanKontroliAktualizacji {
   wynikApk?: WynikSprawdzeniaAktualizacji
-  wynikWeb?: WynikSprawdzeniaAktualizacjiWeb
   bladApk?: string
-  bladWeb?: string
   sprawdzono: boolean
 }
 
@@ -71,24 +69,8 @@ export async function sprawdzAktualizacjeApk() {
   }
 }
 
-export async function sprawdzAktualizacjeWeb() {
-  if (!platforma.aktualizacjeWeb.skonfigurowane()) return undefined
-  try {
-    const wynikWeb = await platforma.aktualizacjeWeb.sprawdz()
-    zapiszStan({ wynikWeb, bladWeb: undefined, sprawdzono: true })
-    return wynikWeb
-  } catch (blad) {
-    const bladWeb = tekstBledu(blad, 'Nie udało się sprawdzić szybkich poprawek.')
-    zapiszStan({ bladWeb, sprawdzono: true })
-    throw blad
-  }
-}
-
 export async function sprawdzAktualizacjeTeraz() {
-  await Promise.all([
-    sprawdzAktualizacjeApk().catch(() => undefined),
-    sprawdzAktualizacjeWeb().catch(() => undefined),
-  ])
+  await sprawdzAktualizacjeApk().catch(() => undefined)
 }
 
 export function inicjalizujKontroleAktualizacjiAplikacji(): Promise<() => void> {

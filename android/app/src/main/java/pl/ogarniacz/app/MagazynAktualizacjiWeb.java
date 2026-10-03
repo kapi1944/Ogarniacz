@@ -50,37 +50,31 @@ final class MagazynAktualizacjiWeb {
     }
 
     static synchronized void przygotujStart(Context kontekst) {
-        JSONObject stan = wczytaj(kontekst);
+        wycofajKanal(preferencje(kontekst),
+            kontekst.getSharedPreferences(PREFERENCJE_CAPACITOR, Context.MODE_PRIVATE), kontekst.getFilesDir());
+    }
+
+    static void wycofajKanal(SharedPreferences preferencjeWeb, SharedPreferences preferencjeCapacitor, File katalogPlikow) {
+        // Zapis synchroniczny przed utworzeniem WebView; błąd blokuje start starego frontendu.
+        if (!preferencjeCapacitor.edit().remove(SCIEZKA_CAPACITOR).commit()
+            || !preferencjeWeb.edit().remove(KLUCZ_STANU).commit()) {
+            throw new IllegalStateException("Nie udało się wycofać stanu Web OTA.");
+        }
+        File katalogOta = new File(katalogPlikow, "web-ota");
         try {
-            if (stan.has("pending")) {
-                dodajOdrzucony(stan, stan.getJSONObject("pending"));
-                stan.remove("pending");
-            }
-            int kodApk = pobierzKodApk(kontekst);
-            while (stan.has("active")) {
-                JSONObject aktywny = stan.getJSONObject("active");
-                MetadaneBundle metadane = MetadaneBundle.zJson(aktywny);
-                if (new File(metadane.sciezka, "index.html").isFile() && kodApk >= metadane.minimalnyKodApk) break;
-                dodajOdrzucony(stan, aktywny);
-                if (stan.has("previous")) stan.put("active", stan.getJSONObject("previous"));
-                else stan.remove("active");
-                stan.remove("previous");
-            }
-            zapisz(kontekst, stan);
-            zapiszSciezke(kontekst, stan.has("active") ? stan.getJSONObject("active").getString("path") : "");
-        } catch (Exception blad) {
-            wyczyscStan(kontekst);
+            usunPlikiOta(katalogOta, katalogOta.getAbsolutePath());
+        } catch (java.io.IOException blad) {
+            // Pozostałe pliki nie mogą być uruchomione; czyszczenie będzie ponowione przy starcie.
         }
     }
 
-    static synchronized void zastosujPoStarcie(Bridge bridge, Context kontekst) {
-        JSONObject stan = wczytaj(kontekst);
-        String sciezka = stan.optJSONObject("active") == null ? null : stan.optJSONObject("active").optString("path", null);
-        if (sciezka == null) {
-            if (!"public".equals(bridge.getServerBasePath())) bridge.setServerAssetPath("public");
-        } else if (!sciezka.equals(bridge.getServerBasePath())) {
-            bridge.setServerBasePath(sciezka);
-        }
+    private static void usunPlikiOta(File plik, String sciezkaKatalogu) throws java.io.IOException {
+        String kanoniczna = plik.getCanonicalPath();
+        // Nie podążaj za dowiązaniem poza prywatny katalog Web OTA.
+        if (!kanoniczna.equals(sciezkaKatalogu) && !kanoniczna.startsWith(sciezkaKatalogu + File.separator)) return;
+        File[] dzieci = plik.listFiles();
+        if (dzieci != null) for (File dziecko : dzieci) usunPlikiOta(dziecko, sciezkaKatalogu);
+        plik.delete();
     }
 
     static synchronized JSObject pobierzStan(Context kontekst) {

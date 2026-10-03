@@ -191,17 +191,4 @@ export interface PlatformaOgarniacza {
     pobierzStanInstalacji: () => Promise<StanInstalacjiAktualizacji>
     nasluchujStanuInstalacji: (obsluga: (stan: StanInstalacjiAktualizacji) => void) => Promise<() => void>
   }
-  aktualizacjeWeb: {
-    skonfigurowane: () => boolean
-    pobierzStan: () => Promise<StanAktualizacjiWeb>
-    sprawdz: () => Promise<WynikSprawdzeniaAktualizacjiWeb>
-    pobierzIAktywuj: (
-      manifest: ManifestAktualizacjiWeb,
-      ponownaProba: boolean,
-      obslugaStanu: (stan: 'pobieranie' | 'weryfikacja' | 'rozpakowywanie', procent: number) => void,
-    ) => Promise<void>
-    potwierdzGotowoscBundle: () => Promise<void>
-    przywrocPoprzednia: () => Promise<void>
-    przywrocWbudowana: () => Promise<void>
-  }
 }

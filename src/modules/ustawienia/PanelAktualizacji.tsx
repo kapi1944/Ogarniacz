@@ -5,7 +5,6 @@ import { platforma } from '../../platform/platforma'
 import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
 import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeApk } from '../../services/KontrolaAktualizacjiAplikacji'
 import type { PobranaAktualizacja, StanInstalacjiAktualizacji, StatusInstalacjiAktualizacji, WynikSprawdzeniaAktualizacji, WynikUruchomieniaInstalatora } from '../../platform/typy'
-import { PanelAktualizacjiWeb } from './PanelAktualizacjiWeb'
 
 type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'blad_instalatora' | 'blad_pobierania' | 'bledny_sha' | 'blad_finalizacji' | 'blad'
 
@@ -97,7 +96,7 @@ export function PanelAktualizacji() {
 
   useEffect(() => {
     platforma.aktualizacje.pobierzInformacje()
-      .then((informacje) => ustawWersje(`${informacje.wersja} (${informacje.kod})`))
+      .then((informacje) => ustawWersje(`${informacje.wersja} (versionCode: ${informacje.kod})`))
       .catch(() => ustawWersje(__WERSJA_APLIKACJI__))
   }, [])
 
@@ -243,7 +242,7 @@ export function PanelAktualizacji() {
   const maZweryfikowanyApk = Boolean(stanNatywny?.maZweryfikowanyApk || pobrana)
   const czekaNaPotwierdzenie = stanNatywny?.status === 'OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI' && stanNatywny.maPotwierdzenieInstalacji
   const moznaPonowicInstalacje = Boolean(stanNatywny?.moznaPonowicInstalacje && maZweryfikowanyApk)
-  return <><Karta>
+  return <Karta>
     <div className="naglowek-karty"><div><h2>Android APK</h2><p>Pełna aktualizacja aplikacji, w tym kodu natywnego i bazowego interfejsu.</p></div><Znacznik wariant={wariant}>{etykietyEtapu[etap]}</Znacznik></div>
     <div className="lista-kompaktowa">
       <div><span>Aktualnie zainstalowana wersja</span><strong>{wersja}</strong></div>
@@ -263,5 +262,5 @@ export function PanelAktualizacji() {
       {!moznaPonowicInstalacje && (etap === 'brak_miejsca' || etap === 'blad_instalatora') && pobrana && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={() => uruchomInstalator(pobrana, dostepna.manifest)}>Ponów instalację</button>}
       {czyEtapBledu && !maZweryfikowanyApk && dostepna && <button type="button" className="przycisk przycisk--glowny" onClick={pobierzAktualizacje}><Download aria-hidden="true" />Ponów pobieranie</button>}
     </div>
-  </Karta><PanelAktualizacjiWeb /></>
+  </Karta>
 }
