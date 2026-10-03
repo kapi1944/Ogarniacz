@@ -20,6 +20,7 @@ import {
   czyZadanieZablokowane,
   czyZadanieZalegle,
   odroczZadanie,
+  ukonczZadanie,
   utworzZadanie,
 } from "../ZadaniaService";
 import {
@@ -494,8 +495,9 @@ export function utworzDomyslnyRejestrNarzedziEcho(
       const repozytorium = pobierzRepozytorium("zadania");
       const zadanie = await repozytorium.pobierz(id);
       if (!zadanie) throw new Error("Nie znaleziono zadania.");
-      const wykonane = { ...zadanie, status: "wykonane" as const };
+      const { wykonane, nastepne } = ukonczZadanie(zadanie);
       await repozytorium.zapisz(wykonane);
+      if (nastepne) await repozytorium.zapisz(nastepne);
       return {
         id,
         tytul: wykonane.tytul,
