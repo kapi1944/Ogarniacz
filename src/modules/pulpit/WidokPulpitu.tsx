@@ -4,10 +4,11 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { addDays, format } from 'date-fns'
 import { AlertCircle, CalendarDays, Inbox, LayoutGrid, MessageCircle, Plus, Sparkles } from 'lucide-react'
 import { Karta, Komunikat, NaglowekWidoku, PustyStan } from '../../components/Interfejs'
-import { utworzMetadane, dzisiajIso } from '../../domain/fabryki'
-import { poprawnaGodzinaTerminu } from '../../domain/logikaTerminuZadania'
+import { dzisiajIso } from '../../domain/fabryki'
+import { usePlanDniaPulpitu } from './usePlanDniaPulpitu'
+import { PrzegladTygodnia } from './PrzegladTygodnia'
 import type { DostawcaElementowPulpitu, ElementOgarniacza, ZakresDat } from '../../domain/elementyOgarniacza'
-import type { KonfiguracjaKafelkaPulpitu, ZakresZmianyHarmonogramu } from '../../domain/typy'
+import type { KonfiguracjaKafelkaPulpitu } from '../../domain/typy'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { DostawcaLekowPulpitu } from '../../providers/DostawcaLekowPulpitu'
@@ -47,11 +48,6 @@ import { FormularzHarmonogramuDnia } from './FormularzHarmonogramuDnia'
 import { NawigatorDnia } from './NawigatorDnia'
 import { OsCzasu } from './OsCzasu'
 import { kandydaciSugestiiEchoPulpitu, widoczneSugestieEchoPulpitu } from './SugestieEchoPulpitu'
-import {
-  utworzHarmonogramDnia,
-  utworzNowaReguleHarmonogramu,
-  type EdycjaHarmonogramuDnia,
-} from './logikaOsiCzasu'
 
 const dostawcaZadan = new DostawcaZadanPulpitu()
 const dostawcaLekow = new DostawcaLekowPulpitu()
@@ -85,10 +81,6 @@ async function pobierzBezpiecznie(dostawca: DostawcaElementowPulpitu, zakres: Za
   } catch {
     return { stan: 'blad', elementy: [] }
   }
-}
-
-function ograniczMinuty(wartosc: number): number {
-  return Number.isFinite(wartosc) ? Math.min(180, Math.max(0, Math.round(wartosc))) : 0
 }
 
 function etykietaKafelka(kafelek: KonfiguracjaKafelkaPulpitu): string {
@@ -146,14 +138,10 @@ function ZawartoscKafelka({
 
 export function WidokPulpitu() {
   const [data, ustawDate] = useState(dzisiajIso())
-  const [edycjaHarmonogramu, ustawEdycjeHarmonogramu] = useState(false)
-  const [komunikat, ustawKomunikat] = useState('')
   const [pokazWiecejAlertow, ustawPokazWiecejAlertow] = useState(false)
   const [filtrKafelkow, ustawFiltrKafelkow] = useState<'wszystkie' | 'zadania' | 'pilne'>('wszystkie')
   const nawiguj = useNavigate()
   const { ustawienia, zapiszUstawienia, otworzSzybkieDodawanie, otworzSzybkieDodawanieZDanymi } = useAplikacja()
-  const { dane: wyjatki, repozytorium: repozytoriumWyjatkow } = useRepozytorium('wyjatkiGrafiku')
-  const { dane: urlopy } = useRepozytorium('urlopy')
   const { dane: cele } = useRepozytorium('cele')
   const { dane: terminyWaznosci } = useRepozytorium('terminyWaznosci')
   const { dane: platnosciStale } = useRepozytorium('platnosciStale')
@@ -171,19 +159,7 @@ export function WidokPulpitu() {
     if (ustawienia.pulpit.pokazAlerty) konceZakresow.push(format(addDays(dataReferencyjna, 1), 'yyyy-MM-dd'))
     return { od: dzisiaj, do: konceZakresow.sort().at(-1) ?? dzisiaj }
   }, [dzisiaj, ustawienia.pulpit.kafelki, ustawienia.pulpit.pokazAlerty])
-  const zadaniaDnia = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: data, do: data }), [data], [])
-  const modulyDnia = useLiveQuery(async () => {
-    const [leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia] = await Promise.all([
-      pobierzBezpiecznie(dostawcaLekow, { od: data, do: data }),
-      pobierzBezpiecznie(dostawcaWizyt, { od: data, do: data }),
-      pobierzBezpiecznie(dostawcaFinansow, { od: data, do: data }),
-      pobierzBezpiecznie(dostawcaSamochodu, { od: data, do: data }),
-      pobierzBezpiecznie(dostawcaZakupow, { od: data, do: data }),
-      pobierzBezpiecznie(dostawcaNotatek, { od: data, do: data }),
-      pobierzBezpiecznie(dostawcaPoczekalni, { od: data, do: data }),
-    ])
-    return { leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia }
-  }, [data])
+  const { daneDnia, elementyDnia, elementyOsi, harmonogram, wyjatekDnia, edycjaHarmonogramu, ustawEdycjeHarmonogramu, komunikat, ustawKomunikat, zapiszZmianeHarmonogramu, przelaczDostepnosc, usunWyjatek } = usePlanDniaPulpitu(data)
   const zadaniaKafelkow = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: '1900-01-01', do: '9999-12-31' }), [], [])
   const modulyKafelkow = useLiveQuery(async () => {
     const [leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia] = await Promise.all([
@@ -214,15 +190,6 @@ export function WidokPulpitu() {
     return { leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia }
   }, [dzisiaj])
   const zdrowieDoAlertow = useLiveQuery(async () => ({ skierowania: await pobierzRepozytorium('skierowania').lista(), recepty: await pobierzRepozytorium('recepty').lista() }), [], { skierowania: [], recepty: [] })
-  const elementyDnia = [
-    ...zadaniaDnia,
-    ...(modulyDnia?.leki.elementy ?? []),
-    ...(modulyDnia?.wizyty.elementy ?? []),
-    ...(modulyDnia?.finanse.elementy.filter((element) => element.typ === 'platnosc') ?? []),
-    ...(modulyDnia?.samochod.elementy ?? []),
-    ...(modulyDnia?.zakupy.elementy.filter((element) => element.data === data) ?? []),
-    ...(modulyDnia?.notatki.elementy.filter((element) => element.data === data) ?? []),
-  ]
   const elementyModulowKafelkow = useMemo(() => [
     ...(modulyKafelkow?.leki.elementy ?? []),
     ...(modulyKafelkow?.wizyty.elementy ?? []),
@@ -256,13 +223,6 @@ export function WidokPulpitu() {
   const kafelki = useMemo(() => sortujKafelki(ustawienia.pulpit.kafelki)
     .filter((kafelek) => kafelek.typ !== 'poczekalnia')
     .filter((kafelek) => filtrKafelkow === 'wszystkie' || kafelek.typ === filtrKafelkow), [ustawienia.pulpit.kafelki, filtrKafelkow])
-  const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
-  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia, urlopy), [data, ustawienia.harmonogram, urlopy, wyjatekDnia])
-  const elementyOsi = elementyDnia
-    .filter((element) => element.trybTerminu === 'o_godzinie' && poprawnaGodzinaTerminu(element.godzina))
-    .filter((element) => element.typ === 'lek' || element.status !== 'wykonany')
-    .filter((element) => element.status !== 'anulowany')
-    .sort((a, b) => (a.godzina ?? '').localeCompare(b.godzina ?? '') || a.typ.localeCompare(b.typ, 'pl') || a.tytul.localeCompare(b.tytul, 'pl') || a.id.localeCompare(b.id))
   const kandydaciSugestiiEcho = useMemo(() => kandydaciSugestiiEchoPulpitu(alerty, elementyDnia, harmonogram, teraz), [alerty, elementyDnia, harmonogram, teraz])
   const sugestieEcho = ustawienia.proaktywnoscEcho && !ustawienia.echoWyciszone
     ? widoczneSugestieEchoPulpitu(kandydaciSugestiiEcho, ustawienia.pulpit.odrzuconeSugestieEcho, 1)
@@ -279,44 +239,7 @@ export function WidokPulpitu() {
     await zapiszUstawienia({ pulpit: { ...ustawienia.pulpit, odrzuconeSugestieEcho } })
   }
 
-  const zapiszWyjatekDnia = async (edycja: EdycjaHarmonogramuDnia) => {
-    await repozytoriumWyjatkow.zapisz({
-      ...(wyjatekDnia ?? utworzMetadane()), data, pracuje: edycja.pracuje,
-      od: edycja.pracuje ? edycja.odPracy : undefined, do: edycja.pracuje ? edycja.doPracy : undefined,
-      dojazdDoPracyMinuty: edycja.pracuje ? ograniczMinuty(edycja.dojazdDoPracyMinuty) : 0,
-      powrotZPracyMinuty: edycja.pracuje ? ograniczMinuty(edycja.powrotZPracyMinuty) : 0,
-      dostepnoscDojazdu: edycja.dostepnoscDojazdu, opis: edycja.opis?.trim() || undefined,
-    })
-  }
-
-  const zapiszZmianeHarmonogramu = async (edycja: EdycjaHarmonogramuDnia, zakres: ZakresZmianyHarmonogramu) => {
-    if (zakres === 'tylko_ten_dzien') {
-      await zapiszWyjatekDnia(edycja)
-      ustawKomunikat('Zapisano wyjątek wyłącznie dla wybranego dnia.')
-    } else {
-      await zapiszUstawienia({ harmonogram: utworzNowaReguleHarmonogramu(ustawienia.harmonogram, data, edycja) })
-      if (wyjatekDnia) await repozytoriumWyjatkow.usun(wyjatekDnia.id)
-      ustawKomunikat('Zapisano nową domyślną regułę harmonogramu.')
-    }
-    ustawEdycjeHarmonogramu(false)
-  }
-
-  const przelaczDostepnosc = async () => {
-    await zapiszWyjatekDnia({
-      pracuje: harmonogram.pracuje, odPracy: harmonogram.odPracy, doPracy: harmonogram.doPracy,
-      dojazdDoPracyMinuty: harmonogram.dojazdDoPracyMinuty, powrotZPracyMinuty: harmonogram.powrotZPracyMinuty,
-      dostepnoscDojazdu: harmonogram.dostepnoscDojazdu === 'pelna' ? 'czesciowa' : 'pelna', opis: wyjatekDnia?.opis,
-    })
-    ustawKomunikat('Dostępność dojazdów zmieniono tylko dla wybranego dnia.')
-  }
-
-  const usunWyjatek = async () => {
-    if (!wyjatekDnia) return
-    await repozytoriumWyjatkow.usun(wyjatekDnia.id)
-    ustawKomunikat('Przywrócono domyślną regułę harmonogramu dla tego dnia.')
-  }
-
-  const bladModuluDnia = modulyDnia && Object.values(modulyDnia).some((wynik) => wynik.stan === 'blad')
+  const bladModuluDnia = daneDnia?.blad
   const dataReferencyjnaKafelkow = new Date(`${dzisiaj}T12:00:00`)
 
   return <div className="widok widok-pulpitu">
@@ -334,6 +257,7 @@ export function WidokPulpitu() {
     </section>
     <section className="pulpit-sekcja--szybkie-akcje" aria-label="Szybkie akcje"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworzSzybkieDodawanieZDanymi({ typ: 'zadanie' })}><Plus aria-hidden="true" />Zadanie</button><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworzSzybkieDodawanieZDanymi({ typ: 'przypomnienie' })}><Plus aria-hidden="true" />Przypomnienie</button><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworzSzybkieDodawanieZDanymi({ typ: 'wydatek' })}><Plus aria-hidden="true" />Wydatek</button><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworzSzybkieDodawanieZDanymi({ typ: 'wydarzenie' })}><Plus aria-hidden="true" />Wydarzenie</button></section>
     {ustawienia.pulpit.pokazOsCzasu && <OsCzasu data={data} harmonogram={harmonogram} zakresSnu={{ od: ustawienia.harmonogram.poczatekSnu, do: ustawienia.harmonogram.koniecSnu, skala: ustawienia.harmonogram.skalaSnuNaOsi }} elementy={elementyOsi} zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu} edytujHarmonogram={() => ustawEdycjeHarmonogramu(true)} przelaczDostepnosc={przelaczDostepnosc} usunWyjatek={usunWyjatek} otworzElement={(element) => { if (element.referencjaZrodla) nawiguj(adresReferencjiZrodla(element.referencjaZrodla)) }} />}
+    <PrzegladTygodnia dzisiaj={dzisiaj} />
     {ustawienia.pulpit.pokazKafelki && <section className="pulpit-sekcja--kafelki"><div className="akcje-formularza"><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('wszystkie')}>Wszystkie</button><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('zadania')}>Zadania</button><button type="button" className="przycisk przycisk--maly" onClick={() => ustawFiltrKafelkow('pilne')}>Pilne</button></div><div className="strefy-pulpitu">{kafelki.map((kafelek) => <Karta key={kafelek.id} klasa={`strefa-pulpitu strefa-pulpitu--${kafelek.typ} ${klasaRozmiaruKafelka(kafelek.rozmiar)} ${klasaUwagiKafelka(kafelek)}`}><div className="tytul-karty"><LayoutGrid aria-hidden="true" /><span>{etykietaKafelka(kafelek)}</span></div><ZawartoscKafelka kafelek={kafelek} elementy={elementyKafelkow} wynikiModulow={modulyKafelkow} dataReferencyjna={dataReferencyjnaKafelkow} /></Karta>)}</div></section>}
     <section className="pulpit-sekcja--echo"><Karta klasa="karta-echo"><Sparkles aria-hidden="true" /><div><h2>Echo proponuje</h2>{sugestieEcho.length === 0 ? <p>{ustawienia.proaktywnoscEcho && !ustawienia.echoWyciszone ? 'Nie mam teraz krótkiej sugestii wynikającej z Twoich danych.' : 'Proaktywne sugestie Echo są wyłączone.'}</p> : <div className="lista-kompaktowa">{sugestieEcho.map((sugestia) => <div key={sugestia.id}><div><p>{sugestia.tresc}</p></div><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void odrzucSugestieEcho(sugestia.id)}>Ukryj</button></div>)}</div>}</div><Link className="przycisk przycisk--drugorzedny" to="/echo"><MessageCircle aria-hidden="true" />Zapytaj Echo</Link></Karta></section>
 

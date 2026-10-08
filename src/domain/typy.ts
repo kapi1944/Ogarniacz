@@ -604,6 +604,7 @@ export type ZakresZmianyHarmonogramu = 'tylko_ten_dzien' | 'nowa_regula'
 export type TypSzybkiegoDodawania = 'zadanie' | 'notatka' | 'wydarzenie' | 'przypomnienie' | 'wizyta' | 'lek' | 'wydatek' | 'samochod'
 
 export interface DaneSzybkiegoDodawania {
+  data?: string
   typ?: TypSzybkiegoDodawania
   tresc?: string
   tytul?: string

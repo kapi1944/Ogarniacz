@@ -1,0 +1,11 @@
+.przeglad-tygodnia { display: grid; min-width: 0; gap: 12px; }
+.przeglad-tygodnia > h2, .przeglad-tygodnia__kolejne h3 { margin: 0; }
+.przeglad-tygodnia__kolejne { display: grid; gap: 20px; }
+.przeglad-tygodnia__kolejne h3 { margin-bottom: 8px; font-size: .9rem; color: var(--tekst-2); }
+.wiersz-tygodnia { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 980px) {
+  .pulpit-sekcja--tydzien { order: 6; }
+}
+@media (max-width: 700px) {
+  .wiersz-tygodnia { gap: 4px; }
+}
