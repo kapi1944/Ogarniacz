@@ -37,7 +37,7 @@ const WidokDokumentow = lazy(() => WidokiWiedzy().then((modul) => ({ default: mo
 const WidokTerminow = lazy(() => WidokiWiedzy().then((modul) => ({ default: modul.WidokTerminow })))
 const WidokFinansow = lazy(() => import('./modules/finanse/WidokFinansow').then((modul) => ({ default: modul.WidokFinansow })))
 const WidokSamochodu = lazy(() => import('./modules/samochod/WidokSamochodu').then((modul) => ({ default: modul.WidokSamochodu })))
-const WidokDzisiaj = lazy(() => import('./modules/dzisiaj/WidokDzisiaj').then((modul) => ({ default: modul.WidokPulpitu })))
+const WidokDzisiaj = lazy(() => import('./modules/dzisiaj/WidokDzisiaj').then((modul) => ({ default: modul.WidokDzisiaj })))
 const WidokEcho = lazy(() => import('./modules/echo/WidokEcho').then((modul) => ({ default: modul.WidokEcho })))
 const WidokUstawien = lazy(() => import('./modules/ustawienia/WidokUstawien').then((modul) => ({ default: modul.WidokUstawien })))
 const EdytorPersonalizacji = lazy(() => import('./modules/ustawienia/EdytorPersonalizacji').then((modul) => ({ default: modul.EdytorPersonalizacji })))

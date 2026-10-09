@@ -1,11 +1,12 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useAplikacja } from '../../app/KontekstAplikacji'
-import { useRepozytorium } from '../../hooks/useRepozytorium'
+import { pobierzRepozytorium } from '../../data/Repozytorium'
 import { utworzMetadane } from '../../domain/fabryki'
-import { poprawnaGodzinaTerminu } from '../../domain/logikaTerminuZadania'
 import type { ZakresZmianyHarmonogramu } from '../../domain/typy'
-import { useElementyPlanuDnia } from './useElementyPlanuDnia'
-import { utworzHarmonogramDnia, utworzNowaReguleHarmonogramu, type EdycjaHarmonogramuDnia } from './logikaOsiCzasu'
+import { useDaneDni } from './useDaneDni'
+import { utworzNowaReguleHarmonogramu, type EdycjaHarmonogramuDnia } from './logikaOsiCzasu'
+
+const repozytoriumWyjatkow = pobierzRepozytorium('wyjatkiGrafiku')
 
 function ograniczMinuty(wartosc: number): number {
   return Number.isFinite(wartosc) ? Math.min(180, Math.max(0, Math.round(wartosc))) : 0
@@ -13,19 +14,11 @@ function ograniczMinuty(wartosc: number): number {
 
 export function usePlanDniaPulpitu(data: string) {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
-  const { dane: wyjatki, repozytorium: repozytoriumWyjatkow } = useRepozytorium('wyjatkiGrafiku')
-  const { dane: urlopy } = useRepozytorium('urlopy')
   const [edycjaHarmonogramu, ustawEdycjeHarmonogramu] = useState(false)
   const [komunikat, ustawKomunikat] = useState('')
-  const daneDnia = useElementyPlanuDnia({ od: data, do: data })
-  const elementyDnia = daneDnia?.elementy ?? []
-  const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
-  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia, urlopy), [data, ustawienia.harmonogram, urlopy, wyjatekDnia])
-  const elementyOsi = elementyDnia
-    .filter((element) => element.trybTerminu === 'o_godzinie' && poprawnaGodzinaTerminu(element.godzina))
-    .filter((element) => element.typ === 'lek' || element.status !== 'wykonany')
-    .filter((element) => element.status !== 'anulowany')
-    .sort((a, b) => (a.godzina ?? '').localeCompare(b.godzina ?? '') || a.typ.localeCompare(b.typ, 'pl') || a.tytul.localeCompare(b.tytul, 'pl') || a.id.localeCompare(b.id))
+  const dane = useDaneDni({ od: data, do: data })
+  const { harmonogram, wyjatekDnia, elementy: elementyDnia, elementyOsi } = dane.dni[0]
+  const daneDnia = dane.ladowanie ? undefined : { ...dane.dni[0], blad: dane.blad }
 
   const zapiszWyjatekDnia = async (edycja: EdycjaHarmonogramuDnia) => {
     await repozytoriumWyjatkow.zapisz({

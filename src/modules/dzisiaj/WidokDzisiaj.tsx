@@ -6,28 +6,16 @@ import { CalendarDays, Check, ChevronRight, Clock3, MessageCircle, Plus, Undo2 }
 import { Karta, Komunikat, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { dzisiajIso } from '../../domain/fabryki'
-import { poprawnaGodzinaTerminu } from '../../domain/logikaTerminuZadania'
 import type { ElementOgarniacza } from '../../domain/elementyOgarniacza'
-import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { DostawcaFinansowPulpitu } from '../../providers/DostawcaFinansowPulpitu'
-import { DostawcaLekowPulpitu } from '../../providers/DostawcaLekowPulpitu'
-import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
-import { DostawcaSamochoduPulpitu } from '../../providers/DostawcaSamochoduPulpitu'
-import { DostawcaWizytPulpitu } from '../../providers/DostawcaWizytPulpitu'
 import { DostawcaZadanPulpitu } from '../../providers/DostawcaZadanPulpitu'
-import { DostawcaZakupowPulpitu } from '../../providers/DostawcaZakupowPulpitu'
 import { repozytoriumElementowZadan } from '../../data/RepozytoriumElementowZadan'
 import { adresReferencjiZrodla } from '../pulpit/logikaKafelkow'
-import { utworzHarmonogramDnia } from '../pulpit/logikaOsiCzasu'
-import { sortujElementyDzisiaj, wybierzElementTeraz } from '../pulpit/logikaDniaPulpitu'
+import { useDaneDni } from '../pulpit/useDaneDni'
+import { HoryzontTygodniowy } from './HoryzontTygodniowy'
+import { zakresHoryzontu } from './logikaHoryzontu'
+import { wybierzElementTeraz } from '../pulpit/logikaDniaPulpitu'
 
 const dostawcaZadan = new DostawcaZadanPulpitu()
-const dostawcaLekow = new DostawcaLekowPulpitu()
-const dostawcaWizyt = new DostawcaWizytPulpitu()
-const dostawcaFinansow = new DostawcaFinansowPulpitu()
-const dostawcaSamochodu = new DostawcaSamochoduPulpitu()
-const dostawcaZakupow = new DostawcaZakupowPulpitu()
-const dostawcaNotatek = new DostawcaNotatekPulpitu()
 
 function etykietaTypu(element: ElementOgarniacza): string {
   const etykiety = { zadanie: 'Zadanie', lek: 'Lek', wizyta: 'Wizyta', platnosc: 'Płatność', samochod: 'Samochód', zakupy: 'Zakupy', notatka: 'Notatka', wydarzenie: 'Wydarzenie' }
@@ -43,37 +31,23 @@ function stanCzasu(element: ElementOgarniacza, teraz: Date): 'przeszly' | 'teraz
   return minutyElementu < minutyTeraz ? 'przeszly' : 'pozniej'
 }
 
-export function WidokPulpitu() {
+export function WidokDzisiaj() {
   const data = dzisiajIso()
   const [teraz, ustawTeraz] = useState(() => new Date())
   const [komunikat, ustawKomunikat] = useState('')
   const [ostatniaZmiana, ustawOstatniaZmiane] = useState<{ tytul: string; cofnij: () => Promise<void> }>()
   const { moze, otworzSzybkieDodawanie, ustawienia } = useAplikacja()
-  const { dane: wyjatki } = useRepozytorium('wyjatkiGrafiku')
-  const { dane: urlopy } = useRepozytorium('urlopy')
 
   useEffect(() => {
     const identyfikator = window.setInterval(() => ustawTeraz(new Date()), 60_000)
     return () => window.clearInterval(identyfikator)
   }, [])
 
-  const wyjatekDnia = useMemo(() => [...wyjatki].filter((wyjatek) => wyjatek.data === data).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0], [data, wyjatki])
-  const harmonogram = useMemo(() => utworzHarmonogramDnia(data, ustawienia.harmonogram, wyjatekDnia, urlopy), [data, ustawienia.harmonogram, urlopy, wyjatekDnia])
-  const elementyDnia = useLiveQuery(async () => {
-    const zakres = { od: data, do: data }
-    const [zadania, leki, wizyty, finanse, samochod, zakupy, notatki] = await Promise.all([
-      dostawcaZadan.pobierzElementy(zakres), dostawcaLekow.pobierzElementy(zakres), dostawcaWizyt.pobierzElementy(zakres),
-      dostawcaFinansow.pobierzElementy(zakres), dostawcaSamochodu.pobierzElementy(zakres), dostawcaZakupow.pobierzElementy(zakres), dostawcaNotatek.pobierzElementy(zakres),
-    ])
-    return [...zadania, ...leki, ...wizyty, ...finanse.filter((element) => element.typ === 'platnosc'), ...samochod, ...zakupy, ...notatki]
-  }, [data], [])
+  const dane = useDaneDni(zakresHoryzontu(data))
+  const daneDnia = dane.dni.find((dzien) => dzien.data === data)!
+  const { harmonogram, elementy: elementyDnia, elementyOsi: zaplanowane, doZrobieniaBezGodziny: bezGodziny } = daneDnia
   const wszystkieZadania = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: '1900-01-01', do: '9999-12-31' }), [], [])
 
-  const zaplanowane = useMemo(() => elementyDnia
-    .filter((element) => element.trybTerminu === 'o_godzinie' && poprawnaGodzinaTerminu(element.godzina))
-    .filter((element) => element.typ === 'lek' || (element.status !== 'wykonany' && element.status !== 'anulowany'))
-    .sort((a, b) => (a.godzina ?? '').localeCompare(b.godzina ?? '') || a.tytul.localeCompare(b.tytul, 'pl')), [elementyDnia])
-  const bezGodziny = useMemo(() => sortujElementyDzisiaj(elementyDnia, data).filter((element) => !element.godzina), [data, elementyDnia])
   const elementTeraz = useMemo(() => wybierzElementTeraz(elementyDnia, data, teraz), [data, elementyDnia, teraz])
   const zalegle = useMemo(() => wszystkieZadania
     .filter((element) => element.status === 'otwarty' && Boolean(element.data && element.data < data))
@@ -124,6 +98,8 @@ export function WidokPulpitu() {
   return <div className="widok widok-dzisiaj">
     <NaglowekWidoku tytul="Dzisiaj" opis="Plan dnia krok po kroku." akcje={<><Link className="przycisk przycisk--drugorzedny" to={`/planer?data=${data}&od=${format(teraz, 'HH:mm')}`}>Przeplanuj resztę dnia</Link><Link className="przycisk przycisk--drugorzedny" to="/echo"><MessageCircle aria-hidden="true" />Zapytaj Echo</Link><button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj</button></>} />
     {komunikat && <Komunikat typ="sukces">{komunikat}{ostatniaZmiana && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijOstatniaZmiane()}><Undo2 aria-hidden="true" />Cofnij</button>}</Komunikat>}
+
+    <HoryzontTygodniowy dzisiaj={data} dni={dane.dni} ladowanie={dane.ladowanie} blad={dane.blad} />
 
     <section className="plan-dnia__wprowadzenie">
       <div className="plan-dnia__najblizszy"><small>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższy krok'}</small><strong>{elementTeraz ? `${elementTeraz.element.godzina ? `${elementTeraz.element.godzina} · ` : ''}${elementTeraz.element.tytul}` : 'Dzień jest spokojny'}</strong>{elementTeraz?.stan === 'trwa' && <small>Następnie: {nastepnyElement ? `${nastepnyElement.godzina} · ${nastepnyElement.tytul}` : 'brak kolejnych spraw z godziną'}</small>}{elementTeraz?.element.typ === 'zadanie' && <div className="plan-dnia__akcje"><button type="button" className="przycisk przycisk--maly" disabled={!moze('zadania', 'edycja')} onClick={() => void wykonaj(elementTeraz.element)}><Check aria-hidden="true" />Wykonaj</button><button type="button" className="przycisk przycisk--tekstowy" disabled={!moze('zadania', 'edycja')} onClick={() => void przeloz(elementTeraz.element)}><Undo2 aria-hidden="true" />Przełóż</button></div>}</div>

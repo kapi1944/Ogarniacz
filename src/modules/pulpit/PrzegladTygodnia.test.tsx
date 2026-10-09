@@ -3,6 +3,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { PrzegladTygodnia } from './PrzegladTygodnia'
 import { obsluzWstecz } from '../../platform/obslugaWstecz'
 
+vi.mock('../../app/KontekstAplikacji', async () => {
+  const { DOMYSLNE_USTAWIENIA } = await import('../../domain/ustawienia')
+  return { useAplikacja: () => ({ ustawienia: DOMYSLNE_USTAWIENIA }) }
+})
+vi.mock('../../hooks/useRepozytorium', () => ({ useRepozytorium: () => ({ dane: [] }) }))
+
 vi.mock('./useElementyPlanuDnia', () => ({
   useElementyPlanuDnia: () => ({ elementy: [
     { id: 'wizyta', typ: 'wizyta', tytul: 'Dentysta', data: '2026-10-08', godzina: '12:00', status: 'otwarty' },

@@ -1,5 +1,7 @@
 .kafelek-dnia { position: relative; display: flex; min-width: 0; min-height: 142px; flex-direction: column; align-items: flex-start; gap: 5px; padding: 12px; color: var(--tekst); background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); cursor: pointer; text-align: left; }
 .kafelek-dnia:hover, .kafelek-dnia:focus-visible { border-color: var(--akcent); background: var(--akcent-jasny); }
+.kafelek-dnia--wybrany { background: var(--akcent-jasny); outline: 2px solid var(--akcent); outline-offset: -2px; }
+.kafelek-dnia__praca { font-size: .75rem; }
 .kafelek-dnia--dzisiaj { border-color: var(--akcent); }
 .kafelek-dnia__tydzien { color: var(--tekst-2); font-size: .8rem; text-transform: capitalize; }
 .kafelek-dnia__numer { font-size: 1.5rem; }
@@ -19,9 +21,9 @@
 .skupienie-dnia__tresc .karta { min-width: 0; }
 .skupienie-dnia__tresc .lista-kompaktowa { overflow-wrap: anywhere; }
 @media (max-width: 700px) {
-  .kafelek-dnia { min-height: 116px; padding: 6px 3px; gap: 4px; align-items: center; text-align: center; }
+  .kafelek-dnia { min-height: 116px; padding: 10px; gap: 4px; align-items: center; text-align: center; }
   .kafelek-dnia__numer { font-size: 1.2rem; }
-  .kafelek-dnia__tydzien, .kafelek-dnia__liczba, .kafelek-dnia__termin { font-size: .6rem; }
+  .kafelek-dnia__tydzien, .kafelek-dnia__liczba, .kafelek-dnia__termin { font-size: .75rem; }
   .skupienie-dnia__tresc { padding: 10px; }
 }
 @media (prefers-reduced-motion: reduce) {
