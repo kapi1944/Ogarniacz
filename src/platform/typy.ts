@@ -19,6 +19,7 @@ export interface DanePowiadomienia {
   tytul: string
   tresc: string
   sciezka?: string
+  rodzaj?: 'synchronizacja'
 }
 
 export interface PowiadomieniePlatformowe {

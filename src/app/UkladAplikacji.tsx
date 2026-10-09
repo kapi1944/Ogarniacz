@@ -10,6 +10,7 @@ import type { NazwaModulu } from '../domain/typy'
 import { useObslugaWstecz } from '../platform/obslugaWstecz'
 import { useAplikacja } from './KontekstAplikacji'
 import { StanKlientaWeb } from './StanKlientaWeb'
+import { PowiadomieniaSynchronizacji } from './PowiadomieniaSynchronizacji'
 
 interface PozycjaMenu {
   etykieta: string
@@ -217,6 +218,7 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
             <button type="button" className="przycisk-plus" onClick={otworzSzybkieDodawanie} title="Szybkie dodawanie (Ctrl+Enter)"><Plus aria-hidden="true" /><span>Dodaj</span></button>
           </div>
         </header>
+        <PowiadomieniaSynchronizacji />
         <main className="zawartosc">{children}</main>
       </div>
       <DolnaNawigacjaMobilna otworzSzybkieDodawanie={otworzSzybkieDodawanie} moze={moze} />

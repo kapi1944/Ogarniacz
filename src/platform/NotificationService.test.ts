@@ -49,7 +49,7 @@ beforeEach(() => {
   lokalnePowiadomienia.update.mockResolvedValue(undefined)
 })
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
 
 const przypomnienie = (zmiany: Partial<Przypomnienie> = {}): Przypomnienie => ({
   ...utworzMetadane('przypomnienie-1'),
@@ -60,6 +60,64 @@ const przypomnienie = (zmiany: Partial<Przypomnienie> = {}): Przypomnienie => ({
   stan: 'nowe',
   eskalacja: false,
   ...zmiany,
+})
+
+describe('odrębne powiadomienia synchronizacji', () => {
+  const komunikat = { tytul: 'Ogarniacz — synchronizacja', tresc: 'Wysłano: 3, pobrano: 7, konflikty: 0.', rodzaj: 'synchronizacja' as const, sciezka: '/ustawienia' }
+
+  it('używa osobnego kanału i identyfikatora, bez anulowania alarmów zdrowotnych', async () => {
+    const usluga = utworzUslugePowiadomien(true)
+    const zdrowotne = przypomnienie({ zrodlo: { typ: 'leki', id: 'lek-1' } })
+    const alarm = mapujPrzypomnienieNaPowiadomienie(zdrowotne)!
+    expect(await usluga.pokaz(komunikat)).toBe(true)
+    expect(lokalnePowiadomienia.createChannel).toHaveBeenCalledWith(expect.objectContaining({ id: 'ogarniacz-system' }))
+    const systemowe = lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0]
+    expect(systemowe).toMatchObject({ id: -1, channelId: 'ogarniacz-system', extra: { synchronizacja: true, sciezka: '/ustawienia' } })
+    expect(systemowe.actionTypeId).toBeUndefined()
+    expect(systemowe.extra.ogarniacz).toBeUndefined()
+    expect(systemowe.extra.przypomnienieId).toBeUndefined()
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [systemowe, { id: alarm.id, extra: { ogarniacz: true, wersja: alarm.wersja } }] })
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [systemowe] })
+    await usluga.synchronizuj([zdrowotne], true)
+    expect(lokalnePowiadomienia.cancel).not.toHaveBeenCalled()
+    expect(lokalnePowiadomienia.removeDeliveredNotificationsById).not.toHaveBeenCalled()
+    await usluga.synchronizuj([], false)
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: alarm.id }] })
+    expect(lokalnePowiadomienia.removeDeliveredNotificationsById).not.toHaveBeenCalled()
+  })
+
+  it('nie prosi samoczynnie o zgodę i bez niej nie planuje komunikatu systemowego', async () => {
+    lokalnePowiadomienia.checkPermissions.mockResolvedValue({ display: 'denied' })
+    expect(await utworzUslugePowiadomien(true).pokaz(komunikat)).toBe(false)
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+    expect(lokalnePowiadomienia.cancel).not.toHaveBeenCalled()
+    expect(lokalnePowiadomienia.requestPermissions).not.toHaveBeenCalled()
+  })
+
+  it('kliknięcie systemowego komunikatu otwiera Ustawienia bez wykonania przypomnienia', async () => {
+    const usluga = utworzUslugePowiadomien(true)
+    await usluga.pokaz(komunikat)
+    const obsluga = vi.fn()
+    usluga.nasluchujAkcji(obsluga)
+    lokalnePowiadomienia.addListener.mock.calls[0][1]({ actionId: 'tap', notification: { extra: { synchronizacja: true } } })
+    expect(obsluga).toHaveBeenCalledWith({ typ: 'otworz', sciezka: '/ustawienia' })
+  })
+
+  it('na Windows/Web korzysta z Notification API tylko po zgodzie i scala komunikaty tagiem', async () => {
+    const utworzPowiadomienie = vi.fn()
+    class PowiadomienieTestowe {
+      static permission = 'denied'
+      constructor(tytul: string, opcje: unknown) { utworzPowiadomienie(tytul, opcje) }
+    }
+    vi.stubGlobal('Notification', PowiadomienieTestowe)
+    const usluga = utworzUslugePowiadomien(false)
+    expect(await usluga.pokaz(komunikat)).toBe(false)
+    expect(utworzPowiadomienie).not.toHaveBeenCalled()
+    PowiadomienieTestowe.permission = 'granted'
+    expect(await usluga.pokaz(komunikat)).toBe(true)
+    expect(utworzPowiadomienie).toHaveBeenCalledWith(komunikat.tytul, expect.objectContaining({ body: komunikat.tresc, tag: 'ogarniacz-synchronizacja' }))
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
 })
 
 describe('mapowanie przypomnienia na kanał platformowy', () => {

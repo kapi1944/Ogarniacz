@@ -20,6 +20,9 @@ import type {
 
 const AKCJA_WYKONANE = 'wykonane'
 const AKCJA_ODROCZ = 'odrocz'
+const KANAL_SYSTEMOWY = { id: 'ogarniacz-system', name: 'Komunikaty systemowe Ogarniacza', description: 'Status synchronizacji aplikacji', importance: 3 as const, vibration: false }
+// Przypomnienia używają dodatnich identyfikatorów; ten identyfikator jest osobny.
+const ID_POWIADOMIENIA_SYNCHRONIZACJI = -1
 
 const KANALY = [
   { id: 'ogarniacz-wazne', name: 'Ważne przypomnienia', description: 'Pilne i eskalowane przypomnienia', importance: 4 as const, vibration: true },
@@ -126,6 +129,10 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
       przygotujAkcje(),
       LocalNotifications.addListener('localNotificationActionPerformed', ({ actionId, notification }) => {
         const sciezka = notification.extra?.sciezka
+        if (notification.extra?.synchronizacja === true) {
+          przekazAkcje({ typ: 'otworz', sciezka: '/ustawienia' })
+          return
+        }
         const przypomnienieId = notification.extra?.przypomnienieId
         if (typeof sciezka !== 'string' || typeof przypomnienieId !== 'string') return
         const typ = actionId === AKCJA_WYKONANE ? 'wykonane' : actionId === AKCJA_ODROCZ ? 'odrocz' : 'otworz'
@@ -180,9 +187,22 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     }
   }
 
-  const pokaz = async ({ tytul, tresc, sciezka }: DanePowiadomienia) => {
-    if (czyAndroid || !('Notification' in window) || Notification.permission !== 'granted') return false
-    const powiadomienie = new Notification(tytul, { body: tresc })
+  const pokaz = async ({ tytul, tresc, sciezka, rodzaj }: DanePowiadomienia) => {
+    if (czyAndroid) {
+      if (rodzaj !== 'synchronizacja') return false
+      await inicjalizuj()
+      const [zgoda, systemowe] = await Promise.all([LocalNotifications.checkPermissions(), LocalNotifications.areEnabled()])
+      if (zgoda.display !== 'granted' || !systemowe.value) return false
+      await LocalNotifications.createChannel(KANAL_SYSTEMOWY)
+      await LocalNotifications.schedule({ notifications: [{
+        id: ID_POWIADOMIENIA_SYNCHRONIZACJI, title: tytul, body: tresc,
+        channelId: KANAL_SYSTEMOWY.id, group: 'ogarniacz-system', autoCancel: true,
+        extra: { synchronizacja: true, sciezka: '/ustawienia' },
+      }] })
+      return true
+    }
+    if (!('Notification' in window) || Notification.permission !== 'granted') return false
+    const powiadomienie = new Notification(tytul, { body: tresc, ...(rodzaj === 'synchronizacja' ? { tag: 'ogarniacz-synchronizacja', icon: '/ikona-192.png' } : {}) })
     if (sciezka) powiadomienie.onclick = () => {
       window.focus()
       przekazAkcje({ typ: 'otworz', sciezka })

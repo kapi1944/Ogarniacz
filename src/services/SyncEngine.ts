@@ -15,12 +15,15 @@ import type { EncjaBazowa, KonfliktSynchronizacji, StanSynchronizacji } from '..
 import { pobierzInstallationId } from './InstallationService'
 import { komunikatyBledowSynchronizacji, sklasyfikujBladSynchronizacji } from './DiagnostykaSynchronizacji'
 
+export type EtapOperacjiSynchronizacji = 'pobieranie' | 'wysylanie'
+
 const POCZATEK_SYNCHRONIZACJI = '1970-01-01T00:00:00.000Z'
 export const nazwyTabelSynchronizowanych = nazwyTabel.filter(
   (nazwa): nazwa is NazwaTabeliSynchronizowanej => czyTabelaSynchronizowana(nazwa),
 )
 
 interface OpcjeSyncEngine {
+  obslugaEtapu?: (etap: EtapOperacjiSynchronizacji) => void
   teraz?: () => string
   czyOnline?: () => boolean
   installationId?: () => string
@@ -158,6 +161,7 @@ export async function odtworzOczekujacaSynchronizacje(online = typeof navigator 
 }
 
 export class SyncEngine implements DostawcaSynchronizacji {
+  private readonly obslugaEtapu?: (etap: EtapOperacjiSynchronizacji) => void
   private readonly teraz: () => string
   private readonly czyOnline: () => boolean
   private readonly installationId: () => string
@@ -166,6 +170,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
   private trwajacaSynchronizacja?: Promise<WynikSynchronizacji>
 
   constructor(opcje: OpcjeSyncEngine = {}) {
+    this.obslugaEtapu = opcje.obslugaEtapu
     this.teraz = opcje.teraz ?? (() => new Date().toISOString())
     this.czyOnline = opcje.czyOnline ?? (() => typeof navigator === 'undefined' || navigator.onLine)
     this.installationId = opcje.installationId ?? pobierzInstallationId
@@ -255,6 +260,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
 
     try {
       await uzupelnijKolejkePoMigracji()
+      this.powiadomOEtapie('pobieranie')
       const installationId = this.installationId()
       const [lokalne, wszystkieZdalne] = await Promise.all([
         pobierzLokalneZmiany(installationId),
@@ -286,6 +292,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
         && !bazoweKlucze.has(kluczZmiany(zmiana)))
 
       if (doWyslania.length > 0) {
+        this.powiadomOEtapie('wysylanie')
         await this.zPonowieniami(() => repozytoriumZdalne.wyslijZmiany(doWyslania, od))
         await this.zapiszStan({ ostatniPush: this.teraz(), polaczenie: 'dostepne', sesjaWymagaLogowania: false })
         await usunWyslaneZmiany(doWyslania.flatMap((zmiana) => zmiana.zmianaId ? [zmiana.zmianaId] : []))
@@ -329,6 +336,12 @@ export class SyncEngine implements DostawcaSynchronizacji {
     for (const [tabela, rekordy] of grupy) {
       await tabelaLokalna(tabela).bulkPut(rekordy)
       powiadomOZmianieDanych(tabela)
+    }
+  }
+
+  private powiadomOEtapie(etap: EtapOperacjiSynchronizacji) {
+    try { this.obslugaEtapu?.(etap) } catch {
+      // Błąd odbiorcy komunikatu nie może przerwać synchronizacji danych.
     }
   }
 
