@@ -81,7 +81,10 @@ export function inicjalizujKontroleAktualizacjiAplikacji(): Promise<() => void> 
       void sprawdzAktualizacjeTeraz()
     }
 
-    sprawdzAutomatycznie()
+    if (platforma.natywna) {
+      zapiszOstatniaKontrole()
+      void sprawdzAktualizacjeTeraz()
+    }
     const zatrzymajCyklZycia = await platforma.cyklZycia.nasluchuj((stanCykluZycia) => {
       if (stanCykluZycia === 'aktywny') sprawdzAutomatycznie()
     })

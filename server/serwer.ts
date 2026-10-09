@@ -42,6 +42,7 @@ const typyZawartosci: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.js': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
   '.map': 'application/json; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.png': 'image/png',

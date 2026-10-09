@@ -10,6 +10,7 @@ import { inicjalizujSynchronizacjeAplikacji } from './services/SynchronizacjaApl
 import { inicjalizujKontroleAktualizacjiAplikacji } from './services/KontrolaAktualizacjiAplikacji'
 import { inicjalizujRuntimeConfig } from './services/RuntimeConfigService'
 import { AktualizacjaPwa } from './app/AktualizacjaPwa'
+import { AktualizacjaAndroid } from './app/AktualizacjaAndroid'
 import './styles/glowny.css'
 import { GranicaBledu, KomunikatBleduAsynchronicznego } from './components/GranicaBledu'
 
@@ -25,7 +26,7 @@ try {
   )
   inicjalizujWidgetSnapshotService()
   korzen.render(
-    <StrictMode><KomunikatBleduAsynchronicznego /><GranicaBledu><App /><AktualizacjaPwa /></GranicaBledu></StrictMode>,
+    <StrictMode><KomunikatBleduAsynchronicznego /><GranicaBledu><App /><AktualizacjaPwa /><AktualizacjaAndroid /></GranicaBledu></StrictMode>,
   )
   void inicjalizujSynchronizacjeAplikacji()
   void inicjalizujKontroleAktualizacjiAplikacji()

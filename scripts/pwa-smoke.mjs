@@ -40,8 +40,16 @@ try {
 
   const manifest = await fetch(`${ADRES}/manifest.webmanifest`).then((odpowiedz) => odpowiedz.json())
   zapewnij(manifest.name === 'Ogarniacz', 'Manifest ma niepoprawną nazwę.')
+  zapewnij(manifest.id === '/' && manifest.display === 'standalone', 'Manifest nie zapewnia stałej tożsamości i samodzielnego okna aplikacji.')
   zapewnij(manifest.start_url === '/' && manifest.scope === '/', 'Manifest ma niepoprawny start_url lub scope.')
   zapewnij(Array.isArray(manifest.icons) && manifest.icons.some((ikona) => ikona.sizes === '512x512'), 'Manifest nie zawiera ikony 512x512.')
+  for (const rozmiar of ['192x192', '512x512']) {
+    const ikona = manifest.icons.find((element) => element.sizes === rozmiar && element.type === 'image/png')
+    zapewnij(ikona, `Brak ikony PNG ${rozmiar}.`)
+    const odpowiedz = await fetch(new URL(ikona.src, ADRES))
+    const bajty = new Uint8Array(await odpowiedz.arrayBuffer())
+    zapewnij(odpowiedz.ok && bajty[0] === 137 && bajty[1] === 80 && bajty[2] === 78 && bajty[3] === 71, `Ikona ${rozmiar} nie jest dostępna jako PNG.`)
+  }
 
   const serviceWorker = await fetch(`${ADRES}/sw.js`).then((odpowiedz) => odpowiedz.text())
   zapewnij(serviceWorker.includes('NetworkOnly'), 'Service worker nie wymusza dostępu sieciowego dla API.')
@@ -49,6 +57,8 @@ try {
   zapewnij(/denylist:\[[^\]]*health/.test(serviceWorker), 'Service worker kieruje healthcheck do fallbacku HTML.')
   zapewnij(/health[\s\S]{0,120}NetworkOnly/.test(serviceWorker), 'Service worker może cache’ować healthcheck.')
   zapewnij(/assets\/[\w-]+-[\w-]+\.js/.test(serviceWorker), 'Service worker nie zawiera assetów z hashami.')
+  const bezObslugiDecyzji = serviceWorker.replace(/self\.addEventListener\("message",\w+=>\{[^}]*SKIP_WAITING[^}]*\}\)/g, '')
+  zapewnij(bezObslugiDecyzji !== serviceWorker && !/\.skipWaiting\(\)/.test(bezObslugiDecyzji), 'Service worker musi aktywować aktualizację wyłącznie przez komunikat SKIP_WAITING.')
   console.log('PWA smoke: routing, manifest i service worker — OK')
 } finally {
   serwer.kill()

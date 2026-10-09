@@ -2,6 +2,9 @@ import { strict as assert } from 'node:assert'
 import { createHash } from 'node:crypto'
 import { test } from 'node:test'
 import { DatabaseSync } from 'node:sqlite'
+import { mkdtemp, writeFile, unlink, rmdir } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { otworzBaze } from './baza.ts'
 import { utworzKonfiguracjeSerwera } from './config.ts'
 import { uruchomMigracje } from './migracje.ts'
@@ -9,6 +12,31 @@ import { utworzSerwer } from './serwer.ts'
 
 const TERAZ = '2026-09-09T12:00:00.000Z'
 const WYGASA = '2099-01-01T00:00:00.000Z'
+
+test('manifest PWA jest dostępny z właściwym MIME i bez trwałego cache', async () => {
+  const katalog = await mkdtemp(join(tmpdir(), 'ogarniacz-manifest-'))
+  const sciezka = join(katalog, 'manifest.webmanifest')
+  const tresc = JSON.stringify({ name: 'Ogarniacz', display: 'standalone' })
+  const baza = new DatabaseSync(':memory:')
+  const konfiguracja = { ...utworzKonfiguracjeSerwera({}), sciezkaZasobowStatycznych: katalog }
+  const serwer = utworzSerwer(konfiguracja, baza)
+  try {
+    await writeFile(sciezka, tresc)
+    await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', rozwiaz))
+    const adres = serwer.address()
+    assert.ok(adres && typeof adres === 'object')
+    const odpowiedz = await fetch(`http://127.0.0.1:${adres.port}/manifest.webmanifest`)
+    assert.equal(odpowiedz.status, 200)
+    assert.equal(odpowiedz.headers.get('content-type'), 'application/manifest+json; charset=utf-8')
+    assert.equal(odpowiedz.headers.get('cache-control'), 'no-cache')
+    assert.equal(await odpowiedz.text(), tresc)
+  } finally {
+    if (serwer.listening) await new Promise<void>((rozwiaz, odrzuc) => serwer.close((blad) => blad ? odrzuc(blad) : rozwiaz()))
+    baza.close()
+    await unlink(sciezka)
+    await rmdir(katalog)
+  }
+})
 
 function dodajSesjeWlasciciela(baza: DatabaseSync, token = 'token-wlasciciela', csrf = 'csrf-wlasciciela'): void {
   const hash = (wartosc: string) => createHash('sha256').update(wartosc).digest('hex')

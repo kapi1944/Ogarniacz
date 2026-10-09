@@ -133,6 +133,8 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .komunikat-pwa { position: fixed; right: 18px; bottom: 18px; z-index: 120; display: flex; width: min(460px, calc(100vw - 32px)); align-items: center; justify-content: space-between; padding: 14px; gap: 14px; color: var(--tekst); background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: var(--promien-karty); box-shadow: 0 18px 55px rgb(0 0 0 / 24%); }
 .komunikat-pwa > div { display: grid; min-width: 0; gap: 3px; }
 .komunikat-pwa span { color: var(--tekst-2); font-size: .78rem; }
+.komunikat-pwa:has(.akcje-formularza) { flex-direction: column; align-items: stretch; }
+.komunikat-pwa > .akcje-formularza { display: flex; flex-wrap: wrap; }
 .pasek-gorny__menu { display: none !important; }
 .pasek-edytora { display: flex; min-height: 34px; align-items: center; justify-content: center; padding: 5px 20px; gap: 16px; color: #3b2804; background: #f5c768; font-size: .78rem; font-weight: 650; }
 .pasek-edytora span { display: flex; align-items: center; gap: 7px; }

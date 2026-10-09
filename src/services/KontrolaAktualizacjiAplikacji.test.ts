@@ -25,3 +25,11 @@ it('start i wznowienie aplikacji sprawdzają tylko APK', async () => {
   expect(sprawdzApk).toHaveBeenCalledTimes(2)
   expect(sprawdzWeb).not.toHaveBeenCalled()
 })
+it('sprawdza przy każdym starcie mimo zapisanej kontroli, a wznowienia ogranicza do czterech godzin', async () => {
+  localStorage.setItem('ogarniacz:ostatnia-kontrola-aktualizacji', String(Date.now()))
+  const kontrola = await import('./KontrolaAktualizacjiAplikacji')
+  await kontrola.inicjalizujKontroleAktualizacjiAplikacji()
+  expect(sprawdzApk).toHaveBeenCalledTimes(1)
+  nasluchuj.mock.calls[0][0]('aktywny')
+  expect(sprawdzApk).toHaveBeenCalledTimes(1)
+})
