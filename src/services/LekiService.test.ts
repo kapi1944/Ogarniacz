@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
+import { tabelaKolejki } from '../data/KolejkaSynchronizacji'
 import { utworzMetadane } from '../domain/fabryki'
 import type { DziennikLeku, Lek } from '../domain/typy'
 import { dawkiZaplanowaneNaDzien, generujDawkiDnia, graniceLokalnegoDnia, idWystapieniaDawki, proponujGodzinyDawek, przewidywanaDataWyczerpania, stanApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawki, zapiszStatusDawkiZApteczka } from './LekiService'
@@ -137,6 +138,7 @@ describe('apteczka leków', () => {
     await inicjalizujBaze()
     await baza.tabela('leki').clear()
     await baza.tabela('dziennikLekow').clear()
+    await tabelaKolejki().clear()
   })
 
   afterEach(async () => {
@@ -186,4 +188,156 @@ describe('apteczka leków', () => {
     expect(stanApteczki(starszy)).toBe(3)
     expect(przewidywanaDataWyczerpania(starszy, '2026-08-14')).toBe('2026-08-14')
   })
+  it('odczytuje aktualną ilość i zapas zamiast stanu UI', async () => {
+    const dawka = await przygotujLek(1)
+    const aktualny = (await baza.tabela('leki').get(dawka.lek.id))!
+    await baza.tabela('leki').put({ ...aktualny, dawki: [{ ...aktualny.dawki![0], ilosc: 3 }] })
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(2)
+    expect((await baza.tabela('dziennikLekow').get(dawka.idWystapienia))?.przyjetaIlosc).toBe(3)
+  })
+
+  it('cofa zużycie i ponownie przyjmuje, także ze starym obiektem UI', async () => {
+    const dawka = await przygotujLek(2)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    await zapiszStatusDawkiZApteczka(dawka, 'oczekuje')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(5)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(3)
+    expect((await baza.tabela('leki').get(dawka.lek.id))?.ruchyApteczki?.filter((ruch) => ruch.typ === 'zuzycie')).toHaveLength(1)
+  })
+
+  it('odracza tylko do poprawnego przyszłego terminu, a pominięcie nie zużywa zapasu', async () => {
+    const dawka = await przygotujLek(2)
+    for (const termin of [undefined, 'błędny', '2020-01-01T10:00', '2099-02-30T10:00']) {
+      await expect(zapiszStatusDawkiZApteczka(dawka, 'odroczone', termin)).rejects.toThrow('termin')
+    }
+    await zapiszStatusDawkiZApteczka(dawka, 'odroczone', '2099-01-01T10:00:00Z')
+    expect((await baza.tabela('dziennikLekow').get(dawka.idWystapienia))?.odroczoneDo).toBe('2099-01-01T10:00:00.000Z')
+    await zapiszStatusDawkiZApteczka(dawka, 'pominiete')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(5)
+    expect((await baza.tabela('dziennikLekow').get(dawka.idWystapienia))?.odroczoneDo).toBeUndefined()
+  })
+
+  it('wymaga jawnego potwierdzenia niedoboru i zachowuje nierozliczoną ilość bez fikcyjnej dostawy', async () => {
+    const dawka = await przygotujLek(3, 1)
+    const przed = await tabelaKolejki().toArray()
+    await expect(zapiszStatusDawkiZApteczka(dawka, 'zazyte')).rejects.toThrow('Niedobór')
+    expect(await baza.tabela('dziennikLekow').count()).toBe(0)
+    expect(await tabelaKolejki().toArray()).toEqual(przed)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte', undefined, { potwierdzRozbieznosc: true })
+    const wpis = (await baza.tabela('dziennikLekow').get(dawka.idWystapienia))!
+    expect(wpis).toMatchObject({ status: 'zazyte', przyjetaIlosc: 3, przyjetaJednostka: 'szt.', nierozliczonaIlosc: 2 })
+    expect(wpis.rozbieznoscApteczki).toContain('Niedobór')
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect((await baza.tabela('dziennikLekow').get(wpis.id))?.nierozliczonaIlosc).toBe(2)
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(0)
+    expect((await baza.tabela('leki').get(dawka.lek.id))?.ruchyApteczki?.filter((ruch) => ruch.typ === 'dodanie')).toHaveLength(1)
+    await zapiszStatusDawkiZApteczka(dawka, 'oczekuje')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(1)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte', undefined, { potwierdzRozbieznosc: true })
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(0)
+    const kolejka = await tabelaKolejki().toArray()
+    expect(kolejka.find((zmiana) => zmiana.tabela === 'dziennikLekow')?.rekord).toMatchObject({ nierozliczonaIlosc: 2 })
+    expect(kolejka.find((zmiana) => zmiana.tabela === 'leki')?.rekord).toMatchObject({ zapasJednostek: 0 })
+  })
+
+  it('rozdziela faktyczny czas, czas planowany i edycję oraz rozlicza rzeczywistą ilość', async () => {
+    const dawka = await przygotujLek(2)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte', undefined, { przyjetoAt: '2026-08-13T22:15:00Z', przyjetaIlosc: 1.5, przyjetaJednostka: 'szt.' })
+    const wpis = (await baza.tabela('dziennikLekow').get(dawka.idWystapienia))!
+    expect(wpis).toMatchObject({ data: '2026-08-14', planowanaGodzina: '08:00', przyjetoAt: '2026-08-13T22:15:00.000Z', przyjetaIlosc: 1.5, przyjetaJednostka: 'szt.' })
+    expect(wpis.updatedAt).not.toBe(wpis.przyjetoAt)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect((await baza.tabela('dziennikLekow').get(wpis.id))?.przyjetoAt).toBe(wpis.przyjetoAt)
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(3.5)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte', undefined, { przyjetaIlosc: 2.5 })
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(2.5)
+  })
+
+  it('nie przelicza samodzielnie odmiennej jednostki dawki', async () => {
+    const dawka = await przygotujLek(2)
+    const dane = { przyjetaIlosc: 500, przyjetaJednostka: 'mg' }
+    await expect(zapiszStatusDawkiZApteczka(dawka, 'zazyte', undefined, dane)).rejects.toThrow('Jednostka')
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte', undefined, { ...dane, potwierdzRozbieznosc: true })
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(5)
+    expect((await baza.tabela('dziennikLekow').get(dawka.idWystapienia))?.nierozliczonaIlosc).toBe(500)
+  })
+
+  it('wycofuje dziennik, ruchy i kolejkę przy błędzie po zapisach wewnątrz transakcji', async () => {
+    const dawka = await przygotujLek(2)
+    const przedLek = await baza.tabela('leki').get(dawka.lek.id)
+    const przedKolejka = await tabelaKolejki().toArray()
+    const dodaj = tabelaKolejki().add.bind(tabelaKolejki())
+    const awaria = vi.spyOn(tabelaKolejki(), 'add').mockImplementationOnce(dodaj).mockImplementationOnce(() => { throw new Error('Awaria kolejki') })
+    try { await expect(zapiszStatusDawkiZApteczka(dawka, 'zazyte')).rejects.toThrow('Awaria') } finally { awaria.mockRestore() }
+    expect(await baza.tabela('dziennikLekow').count()).toBe(0)
+    expect(await baza.tabela('leki').get(dawka.lek.id)).toEqual(przedLek)
+    expect(await tabelaKolejki().toArray()).toEqual(przedKolejka)
+  })
+
+  it('dopasowuje historyczny wpis, zachowuje ID i nie utożsamia reakcjaAt z przyjęciem', async () => {
+    const dawka = await przygotujLek(2)
+    const historyczny: DziennikLeku = { ...utworzMetadane('historyczny-wpis'), lekId: dawka.lek.id, data: dawka.data, planowanaGodzina: '08:00', status: 'zazyte', reakcjaAt: '2026-08-14T10:00:00Z' }
+    await baza.tabela('dziennikLekow').put(historyczny)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect(await baza.tabela('dziennikLekow').count()).toBe(1)
+    const zapisany = (await baza.tabela('dziennikLekow').get(historyczny.id))!
+    expect(zapisany.createdAt).toBe(historyczny.createdAt)
+    expect(zapisany.przyjetoAt).toBeUndefined()
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(5)
+    await zapiszStatusDawkiZApteczka(dawka, 'oczekuje')
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(3)
+    expect(await baza.tabela('dziennikLekow').count()).toBe(1)
+    expect(generujDawkiDnia([(await baza.tabela('leki').get(dawka.lek.id))!], await baza.tabela('dziennikLekow').toArray(), dawka.data)[0]?.status).toBe('zazyte')
+  })
+
+  it('równoległe potwierdzenia zużywają zapas tylko raz', async () => {
+    const dawka = await przygotujLek(2)
+    await Promise.all([zapiszStatusDawkiZApteczka(dawka, 'zazyte'), zapiszStatusDawkiZApteczka(dawka, 'zazyte')])
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(3)
+    expect(await baza.tabela('dziennikLekow').count()).toBe(1)
+  })
+
+  it('odrzuca nieprawidłowe przyjęcie i zmieniony harmonogram bez zapisów', async () => {
+    const dawka = await przygotujLek(2)
+    for (const dane of [{ przyjetaIlosc: -1 }, { przyjetaIlosc: NaN }, { przyjetaJednostka: ' ' }, { przyjetoAt: '2026-02-30T12:00' }, { przyjetoAt: '2099-01-01T12:00Z' }]) {
+      await expect(zapiszStatusDawkiZApteczka(dawka, 'zazyte', undefined, dane)).rejects.toThrow()
+    }
+    await baza.tabela('leki').update(dawka.lek.id, { dawki: [{ id: 'nowa', godzina: '09:00', ilosc: 2 }] })
+    await expect(zapiszStatusDawkiZApteczka(dawka, 'zazyte')).rejects.toThrow('Harmonogram')
+    expect(await baza.tabela('dziennikLekow').count()).toBe(0)
+  })
+
+  it('ponownie odczytuje zapas, gdy UI pokazuje już nieaktualny stan', async () => {
+    const dawka = await przygotujLek(2)
+    const aktualny = (await baza.tabela('leki').get(dawka.lek.id))!
+    await baza.tabela('leki').put({ ...aktualny, ruchyApteczki: [...aktualny.ruchyApteczki!, { id: 'inne-zuzycie', typ: 'zuzycie', ilosc: 4, data: dawka.data, createdAt: aktualny.createdAt }] })
+    await expect(zapiszStatusDawkiZApteczka(dawka, 'zazyte')).rejects.toThrow('Niedobór')
+    expect(await baza.tabela('dziennikLekow').count()).toBe(0)
+  })
+
+  it('cofa wcześniejsze zużycie przypisane do ID historycznego wpisu', async () => {
+    const dawka = await przygotujLek(2)
+    const aktualny = (await baza.tabela('leki').get(dawka.lek.id))!
+    const wpis: DziennikLeku = { ...utworzMetadane('stare-id'), lekId: dawka.lek.id, data: dawka.data, planowanaGodzina: '08:00', status: 'zazyte' }
+    await baza.tabela('dziennikLekow').put(wpis)
+    await baza.tabela('leki').put({ ...aktualny, ruchyApteczki: [...aktualny.ruchyApteczki!, { id: 'zuzycie:stare-id', typ: 'zuzycie', ilosc: 2, data: dawka.data, createdAt: aktualny.createdAt }] })
+    await zapiszStatusDawkiZApteczka(dawka, 'oczekuje')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(5)
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte')
+    expect(stanApteczki((await baza.tabela('leki').get(dawka.lek.id))!)).toBe(3)
+  })
+
+  it('zapisuje fakt przyjęcia bez prowadzonego zapasu dopiero po potwierdzeniu', async () => {
+    const testowy: Lek = { ...lek, id: 'bez-zapasu', jednostka: 'szt.' }
+    await baza.tabela('leki').put(testowy)
+    const dawka = generujDawkiDnia([testowy], [], '2026-08-14')[0]!
+    await expect(zapiszStatusDawkiZApteczka(dawka, 'zazyte')).rejects.toThrow('Nie prowadzisz zapasu')
+    await zapiszStatusDawkiZApteczka(dawka, 'zazyte', undefined, { potwierdzRozbieznosc: true })
+    expect((await baza.tabela('dziennikLekow').get(dawka.idWystapienia))?.nierozliczonaIlosc).toBe(2)
+    expect(await baza.tabela('leki').get(testowy.id)).toEqual(testowy)
+  })
+
 })

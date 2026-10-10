@@ -200,10 +200,19 @@ export interface Lek extends EncjaBazowa {
 export interface DziennikLeku extends EncjaBazowa {
   lekId: Id
   dawkaId?: Id
+  /** Wiąże wystąpienie ze starszym wpisem bez zmiany jego historycznego ID. */
+  idWystapienia?: string
   data: string
   planowanaGodzina: string
   status: 'oczekuje' | 'zazyte' | 'odroczone' | 'pominiete'
   reakcjaAt?: string
+  /** Brak pola w historii oznacza nieznany czas przyjęcia, nie reakcjaAt. */
+  przyjetoAt?: string
+  przyjetaIlosc?: number
+  przyjetaJednostka?: string
+  /** Ilość w przyjetaJednostka, której nie rozliczono w apteczce. */
+  nierozliczonaIlosc?: number
+  rozbieznoscApteczki?: string
   odroczoneDo?: string
 }
 

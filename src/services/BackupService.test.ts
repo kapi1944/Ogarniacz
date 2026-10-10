@@ -113,6 +113,17 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     vi.unstubAllGlobals()
   })
 
+  it('zachowuje faktyczne przyjęcie i nierozliczony zapas oraz nie dopisuje ich do historii', async () => {
+    const historyczny = { ...utworzMetadane('dawka-stara'), lekId: 'lek-test', data: '2026-08-14', planowanaGodzina: '08:00', status: 'zazyte' as const, reakcjaAt: STALA_DATA }
+    const nowy = { ...historyczny, id: 'dawka-nowa', przyjetoAt: '2026-08-14T06:15:00Z', przyjetaIlosc: 3, przyjetaJednostka: 'szt.', nierozliczonaIlosc: 2, rozbieznoscApteczki: 'Niedobór zapasu' }
+    await baza.tabela('dziennikLekow').bulkPut([historyczny, nowy])
+    const backup = await przygotuj(await utworzBackup(['leki'], () => STALA_DATA))
+    await baza.tabela('dziennikLekow').clear()
+    await przywrocBackup(backup)
+    expect(await baza.tabela('dziennikLekow').get(nowy.id)).toEqual(nowy)
+    expect(await baza.tabela('dziennikLekow').get(historyczny.id)).toEqual(historyczny)
+  })
+
   it('eksportuje wszystkie nowe tabele raz w domyślnej i selektywnej kopii', async () => {
     const dane = await zapiszDaneZdrowotne()
     for (const sekcje of [undefined, ['zdrowie', 'zdrowie'] as const]) {

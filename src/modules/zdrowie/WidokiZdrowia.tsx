@@ -1,5 +1,6 @@
 import { EdytorPolaRejestru, normalizujStarePolaRejestru, type DefinicjaPola } from '../../components/EdytorPolaRejestru'
 import { useEffect, useState } from 'react'
+import { format } from 'date-fns'
 import { Link, useSearchParams } from 'react-router-dom'
 import { BellPlus, CalendarClock, ClipboardList, Edit3, FileText, History, Pill, Plus, ScanLine, ShieldAlert, Stethoscope, Trash2 } from 'lucide-react'
 import { WidokRejestru } from '../../components/WidokRejestru'
@@ -9,7 +10,7 @@ import { dzisiajIso, noweId, terazIso, utworzMetadane } from '../../domain/fabry
 import type { DawkaLeku, JednostkaLeku, Lek, PozycjaRecepty, PostacLeku, Przypomnienie, Recepta, Skierowanie, Terapia, UstawieniaHarmonogramu, Wizyta } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { dawkiLeku, dawkiZaplanowaneNaDzien, generujDawkiDnia, proponujGodzinyDawek, przewidywanaDataWyczerpania, stanApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from '../../services/LekiService'
+import { RozbieznoscApteczki, type DawkaDnia, dawkiLeku, dawkiZaplanowaneNaDzien, generujDawkiDnia, proponujGodzinyDawek, przewidywanaDataWyczerpania, stanApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from '../../services/LekiService'
 import { ocrLekow } from '../../services/LekiOcrService'
 import type { WynikOcrLeku } from '../../services/LekiOcrParser'
 import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
@@ -299,12 +300,43 @@ function RejestrLekow({ leki, repozytorium, wybranyElementId, harmonogram }: { l
   </section>
 }
 
+function FormularzStatusuDawki({ dawka, status, zamknij }: { dawka: DawkaDnia; status: DawkaDnia['status']; zamknij: () => void }) {
+  const lokalnyCzas = (czas: string) => format(new Date(czas), "yyyy-MM-dd'T'HH:mm")
+  const [termin, ustawTermin] = useState(status === 'zazyte' ? lokalnyCzas(dawka.wpis?.przyjetoAt ?? new Date().toISOString()) : '')
+  const [ilosc, ustawIlosc] = useState(String(dawka.wpis?.przyjetaIlosc ?? dawka.dawka.ilosc ?? ''))
+  const [jednostka, ustawJednostke] = useState(dawka.wpis?.przyjetaJednostka ?? jednostkaLeku(dawka.lek) ?? '')
+  const [blad, ustawBlad] = useState('')
+  const [rozbieznosc, ustawRozbieznosc] = useState(false)
+  const [potwierdzona, ustawPotwierdzona] = useState(false)
+  const [zapisuje, ustawZapisuje] = useState(false)
+  return <Modal tytul={status === 'zazyte' ? 'Zapisz faktyczne przyjęcie' : 'Zmień status dawki'} zamknij={zamknij}><form className="formularz" onSubmit={async (zdarzenie) => {
+    zdarzenie.preventDefault()
+    ustawZapisuje(true)
+    try {
+      await zapiszStatusDawkiZApteczka(dawka, status, status === 'odroczone' ? termin : undefined, status === 'zazyte' ? { przyjetoAt: termin, przyjetaIlosc: ilosc === '' ? undefined : Number(ilosc), przyjetaJednostka: jednostka || undefined, potwierdzRozbieznosc: potwierdzona } : {})
+      zamknij()
+    } catch (przyczyna) {
+      ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać dawki.')
+      ustawRozbieznosc(przyczyna instanceof RozbieznoscApteczki)
+      ustawPotwierdzona(false)
+    } finally { ustawZapisuje(false) }
+  }}>
+    <p>{dawka.lek.nazwa} — zaplanowano: {dawka.data} {dawka.planowanaGodzina}</p>
+    {blad && <Komunikat typ="blad">{blad}</Komunikat>}
+    {(status === 'zazyte' || status === 'odroczone') && <label className="pole"><span>{status === 'zazyte' ? 'Rzeczywista data i godzina przyjęcia' : 'Odroczone do'}</span><input type="datetime-local" required value={termin} onChange={(zdarzenie) => { ustawTermin(zdarzenie.target.value); ustawPotwierdzona(false) }} /></label>}
+    {status === 'zazyte' && <><label className="pole"><span>Rzeczywista ilość (opcjonalnie)</span><input type="number" min="0.000001" step="any" value={ilosc} onChange={(zdarzenie) => { ustawIlosc(zdarzenie.target.value); ustawPotwierdzona(false) }} /></label><label className="pole"><span>Jednostka przyjętej dawki</span><input value={jednostka} required={ilosc !== ''} onChange={(zdarzenie) => { ustawJednostke(zdarzenie.target.value); ustawPotwierdzona(false) }} /></label></>}
+    {rozbieznosc && <label className="pole"><span><input type="checkbox" checked={potwierdzona} onChange={(zdarzenie) => ustawPotwierdzona(zdarzenie.target.checked)} /> Potwierdzam faktyczne przyjęcie mimo rozbieżności apteczki. Nierozliczony zapas pozostanie widoczny.</span></label>}
+    <div className="akcje-formularza"><button type="button" className="przycisk" onClick={zamknij}>Anuluj</button><button type="submit" className="przycisk przycisk--glowny" disabled={zapisuje || (rozbieznosc && !potwierdzona)}>Zapisz</button></div>
+  </form></Modal>
+}
+
 export function WidokLekow() {
   const [parametryAdresu] = useSearchParams()
   const { ustawienia } = useAplikacja()
   const { dane: leki, repozytorium } = useRepozytorium('leki')
   const { dane: wpisy } = useRepozytorium('dziennikLekow')
   const [historia, ustawHistorie] = useState(false)
+  const [zmianaDawki, ustawZmianeDawki] = useState<{ dawka: DawkaDnia; status: DawkaDnia['status'] }>()
   const data = dzisiajIso()
   const dawki = generujDawkiDnia(leki, wpisy, data)
 
@@ -313,9 +345,10 @@ export function WidokLekow() {
     <Karta klasa="karta-bezpieczenstwa"><ShieldAlert aria-hidden="true" /><div><strong>Ogarniacz nie udziela porad medycznych.</strong><p>Nie dobiera leków ani dawek i nie zmienia zaleceń. Przechowuje wyłącznie informacje wpisane przez użytkownika.</p></div></Karta>
     <Karta>
       <h2>Dzisiejsze dawki</h2>
-      {dawki.length === 0 ? <PustyStan tytul="Brak aktywnych dawek" opis="Dodaj lek i co najmniej jedną dawkę." /> : <div className="lista-dawek lista-dawek--duza">{dawki.map((dawka) => <div key={dawka.idWystapienia}><time>{dawka.planowanaGodzina}</time><div><strong>{dawka.lek.nazwa}</strong><small>{dawka.dawka.instrukcja || (dawka.dawka.ilosc !== undefined ? `${dawka.dawka.ilosc}${jednostkaLeku(dawka.lek) ? ` ${jednostkaLeku(dawka.lek)}` : ''}` : 'Uzupełnij ilość dawki')}</small></div><select aria-label={`Status ${dawka.lek.nazwa} ${dawka.planowanaGodzina}`} value={dawka.status} onChange={async (e) => { try { await zapiszStatusDawkiZApteczka(dawka, e.target.value as typeof dawka.status) } catch (przyczyna) { window.alert(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać statusu dawki.') } }}><option value="oczekuje">Oczekuje</option><option value="zazyte">Zażyte</option><option value="odroczone">Odroczone</option><option value="pominiete">Pominięte</option></select></div>)}</div>}
+      {dawki.length === 0 ? <PustyStan tytul="Brak aktywnych dawek" opis="Dodaj lek i co najmniej jedną dawkę." /> : <div className="lista-dawek lista-dawek--duza">{dawki.map((dawka) => <div key={dawka.idWystapienia}><time>{dawka.planowanaGodzina}</time><div><strong>{dawka.lek.nazwa}</strong><small>{dawka.dawka.instrukcja || (dawka.dawka.ilosc !== undefined ? `${dawka.dawka.ilosc}${jednostkaLeku(dawka.lek) ? ` ${jednostkaLeku(dawka.lek)}` : ''}` : 'Uzupełnij ilość dawki')}</small>{dawka.wpis?.rozbieznoscApteczki && <p role="status">{dawka.wpis.rozbieznoscApteczki} Nierozliczone: {dawka.wpis.nierozliczonaIlosc ?? 'ilość nieznana'} {dawka.wpis.przyjetaJednostka}</p>}</div><select aria-label={`Status ${dawka.lek.nazwa} ${dawka.planowanaGodzina}`} value={dawka.status} onChange={(e) => ustawZmianeDawki({ dawka, status: e.target.value as DawkaDnia['status'] })}><option value="oczekuje">Oczekuje</option><option value="zazyte">Zażyte</option><option value="odroczone">Odroczone</option><option value="pominiete">Pominięte</option></select></div>)}</div>}
     </Karta>
-    {historia && <Karta><h2>Historia reakcji</h2>{wpisy.length === 0 ? <p className="tekst-pomocniczy">Brak zapisanych reakcji.</p> : <div className="tabela-przewijana"><table><thead><tr><th>Data</th><th>Godzina</th><th>Lek</th><th>Status</th><th>Reakcja</th></tr></thead><tbody>{[...wpisy].sort((a, b) => b.data.localeCompare(a.data)).map((wpis) => <tr key={wpis.id}><td>{wpis.data}</td><td>{wpis.planowanaGodzina}</td><td>{leki.find((lek) => lek.id === wpis.lekId)?.nazwa ?? 'Usunięty lek'}</td><td><Znacznik wariant={wpis.status === 'zazyte' ? 'sukces' : wpis.status === 'pominiete' ? 'blad' : 'ostrzezenie'}>{wpis.status}</Znacznik></td><td>{wpis.reakcjaAt ? new Date(wpis.reakcjaAt).toLocaleString('pl-PL') : '—'}</td></tr>)}</tbody></table></div>}</Karta>}
+    {historia && <Karta><h2>Historia reakcji</h2>{wpisy.length === 0 ? <p className="tekst-pomocniczy">Brak zapisanych reakcji.</p> : <div className="tabela-przewijana"><table><thead><tr><th>Data</th><th>Godzina</th><th>Lek</th><th>Status</th><th>Faktyczne przyjęcie</th><th>Zapis / edycja</th><th>Rozliczenie apteczki</th></tr></thead><tbody>{[...wpisy].sort((a, b) => b.data.localeCompare(a.data)).map((wpis) => <tr key={wpis.id}><td>{wpis.data}</td><td>{wpis.planowanaGodzina}</td><td>{leki.find((lek) => lek.id === wpis.lekId)?.nazwa ?? 'Usunięty lek'}</td><td><Znacznik wariant={wpis.status === 'zazyte' ? 'sukces' : wpis.status === 'pominiete' ? 'blad' : 'ostrzezenie'}>{{ oczekuje: 'Oczekuje', zazyte: 'Zażyte', odroczone: 'Odroczone', pominiete: 'Pominięte' }[wpis.status]}</Znacznik></td><td>{wpis.przyjetoAt ? new Date(wpis.przyjetoAt).toLocaleString('pl-PL') : 'Nieznane'}{wpis.przyjetaIlosc !== undefined && ` — ${wpis.przyjetaIlosc} ${wpis.przyjetaJednostka ?? ''}`}</td><td>{new Date(wpis.updatedAt).toLocaleString('pl-PL')}</td><td>{wpis.rozbieznoscApteczki ? `${wpis.rozbieznoscApteczki} Nierozliczone: ${wpis.nierozliczonaIlosc ?? 'ilość nieznana'} ${wpis.przyjetaJednostka ?? ''}` : '—'}</td></tr>)}</tbody></table></div>}</Karta>}
+    {zmianaDawki && <FormularzStatusuDawki dawka={zmianaDawki.dawka} status={zmianaDawki.status} zamknij={() => ustawZmianeDawki(undefined)} />}
     <RejestrLekow leki={leki} repozytorium={repozytorium} wybranyElementId={parametryAdresu.get('element') ?? undefined} harmonogram={ustawienia.harmonogram} />
   </div>
 }

@@ -175,7 +175,7 @@ function dopasujWpisyDziennika(
   const dopasowane = new Map<string, DziennikLeku>()
 
   for (const wystapienie of wystapienia) {
-    const wpis = [...niewykorzystane].find((element) => element.id === wystapienie.idWystapienia)
+    const wpis = [...niewykorzystane].find((element) => element.id === wystapienie.idWystapienia || element.idWystapienia === wystapienie.idWystapienia)
     if (!wpis) continue
     dopasowane.set(wystapienie.idWystapienia, wpis)
     niewykorzystane.delete(wpis)
@@ -212,6 +212,7 @@ export function generujDawkiDnia(leki: Lek[], wpisy: DziennikLeku[], data: strin
     .sort((a, b) => a.planowanaGodzina.localeCompare(b.planowanaGodzina) || a.idWystapienia.localeCompare(b.idWystapienia))
 }
 
+/** Buduje wpis bez zapisu. Zachowany dla starszych odbiorców; zapis domenowy wykonuje zapiszStatusDawkiZApteczka. */
 export function zapiszStatusDawki(dawka: DawkaDnia, status: DziennikLeku['status'], odroczoneDo?: string): DziennikLeku {
   const obecny = dawka.wpis
   return {
@@ -219,6 +220,7 @@ export function zapiszStatusDawki(dawka: DawkaDnia, status: DziennikLeku['status
     id: obecny?.id ?? dawka.idWystapienia,
     lekId: dawka.lek.id,
     dawkaId: dawka.dawka.id,
+    idWystapienia: dawka.idWystapienia,
     data: dawka.data,
     planowanaGodzina: obecny?.planowanaGodzina ?? dawka.planowanaGodzina,
     status,
@@ -228,40 +230,78 @@ export function zapiszStatusDawki(dawka: DawkaDnia, status: DziennikLeku['status
   }
 }
 
-/** Zapisuje status i ruch apteczki w jednej transakcji. Id ruchu zużycia jest idempotentnym id wystąpienia. */
-export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: DziennikLeku['status'], odroczoneDo?: string): Promise<void> {
+export interface DanePrzyjeciaDawki {
+  przyjetoAt?: string
+  przyjetaIlosc?: number
+  przyjetaJednostka?: string
+  potwierdzRozbieznosc?: boolean
+}
+
+export class RozbieznoscApteczki extends Error {}
+
+/** Jedyny zapis domenowy dawki: dziennik, apteczka i kolejka w jednej transakcji. */
+export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: DziennikLeku['status'], odroczoneDo?: string, dane: DanePrzyjeciaDawki = {}): Promise<void> {
   const tabelaLekow = baza.tabela('leki')
   const tabelaDziennika = baza.tabela('dziennikLekow')
   await baza.transaction('rw', [tabelaLekow, tabelaDziennika, tabelaKolejki()], async () => {
-    const [lek, poprzedniWpis] = await Promise.all([tabelaLekow.get(dawka.lek.id), tabelaDziennika.get(dawka.idWystapienia)])
-    if (!lek) throw new Error('Nie znaleziono leku dla tej dawki.')
-    const wpis = zapiszStatusDawki({ ...dawka, lek, wpis: poprzedniWpis }, status, odroczoneDo)
+    const lek = await tabelaLekow.get(dawka.lek.id)
+    if (!lek || lek.usunietoAt) throw new Error('Nie znaleziono leku dla tej dawki.')
+    const wpisy = (await tabelaDziennika.where('lekId').equals(lek.id).toArray()).filter((wpis) => !wpis.usunietoAt)
+    const aktualna = generujDawkiDnia([lek], wpisy, dawka.data).find((element) => element.idWystapienia === dawka.idWystapienia)
+    if (!aktualna) throw new Error('Harmonogram dawki uległ zmianie. Odśwież widok.')
+    const poprzedniWpis = aktualna.wpis
+    const teraz = terazIso()
+    const poprawnyTermin = (termin: string | undefined) => Boolean(termin && /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?$/.test(termin) && Number.isFinite(parseISO(termin).getTime()))
+    if (status === 'odroczone' && (!poprawnyTermin(odroczoneDo) || new Date(odroczoneDo!).getTime() <= new Date(teraz).getTime())) {
+      throw new Error('Podaj prawidłowy przyszły termin odroczenia.')
+    }
+    if (dane.przyjetoAt !== undefined && (!poprawnyTermin(dane.przyjetoAt) || new Date(dane.przyjetoAt).getTime() > new Date(teraz).getTime())) throw new Error('Podaj prawidłową datę i godzinę faktycznego przyjęcia (nie w przyszłości).')
+    if (dane.przyjetaIlosc !== undefined && (!Number.isFinite(dane.przyjetaIlosc) || dane.przyjetaIlosc <= 0)) throw new Error('Podaj dodatnią rzeczywistą ilość dawki.')
+    if (dane.przyjetaJednostka !== undefined && !dane.przyjetaJednostka.trim()) throw new Error('Podaj jednostkę przyjętej dawki.')
+    const wpis = zapiszStatusDawki(aktualna, status, status === 'odroczone' ? new Date(odroczoneDo!).toISOString() : undefined)
     const ruchy = ruchyApteczki(lek)
-    const idZuzycia = `zuzycie:${dawka.idWystapienia}`
-    const istniejaceZuzycie = ruchy.find((ruch) => ruch.id === idZuzycia)
-    const ilosc = dawka.dawka.ilosc
+    // Starszy wpis może mieć inne ID niż aktualne wystąpienie.
+    const idZuzycia = `zuzycie:${aktualna.idWystapienia}`
+    const istniejaceZuzycie = ruchy.find((ruch) => ruch.id === idZuzycia) ?? (poprzedniWpis && ruchy.find((ruch) => ruch.id === `zuzycie:${poprzedniWpis.id}`))
     let zaktualizowaneRuchy = ruchy
-
-    if (status === 'zazyte' && !istniejaceZuzycie && typeof ilosc === 'number' && ilosc > 0 && ruchy.length > 0) {
-      const stan = stanApteczki(lek) ?? 0
-      if (stan < ilosc) throw new Error(`Brak wystarczającego zapasu: dostępne ${stan}, potrzebne ${ilosc}. Dodaj zapas przed potwierdzeniem dawki.`)
-      zaktualizowaneRuchy = [...ruchy, { id: idZuzycia, typ: 'zuzycie', ilosc, data: dawka.data, idWystapienia: dawka.idWystapienia, createdAt: terazIso() }]
+    if (status === 'zazyte') {
+      const juzPrzyjeta = poprzedniWpis?.status === 'zazyte'
+      wpis.przyjetoAt = dane.przyjetoAt ? new Date(dane.przyjetoAt).toISOString() : juzPrzyjeta ? poprzedniWpis.przyjetoAt : teraz
+      const ilosc = dane.przyjetaIlosc ?? (juzPrzyjeta ? poprzedniWpis.przyjetaIlosc ?? istniejaceZuzycie?.ilosc : aktualna.dawka.ilosc)
+      if (ilosc !== undefined && (!Number.isFinite(ilosc) || ilosc <= 0)) throw new Error('Podaj dodatnią rzeczywistą ilość dawki.')
+      const jednostka = dane.przyjetaJednostka?.trim() ?? (juzPrzyjeta ? poprzedniWpis.przyjetaJednostka : undefined) ?? lek.jednostka ?? lek.jednostkaLubPostac
+      wpis.przyjetaIlosc = ilosc
+      wpis.przyjetaJednostka = jednostka
+      // Powtórzenie potwierdzenia zachowuje wcześniejsze rozliczenie, także niedobór.
+      const zmienionoIlosc = dane.przyjetaIlosc !== undefined && dane.przyjetaIlosc !== poprzedniWpis?.przyjetaIlosc
+      const zmienionoJednostke = dane.przyjetaJednostka !== undefined && jednostka !== poprzedniWpis?.przyjetaJednostka
+      if (!juzPrzyjeta || zmienionoIlosc || zmienionoJednostke) {
+        const stan = stanApteczki(lek)
+        const dostepne = Math.max(0, (stan ?? 0) + (istniejaceZuzycie && !istniejaceZuzycie.cofnietoAt ? istniejaceZuzycie.ilosc : 0))
+        const jednostkaZapasu = lek.jednostka ?? lek.jednostkaLubPostac
+        const moznaRozliczyc = ilosc !== undefined && stan !== undefined && jednostka === jednostkaZapasu
+        const rozliczone = moznaRozliczyc ? Math.min(ilosc, dostepne) : 0
+        const nierozliczone = ilosc === undefined ? undefined : ilosc - rozliczone
+        const powod = ilosc === undefined ? 'Nie podano ilości dawki.' : stan === undefined ? 'Nie prowadzisz zapasu tego leku.' : jednostka !== jednostkaZapasu ? 'Jednostka przyjęcia różni się od jednostki zapasu; brak przelicznika.' : nierozliczone! > 0 ? `Niedobór zapasu: dostępne ${dostepne}, przyjęte ${ilosc} ${jednostka ?? ''}.` : undefined
+        if (powod && !dane.potwierdzRozbieznosc) throw new RozbieznoscApteczki(`${powod} Fakt przyjęcia zostanie zapisany z jawnym nierozliczonym zapasem. Potwierdź rozbieżność.`)
+        wpis.nierozliczonaIlosc = nierozliczone
+        wpis.rozbieznoscApteczki = powod
+        if (istniejaceZuzycie || rozliczone > 0) zaktualizowaneRuchy = ruchy.filter((ruch) => ruch !== istniejaceZuzycie)
+        if (rozliczone > 0) zaktualizowaneRuchy.push({ id: istniejaceZuzycie?.id ?? idZuzycia, typ: 'zuzycie', ilosc: rozliczone, data: wpis.przyjetoAt?.slice(0, 10) ?? aktualna.data, idWystapienia: aktualna.idWystapienia, createdAt: istniejaceZuzycie?.createdAt ?? teraz })
+        else if (istniejaceZuzycie) zaktualizowaneRuchy.push({ ...istniejaceZuzycie, cofnietoAt: teraz })
+      }
+    } else {
+      wpis.przyjetoAt = undefined
+      wpis.przyjetaIlosc = undefined
+      wpis.przyjetaJednostka = undefined
+      wpis.nierozliczonaIlosc = undefined
+      wpis.rozbieznoscApteczki = undefined
+      if (istniejaceZuzycie && !istniejaceZuzycie.cofnietoAt) zaktualizowaneRuchy = ruchy.map((ruch) => ruch === istniejaceZuzycie ? { ...ruch, cofnietoAt: teraz } : ruch)
     }
-    if (status === 'zazyte' && istniejaceZuzycie?.cofnietoAt) {
-      const stan = stanApteczki(lek) ?? 0
-      if (stan < istniejaceZuzycie.ilosc) throw new Error(`Brak wystarczającego zapasu: dostępne ${stan}, potrzebne ${istniejaceZuzycie.ilosc}. Dodaj zapas przed potwierdzeniem dawki.`)
-      zaktualizowaneRuchy = ruchy.map((ruch) => ruch.id === idZuzycia ? { ...ruch, cofnietoAt: undefined } : ruch)
-    }
-    if (status !== 'zazyte' && istniejaceZuzycie && !istniejaceZuzycie.cofnietoAt) {
-      const teraz = terazIso()
-      zaktualizowaneRuchy = ruchy.map((ruch) => ruch.id === idZuzycia ? { ...ruch, cofnietoAt: teraz } : ruch)
-    }
-
-    const zapisanyLek = lekZRuchami(lek, zaktualizowaneRuchy)
-    zapisanyLek.updatedAt = terazIso()
     await tabelaDziennika.put(wpis)
     await dodajDoKolejkiSynchronizacji('dziennikLekow', wpis, poprzedniWpis)
     if (zaktualizowaneRuchy !== ruchy) {
+      const zapisanyLek = { ...lekZRuchami(lek, zaktualizowaneRuchy), updatedAt: teraz }
       await tabelaLekow.put(zapisanyLek)
       await dodajDoKolejkiSynchronizacji('leki', zapisanyLek, lek)
     }
