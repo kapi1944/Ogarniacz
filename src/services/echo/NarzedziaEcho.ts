@@ -1260,7 +1260,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
         idWystapienia: dawka.idWystapienia,
         ilosc: dawka.dawka.ilosc,
         instrukcja: dawka.dawka.instrukcja,
-        jednostka: dawka.lek.jednostka ?? dawka.lek.jednostkaLubPostac,
+        jednostka: dawka.jednostkaDawki,
         lekId: dawka.lek.id,
         tytul: dawka.lek.nazwa,
         godzina: dawka.planowanaGodzina,
@@ -1278,7 +1278,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     sprawdzStan: async (argumenty) => {
       const dawka = await pobierzDawkeEcho(argumenty);
       const statusy = { zazyte: 'przyjęta', pominiete: 'pominięta', odroczone: 'odroczona', oczekuje: 'oczekująca (cofnięcie przyjęcia)' };
-      return `Lek „${dawka.lek.nazwa}”, dawka zaplanowana na ${dawka.data} ${dawka.planowanaGodzina}${dawka.opisWystapienia} (${dawka.dawka.instrukcja ?? dawka.dawka.ilosc ?? 'ilość nieznana'}). Zapiszę status: ${statusy[argumenty.status]}${argumenty.odroczoneDo ? `, do ${argumenty.odroczoneDo}` : ''}${argumenty.przyjetoAt ? `, faktyczne przyjęcie: ${argumenty.przyjetoAt}` : ''}${argumenty.przyjetaIlosc !== undefined ? `, faktyczna ilość: ${argumenty.przyjetaIlosc} ${argumenty.przyjetaJednostka ?? dawka.lek.jednostka ?? ''}` : ''}. Potwierdzasz?`;
+      return `Lek „${dawka.lek.nazwa}”, dawka zaplanowana na ${dawka.data} ${dawka.planowanaGodzina}${dawka.opisWystapienia} (${dawka.dawka.instrukcja ?? dawka.dawka.ilosc ?? 'ilość nieznana'}). Zapiszę status: ${statusy[argumenty.status]}${argumenty.odroczoneDo ? `, do ${argumenty.odroczoneDo}` : ''}${argumenty.przyjetoAt ? `, faktyczne przyjęcie: ${argumenty.przyjetoAt}` : ''}${argumenty.przyjetaIlosc !== undefined ? `, faktyczna ilość: ${argumenty.przyjetaIlosc} ${argumenty.przyjetaJednostka ?? dawka.jednostkaDawki ?? ''}` : ''}. Potwierdzasz?`;
     },
     wykonaj: async (argumenty, zgoda) => {
       const dawka = await pobierzDawkeEcho(argumenty);

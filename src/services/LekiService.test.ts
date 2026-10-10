@@ -127,7 +127,7 @@ describe('leki', () => {
     const wpis = zapiszStatusDawki(pierwsza, 'zazyte')
     const poZmianieGodziny = { ...lek, dawki: [{ ...lek.dawki![0]!, godzina: '09:00' }, lek.dawki![1]!] }
     const odswiezona = generujDawkiDnia([poZmianieGodziny], [wpis], '2026-08-14')[0]!
-    expect(odswiezona.planowanaGodzina).toBe('09:00')
+    expect(odswiezona.planowanaGodzina).toBe('08:00')
     expect(odswiezona.status).toBe('zazyte')
     expect(odswiezona.wpis?.planowanaGodzina).toBe('08:00')
   })
@@ -148,6 +148,7 @@ describe('apteczka leków', () => {
 
   async function przygotujLek(iloscDawki: number, zapas = 5) {
     const testowy: Lek = { ...lek, id: `lek-apteczka-${iloscDawki}`, dawki: [{ id: 'dawka-apteczka', godzina: '08:00', ilosc: iloscDawki }], godziny: ['08:00'], postac: 'tabletka', jednostka: 'szt.' }
+    await baza.tabela('leki').put(testowy)
     await zapiszLekZDodanymZapasem(testowy, zapas)
     const zapisany = await baza.tabela('leki').get(testowy.id)
     return generujDawkiDnia([zapisany!], [], '2026-08-14')[0]!

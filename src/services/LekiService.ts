@@ -3,7 +3,7 @@ import { noweId, terazIso, utworzMetadane } from '../domain/fabryki'
 import { baza } from '../data/BazaOgarniacza'
 import { dodajDoKolejkiSynchronizacji, tabelaKolejki } from '../data/KolejkaSynchronizacji'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
-import type { DawkaLeku, DziennikLeku, Lek, RuchApteczkiLeku, TrybDawkowaniaLeku } from '../domain/typy'
+import type { DawkaLeku, DziennikLeku, Lek, RuchApteczkiLeku, TrybDawkowaniaLeku, KonfiguracjaDawkowaniaLeku, WersjaDawkowaniaLeku } from '../domain/typy'
 
 export interface DawkaDnia {
   idWystapienia: string
@@ -13,15 +13,62 @@ export interface DawkaDnia {
   planowanaGodzina: string
   status: DziennikLeku['status']
   wpis?: DziennikLeku
+  wersjaDawkowaniaId?: string
+  jednostkaDawki?: string
+  planowanyCzas?: string
 }
 
 interface ZaplanowanaDawka {
   dawka: DawkaLeku
   kluczWystapienia?: string
+  planowanyCzas?: string
 }
 
 interface ZaplanowaneWystapienie extends ZaplanowanaDawka {
   idWystapienia: string
+}
+
+const polaDawkowania = ['dawkaInstrukcja', 'godziny', 'dawki', 'trybDawkowania', 'liczbaDawekDziennie', 'oknoAktywnosciOd', 'oknoAktywnosciDo', 'interwalGodzin', 'pierwszaGodzina', 'jednostka', 'jednostkaLubPostac', 'dniTygodnia', 'coIleDni', 'dataOd', 'dataDo', 'zuzycieNaDawke', 'dodatkoweInstrukcje'] as const
+
+function konfiguracjaDawkowania(lek: KonfiguracjaDawkowaniaLeku): KonfiguracjaDawkowaniaLeku {
+  return structuredClone(Object.fromEntries(polaDawkowania.map((pole) => [pole, lek[pole]]))) as KonfiguracjaDawkowaniaLeku
+}
+
+export function aktualnySchematLeku(lek: Lek, czas = new Date()): Lek | undefined {
+  const wersja = lek.historiaDawkowania?.filter((element) => Date.parse(element.obowiazujeOd) <= czas.getTime()).at(-1)
+  return wersja ? { ...lek, ...konfiguracjaDawkowania(wersja.konfiguracja) } : lek.historiaDawkowania?.length ? undefined : lek
+}
+
+export function jednostkaZapasuLeku(lek: Lek): string | undefined {
+  if (lek.jednostkaZapasu === null) return undefined
+  return lek.jednostkaZapasu ?? lek.jednostka ?? lek.jednostkaLubPostac
+}
+
+export interface ZmianaDawkowaniaLeku {
+  obowiazujeOd?: string
+  notatka?: string
+}
+
+/** Lokalne pole formularza może wskazywać dwie chwile podczas cofnięcia zegara. */
+export function mozliweChwileSchematu(termin: string): Date[] {
+  const pierwsza = parseISO(termin)
+  if (!Number.isFinite(pierwsza.getTime()) || format(pierwsza, "yyyy-MM-dd'T'HH:mm") !== termin) return []
+  return [0, 30, 60, 120].map((minuty) => new Date(pierwsza.getTime() + minuty * 60_000)).filter((chwila) => format(chwila, "yyyy-MM-dd'T'HH:mm") === termin)
+}
+
+function nowaWersjaDawkowania(lek: Lek, zmiana: ZmianaDawkowaniaLeku, teraz: string, poczatekNieznany = false): WersjaDawkowaniaLeku {
+  const konfiguracja = konfiguracjaDawkowania(lek)
+  const poczatek = zmiana.obowiazujeOd ?? teraz
+  const obowiazujeOd = parseISO(poczatek)
+  if (!poczatek.includes('T') || !Number.isFinite(obowiazujeOd.getTime())) throw new Error('Podaj prawidłową datę i godzinę początku schematu.')
+  if (!/(?:Z|[+-]\d{2}:\d{2})$/.test(poczatek)) {
+    const chwile = mozliweChwileSchematu(poczatek.slice(0, 16))
+    if (chwile.length === 0) throw new Error('Ta godzina nie istnieje w lokalnej strefie czasu. Wybierz inną godzinę.')
+    if (chwile.length > 1) throw new Error('Ta godzina występuje dwukrotnie. Wybierz konkretne wystąpienie z przesunięciem czasu.')
+  }
+  const godzina = lek.pierwszaGodzina ?? dawkiLeku(lek)[0]?.godzina
+  return { id: noweId(), obowiazujeOd: obowiazujeOd.toISOString(), zapisanoAt: teraz, konfiguracja, notatka: zmiana.notatka?.trim() || undefined, poczatekNieznany: poczatekNieznany || undefined,
+    poczatekInterwalu: trybDawkowania(lek) === 'co_x_godzin' && godzina ? new Date(`${lek.dataOd ?? format(obowiazujeOd, 'yyyy-MM-dd')}T${godzina}:00`).toISOString() : undefined }
 }
 
 function poprawnaGodzina(godzina: string): boolean {
@@ -43,7 +90,7 @@ export function trybDawkowania(lek: Lek): TrybDawkowaniaLeku {
 }
 
 /** Zamienia stary zapis godzin na dawki z deterministycznym, trwałym id. */
-export function dawkiLeku(lek: Lek): DawkaLeku[] {
+export function dawkiLeku(lek: Pick<Lek, 'id' | 'dawki' | 'godziny' | 'zuzycieNaDawke' | 'dawkaInstrukcja'>): DawkaLeku[] {
   if (lek.dawki?.length) return lek.dawki.filter((dawka) => poprawnaGodzina(dawka.godzina)).sort((a, b) => a.godzina.localeCompare(b.godzina))
   return lek.godziny
     .filter(poprawnaGodzina)
@@ -81,12 +128,12 @@ export function graniceLokalnegoDnia(data: string): { od: Date; do: Date } | und
   return { od, do: addDays(od, 1) }
 }
 
-function dawkiInterwalowe(lek: Lek, data: string): ZaplanowanaDawka[] {
+function dawkiInterwalowe(lek: Lek, data: string, poczatekInterwalu?: string): ZaplanowanaDawka[] {
   const definicja = dawkiLeku(lek)[0]
   const interwal = lek.interwalGodzin
   const pierwszaGodzina = lek.pierwszaGodzina ?? definicja?.godzina
   if (!definicja || !interwal || interwal < 1 || !pierwszaGodzina || !poprawnaGodzina(pierwszaGodzina)) return []
-  const poczatek = new Date(`${lek.dataOd ?? data}T${pierwszaGodzina}:00`).getTime()
+  const poczatek = new Date(poczatekInterwalu ?? `${lek.dataOd ?? data}T${pierwszaGodzina}:00`).getTime()
   const graniceDnia = graniceLokalnegoDnia(data)
   if (!graniceDnia) return []
   const dzienOd = graniceDnia.od.getTime()
@@ -96,22 +143,41 @@ function dawkiInterwalowe(lek: Lek, data: string): ZaplanowanaDawka[] {
   const wynik: ZaplanowanaDawka[] = []
   for (let indeks = pierwszyIndeks; poczatek + indeks * krok < dzienDo; indeks += 1) {
     const czas = poczatek + indeks * krok
-    if (czas >= dzienOd) wynik.push({ dawka: { ...definicja, godzina: format(new Date(czas), 'HH:mm') }, kluczWystapienia: `interwal-${indeks}` })
+    if (czas >= dzienOd) wynik.push({ dawka: { ...definicja, godzina: format(new Date(czas), 'HH:mm') }, kluczWystapienia: `interwal-${indeks}`, planowanyCzas: new Date(czas).toISOString() })
   }
   return wynik
 }
 
-function zaplanowaneDawki(lek: Lek, data: string): ZaplanowanaDawka[] {
-  return trybDawkowania(lek) === 'co_x_godzin' ? dawkiInterwalowe(lek, data) : dawkiLeku(lek).map((dawka) => ({ dawka }))
+function zaplanowaneDawki(lek: Lek, data: string, poczatekInterwalu?: string): ZaplanowanaDawka[] {
+  return trybDawkowania(lek) === 'co_x_godzin' ? dawkiInterwalowe(lek, data, poczatekInterwalu) : dawkiLeku(lek).map((dawka) => ({ dawka }))
+}
+
+function wystapieniaSchematow(lek: Lek, data: string): (ZaplanowaneWystapienie & { wersjaDawkowaniaId?: string; jednostkaDawki?: string })[] {
+  const wersje = lek.historiaDawkowania
+  // JSON pomija undefined; brak pola w starszej wersji nie może dziedziczyć wartości z nowszej.
+  const konfiguracje = wersje?.length ? wersje.map((wersja, indeks) => ({ lek: { ...lek, ...konfiguracjaDawkowania(wersja.konfiguracja) }, wersja, indeks })) : [{ lek, wersja: undefined, indeks: 0 }]
+  return konfiguracje.flatMap(({ lek: wedlugWersji, wersja, indeks }) => {
+    if (!czyLekZaplanowanyNaDzien(wedlugWersji, data)) return []
+    const dawki = zaplanowaneDawki(wedlugWersji, data, wersja?.poczatekInterwalu)
+    return dawki.flatMap(({ dawka, kluczWystapienia, planowanyCzas }) => {
+      const czas = planowanyCzas ?? new Date(`${data}T${dawka.godzina}:00`).toISOString()
+      // Nie przesuwamy nieistniejącej godziny podczas wiosennej zmiany czasu.
+      if (!planowanyCzas && format(new Date(czas), 'HH:mm') !== dawka.godzina) return []
+      if (wersja && (Date.parse(czas) < Date.parse(wersja.obowiazujeOd) || wersje?.[indeks + 1] && Date.parse(czas) >= Date.parse(wersje[indeks + 1].obowiazujeOd))) return []
+      const idBazowe = idWystapieniaDawki(lek.id, data, dawka.id, kluczWystapienia)
+      return [{ dawka, kluczWystapienia, planowanyCzas: czas, idWystapienia: indeks === 0 ? idBazowe : `${idBazowe}:wersja-${wersja!.id}`, wersjaDawkowaniaId: wersja?.id, jednostkaDawki: wedlugWersji.jednostka ?? wedlugWersji.jednostkaLubPostac }]
+    })
+  })
 }
 
 export function dawkiZaplanowaneNaDzien(lek: Lek, data: string): DawkaLeku[] {
-  return zaplanowaneDawki(lek, data).map(({ dawka }) => dawka)
+  return wystapieniaSchematow(lek, data).map(({ dawka }) => dawka)
 }
 
-function zuzycieDnia(lek: Lek, data: string): number {
-  if (!czyLekZaplanowanyNaDzien(lek, data)) return 0
-  return dawkiZaplanowaneNaDzien(lek, data).reduce((suma, dawka) => suma + (typeof dawka.ilosc === 'number' && dawka.ilosc > 0 ? dawka.ilosc : 0), 0)
+function zuzycieDnia(lek: Lek, data: string): number | undefined {
+  const wystapienia = wystapieniaSchematow(lek, data)
+  if (wystapienia.some((wystapienie) => wystapienie.jednostkaDawki !== jednostkaZapasuLeku(lek) || !wystapienie.dawka.ilosc || wystapienie.dawka.ilosc < 0)) return undefined
+  return wystapienia.reduce((suma, wystapienie) => suma + wystapienie.dawka.ilosc!, 0)
 }
 
 export function przewidywanaDataWyczerpania(lek: Lek, odDnia: string): string | undefined {
@@ -121,12 +187,13 @@ export function przewidywanaDataWyczerpania(lek: Lek, odDnia: string): string | 
   let data = odDnia
   for (let indeks = 0; indeks < 3660; indeks += 1) {
     const zuzycie = zuzycieDnia(lek, data)
+    if (zuzycie === undefined) return undefined
     if (zuzycie > 0) {
       pozostalo -= zuzycie
       if (pozostalo <= 0) return data
     }
     data = format(addDays(parseISO(data), 1), 'yyyy-MM-dd')
-    if (lek.dataDo && data > lek.dataDo) return undefined
+    if (!lek.historiaDawkowania?.length && lek.dataDo && data > lek.dataDo) return undefined
   }
   return undefined
 }
@@ -148,16 +215,31 @@ function lekZRuchami(lek: Lek, ruchy: RuchApteczkiLeku[]): Lek {
   return { ...lek, ruchyApteczki: ruchy, zapasJednostek: ruchy.reduce((suma, ruch) => ruch.cofnietoAt ? suma : suma + (ruch.typ === 'dodanie' ? ruch.ilosc : -ruch.ilosc), 0) }
 }
 
-export async function zapiszLekZDodanymZapasem(lek: Lek, dodanyZapas?: number): Promise<void> {
+export async function zapiszLekZDodanymZapasem(lek: Lek, dodanyZapas?: number, zmiana?: ZmianaDawkowaniaLeku): Promise<void> {
   if (dodanyZapas !== undefined && (!Number.isFinite(dodanyZapas) || dodanyZapas < 0)) throw new Error('Podaj nieujemną ilość zapasu.')
   const tabelaLekow = baza.tabela('leki')
   await baza.transaction('rw', [tabelaLekow, tabelaKolejki()], async () => {
     const poprzedni = await tabelaLekow.get(lek.id)
+    const teraz = terazIso()
+    if (poprzedni?.historiaDawkowania && JSON.stringify(lek.historiaDawkowania) !== JSON.stringify(poprzedni.historiaDawkowania)) throw new Error('Historia schematów uległa zmianie. Odśwież formularz.')
+    let historia = poprzedni?.historiaDawkowania
+    const poprzedniaKonfiguracja = historia?.at(-1)?.konfiguracja ?? (poprzedni && konfiguracjaDawkowania(poprzedni))
+    const zmieniony = poprzedniaKonfiguracja && JSON.stringify(konfiguracjaDawkowania(poprzedniaKonfiguracja)) !== JSON.stringify(konfiguracjaDawkowania(lek))
+    if (!poprzedni || zmieniony) {
+      const nowa = nowaWersjaDawkowania(lek, zmiana ?? { obowiazujeOd: teraz }, teraz)
+      if (poprzedni && Date.parse(nowa.obowiazujeOd) < Date.parse(teraz)) throw new Error('Nowy schemat nie może zmieniać przeszłości. Wskaż bieżący lub przyszły początek.')
+      if (historia?.length && Date.parse(nowa.obowiazujeOd) <= Date.parse(historia.at(-1)!.obowiazujeOd)) throw new Error('Nowy schemat musi zaczynać się po ostatniej zapisanej wersji.')
+      historia = [...(historia ?? (poprzedni ? [nowaWersjaDawkowania(poprzedni, { obowiazujeOd: teraz, notatka: 'Schemat uchwycony przed pierwszą zmianą; wcześniejszy początek nieznany.' }, teraz, true)] : [])), nowa]
+    }
     const ruchy = ruchyApteczki(poprzedni ?? lek)
     const zDodaniem = dodanyZapas && dodanyZapas > 0
       ? [...ruchy, { id: `dodanie:${noweId()}`, typ: 'dodanie' as const, ilosc: dodanyZapas, data: new Date().toISOString().slice(0, 10), createdAt: terazIso() }]
       : ruchy
-    const zapisany = lekZRuchami({ ...lek, ruchyApteczki: zDodaniem }, zDodaniem)
+    // null zachowuje nieznaną jednostkę starego bilansu po późniejszym uzupełnieniu dawkowania.
+    const jednostkaZapasu = poprzedni
+      ? poprzedni.jednostkaZapasu !== undefined ? poprzedni.jednostkaZapasu : jednostkaZapasuLeku(poprzedni) ?? null
+      : lek.jednostka ?? lek.jednostkaLubPostac ?? null
+    const zapisany = lekZRuchami({ ...lek, historiaDawkowania: historia, jednostkaZapasu, ruchyApteczki: zDodaniem }, zDodaniem)
     zapisany.updatedAt = terazIso()
     await tabelaLekow.put(zapisany)
     await dodajDoKolejkiSynchronizacji('leki', zapisany, poprzedni)
@@ -187,6 +269,7 @@ function dopasujWpisyDziennika(
     const wadliweIdInterwalowe = idWystapieniaDawki(lek.id, data, dawka.id)
     const wpis = [...niewykorzystane].find((element) => {
       if (element.planowanaGodzina !== dawka.godzina) return false
+      if (element.wersjaDawkowaniaId || element.idWystapienia || wystapienie.idWystapienia.includes(':wersja-')) return false
       if (!element.dawkaId) return true
       return Boolean(kluczWystapienia) && element.dawkaId === dawka.id && element.id === wadliweIdInterwalowe
     })
@@ -199,17 +282,22 @@ function dopasujWpisyDziennika(
 }
 
 export function generujDawkiDnia(leki: Lek[], wpisy: DziennikLeku[], data: string): DawkaDnia[] {
-  return leki
-    .filter((lek) => lek.aktywny && !lek.usunietoAt && czyLekZaplanowanyNaDzien(lek, data))
-    .flatMap((lek) => {
-      const wystapienia = zaplanowaneDawki(lek, data).map(({ dawka, kluczWystapienia }) => ({ dawka, kluczWystapienia, idWystapienia: idWystapieniaDawki(lek.id, data, dawka.id, kluczWystapienia) }))
-      const dopasowane = dopasujWpisyDziennika(lek, data, wystapienia, wpisy)
-      return wystapienia.map(({ dawka, idWystapienia }) => {
-        const wpis = dopasowane.get(idWystapienia)
-        return { idWystapienia, lek, dawka, data, planowanaGodzina: dawka.godzina, status: wpis?.status ?? 'oczekuje', wpis }
-      })
+  return leki.filter((lek) => !lek.usunietoAt).flatMap((lek) => {
+    const wystapienia = lek.aktywny ? wystapieniaSchematow(lek, data) : []
+    const dopasowane = dopasujWpisyDziennika(lek, data, wystapienia, wpisy.filter((wpis) => !wpis.usunietoAt))
+    const wykorzystane = new Set([...dopasowane.values()].map((wpis) => wpis.id))
+    const wynik: DawkaDnia[] = wystapienia.map((wystapienie) => {
+      const wpis = dopasowane.get(wystapienie.idWystapienia)
+      const nieznanaHistoria = wpis && lek.historiaDawkowania?.length && !wpis.planowanaDawka
+      return { ...wystapienie, lek, dawka: wpis?.planowanaDawka ?? (nieznanaHistoria ? { id: wystapienie.dawka.id, godzina: wpis.planowanaGodzina } : wystapienie.dawka), planowanaGodzina: wpis?.planowanaGodzina ?? wystapienie.dawka.godzina, data, status: wpis?.status ?? 'oczekuje', wpis,
+        wersjaDawkowaniaId: wpis ? wpis.wersjaDawkowaniaId : wystapienie.wersjaDawkowaniaId, jednostkaDawki: nieznanaHistoria ? wpis.planowanaJednostka : wpis?.planowanaJednostka ?? wystapienie.jednostkaDawki, planowanyCzas: nieznanaHistoria ? wpis.planowanyCzas : wpis?.planowanyCzas ?? wystapienie.planowanyCzas }
     })
-    .sort((a, b) => a.planowanaGodzina.localeCompare(b.planowanaGodzina) || a.idWystapienia.localeCompare(b.idWystapienia))
+    // Wpisy spoza znanych schematów pozostają historią, bez zgadywania dawnej ilości.
+    for (const wpis of wpisy.filter((element) => element.lekId === lek.id && element.data === data && !element.usunietoAt && !wykorzystane.has(element.id))) {
+      wynik.push({ idWystapienia: wpis.idWystapienia ?? wpis.id, lek, dawka: wpis.planowanaDawka ?? { id: wpis.dawkaId ?? `starsza-dawka:${lek.id}:${wpis.planowanaGodzina}`, godzina: wpis.planowanaGodzina }, data, planowanaGodzina: wpis.planowanaGodzina, status: wpis.status, wpis, wersjaDawkowaniaId: wpis.wersjaDawkowaniaId, jednostkaDawki: wpis.planowanaJednostka, planowanyCzas: wpis.planowanyCzas })
+    }
+    return wynik
+  }).sort((a, b) => a.planowanaGodzina.localeCompare(b.planowanaGodzina) || a.idWystapienia.localeCompare(b.idWystapienia))
 }
 
 /** Buduje wpis bez zapisu. Zachowany dla starszych odbiorców; zapis domenowy wykonuje zapiszStatusDawkiZApteczka. */
@@ -221,6 +309,10 @@ export function zapiszStatusDawki(dawka: DawkaDnia, status: DziennikLeku['status
     lekId: dawka.lek.id,
     dawkaId: dawka.dawka.id,
     idWystapienia: dawka.idWystapienia,
+    wersjaDawkowaniaId: obecny ? obecny.wersjaDawkowaniaId : dawka.wersjaDawkowaniaId,
+    planowanaDawka: obecny?.planowanaDawka ?? (obecny && !obecny.wersjaDawkowaniaId ? undefined : structuredClone(dawka.dawka)),
+    planowanaJednostka: obecny?.planowanaJednostka ?? (obecny && !obecny.wersjaDawkowaniaId ? undefined : dawka.jednostkaDawki),
+    planowanyCzas: obecny?.planowanyCzas ?? (obecny && !obecny.wersjaDawkowaniaId ? undefined : dawka.planowanyCzas),
     data: dawka.data,
     planowanaGodzina: obecny?.planowanaGodzina ?? dawka.planowanaGodzina,
     status,
@@ -248,7 +340,7 @@ export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: Dzien
     if (!lek || lek.usunietoAt) throw new Error('Nie znaleziono leku dla tej dawki.')
     const wpisy = (await tabelaDziennika.where('lekId').equals(lek.id).toArray()).filter((wpis) => !wpis.usunietoAt)
     const aktualna = generujDawkiDnia([lek], wpisy, dawka.data).find((element) => element.idWystapienia === dawka.idWystapienia)
-    if (!aktualna) throw new Error('Harmonogram dawki uległ zmianie. Odśwież widok.')
+    if (!aktualna || !lek.aktywny) throw new Error('Harmonogram dawki uległ zmianie. Odśwież widok.')
     const poprzedniWpis = aktualna.wpis
     const teraz = terazIso()
     const poprawnyTermin = (termin: string | undefined) => Boolean(termin && /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?$/.test(termin) && Number.isFinite(parseISO(termin).getTime()))
@@ -269,7 +361,7 @@ export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: Dzien
       wpis.przyjetoAt = dane.przyjetoAt ? new Date(dane.przyjetoAt).toISOString() : juzPrzyjeta ? poprzedniWpis.przyjetoAt : teraz
       const ilosc = dane.przyjetaIlosc ?? (juzPrzyjeta ? poprzedniWpis.przyjetaIlosc ?? istniejaceZuzycie?.ilosc : aktualna.dawka.ilosc)
       if (ilosc !== undefined && (!Number.isFinite(ilosc) || ilosc <= 0)) throw new Error('Podaj dodatnią rzeczywistą ilość dawki.')
-      const jednostka = dane.przyjetaJednostka?.trim() ?? (juzPrzyjeta ? poprzedniWpis.przyjetaJednostka : undefined) ?? lek.jednostka ?? lek.jednostkaLubPostac
+      const jednostka = dane.przyjetaJednostka?.trim() ?? (juzPrzyjeta ? poprzedniWpis.przyjetaJednostka : undefined) ?? aktualna.jednostkaDawki
       wpis.przyjetaIlosc = ilosc
       wpis.przyjetaJednostka = jednostka
       // Powtórzenie potwierdzenia zachowuje wcześniejsze rozliczenie, także niedobór.
@@ -278,7 +370,7 @@ export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: Dzien
       if (!juzPrzyjeta || zmienionoIlosc || zmienionoJednostke) {
         const stan = stanApteczki(lek)
         const dostepne = Math.max(0, (stan ?? 0) + (istniejaceZuzycie && !istniejaceZuzycie.cofnietoAt ? istniejaceZuzycie.ilosc : 0))
-        const jednostkaZapasu = lek.jednostka ?? lek.jednostkaLubPostac
+        const jednostkaZapasu = jednostkaZapasuLeku(lek)
         const moznaRozliczyc = ilosc !== undefined && stan !== undefined && jednostka === jednostkaZapasu
         const rozliczone = moznaRozliczyc ? Math.min(ilosc, dostepne) : 0
         const nierozliczone = ilosc === undefined ? undefined : ilosc - rozliczone
@@ -316,7 +408,7 @@ export function czasDawkiDoUwagi(data: string, godzina: string, status: Dziennik
 
 export function wyznaczNastepnaDawke(dawki: readonly DawkaDnia[], teraz = new Date()): DawkaDnia | undefined {
   const czasTeraz = teraz.getTime()
-  const czasDawki = (dawka: DawkaDnia) => dawka.status === 'odroczone' && dawka.wpis?.odroczoneDo ? new Date(dawka.wpis.odroczoneDo).getTime() : new Date(`${dawka.data}T${dawka.planowanaGodzina}:00`).getTime()
+  const czasDawki = (dawka: DawkaDnia) => dawka.status === 'odroczone' && dawka.wpis?.odroczoneDo ? new Date(dawka.wpis.odroczoneDo).getTime() : new Date(dawka.planowanyCzas ?? `${dawka.data}T${dawka.planowanaGodzina}:00`).getTime()
   return [...dawki]
     .filter((dawka) => dawka.status === 'oczekuje' || dawka.status === 'odroczone')
     .filter((dawka) => Number.isFinite(czasDawki(dawka)) && czasDawki(dawka) >= czasTeraz)

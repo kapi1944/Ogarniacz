@@ -10,6 +10,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import type { Dokument, ElementPoczekalni, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, Recepta, Skierowanie, Terapia, WpisTerapii, Wizyta, Zadanie } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 import { pobierzInstallationId } from './InstallationService'
+import { generujDawkiDnia, stanApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from './LekiService'
 import {
   checksumJestPoprawny,
   obliczChecksum,
@@ -111,6 +112,54 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('przywraca historię schematów, parametry planu i przyjęcia oraz ID i bilans apteczki', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-01T00:00:00'))
+    const pierwotny: Lek = { ...utworzMetadane('lek-wersjonowany'), nazwa: 'Lek testowy', dawkaInstrukcja: '', godziny: ['08:00', '20:00'], dawki: [{ id: 'rano', godzina: '08:00', ilosc: 1 }, { id: 'wieczor', godzina: '20:00', ilosc: 1 }], jednostka: 'szt.', aktywny: true }
+    await zapiszLekZDodanymZapasem(pierwotny, 20)
+    const lek = (await baza.tabela('leki').get(pierwotny.id))!
+    const wystapienia = generujDawkiDnia([lek], [], '2026-08-10')
+    vi.setSystemTime(new Date('2026-08-10T10:00:00'))
+    await zapiszStatusDawkiZApteczka(wystapienia[0], 'zazyte', undefined, { przyjetaIlosc: 0.5, przyjetoAt: '2026-08-10T08:15:00' })
+    vi.setSystemTime(new Date('2026-08-15T12:00:00'))
+    const obecny = (await baza.tabela('leki').get(lek.id))!
+    await zapiszLekZDodanymZapasem({ ...obecny, godziny: ['09:00'], dawki: [{ ...obecny.dawki![0], godzina: '09:00', ilosc: 2 }], dataOd: '2026-08-15', dataDo: '2026-08-20' }, undefined, { notatka: 'Zmiana schematu' })
+    const przed = (await baza.tabela('leki').get(lek.id))!
+    const dziennik = await baza.tabela('dziennikLekow').toArray()
+    const backup = await przygotuj(await utworzBackup(['leki'], () => STALA_DATA))
+    await baza.tabela('leki').clear()
+    await baza.tabela('dziennikLekow').clear()
+    await przywrocBackup(backup)
+    baza.close()
+    await baza.open()
+    const po = (await baza.tabela('leki').get(lek.id))!
+    expect(JSON.stringify(po)).toBe(JSON.stringify(przed))
+    expect(await baza.tabela('dziennikLekow').toArray()).toEqual(dziennik)
+    // Nieobecne w JSON dawnej wersji dataOd/dataDo nie dziedziczą nowych ograniczeń.
+    const historia = generujDawkiDnia([po], dziennik, '2026-08-10')
+    expect(historia.map((dawka) => dawka.idWystapienia)).toEqual(wystapienia.map((dawka) => dawka.idWystapienia))
+    expect(historia.map((dawka) => dawka.dawka.ilosc)).toEqual([1, 1])
+    expect(historia[0].wpis?.przyjetaIlosc).toBe(0.5)
+    expect(stanApteczki(po)).toBe(19.5)
+    await zapiszStatusDawkiZApteczka(historia[0], 'zazyte')
+    expect(stanApteczki((await baza.tabela('leki').get(lek.id))!)).toBe(19.5)
+  })
+
+  it.each(['powtórzone ID', 'błędna kolejność', 'błędny czas'])('odrzuca uszkodzoną historię schematów przed zapisem: %s', async (przypadek) => {
+    const konfiguracja = { dawkaInstrukcja: '', godziny: ['08:00'] }
+    const wersje = [{ id: 'pierwsza', obowiazujeOd: '2026-08-01T00:00:00Z', zapisanoAt: STALA_DATA, konfiguracja }, { id: 'druga', obowiazujeOd: '2026-08-15T00:00:00Z', zapisanoAt: STALA_DATA, konfiguracja }]
+    await baza.tabela('leki').put({ ...utworzMetadane('lek-historia'), nazwa: 'Lek testowy', ...konfiguracja, aktywny: true, historiaDawkowania: wersje })
+    const backup = await utworzBackup(['leki'], () => STALA_DATA)
+    const rekord = backup.payload.leki!.leki![0] as unknown as Lek
+    if (przypadek === 'powtórzone ID') rekord.historiaDawkowania![1].id = 'pierwsza'
+    if (przypadek === 'błędna kolejność') rekord.historiaDawkowania!.reverse()
+    if (przypadek === 'błędny czas') rekord.historiaDawkowania![1].obowiazujeOd = 'nieznany'
+    await przeliczChecksum(backup)
+    await expect(przygotuj(backup)).rejects.toThrow()
+    expect((await baza.tabela('leki').get('lek-historia'))?.historiaDawkowania).toEqual(wersje)
   })
 
   it('zachowuje faktyczne przyjęcie i nierozliczony zapas oraz nie dopisuje ich do historii', async () => {

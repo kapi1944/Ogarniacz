@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze } from '../../data/BazaOgarniacza'
 import { utworzMetadane } from '../../domain/fabryki'
 import type { Lek } from '../../domain/typy'
@@ -11,9 +11,11 @@ beforeEach(async () => {
   await inicjalizujBaze()
   for (const nazwa of ['leki', 'dziennikLekow', 'kolejkaSynchronizacji', 'dziennikEcho'] as const) await baza.tabela(nazwa).clear()
 })
+afterEach(() => vi.useRealTimers())
 
 async function przygotuj(zapas = 5, dwieDawki = false) {
   const lek: Lek = { ...utworzMetadane('lek-echo'), nazwa: 'Lek testowy', dawkaInstrukcja: 'Instrukcja źródłowa', godziny: ['08:00'], dawki: [{ id: 'rano', godzina: '08:00', ilosc: 2 }, ...(dwieDawki ? [{ id: 'druga', godzina: '08:00', ilosc: 1 }] : [])], jednostka: 'szt.', aktywny: true }
+  await baza.tabela('leki').put(lek)
   await zapiszLekZDodanymZapasem(lek, zapas)
   const dawka = generujDawkiDnia([lek], [], '2026-08-14').find((element) => element.dawka.id === 'rano')!
   const wywolanie: WywolanieNarzedziaEcho = { id: 'przyjecie', nazwa: 'mark_medication_dose', argumenty: { lekId: lek.id, data: dawka.data, idWystapienia: dawka.idWystapienia, status: 'zazyte' } }
@@ -31,6 +33,25 @@ function utworzAgenta(wywolania: WywolanieNarzedziaEcho[], rejestr: ReturnType<t
 }
 
 describe('transakcyjne dawki przez Echo', () => {
+  it('korzysta z wersji schematu, wymaga zgody i zapisuje jej parametry bez ponownego zużycia', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-01T00:00:00'))
+    const { wykonawca, wywolanie } = await przygotuj()
+    const lek = (await baza.tabela('leki').get('lek-echo'))!
+    await zapiszLekZDodanymZapasem({ ...lek, godziny: ['09:00'], dawki: [{ ...lek.dawki![0], godzina: '09:00', ilosc: 1 }] })
+    vi.setSystemTime(new Date('2026-08-14T12:00:00'))
+    const aktualny = (await baza.tabela('leki').get(lek.id))!
+    const dawka = generujDawkiDnia([aktualny], [], '2026-08-14')[0]
+    const nowe = { ...wywolanie, argumenty: { lekId: lek.id, data: dawka.data, idWystapienia: dawka.idWystapienia, status: 'zazyte' } }
+    expect((await wykonawca.wykonaj(wywolanie, true)).status).toBe('zablokowane')
+    expect((await wykonawca.wykonaj(nowe)).status).toBe('wymaga_potwierdzenia')
+    expect(await baza.tabela('dziennikLekow').count()).toBe(0)
+    expect((await wykonawca.wykonaj(nowe, true)).status).toBe('wykonane')
+    expect((await wykonawca.wykonaj(nowe, true)).status).toBe('wykonane')
+    expect(await zapasLeku()).toBe(4)
+    expect(await baza.tabela('dziennikLekow').toArray()).toMatchObject([{ wersjaDawkowaniaId: aktualny.historiaDawkowania!.at(-1)!.id, planowanaDawka: { id: 'rano', godzina: '09:00', ilosc: 1 }, planowanaJednostka: 'szt.', przyjetaIlosc: 1 }])
+  })
+
   it('bez potwierdzenia nic nie zapisuje, także przy liberalnej polityce i podrobionym opisie modelu', async () => {
     const { wywolanie, rejestr } = await przygotuj()
     const wykonawca = new WykonawcaNarzedziEcho(rejestr, { ocen: () => ({ dozwolone: true }) }, async () => undefined)

@@ -92,6 +92,24 @@ interface SurowyBackup {
 }
 
 const niedozwoloneKlucze = /^(access_?token|refresh_?token|token|secret|sekret|password|haslo|session|sesja|credentials|daneLogowania)$/i
+const schematDawki = z.object({ id: z.string(), godzina: z.string(), ilosc: z.number().optional(), instrukcja: z.string().optional() }).passthrough()
+const schematWersjiDawkowania = z.object({
+  id: z.string().min(1), obowiazujeOd: z.iso.datetime({ offset: true }), zapisanoAt: z.iso.datetime({ offset: true }),
+  poczatekNieznany: z.boolean().optional(), poczatekInterwalu: z.iso.datetime({ offset: true }).optional(), notatka: z.string().optional(),
+  konfiguracja: z.object({
+    dawkaInstrukcja: z.string(), godziny: z.array(z.string()), dawki: z.array(schematDawki).optional(),
+    trybDawkowania: z.enum(['konkretne_godziny', 'razy_dziennie', 'co_x_godzin']).optional(),
+    liczbaDawekDziennie: z.number().optional(), oknoAktywnosciOd: z.string().optional(), oknoAktywnosciDo: z.string().optional(),
+    interwalGodzin: z.number().min(1).optional(), pierwszaGodzina: z.string().optional(),
+    jednostka: z.string().optional(), jednostkaLubPostac: z.string().optional(), dniTygodnia: z.array(z.number()).optional(),
+    coIleDni: z.number().optional(), dataOd: z.string().optional(), dataDo: z.string().optional(),
+    zuzycieNaDawke: z.number().optional(), dodatkoweInstrukcje: z.string().optional(),
+  }).passthrough(),
+}).passthrough()
+const schematHistoriiDawkowania = z.array(schematWersjiDawkowania).min(1).refine((wersje) =>
+  new Set(wersje.map((wersja) => wersja.id)).size === wersje.length
+  && wersje.every((wersja, indeks) => indeks === 0 || Date.parse(wersja.obowiazujeOd) >= Date.parse(wersje[indeks - 1].obowiazujeOd)), 'Historia schematów ma niepoprawną kolejność lub powtórzone ID.')
+
 const schematEncji = z.object({
   id: z.string().min(1),
   createdAt: z.string().min(1),
@@ -134,6 +152,8 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     status: z.enum(['do_sklasyfikowania', 'nowe', 'przetworzone']),
   }),
   leki: schematEncji.extend({
+    historiaDawkowania: schematHistoriiDawkowania.optional(),
+    jednostkaZapasu: z.string().nullable().optional(),
     nazwa: z.string(),
     dawkaInstrukcja: z.string(),
     godziny: z.array(z.string()),
@@ -148,6 +168,8 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     aktywny: z.boolean(),
   }),
   dziennikLekow: schematEncji.extend({
+    wersjaDawkowaniaId: z.string().optional(), planowanaDawka: schematDawki.optional(),
+    planowanaJednostka: z.string().optional(), planowanyCzas: z.iso.datetime({ offset: true }).optional(),
     lekId: z.string(),
     dawkaId: z.string().optional(),
     data: z.string(),

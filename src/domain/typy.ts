@@ -170,6 +170,9 @@ export interface RuchApteczkiLeku {
 }
 
 export interface Lek extends EncjaBazowa {
+  historiaDawkowania?: WersjaDawkowaniaLeku[]
+  /** Jednostka bilansu apteczki niezależna od jednostki kolejnych schematów. */
+  jednostkaZapasu?: string | null
   nazwa: string
   /** Pola historyczne; nowe zapisy utrzymują je jako projekcję dawek. */
   dawkaInstrukcja: string
@@ -197,11 +200,29 @@ export interface Lek extends EncjaBazowa {
   aktywny: boolean
 }
 
+export type KonfiguracjaDawkowaniaLeku = Pick<Lek, 'dawkaInstrukcja' | 'godziny' | 'dawki' | 'trybDawkowania' | 'liczbaDawekDziennie' | 'oknoAktywnosciOd' | 'oknoAktywnosciDo' | 'interwalGodzin' | 'pierwszaGodzina' | 'jednostka' | 'jednostkaLubPostac' | 'dniTygodnia' | 'coIleDni' | 'dataOd' | 'dataDo' | 'zuzycieNaDawke' | 'dodatkoweInstrukcje'>
+
+export interface WersjaDawkowaniaLeku {
+  id: Id
+  obowiazujeOd: string
+  zapisanoAt: string
+  konfiguracja: KonfiguracjaDawkowaniaLeku
+  notatka?: string
+  /** Stary schemat znamy dopiero od chwili uchwycenia; wcześniejszy początek jest nieznany. */
+  poczatekNieznany?: boolean
+  poczatekInterwalu?: string
+}
+
 export interface DziennikLeku extends EncjaBazowa {
   lekId: Id
   dawkaId?: Id
   /** Wiąże wystąpienie ze starszym wpisem bez zmiany jego historycznego ID. */
   idWystapienia?: string
+  wersjaDawkowaniaId?: Id
+  planowanaDawka?: DawkaLeku
+  planowanaJednostka?: string
+  /** Pełny czas rozróżnia powtórzone godziny podczas jesiennej zmiany czasu. */
+  planowanyCzas?: string
   data: string
   planowanaGodzina: string
   status: 'oczekuje' | 'zazyte' | 'odroczone' | 'pominiete'

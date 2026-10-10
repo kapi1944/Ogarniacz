@@ -215,6 +215,9 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .formularz { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
 .pole { display: grid; align-content: start; gap: 5px; color: var(--tekst-2); font-size: .78rem; font-weight: 650; }
 .pole--pelne { grid-column: 1 / -1; }
+.historia-schematow { min-width: 0; overflow-wrap: anywhere; }
+.historia-schematow ul { padding-left: 20px; }
+.historia-schematow li + li { margin-top: 16px; }
 .pole input, .pole select, .pole textarea, .pasek-planera input, .pasek-planera select, .pole-inline input, .pole-inline select, .rekord__akcje select, .akcje-backupu select { width: 100%; min-height: 38px; padding: calc(8px * var(--gestosc)) 10px; color: var(--tekst); background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: var(--promien-pola); }
 .pole textarea { min-height: 104px; resize: vertical; line-height: 1.45; }
 .pole small { color: var(--tekst-2); font-weight: 400; }
