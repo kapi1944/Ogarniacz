@@ -749,6 +749,11 @@ export async function przywrocBackup(
   ) {
     throw new BladBackupu('Automatyczna kopia before-restore nie jest pełnym backupem.', 'BEFORE_RESTORE')
   }
+  try {
+    walidujCaloscBackupu(backupPrzedPrzywracaniem as unknown as SurowyBackup)
+  } catch (blad) {
+    throw new BladBackupu('Automatyczna kopia before-restore zawiera niepoprawne lub niepełne dane.', 'BEFORE_RESTORE', blad)
+  }
   opcje.poUtworzeniuKopii?.(backupPrzedPrzywracaniem)
 
   const definicje = wybraneSekcje.map((nazwa) => definicjeSekcji.find((element) => element.nazwa === nazwa)!)

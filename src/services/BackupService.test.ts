@@ -186,6 +186,34 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     expect(await odczytajDaneZdrowotne()).toEqual(dane)
   })
 
+  it.each(['brak sekcji', 'brak tabeli', 'błędna liczba', 'błędny rekord'] as const)(
+    'blokuje restore bez zmian danych, gdy kopia ochronna zdrowia ma problem: %s', async (problem) => {
+      await zapiszDaneZdrowotne()
+      const backup = await przygotuj(await utworzBackup(['zdrowie'], () => STALA_DATA))
+      await baza.tabela('wpisyTerapii').update('wpis-testowy', { tresc: 'Bieżąca treść do ochrony' })
+      const przed = await odczytajDaneZdrowotne()
+      const kopiaOchronna = await utworzBackup(undefined, () => STALA_DATA, 'before-restore')
+      if (problem === 'brak sekcji') {
+        kopiaOchronna.manifest.sections = kopiaOchronna.manifest.sections.filter((sekcja) => sekcja !== 'zdrowie')
+        delete kopiaOchronna.payload.zdrowie
+        delete kopiaOchronna.manifest.recordCounts.zdrowie
+        delete kopiaOchronna.manifest.schemaVersions.zdrowie
+      } else if (problem === 'brak tabeli') delete kopiaOchronna.payload.zdrowie!.wpisyTerapii
+      else if (problem === 'błędna liczba') kopiaOchronna.manifest.recordCounts.zdrowie = 0
+      else kopiaOchronna.payload.zdrowie!.wpisyTerapii[0].terapiaId = 123
+      await przeliczChecksum(kopiaOchronna)
+      const poUtworzeniuKopii = vi.fn()
+
+      await expect(przywrocBackup(backup, undefined, {
+        utworzKopiePrzedPrzywracaniem: async () => kopiaOchronna,
+        poUtworzeniuKopii,
+      })).rejects.toMatchObject({ kod: 'BEFORE_RESTORE' })
+
+      expect(poUtworzeniuKopii).not.toHaveBeenCalled()
+      expect(await odczytajDaneZdrowotne()).toEqual(przed)
+    },
+  )
+
   it('cofa wcześniejsze czyszczenia i zapisy wszystkich tabel zdrowia po błędzie ostatniej tabeli', async () => {
     await zapiszDaneZdrowotne()
     const backup = await przygotuj(await utworzBackup(['zdrowie'], () => STALA_DATA))
