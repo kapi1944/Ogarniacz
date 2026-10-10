@@ -7,7 +7,7 @@ import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarnia
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { utworzMetadane } from '../domain/fabryki'
-import type { Dokument, ElementPoczekalni, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, Wizyta, Zadanie } from '../domain/typy'
+import type { Dokument, ElementPoczekalni, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, Recepta, Skierowanie, Terapia, WpisTerapii, Wizyta, Zadanie } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 import { pobierzInstallationId } from './InstallationService'
 import {
@@ -22,6 +22,54 @@ import {
 } from './BackupService'
 
 const STALA_DATA = '2026-08-30T10:00:00.000Z'
+const TABELE_ZDROWOTNE = ['skierowania', 'recepty', 'terapie', 'wpisyTerapii'] as const
+
+async function zapiszDaneZdrowotne() {
+  const metadane = { createdAt: STALA_DATA, updatedAt: STALA_DATA }
+  const skierowanie: Skierowanie = {
+    ...metadane, id: 'skierowanie-testowe', nazwa: 'Badanie testowe',
+    wystawca: 'Wystawca testowy', dataWystawienia: '2026-08-20',
+    typCelu: 'badanie', cel: 'Cel testowy', kod: '1234',
+    terminWaznosci: '2026-12-20', placowka: 'Placówka testowa',
+    notatka: 'Notatka skierowania', status: 'umowiono', wizytaId: 'wizyta-testowa',
+  }
+  const recepta: Recepta = {
+    ...metadane, id: 'recepta-testowa', kod: '5678', dataWystawienia: '2026-08-20',
+    wystawca: 'Wystawca testowy', terminRealizacji: '2026-09-20',
+    status: 'czesciowo_zrealizowana', notatka: 'Notatka recepty', wizytaId: 'wizyta-testowa',
+    pozycje: [{ id: 'pozycja-testowa', nazwaLeku: 'Lek testowy', lekId: 'lek-testowy',
+      ilosc: 2, iloscZrealizowana: 1, dawkowanie: 'Instrukcja źródłowa',
+      odplatnosc: 'Testowa', notatka: 'Notatka pozycji' }],
+  }
+  const terapia: Terapia = {
+    ...metadane, id: 'terapia-testowa', nazwa: 'Terapia testowa', rodzaj: 'psychoterapia',
+    dataRozpoczecia: '2026-08-01', status: 'aktywna', notatka: 'Notatka terapii',
+    polaWlasne: { 'custom:cel': 'Własna informacja' },
+  }
+  const wpis: WpisTerapii = {
+    ...metadane, id: 'wpis-testowy', terapiaId: terapia.id, dataCzas: STALA_DATA,
+    tytul: 'Sesja testowa', tresc: 'Treść źródłowa', samopoczucie: 0,
+    obserwacje: 'Obserwacje', zalecenia: 'Zapisane zalecenia',
+    tematNastepnegoSpotkania: 'Pytania', wizytaId: 'wizyta-testowa',
+  }
+  await baza.tabela('skierowania').put(skierowanie)
+  await baza.tabela('recepty').put(recepta)
+  await baza.tabela('terapie').put(terapia)
+  await baza.tabela('wpisyTerapii').bulkPut([wpis, {
+    ...wpis, id: 'wpis-usuniety', tresc: 'Historyczny wpis', usunietoAt: '2026-08-31T10:00:00.000Z',
+  }])
+  return odczytajDaneZdrowotne()
+}
+
+async function odczytajDaneZdrowotne() {
+  return Object.fromEntries(await Promise.all(TABELE_ZDROWOTNE.map(async (tabela) =>
+    [tabela, await baza.tabela(tabela).toArray()] as const)))
+}
+
+async function przeliczChecksum(backup: OgarniaczBackup): Promise<void> {
+  const { checksum: _checksum, ...manifest } = backup.manifest
+  backup.manifest.checksum = await obliczChecksum({ manifest, payload: backup.payload })
+}
 
 function utworzNotatke(tytul: string): Notatka {
   return { ...utworzMetadane(), tytul, tresc: 'Treść', tagi: [], powiazania: [] }
@@ -63,6 +111,127 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('eksportuje wszystkie nowe tabele raz w domyślnej i selektywnej kopii', async () => {
+    const dane = await zapiszDaneZdrowotne()
+    for (const sekcje of [undefined, ['zdrowie', 'zdrowie'] as const]) {
+      const backup = await utworzBackup(sekcje, () => STALA_DATA)
+      expect(backup.payload.zdrowie).toEqual(dane)
+      expect(backup.manifest.sections.filter((sekcja) => sekcja === 'zdrowie')).toHaveLength(1)
+      expect(backup.manifest.recordCounts.zdrowie).toBe(5)
+      expect(backup.manifest.schemaVersions.zdrowie).toBe(1)
+      expect(backup.manifest.formatVersion).toBe(WERSJA_FORMATU_BACKUPU)
+      for (const tabela of TABELE_ZDROWOTNE) {
+        expect(Object.values(backup.payload).filter((sekcja) => tabela in sekcja!)).toHaveLength(1)
+      }
+      expect(await checksumJestPoprawny(backup)).toBe(true)
+    }
+  })
+
+  it('przywraca zdrowie z pełną treścią, datami, powiązaniami i soft-delete bez duplikatów', async () => {
+    const dane = await zapiszDaneZdrowotne()
+    const lek: Lek = { id: 'lek-testowy', createdAt: STALA_DATA, updatedAt: STALA_DATA,
+      nazwa: 'Lek testowy', dawkaInstrukcja: '', godziny: [], aktywny: true }
+    const wizyta: Wizyta = { id: 'wizyta-testowa', createdAt: STALA_DATA, updatedAt: STALA_DATA,
+      nazwa: 'Wizyta testowa', status: 'odbyta', notatka: '', pytania: [],
+      dokumentyIds: [], checklista: [], skierowanieId: 'skierowanie-testowe' }
+    await baza.tabela('leki').put(lek)
+    await baza.tabela('wizyty').put(wizyta)
+    const backup = await przygotuj(await utworzBackup(['zdrowie', 'leki', 'wizyty'], () => STALA_DATA))
+    for (const tabela of [...TABELE_ZDROWOTNE, 'leki', 'wizyty'] as const) await baza.tabela(tabela).clear()
+
+    const wynik = await przywrocBackup(backup)
+    await przywrocBackup(backup)
+
+    expect(wynik.liczbaRekordow).toBe(7)
+    expect(await odczytajDaneZdrowotne()).toEqual(dane)
+    expect(await baza.tabela('leki').get(lek.id)).toEqual(lek)
+    expect(await baza.tabela('wizyty').get(wizyta.id)).toEqual(wizyta)
+  })
+
+  it.each([1, 2, 3])('zachowuje zdrowie przy odtwarzaniu starszej pełnej kopii v%i bez nowej sekcji', async (wersja) => {
+    const historyczneSekcje = PODSTAWOWE_SEKCJE_BACKUPU.filter((sekcja) => sekcja !== 'zdrowie')
+    const kopia = await utworzBackup(historyczneSekcje, () => STALA_DATA)
+    const staraKopia = await zmienManifest(kopia, (manifest) => {
+      manifest.formatVersion = wersja
+      if (wersja === 1) {
+        delete manifest.dexieSchemaVersion
+        delete manifest.backupType
+        delete manifest.installationId
+      } else if (wersja === 2) delete manifest.installationId
+    })
+    const dane = await zapiszDaneZdrowotne()
+
+    const wynik = await przywrocBackup(await przygotujBackupDoPrzywracania(JSON.stringify(staraKopia)))
+
+    expect(wynik.przywroconeSekcje).toEqual(historyczneSekcje)
+    expect(await odczytajDaneZdrowotne()).toEqual(dane)
+    expect(wynik.backupPrzedPrzywracaniem.payload.zdrowie).toEqual(dane)
+    expect(await checksumJestPoprawny(wynik.backupPrzedPrzywracaniem)).toBe(true)
+  })
+
+  it('tworzy kompletną kopię zdrowia before-restore przed zastąpieniem danych', async () => {
+    const dane = await zapiszDaneZdrowotne()
+    const backup = await przygotuj(await utworzBackup(['zdrowie'], () => STALA_DATA))
+    await baza.tabela('wpisyTerapii').update('wpis-testowy', { tresc: 'Bieżąca treść' })
+    const przed = await odczytajDaneZdrowotne()
+
+    const wynik = await przywrocBackup(backup)
+
+    expect(wynik.backupPrzedPrzywracaniem.manifest.backupType).toBe('before-restore')
+    expect(wynik.backupPrzedPrzywracaniem.manifest.sections).toEqual(PODSTAWOWE_SEKCJE_BACKUPU)
+    expect(wynik.backupPrzedPrzywracaniem.payload.zdrowie).toEqual(przed)
+    await przygotuj(wynik.backupPrzedPrzywracaniem)
+    expect(await odczytajDaneZdrowotne()).toEqual(dane)
+  })
+
+  it('cofa wcześniejsze czyszczenia i zapisy wszystkich tabel zdrowia po błędzie ostatniej tabeli', async () => {
+    await zapiszDaneZdrowotne()
+    const backup = await przygotuj(await utworzBackup(['zdrowie'], () => STALA_DATA))
+    await baza.tabela('skierowania').update('skierowanie-testowe', { cel: 'Bieżący cel' })
+    await baza.tabela('recepty').update('recepta-testowa', { notatka: 'Bieżąca recepta' })
+    await baza.tabela('terapie').update('terapia-testowa', { nazwa: 'Bieżąca terapia' })
+    await baza.tabela('wpisyTerapii').update('wpis-testowy', { tresc: 'Bieżący wpis' })
+    const przed = await odczytajDaneZdrowotne()
+    const odrzucZapis = () => { throw new Error('Syntetyczny błąd zapisu wpisu terapii') }
+    baza.tabela('wpisyTerapii').hook('creating', odrzucZapis)
+    try {
+      await expect(przywrocBackup(backup)).rejects.toThrow('Syntetyczny błąd zapisu wpisu terapii')
+    } finally {
+      baza.tabela('wpisyTerapii').hook('creating').unsubscribe(odrzucZapis)
+    }
+    expect(await odczytajDaneZdrowotne()).toEqual(przed)
+  })
+
+  it.each([
+    ['skierowania', { status: 'nieznany' }],
+    ['recepty', { pozycje: [{ id: 'pozycja', nazwaLeku: 'Test', ilosc: 'dwie', iloscZrealizowana: 0 }] }],
+    ['terapie', { rodzaj: 123 }],
+    ['wpisyTerapii', { terapiaId: 123 }],
+  ] as const)('odrzuca niepoprawny rekord tabeli %s przed zmianą danych', async (tabela, zmiana) => {
+    const przed = await zapiszDaneZdrowotne()
+    const backup = await utworzBackup(['zdrowie'], () => STALA_DATA)
+    Object.assign(backup.payload.zdrowie![tabela][0], zmiana)
+    await przeliczChecksum(backup)
+
+    await expect(przywrocBackup(backup)).rejects.toMatchObject({ kod: 'MODEL_DANYCH' })
+    expect(await odczytajDaneZdrowotne()).toEqual(przed)
+  })
+
+  it('odrzuca powtórzone ID i niepełny zestaw tabel nowej sekcji', async () => {
+    const przed = await zapiszDaneZdrowotne()
+    const backup = await utworzBackup(['zdrowie'], () => STALA_DATA)
+    const duplikat = structuredClone(backup)
+    duplikat.payload.zdrowie!.terapie.push(duplikat.payload.zdrowie!.terapie[0])
+    duplikat.manifest.recordCounts.zdrowie! += 1
+    await przeliczChecksum(duplikat)
+    await expect(przygotuj(duplikat)).rejects.toMatchObject({ kod: 'MODEL_DANYCH' })
+
+    delete backup.payload.zdrowie!.skierowania
+    await przeliczChecksum(backup)
+    await expect(przygotuj(backup)).rejects.toMatchObject({ kod: 'STRUKTURA_SEKCJI' })
+    expect(await odczytajDaneZdrowotne()).toEqual(przed)
   })
 
   it('buduje kompletny manifest aktualnego formatu', async () => {
