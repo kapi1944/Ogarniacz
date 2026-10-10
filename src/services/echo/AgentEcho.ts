@@ -22,6 +22,7 @@ const INSTRUKCJE_SYSTEMOWE = [
   'Nie znasz implementacji bazy i nie możesz wykonywać kodu, SQL ani poleceń systemowych.',
   'Jeśli brakuje istotnej informacji, zadaj jedno naturalne pytanie. Jeśli danych nie ma, powiedz wprost, że ich nie ma.',
   'Możesz proponować działania, ale decyzję o wykonaniu i potwierdzeniu podejmuje warstwa polityki.',
+  'Zmianę statusu leku przygotuj przez list_medication_doses i konkretne idWystapienia. Jeżeli godzina pasuje do kilku dawek, zapytaj użytkownika, którą wskazuje. Nie wybieraj pierwszej i nie zmieniaj dawkowania ani instrukcji medycznych.',
 ]
 
 export interface OpcjeAgentaEcho {
@@ -209,10 +210,17 @@ export class AgentEcho {
     const wynik = await this.wykonawca.wykonaj(wywolanie, true)
     this.wynikiBiezacejTury = [wynik]
     this.kontekst.dodajWynikNarzedzia(wynik)
+    if (wywolanie.nazwa === 'mark_medication_dose' && wynik.status === 'wymaga_potwierdzenia') {
+      const ponownaAkcja = { ...oczekujaca, opis: wynik.komunikat ?? 'Potwierdź rozbieżność apteczki.' }
+      this.oczekujacaAkcja = structuredClone(ponownaAkcja)
+      return { tekst: ponownaAkcja.opis, ryzyko: ponownaAkcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: ponownaAkcja }
+    }
+    if (wywolanie.nazwa === 'mark_medication_dose' && wynik.status !== 'wykonane') return this.odpowiedz(wynik.komunikat ?? 'Nie zapisano zmiany dawki.', akcja.ryzyko)
     if (wynik.status !== 'wykonane' && ['create_task', 'create_reminder'].includes(wywolanie.nazwa)) return this.uruchomPetle(sygnalZewnetrzny)
     if (wynik.status !== 'wykonane') return this.odpowiedz('Nie udało się bezpiecznie wykonać tej zmiany.', akcja.ryzyko)
     this.kontekst.ustawOstatniaAkcje(wywolanie.nazwa, wywolanie.argumenty)
     this.zapamietajEncjeWyniku(wywolanie.nazwa, wynik.dane)
+    if (wywolanie.nazwa === 'mark_medication_dose') return this.odpowiedz(wynik.komunikat ?? 'Sprawdź zapis w historii leków.', akcja.ryzyko)
     if (wywolanie.odpowiedzPoWykonaniu) return this.odpowiedz(wywolanie.odpowiedzPoWykonaniu, akcja.ryzyko)
     return this.uruchomPetle(sygnalZewnetrzny)
   }
@@ -276,6 +284,11 @@ export class AgentEcho {
     if (decyzja.wywolania.length > 1 || this.oczekujacaAkcja?.plan) {
       const cel = [...this.kontekst.migawka().tury].reverse().find((tura) => tura.rola === 'uzytkownik')?.tresc ?? 'Wykonanie polecenia'
       const plan = utworzPlanWykonaniaEcho(cel, decyzja.wywolania, this.rejestr)
+      for (const krok of plan.kroki.filter((element) => element.narzedzie === 'mark_medication_dose')) {
+        const wynik = await this.wykonawca.wykonaj({ id: krok.id, nazwa: krok.narzedzie, argumenty: krok.parametry })
+        if (wynik.status !== 'wymaga_potwierdzenia') return this.odpowiedz(wynik.komunikat ?? 'Nie można przygotować zmiany dawki.', 'umiarkowane')
+        krok.opis = wynik.komunikat ?? krok.opis
+      }
       this.kontekst.ustawPlanWykonania(plan)
       this.oczekujacaAkcja = undefined
       if (plan.kroki.some((krok) => krok.wymagaPotwierdzenia)) {
@@ -291,7 +304,7 @@ export class AgentEcho {
       return this.wykonajPlan(plan, false)
     }
     for (const wywolanie of decyzja.wywolania) {
-      if (wywolanie.opisPotwierdzenia) {
+      if (wywolanie.opisPotwierdzenia && wywolanie.nazwa !== 'mark_medication_dose') {
         const narzedzie = this.rejestr.pobierz(wywolanie.nazwa)
         const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie, ryzyko: narzedzie?.ryzyko ?? 'wysokie', opis: wywolanie.opisPotwierdzenia }
         this.oczekujacaAkcja = structuredClone(akcja)
@@ -304,13 +317,14 @@ export class AgentEcho {
       this.kontekst.dodajWynikNarzedzia(wynik)
       if (wynik.status === 'wymaga_potwierdzenia') {
         const narzedzie = this.rejestr.pobierz(wywolanie.nazwa)
-        const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie, ryzyko: narzedzie?.ryzyko ?? 'wysokie', opis: wywolanie.opisPotwierdzenia ?? wynik.komunikat ?? 'Zmiana danych' }
+        const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie, ryzyko: narzedzie?.ryzyko ?? 'wysokie', opis: wywolanie.nazwa === 'mark_medication_dose' ? wynik.komunikat ?? 'Zmiana dawki' : wywolanie.opisPotwierdzenia ?? wynik.komunikat ?? 'Zmiana danych' }
         this.oczekujacaAkcja = structuredClone(akcja)
         return { tekst: podsumujAkcje(akcja), ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
       }
       if (wynik.status === 'zablokowane') {
         return this.odpowiedz(wynik.komunikat ?? 'Echo nie może wykonać tego działania.')
       }
+      if (wywolanie.nazwa === 'mark_medication_dose' && wynik.status === 'blad') return this.odpowiedz(wynik.komunikat ?? 'Nie zapisano zmiany dawki.', 'umiarkowane')
       if (
         wynik.status === 'wykonane'
         && wywolanie.nazwa === 'current_external_data'
@@ -333,6 +347,8 @@ export class AgentEcho {
     this.kontekst.ustawPlanWykonania(plan)
     const statusy = new Map<string, import('./typyEcho').KrokPlanuWykonaniaEcho['status']>()
     for (const krok of plan.kroki) {
+      // Wznowienie po rozbieżności dawki nie powtarza już wykonanych kroków planu.
+      if (krok.status === 'wykonany') { statusy.set(krok.id, krok.status); continue }
       const zaleznoscNieudana = krok.zaleznosci.some((id) => statusy.get(id) !== 'wykonany')
       if (zaleznoscNieudana) {
         krok.status = 'pominiety'
@@ -347,6 +363,11 @@ export class AgentEcho {
       const wynik = await this.wykonawca.wykonaj({ id: krok.id, nazwa: krok.narzedzie, argumenty: krok.parametry }, potwierdzone)
       this.wynikiBiezacejTury.push(wynik)
       this.kontekst.dodajWynikNarzedzia(wynik)
+      if (krok.narzedzie === 'mark_medication_dose' && wynik.status === 'wymaga_potwierdzenia') {
+        const akcja: AkcjaDoPotwierdzeniaEcho = { wywolanie: { id: krok.id, nazwa: krok.narzedzie, argumenty: krok.parametry }, ryzyko: krok.ryzyko, opis: wynik.komunikat ?? 'Potwierdź rozbieżność apteczki.', plan }
+        this.oczekujacaAkcja = structuredClone(akcja)
+        return { tekst: akcja.opis, ryzyko: akcja.ryzyko, tryb: this.provider.tryb, wymagaPotwierdzenia: true, akcjaDoPotwierdzenia: akcja }
+      }
       krok.status = wynik.status === 'wykonane' ? 'wykonany' : 'blad'
       krok.komunikat = wynik.komunikat
       statusy.set(krok.id, krok.status)
@@ -360,8 +381,11 @@ export class AgentEcho {
     const nieudane = plan.kroki.filter((krok) => krok.status === 'blad' || krok.status === 'pominiety')
     plan.status = nieudane.length ? 'czesciowo_wykonany' : 'wykonany'
     this.kontekst.ustawPlanWykonania(plan)
-    if (!nieudane.length) return undefined
-    const czescWykonana = wykonane.length ? `Wykonałem: ${wykonane.map((krok) => krok.opis).join(', ')}. ` : 'Nie udało się wykonać żadnego kroku. '
+    if (!nieudane.length) {
+      const wynikiDawek = wykonane.filter((krok) => krok.narzedzie === 'mark_medication_dose').map((krok) => krok.komunikat).join(' ')
+      return wynikiDawek ? this.odpowiedz(`Zakończono plan. ${wynikiDawek}`, najwyzszeRyzykoPlanu(plan)) : undefined
+    }
+    const czescWykonana = wykonane.length ? `Wykonałem: ${wykonane.map((krok) => krok.narzedzie === 'mark_medication_dose' ? krok.komunikat ?? krok.opis : krok.opis).join(', ')}. ` : 'Nie udało się wykonać żadnego kroku. '
     const czescNieudana = `Nie udało się: ${nieudane.map((krok) => `${krok.opis}${krok.komunikat ? ` — ${krok.komunikat}` : ''}`).join(', ')}.`
     return this.odpowiedz(`${czescWykonana}${czescNieudana}`, najwyzszeRyzykoPlanu(plan))
   }

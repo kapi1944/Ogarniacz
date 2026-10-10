@@ -31,7 +31,8 @@ import {
 import {
   generujDawkiDnia,
   przewidywanaDataWyczerpania,
-  zapiszStatusDawki,
+  RozbieznoscApteczki,
+  zapiszStatusDawkiZApteczka,
 } from "../LekiService";
 import { statystykaNawyku } from "../NawykiService";
 import { statystykaPaliwa } from "../MotoryzacjaService";
@@ -65,7 +66,7 @@ export interface NarzedzieEcho<TArgumenty, TWynik> {
   opis: string;
   schematArgumentow: z.ZodType<TArgumenty>;
   ryzyko: RyzykoDzialania;
-  wykonaj(argumenty: TArgumenty): Promise<TWynik>;
+  wykonaj(argumenty: TArgumenty, zgoda?: { potwierdzRozbieznosc: boolean }): Promise<TWynik>;
 }
 
 interface NarzedzieWykonywalneEcho {
@@ -75,7 +76,7 @@ interface NarzedzieWykonywalneEcho {
   opis: string;
   schematArgumentow: z.ZodType;
   ryzyko: RyzykoDzialania;
-  wykonaj(argumenty: unknown): Promise<unknown>;
+  wykonaj(argumenty: unknown, zgoda?: { potwierdzRozbieznosc: boolean }): Promise<unknown>;
 }
 
 export function rodzajNarzedziaEcho(narzedzie: Pick<NarzedzieWykonywalneEcho, 'nazwa' | 'rodzaj'>): 'odczyt' | 'zapis' {
@@ -176,6 +177,8 @@ async function zapiszTworzonaEncjeEcho<T extends EncjaBazowa>(repozytorium: Repo
 }
 
 export class WykonawcaNarzedziEcho {
+  // Zgoda pochodzi z ponownego potwierdzenia użytkownika, nigdy z argumentów modelu.
+  private rozbieznoscDawki?: { klucz: string; komunikat: string };
   private kolejkaTworzenia: Promise<unknown> = Promise.resolve();
   private readonly zakonczoneTworzenie = new Map<string, WynikNarzedziaEcho>();
   constructor(
@@ -234,8 +237,14 @@ export class WykonawcaNarzedziEcho {
         komunikat: "Argumenty narzędzia są niepoprawne.",
       };
 
+    const czyDawka = narzedzie.nazwa === 'mark_medication_dose';
+    const kluczDawki = JSON.stringify([wywolanie.id, walidacja.data]);
     try {
       const konflikt = await narzedzie.sprawdzStan?.(walidacja.data, this.sprawdzDostep);
+      if (czyDawka && !potwierdzone) return {
+        wywolanieId: wywolanie.id, nazwa: wywolanie.nazwa, status: 'wymaga_potwierdzenia',
+        komunikat: this.rozbieznoscDawki?.klucz === kluczDawki ? this.rozbieznoscDawki.komunikat : konflikt ?? narzedzie.opis,
+      };
       if (konflikt && !potwierdzone) return {
         wywolanieId: wywolanie.id, nazwa: wywolanie.nazwa,
         status: 'wymaga_potwierdzenia', komunikat: konflikt,
@@ -253,35 +262,43 @@ export class WykonawcaNarzedziEcho {
         status: "wymaga_potwierdzenia",
         komunikat: narzedzie.opis,
       };
-      const dane = await narzedzie.wykonaj(walidacja.data);
+      const dane = czyDawka
+        ? await narzedzie.wykonaj(walidacja.data, { potwierdzRozbieznosc: potwierdzone && this.rozbieznoscDawki?.klucz === kluczDawki })
+        : await narzedzie.wykonaj(walidacja.data);
+      if (czyDawka) this.rozbieznoscDawki = undefined;
       const zapisDziennika = this.zapiszDziennik(
         `Echo wykonało narzędzie ${narzedzie.nazwa}.`,
         narzedzie.nazwa,
         narzedzie.ryzyko,
         "wykonane",
       );
-      if (['create_task', 'create_reminder'].includes(narzedzie.nazwa)) await zapisDziennika.catch(() => undefined);
+      if (czyDawka || ['create_task', 'create_reminder'].includes(narzedzie.nazwa)) await zapisDziennika.catch(() => undefined);
       else await zapisDziennika;
       return {
         wywolanieId: wywolanie.id,
         nazwa: wywolanie.nazwa,
         status: "wykonane",
         dane,
+        ...(czyDawka ? { komunikat: (dane as { komunikat: string }).komunikat } : {}),
       };
     } catch (blad) {
+      if (czyDawka && blad instanceof RozbieznoscApteczki) {
+        this.rozbieznoscDawki = { klucz: kluczDawki, komunikat: blad.message };
+        return { wywolanieId: wywolanie.id, nazwa: wywolanie.nazwa, status: 'wymaga_potwierdzenia', komunikat: blad.message };
+      }
       const zapisBledu = this.zapiszDziennik(
         `Błąd narzędzia Echo ${narzedzie.nazwa}.`,
         narzedzie.nazwa,
         narzedzie.ryzyko,
         "blad",
       );
-      if (['create_task', 'create_reminder'].includes(narzedzie.nazwa)) await zapisBledu.catch(() => undefined);
+      if (czyDawka || ['create_task', 'create_reminder'].includes(narzedzie.nazwa)) await zapisBledu.catch(() => undefined);
       else await zapisBledu;
       return {
         wywolanieId: wywolanie.id,
         nazwa: wywolanie.nazwa,
-        status: "blad",
-        komunikat: blad instanceof BladZapisuTworzeniaEcho ? blad.message : "Narzędzie nie mogło zakończyć działania.",
+        status: blad instanceof BladWyboruDawkiEcho ? 'zablokowane' : 'blad',
+        komunikat: blad instanceof BladZapisuTworzeniaEcho || czyDawka && blad instanceof Error ? blad.message : "Narzędzie nie mogło zakończyć działania.",
       };
     }
   }
@@ -290,6 +307,39 @@ export class WykonawcaNarzedziEcho {
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const priorytet = z.enum(["niski", "normalny", "wysoki", "krytyczny"]);
 const godzina = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/);
+
+const schematStatusuDawkiEcho = z.object({
+  lekId: z.string().min(1),
+  data: dataIso,
+  idWystapienia: z.string().min(1).optional(),
+  godzina: godzina.optional(),
+  status: z.enum(['zazyte', 'odroczone', 'pominiete', 'oczekuje']),
+  odroczoneDo: z.string().optional(),
+  przyjetoAt: z.string().optional(),
+  przyjetaIlosc: z.number().positive().optional(),
+  przyjetaJednostka: z.string().trim().min(1).optional(),
+}).strict();
+
+class BladWyboruDawkiEcho extends Error {}
+
+async function pobierzDawkeEcho(argumenty: z.infer<typeof schematStatusuDawkiEcho>) {
+  const [lek, wpisy] = await Promise.all([
+    pobierzRepozytorium('leki').pobierz(argumenty.lekId),
+    pobierzRepozytorium('dziennikLekow').lista(),
+  ]);
+  if (!lek) throw new BladWyboruDawkiEcho('Nie znaleziono leku. Odśwież listę dawek.');
+  const dawki = generujDawkiDnia([lek], wpisy, argumenty.data);
+  if (!argumenty.idWystapienia) {
+    const pasujace = dawki.filter((dawka) => !argumenty.godzina || dawka.planowanaGodzina === argumenty.godzina);
+    throw new BladWyboruDawkiEcho(pasujace.length > 1
+      ? 'Pasuje więcej niż jedno wystąpienie dawki. Doprecyzuj, o którą dawkę chodzi. Wybierz konkretne wystąpienie z listy dawek.'
+      : 'Wskaż konkretne wystąpienie z listy dawek przed zmianą statusu. Sama godzina nie wystarcza.');
+  }
+  const dawka = dawki.find((element) => element.idWystapienia === argumenty.idWystapienia);
+  if (!dawka || argumenty.godzina && dawka.planowanaGodzina !== argumenty.godzina) throw new BladWyboruDawkiEcho('Wystąpienie dawki jest nieaktualne. Odśwież listę dawek i wskaż właściwą dawkę.');
+  const oTejGodzinie = dawki.filter((element) => element.planowanaGodzina === dawka.planowanaGodzina);
+  return { ...dawka, opisWystapienia: oTejGodzinie.length > 1 ? `, wystąpienie ${oTejGodzinie.indexOf(dawka) + 1} z ${oTejGodzinie.length}` : '' };
+}
 
 function uproscDoWyszukiwania(tekst: string): string[] {
   return tekst
@@ -1207,6 +1257,10 @@ export function utworzDomyslnyRejestrNarzedziEcho(
       ]);
       return generujDawkiDnia(leki, wpisy, data).map((dawka) => ({
         id: dawka.idWystapienia,
+        idWystapienia: dawka.idWystapienia,
+        ilosc: dawka.dawka.ilosc,
+        instrukcja: dawka.dawka.instrukcja,
+        jednostka: dawka.lek.jednostka ?? dawka.lek.jednostkaLubPostac,
         lekId: dawka.lek.id,
         tytul: dawka.lek.nazwa,
         godzina: dawka.planowanaGodzina,
@@ -1218,27 +1272,27 @@ export function utworzDomyslnyRejestrNarzedziEcho(
   });
   rejestr.zarejestruj({
     nazwa: "mark_medication_dose",
-    opis: "Oznacza pojedynczą dawkę jako zażytą, odroczoną albo pominiętą.",
-    schematArgumentow: z.object({
-      lekId: z.string().min(1),
-      data: dataIso,
-      godzina,
-      status: z.enum(["zazyte", "odroczone", "pominiete"]),
-    }),
-    ryzyko: "niskie",
-    wykonaj: async ({ lekId, data, godzina: oGodzinie, status }) => {
-      const [lek, wpisy] = await Promise.all([
-        pobierzRepozytorium("leki").pobierz(lekId),
-        pobierzRepozytorium("dziennikLekow").lista(),
-      ]);
-      if (!lek) return null;
-      const dawka = generujDawkiDnia([lek], wpisy, data).find(
-        (element) => element.planowanaGodzina === oGodzinie,
-      );
-      if (!dawka) return null;
-      const wpis = zapiszStatusDawki(dawka, status);
-      await pobierzRepozytorium("dziennikLekow").zapisz(wpis);
-      return { id: wpis.id, tytul: lek.nazwa, status, typ: "lek" };
+    opis: "Po potwierdzeniu zmienia status konkretnego wystąpienia dawki. Użyj idWystapienia z list_medication_doses; nie zmienia dawkowania ani instrukcji medycznych.",
+    schematArgumentow: schematStatusuDawkiEcho,
+    ryzyko: "umiarkowane",
+    sprawdzStan: async (argumenty) => {
+      const dawka = await pobierzDawkeEcho(argumenty);
+      const statusy = { zazyte: 'przyjęta', pominiete: 'pominięta', odroczone: 'odroczona', oczekuje: 'oczekująca (cofnięcie przyjęcia)' };
+      return `Lek „${dawka.lek.nazwa}”, dawka zaplanowana na ${dawka.data} ${dawka.planowanaGodzina}${dawka.opisWystapienia} (${dawka.dawka.instrukcja ?? dawka.dawka.ilosc ?? 'ilość nieznana'}). Zapiszę status: ${statusy[argumenty.status]}${argumenty.odroczoneDo ? `, do ${argumenty.odroczoneDo}` : ''}${argumenty.przyjetoAt ? `, faktyczne przyjęcie: ${argumenty.przyjetoAt}` : ''}${argumenty.przyjetaIlosc !== undefined ? `, faktyczna ilość: ${argumenty.przyjetaIlosc} ${argumenty.przyjetaJednostka ?? dawka.lek.jednostka ?? ''}` : ''}. Potwierdzasz?`;
+    },
+    wykonaj: async (argumenty, zgoda) => {
+      const dawka = await pobierzDawkeEcho(argumenty);
+      await zapiszStatusDawkiZApteczka(dawka, argumenty.status, argumenty.odroczoneDo, {
+        przyjetoAt: argumenty.przyjetoAt,
+        przyjetaIlosc: argumenty.przyjetaIlosc,
+        przyjetaJednostka: argumenty.przyjetaJednostka,
+        potwierdzRozbieznosc: zgoda?.potwierdzRozbieznosc ?? false,
+      });
+      const wpis = await pobierzRepozytorium('dziennikLekow').pobierz(dawka.wpis?.id ?? dawka.idWystapienia);
+      if (!wpis || wpis.status !== argumenty.status) throw new Error('Nie mogę potwierdzić zapisanego wyniku dawki. Sprawdź historię leków.');
+      const statusy = { zazyte: 'przyjęcie', pominiete: 'pominięcie', odroczone: 'odroczenie', oczekuje: 'cofnięcie przyjęcia' };
+      const komunikat = `Zapisano ${statusy[wpis.status]} dawki leku „${dawka.lek.nazwa}” zaplanowanej na ${wpis.data} ${wpis.planowanaGodzina}.${wpis.odroczoneDo ? ` Odroczone do: ${wpis.odroczoneDo}.` : ''}${wpis.rozbieznoscApteczki ? ` ${wpis.rozbieznoscApteczki} Nierozliczone: ${wpis.nierozliczonaIlosc ?? 'ilość nieznana'} ${wpis.przyjetaJednostka ?? ''}.` : ''}`;
+      return { id: wpis.id, idWystapienia: dawka.idWystapienia, tytul: dawka.lek.nazwa, status: wpis.status, przyjetoAt: wpis.przyjetoAt, przyjetaIlosc: wpis.przyjetaIlosc, przyjetaJednostka: wpis.przyjetaJednostka, odroczoneDo: wpis.odroczoneDo, nierozliczonaIlosc: wpis.nierozliczonaIlosc, rozbieznoscApteczki: wpis.rozbieznoscApteczki, komunikat, typ: 'lek' };
     },
   });
 

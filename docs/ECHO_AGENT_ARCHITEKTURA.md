@@ -102,6 +102,14 @@ Ryzyko jest cechą narzędzia, nie słów znalezionych w wypowiedzi. Model może
 
 W przyszłości poziom umiarkowany może zależeć od ustawień użytkownika i skali zmiany. Tokenem potwierdzenia jest konkretne, oczekujące wywołanie o znanym identyfikatorze, nazwie i argumentach; ponowna interpretacja pierwotnego zdania nie jest potrzebna. Usuwanie, finanse, dostęp i operacje zewnętrzne wymagają osobnych narzędzi oraz ostrzejszych zasad.
 
+### Dawki leków — Health 2.0, etap 2B
+
+`mark_medication_dose` ma ryzyko umiarkowane i obowiązkowe potwierdzenie w wykonawcy, również przy liberalnej polityce. Wymaga konkretnego `idWystapienia` z `list_medication_doses`; sama godzina prowadzi do doprecyzowania, nigdy do wyboru pierwszej dawki. Wykonuje wyłącznie `zapiszStatusDawkiZApteczka` i nie modyfikuje harmonogramu ani zaleceń. Obsługuje przyjęcie, pominięcie, odroczenie z terminem i cofnięcie do statusu oczekującego; opcjonalnie zapisuje faktyczny czas, ilość i jednostkę.
+
+Rozbieżność apteczki odrzuca pierwszą transakcję i wymaga osobnego potwierdzenia. Wykonawca wiąże tę zgodę z ID wywołania oraz zwalidowanymi argumentami. Model nie otrzymuje argumentu pozwalającego potwierdzić rozbieżność. Uprawnienia i aktualność wystąpienia są sprawdzane również przy wykonaniu. Wynik użytkownika pochodzi z zakończonego zapisu; błędy nie stają się sukcesem, a nierozliczony zapas pozostaje w odpowiedzi. Wznowienie planu po niedoborze pomija już wykonane kroki.
+
+Akcje `odrocz` i zakończenia przypomnienia w `NawigacjaPlatformy` dotyczą obecnie przypomnienia, nie przyjęcia leku. Podczas prac nad alarmami ewentualne akcje dawek muszą przenosić `idWystapienia`, używać tej samej usługi i osobno potwierdzać rozbieżność; zakończenie przypomnienia nie oznacza przyjęcia dawki.
+
 ## 10. Czas
 
 Każde zadanie modelu otrzymuje jawnie bieżący timestamp ISO, lokalną datę i strefę czasową urządzenia. Model nie ma zgadywać daty. Grafik pracy, kalendarz, wyjątki i zajęte okna będą pobierane narzędziami tylko wtedy, gdy pytanie ich wymaga. Rozumienie zwrotów „jutro”, „po pracy” czy „to drugie” należy do LLM pracującego na tych jawnych danych i kontekście, a nie do zestawu regexów.
