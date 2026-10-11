@@ -1,6 +1,7 @@
 ﻿# Model danych i migracje
 
 ## Zmiany modelu
+Health 2.0, etap 7: [Oś czasu i ważne informacje](HISTORIA_ZDROWIA.md). Dexie 18 → 19 dodaje lokalną tabelę `wazneInformacjeZdrowotne`. Historia jest projekcją istniejących danych, bez dodatkowej tabeli wydarzeń. Backup w formacie 3 uwzględnia nową sekcję; starsze kopie bez niej zachowują bieżące ważne informacje.
 Health 2.0, etap 6: [Badania i dokumenty](BADANIA_DOKUMENTY.md). Dexie 17 → 18 dodaje lokalną tabelę `wynikiBadan`; `Dokument.medyczne` rozszerza istniejące dokumenty. Relacje dokument–wizyta zachowują sumę dawnych reprezentacji po ID. Backup w formacie 3 zawiera osobną sekcję `badania`; starsze kopie jej nie czyszczą.
 Health 2.0, etap 5: [Sesje psychoterapii](PSYCHOTERAPIA.md). Opcjonalne `WpisTerapii.psychoterapia` i `Zadanie.sesjaTerapiiId` rozszerzają istniejące rekordy bez nowych tabel/indeksów i bez podniesienia wersji Dexie. Chronią całe sesje i ćwiczenia jako lokalne; backup pozostaje w formacie 3. Starsze wpisy zachowują dane i dotychczasową politykę do czasu edycji w nowym formularzu.
 

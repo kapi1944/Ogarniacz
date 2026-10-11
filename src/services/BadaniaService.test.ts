@@ -4,7 +4,7 @@ import { Blob as BlobWezla } from 'node:buffer'
 // @ts-expect-error Natywne Web Crypto jest używane tylko w testach.
 import { webcrypto as kryptografiaWezla } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
+import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { pobierzKolejkeSynchronizacji } from '../data/KolejkaSynchronizacji'
 import type { ZmianaSynchronizacji } from '../data/DostawcaSynchronizacji'
@@ -177,13 +177,13 @@ describe.sequential('Badania i dokumenty medyczne', () => {
     expect(await baza.tabela('dokumenty').get('dokument')).toBeDefined()
   })
 
-  it('migruje rzeczywistą bazę Dexie 17 do 18 bez utraty dokumentów i relacji', async () => {
-    const schemat = Object.fromEntries(baza.tables.filter((tabela) => tabela.name !== 'wynikiBadan').map((tabela) => [tabela.name, [tabela.schema.primKey.src, ...tabela.schema.indexes.map((indeks) => indeks.src)].join(',')]))
+  it('migruje rzeczywistą bazę Dexie 17 do bieżącego schematu bez utraty dokumentów i relacji', async () => {
+    const schemat = Object.fromEntries(baza.tables.filter((tabela) => !['wynikiBadan', 'wazneInformacjeZdrowotne'].includes(tabela.name)).map((tabela) => [tabela.name, [tabela.schema.primKey.src, ...tabela.schema.indexes.map((indeks) => indeks.src)].join(',')]))
     baza.close(); await Dexie.delete('ogarniacz-v1')
     const stara = new Dexie('ogarniacz-v1'); stara.version(17).stores(schemat)
     await stara.open(); await stara.table('dokumenty').put({ ...dokument(), powiazania: [{ typ: 'wizyty', id: 'wizyta' }] }); await stara.table('wizyty').put({ ...wizyta(), dokumentyIds: ['dokument'] }); stara.close()
     await baza.open()
-    expect(baza.verno).toBe(18)
+    expect(baza.verno).toBe(WERSJA_SCHEMATU_BAZY)
     expect(await baza.tabela('wynikiBadan').count()).toBe(0)
     expect((await baza.tabela('wizyty').get('wizyta'))?.dokumentyIds).toEqual(['dokument'])
     expect((await baza.tabela('dokumenty').get('dokument'))?.powiazania).toEqual([{ typ: 'wizyty', id: 'wizyta' }])

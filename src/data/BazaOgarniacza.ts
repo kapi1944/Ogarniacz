@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 18
+export const WERSJA_SCHEMATU_BAZY = 19
 
 const POSTAC_Z_HISTORYCZNEJ_WARTOSCI: Record<string, string> = {
   tabletka: 'tabletka',
@@ -32,6 +32,7 @@ const POSTAC_Z_HISTORYCZNEJ_WARTOSCI: Record<string, string> = {
 }
 
 export const nazwyTabel: NazwaTabeli[] = [
+  'wazneInformacjeZdrowotne',
   'wynikiBadan',
   'wpisySamopoczucia',
   'zadania',
@@ -216,6 +217,7 @@ class BazaOgarniacza extends Dexie {
     })
     this.version(17).stores({ wpisySamopoczucia: 'id, dataObserwacji, czasObserwacji, updatedAt, usunietoAt' })
     this.version(18).stores({ wynikiBadan: 'id, dataPobrania, parametr, dokumentId, grupaId, updatedAt, usunietoAt' })
+    this.version(19).stores({ wazneInformacjeZdrowotne: 'id, kategoria, updatedAt, usunietoAt' })
   }
 
   tabela<K extends NazwaTabeli>(nazwa: K): Table<MapaTabel[K], string> {

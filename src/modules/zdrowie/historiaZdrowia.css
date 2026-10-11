@@ -1,0 +1,14 @@
+.os-zdrowia .akcje-formularza, .wazne-zdrowie .akcje-formularza { flex-wrap: wrap; }
+.os-zdrowia__lista { list-style: none; padding: 0 0 0 1rem; border-left: 3px solid var(--obramowanie-mocne); }
+.os-zdrowia__lista > li { margin: 1rem 0; padding: 1rem; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: 12px; }
+.wazne-zdrowie__karta { display: grid; gap: 1rem; font-size: 1.12rem; line-height: 1.6; }
+.wazne-zdrowie__karta h2 { font-size: 1.5rem; }
+.wazne-zdrowie__pozycja { border-top: 1px solid var(--obramowanie); padding: 1rem 0; }
+.wazne-zdrowie__tekst { white-space: pre-wrap; overflow-wrap: anywhere; }
+.wazne-zdrowie__wybor { display: flex; align-items: center; gap: .75rem; padding: .75rem 0; }
+.wazne-zdrowie__wybor input { flex: 0 0 auto; width: 22px; height: 22px; }
+.wazne-zdrowie__druk { position: fixed; left: -10000px; width: 800px; height: 1px; border: 0; }
+@media (max-width: 600px) {
+  .os-zdrowia .przycisk, .wazne-zdrowie .przycisk { min-height: 44px; }
+  .os-zdrowia .akcje-formularza > .przycisk, .wazne-zdrowie .akcje-formularza > .przycisk { flex: 1 1 150px; }
+}

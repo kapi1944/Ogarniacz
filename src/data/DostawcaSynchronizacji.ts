@@ -1,6 +1,7 @@
 import type { EncjaBazowa, NazwaTabeli } from '../domain/typy'
 
 export type NazwaTabeliSynchronizowanej = Exclude<NazwaTabeli,
+  | 'wazneInformacjeZdrowotne'
   | 'wynikiBadan'
   | 'wpisySamopoczucia'
   | 'stanSynchronizacji'

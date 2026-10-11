@@ -61,7 +61,8 @@ export function WidokZdrowia() {
     { adres: '/zdrowie/skierowania', tytul: 'Skierowania', opis: wymagajaceDzialania.length ? `${wymagajaceDzialania.length} wymagają działania` : 'Zarządzaj skierowaniami', ikona: Stethoscope },
     { adres: '/zdrowie/recepty', tytul: 'Recepty', opis: receptaDoRealizacji ? 'Wymaga realizacji' : 'Zarządzaj receptami', ikona: FileText },
     { adres: '/zdrowie/badania-dokumenty', tytul: 'Badania i dokumenty', opis: 'Wyniki i dokumentacja medyczna', ikona: FileText },
-    { adres: '/zdrowie/historia', tytul: 'Historia zdrowia', opis: 'Chronologia zdarzeń zdrowotnych', ikona: History },
+    { adres: '/zdrowie/wazne-informacje', tytul: 'Ważne informacje zdrowotne', opis: 'Szybki odczyt i kluczowe wydarzenia', ikona: ShieldAlert },
+    { adres: '/zdrowie/historia', tytul: 'Osobista oś czasu', opis: 'Historia z istniejących źródeł', ikona: History },
   ]
 
   return <div className="widok">
@@ -511,20 +512,4 @@ export function WidokSkierowan() {
     wybranyElementId={parametryAdresu.get('element') ?? undefined}
     szczegoly={(skierowanie) => <><Znacznik wariant={skierowanie.status === 'do_umowienia' || terminWkrotce(skierowanie.terminWaznosci) ? 'ostrzezenie' : skierowanie.status === 'umowiono' ? 'informacja' : skierowanie.status === 'zrealizowano' ? 'sukces' : 'neutralny'}>{skierowanie.status.replaceAll('_', ' ')}</Znacznik><span>{skierowanie.typCelu}: {skierowanie.cel}</span>{skierowanie.terminWaznosci && <span>{terminWkrotce(skierowanie.terminWaznosci) ? 'Ważne wkrótce: ' : 'Ważne do: '}{skierowanie.terminWaznosci}</span>}{skierowanie.wizytaId && <Link to={`/zdrowie/wizyty?element=${skierowanie.wizytaId}`}>Otwórz powiązaną wizytę</Link>}{skierowanie.notatka && <p>{skierowanie.notatka}</p>}</>}
   />
-}
-
-export function WidokHistoriiZdrowia() {
-  const { dane: wizyty } = useRepozytorium('wizyty')
-  const { dane: skierowania } = useRepozytorium('skierowania')
-  const { dane: recepty } = useRepozytorium('recepty')
-  const { dane: terapie } = useRepozytorium('terapie')
-  const { dane: wpisy } = useRepozytorium('wpisyTerapii')
-  const zdarzenia = [
-    ...wizyty.filter((wizyta) => wizyta.data).map((wizyta) => ({ data: wizyta.data!, typ: 'Wizyta', tytul: wizyta.nazwa, opis: wizyta.status.replaceAll('_', ' '), adres: `/zdrowie/wizyty?element=${wizyta.id}` })),
-    ...skierowania.map((skierowanie) => ({ data: skierowanie.dataWystawienia, typ: 'Skierowanie', tytul: skierowanie.nazwa, opis: skierowanie.status.replaceAll('_', ' '), adres: `/zdrowie/skierowania?element=${skierowanie.id}` })),
-    ...recepty.map((recepta) => ({ data: recepta.dataWystawienia, typ: 'Recepta', tytul: recepta.kod ? `Recepta ${recepta.kod}` : 'Recepta', opis: recepta.status.replaceAll('_', ' '), adres: `/zdrowie/recepty?element=${recepta.id}` })),
-    ...terapie.filter((terapia) => terapia.dataRozpoczecia).map((terapia) => ({ data: terapia.dataRozpoczecia!, typ: 'Terapia', tytul: terapia.nazwa, opis: terapia.status.replaceAll('_', ' '), adres: `/zdrowie/dziennik-terapii?element=${terapia.id}` })),
-    ...wpisy.map((wpis) => ({ data: wpis.dataCzas.slice(0, 10), typ: 'Wpis terapii', tytul: wpis.tytul || 'Wpis terapii', opis: wpis.tresc, adres: '/zdrowie/dziennik-terapii' })),
-  ].sort((a, b) => b.data.localeCompare(a.data))
-  return <div className="widok"><NaglowekWidoku tytul="Historia zdrowia" opis="Chronologiczny widok zdarzeń z istniejących danych." />{zdarzenia.length === 0 ? <PustyStan tytul="Brak zdarzeń zdrowotnych" opis="Dodaj wizytę, skierowanie, receptę lub terapię." /> : <div className="lista-rekordow">{zdarzenia.map((zdarzenie, indeks) => <article className="rekord" key={`${zdarzenie.typ}-${indeks}`}><div className="rekord__tresc"><h3><Link to={zdarzenie.adres}>{zdarzenie.tytul}</Link></h3><div className="rekord__szczegoly"><Znacznik wariant="informacja">{zdarzenie.typ}</Znacznik><span>{zdarzenie.data}</span><span>{zdarzenie.opis}</span></div></div></article>)}</div>}</div>
 }

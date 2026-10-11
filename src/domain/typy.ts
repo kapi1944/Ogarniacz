@@ -787,6 +787,7 @@ export type NazwaModulu =
   | 'ustawienia'
 
 export interface MapaTabel {
+  wazneInformacjeZdrowotne: import('./historiaZdrowia').WaznaInformacjaZdrowotna
   wynikiBadan: import('./badania').WynikBadania
   wpisySamopoczucia: import('./samopoczucie').WpisSamopoczucia
   zadania: Zadanie

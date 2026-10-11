@@ -1,3 +1,4 @@
+import { schematWaznejInformacjiZdrowotnej } from '../domain/historiaZdrowia'
 import { schematWynikuBadania } from '../domain/badania'
 import type { EncjaBazowa, MapaTabel, NazwaModulu, NazwaTabeli, Przypomnienie } from '../domain/typy'
 import { terazIso } from '../domain/fabryki'
@@ -55,7 +56,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   constructor(private readonly nazwa: NazwaTabeli, private readonly dostepDoDanychPrywatnych?: (operacja: 'odczyt' | 'edycja') => boolean) {}
 
   private sprawdzDostep(encja?: T): void {
-    if (this.nazwa === 'wynikiBadan' && (!this.dostepDoDanychPrywatnych?.('odczyt') || !this.dostepDoDanychPrywatnych?.('edycja'))) throw new Error('Brak uprawnienia do wyników badań.')
+    if ((this.nazwa === 'wynikiBadan' || this.nazwa === 'wazneInformacjeZdrowotne') && (!this.dostepDoDanychPrywatnych?.('odczyt') || !this.dostepDoDanychPrywatnych?.('edycja'))) throw new Error('Brak uprawnienia do prywatnych danych zdrowotnych.')
     if (czyPrywatnaPsychoterapia(this.nazwa, encja) && !this.dostepDoDanychPrywatnych?.('edycja')) throw new Error('Brak uprawnienia do prywatnych danych psychoterapii.')
   }
 
@@ -63,13 +64,14 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     this.sprawdzDostep(przed)
     this.sprawdzDostep(po)
     if (this.nazwa === 'wynikiBadan') schematWynikuBadania.parse(po)
+    if (this.nazwa === 'wazneInformacjeZdrowotne') schematWaznejInformacjiZdrowotnej.parse(po)
     if (czyPrywatnaPsychoterapia(this.nazwa, przed) && !czyPrywatnaPsychoterapia(this.nazwa, po)) throw new Error('Nie można usunąć ochrony danych psychoterapii.')
     if (czyPrywatnaPsychoterapia(this.nazwa, po)) {
       if (this.nazwa === 'wpisyTerapii') schematSzczegolowPsychoterapii.parse('psychoterapia' in po ? po.psychoterapia : undefined)
       if (this.nazwa === 'zadania' && (!('sesjaTerapiiId' in po) || typeof po.sesjaTerapiiId !== 'string' || !po.sesjaTerapiiId.trim())) throw new Error('Nie można usunąć ochrony danych psychoterapii.')
     }
     // Dwie szybkie edycje prywatnego rekordu muszą mieć różne znaczniki aktualności.
-    if ((this.nazwa === 'wynikiBadan' || czyPrywatnaPsychoterapia(this.nazwa, po)) && przed && Date.parse(po.updatedAt) <= Date.parse(przed.updatedAt)) po.updatedAt = new Date(Date.parse(przed.updatedAt) + 1).toISOString()
+    if ((this.nazwa === 'wynikiBadan' || this.nazwa === 'wazneInformacjeZdrowotne' || czyPrywatnaPsychoterapia(this.nazwa, po)) && przed && Date.parse(po.updatedAt) <= Date.parse(przed.updatedAt)) po.updatedAt = new Date(Date.parse(przed.updatedAt) + 1).toISOString()
   }
 
   private tabela(): Table<T, string> {
@@ -134,13 +136,13 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   async lista(): Promise<T[]> {
     const wszystkie = await this.tabela().toArray()
     return wszystkie
-      .filter((encja) => !encja.usunietoAt && (this.nazwa !== 'wynikiBadan' && !czyPrywatnaPsychoterapia(this.nazwa, encja) || this.dostepDoDanychPrywatnych?.('odczyt')))
+      .filter((encja) => !encja.usunietoAt && (this.nazwa !== 'wynikiBadan' && this.nazwa !== 'wazneInformacjeZdrowotne' && !czyPrywatnaPsychoterapia(this.nazwa, encja) || this.dostepDoDanychPrywatnych?.('odczyt')))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
   async pobierz(id: string): Promise<T | undefined> {
     const encja = (await this.tabela().get(id)) as T | undefined
-    return encja?.usunietoAt || this.nazwa === 'wynikiBadan' && !this.dostepDoDanychPrywatnych?.('odczyt') || czyPrywatnaPsychoterapia(this.nazwa, encja) && !this.dostepDoDanychPrywatnych?.('odczyt') ? undefined : encja
+    return encja?.usunietoAt || (this.nazwa === 'wynikiBadan' || this.nazwa === 'wazneInformacjeZdrowotne') && !this.dostepDoDanychPrywatnych?.('odczyt') || czyPrywatnaPsychoterapia(this.nazwa, encja) && !this.dostepDoDanychPrywatnych?.('odczyt') ? undefined : encja
   }
 
   async zapisz(encja: T): Promise<string> {

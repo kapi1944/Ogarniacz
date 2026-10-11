@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { schematWaznejInformacjiZdrowotnej } from '../domain/historiaZdrowia'
 import { schematWynikuBadania, schematMetadanychMedycznych } from '../domain/badania'
 import { baza, nazwyTabel, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
@@ -13,7 +14,7 @@ import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
 const WERSJA_APLIKACJI = '1.0.0'
-const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, 17, WERSJA_SCHEMATU_BAZY]
+const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, 17, 18, WERSJA_SCHEMATU_BAZY]
 
 export const SEKCJE_BACKUPU = [
   { nazwa: 'ustawienia', etykieta: 'Ustawienia' },
@@ -23,6 +24,7 @@ export const SEKCJE_BACKUPU = [
   { nazwa: 'leki', etykieta: 'Leki' },
   { nazwa: 'wizyty', etykieta: 'Wizyty' },
   { nazwa: 'zdrowie', etykieta: 'Pozostałe dane zdrowotne' },
+  { nazwa: 'wazneInformacjeZdrowotne', etykieta: 'Prywatne ważne informacje zdrowotne' },
   { nazwa: 'badania', etykieta: 'Prywatne wyniki badań' },
   { nazwa: 'samopoczucie', etykieta: 'Prywatny dziennik samopoczucia' },
   { nazwa: 'finanse', etykieta: 'Finanse i rachunki' },
@@ -148,6 +150,7 @@ const schematTransportowegoBlobu = z.object({
 }).strict()
 
 const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
+  wazneInformacjeZdrowotne: schematWaznejInformacjiZdrowotnej,
   wynikiBadan: schematWynikuBadania,
   wpisySamopoczucia: schematWpisuSamopoczucia,
   ustawienia: schematEncji.extend({
@@ -532,6 +535,7 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('leki', ['leki', 'dziennikLekow']),
   zrodloRepozytoriow('wizyty', ['wizyty']),
   zrodloRepozytoriow('zdrowie', ['skierowania', 'recepty', 'terapie', 'wpisyTerapii']),
+  zrodloRepozytoriow('wazneInformacjeZdrowotne', ['wazneInformacjeZdrowotne']),
   zrodloRepozytoriow('badania', ['wynikiBadan']),
   zrodloRepozytoriow('samopoczucie', ['wpisySamopoczucia']),
   zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'platnosciStale', 'planyRat', 'raty', 'budzety', 'kontaFinansowe']),

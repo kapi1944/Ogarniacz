@@ -22,7 +22,8 @@ const WidokWizyt = lazy(() => import('./modules/zdrowie/WidokiZdrowia').then((mo
 const WidokSkierowan = lazy(() => import('./modules/zdrowie/WidokiZdrowia').then((modul) => ({ default: modul.WidokSkierowan })))
 const WidokDziennikaTerapii = lazy(() => import('./modules/zdrowie/WidokiZdrowia').then((modul) => ({ default: modul.WidokDziennikaTerapii })))
 const WidokRecept = lazy(() => import('./modules/zdrowie/WidokiZdrowia').then((modul) => ({ default: modul.WidokRecept })))
-const WidokHistoriiZdrowia = lazy(() => import('./modules/zdrowie/WidokiZdrowia').then((modul) => ({ default: modul.WidokHistoriiZdrowia })))
+const WidokHistoriiZdrowia = lazy(() => import('./modules/zdrowie/HistoriaZdrowia').then((modul) => ({ default: modul.OsCzasuZdrowia })))
+const WazneInformacjeZdrowotne = lazy(() => import('./modules/zdrowie/HistoriaZdrowia').then((modul) => ({ default: modul.WazneInformacjeZdrowotne })))
 const WidokiOrganizacji = () => import('./modules/organizacja/WidokiOrganizacji')
 const WidokNawykow = lazy(() => WidokiOrganizacji().then((modul) => ({ default: modul.WidokNawykow })))
 const WidokPrzypomnien = lazy(() => WidokiOrganizacji().then((modul) => ({ default: modul.WidokPrzypomnien })))
@@ -72,6 +73,7 @@ export default function App() {
     <Route path="/zdrowie/skierowania" element={chron('skierowania', <WidokSkierowan />)} />
     <Route path="/zdrowie/dziennik-terapii" element={chron('zdrowie', <WidokDziennikaTerapii />)} />
     <Route path="/zdrowie/recepty" element={chron('zdrowie', <WidokRecept />)} />
+    <Route path="/zdrowie/wazne-informacje" element={chron('zdrowie', <WazneInformacjeZdrowotne />)} />
     <Route path="/zdrowie/historia" element={chron('zdrowie', <WidokHistoriiZdrowia />)} />
     <Route path="/leki" element={chron('leki', <WidokLekow />)} />
     <Route path="/wizyty" element={chron('wizyty', <WidokWizyt />)} />
