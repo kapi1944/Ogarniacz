@@ -315,6 +315,18 @@ export interface WpisTerapii extends EncjaBazowa {
 }
 
 export interface Przypomnienie extends EncjaBazowa {
+  /** Odniesienie do generatora; nie jest osobnym schematem dawkowania. */
+  dawkaLeku?: {
+    lekId: Id
+    dawkaId: Id
+    idWystapienia: string
+    data: string
+    planowanyCzas: string
+    wersjaDawkowaniaId?: Id
+    status: DziennikLeku['status']
+    wersjaStanu: string
+    nieaktualne?: boolean
+  }
   tytul: string
   zrodlo?: PowiazanieEncji
   typ: 'absolutne' | 'wzgledne' | 'cykliczne'

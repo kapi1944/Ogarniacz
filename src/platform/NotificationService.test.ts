@@ -62,6 +62,67 @@ const przypomnienie = (zmiany: Partial<Przypomnienie> = {}): Przypomnienie => ({
   ...zmiany,
 })
 
+describe('kanały alarmów lekowych', () => {
+  const alarm = () => przypomnienie({ id: 'dawka:lek-1:2026-09-01:rano', zrodlo: { typ: 'leki', id: 'lek-1' }, tytul: 'Dawka leku: Prywatna nazwa',
+    dawkaLeku: { lekId: 'lek-1', dawkaId: 'rano', idWystapienia: 'lek-1:2026-09-01:rano', data: '2026-09-01', planowanyCzas: '2026-09-01T10:00:00.000Z', wersjaDawkowaniaId: 'wersja-1', status: 'oczekuje', wersjaStanu: 'oczekuje||wersja-1|2026-09-01T10:00:00.000Z|' } })
+
+  it('planuje stabilne wystąpienie, ukrywa nazwę i przekazuje stan do akcji bez zapisu dziennika', async () => {
+    const usluga = utworzUslugePowiadomien(true)
+    const przypomnienieDawki = alarm()
+    await usluga.synchronizuj([przypomnienieDawki], true, true)
+    const natywne = lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0]
+    expect(natywne.body).toBe('Przypomnienie dotyczące zdrowia')
+    expect(natywne.actionTypeId).toBe('ogarniacz-dawka')
+    expect(natywne.extra.dawkaLeku).toEqual(przypomnienieDawki.dawkaLeku)
+    expect(natywne.isExactNotification).toBe(true)
+    expect(JSON.stringify(natywne.extra)).not.toContain('Prywatna nazwa')
+    const obsluga = vi.fn()
+    usluga.nasluchujAkcji(obsluga)
+    const akcja = lokalnePowiadomienia.addListener.mock.calls[0][1]
+    akcja({ actionId: 'przyjeto', notification: natywne })
+    akcja({ actionId: 'przyjeto', notification: natywne })
+    expect(obsluga).toHaveBeenCalledTimes(1)
+    expect(obsluga).toHaveBeenCalledWith(expect.objectContaining({ typ: 'przyjeto', przypomnienieId: przypomnienieDawki.id, wersjaStanuDawki: przypomnienieDawki.dawkaLeku!.wersjaStanu }))
+  })
+
+  it('bez dokładnych alarmów stosuje istniejący fallback, a bez zgody nie planuje', async () => {
+    lokalnePowiadomienia.checkExactNotificationSetting.mockResolvedValue({ exact_alarm: 'denied' })
+    await utworzUslugePowiadomien(true).synchronizuj([alarm()], true)
+    expect(lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0].isExactNotification).toBe(false)
+    lokalnePowiadomienia.schedule.mockClear()
+    lokalnePowiadomienia.checkPermissions.mockResolvedValue({ display: 'denied' })
+    await utworzUslugePowiadomien(true).synchronizuj([alarm()], true)
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it('anuluje nieaktualny alarm oraz przeplanowuje odroczenie pod tym samym ID', async () => {
+    const stare = mapujPrzypomnienieNaPowiadomienie(alarm())!
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{ id: stare.id, extra: { ogarniacz: true, wersja: stare.wersja } }] })
+    const zmienione = alarm()
+    zmienione.stan = 'odroczone'; zmienione.odroczoneDo = '2026-09-02T01:00:00.000Z'
+    zmienione.dawkaLeku!.status = 'odroczone'; zmienione.dawkaLeku!.wersjaStanu = 'nowy-stan'
+    await utworzUslugePowiadomien(true).synchronizuj([zmienione], true)
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: stare.id }] })
+    expect(lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0].schedule.at.toISOString()).toBe(zmienione.odroczoneDo)
+    lokalnePowiadomienia.schedule.mockClear(); lokalnePowiadomienia.cancel.mockClear()
+    zmienione.dawkaLeku!.nieaktualne = true
+    await utworzUslugePowiadomien(true).synchronizuj([zmienione], true)
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: stare.id }] })
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it('PWA wykorzystuje aktywny service worker do wyświetlenia, bez planowania w zamkniętej aplikacji', async () => {
+    const pokaz = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('Notification', { permission: 'granted' })
+    const poprzedniOpis = Object.getOwnPropertyDescriptor(navigator, 'serviceWorker')
+    Object.defineProperty(navigator, 'serviceWorker', { configurable: true, value: { getRegistration: vi.fn().mockResolvedValue({ active: {}, showNotification: pokaz }) } })
+    try {
+      expect(await utworzUslugePowiadomien(false).pokaz({ tytul: 'Ogarniacz', tresc: 'Przypomnienie dotyczące zdrowia', sciezka: '/zdrowie/leki?element=lek-1&wystapienie=dawka-1' })).toBe(true)
+      expect(pokaz).toHaveBeenCalledWith('Ogarniacz', expect.objectContaining({ data: { sciezka: '/zdrowie/leki?element=lek-1&wystapienie=dawka-1' } }))
+    } finally { if (poprzedniOpis) Object.defineProperty(navigator, 'serviceWorker', poprzedniOpis); else Reflect.deleteProperty(navigator, 'serviceWorker') }
+  })
+})
+
 describe('odrębne powiadomienia synchronizacji', () => {
   const komunikat = { tytul: 'Ogarniacz — synchronizacja', tresc: 'Wysłano: 3, pobrano: 7, konflikty: 0.', rodzaj: 'synchronizacja' as const, sciezka: '/ustawienia' }
 
@@ -221,7 +282,7 @@ describe('routing sourceRef', () => {
     })
   })
 
-  it('rejestruje tylko dwie proste akcje przypomnienia', async () => {
+  it('zachowuje ogólne akcje i rejestruje osobne akcje lekowe wymagające otwarcia aplikacji', async () => {
     await utworzUslugePowiadomien(true).inicjalizuj()
 
     expect(lokalnePowiadomienia.registerActionTypes).toHaveBeenCalledWith({
@@ -230,6 +291,13 @@ describe('routing sourceRef', () => {
         actions: [
           { id: 'wykonane', title: 'Wykonane' },
           { id: 'odrocz', title: 'Za 15 min' },
+        ],
+      }, {
+        id: 'ogarniacz-dawka',
+        actions: [
+          { id: 'przyjeto', title: 'Przyjęto', foreground: true },
+          { id: 'odrocz', title: 'Odroczono', foreground: true },
+          { id: 'pominieto', title: 'Pominięto', foreground: true },
         ],
       }],
     })

@@ -9,6 +9,7 @@ import { pobierzRepozytorium } from '../data/Repozytorium'
 import { odroczPrzypomnienie, zakonczPrzypomnienie } from '../services/PrzypomnieniaService'
 import { Komunikat } from '../components/Interfejs'
 import { utworzObslugeCelowPlatformy } from './ObslugaCelowPlatformy'
+import { sciezkaAlarmuDawki, sprawdzAlarmDawki } from '../services/PrzypomnieniaLekow'
 
 export function NawigacjaPlatformy() {
   const polozenie = useLocation()
@@ -34,6 +35,16 @@ export function NawigacjaPlatformy() {
   }, [komunikat])
 
   useEffect(() => platforma.powiadomienia.nasluchujAkcji((akcja) => {
+    if (akcja.wersjaStanuDawki !== undefined && akcja.przypomnienieId) {
+      void (async () => {
+        if (!moze('leki', 'edycja')) throw new Error('Brak uprawnienia do zmiany statusu leku.')
+        await sprawdzAlarmDawki(akcja.przypomnienieId!, akcja.wersjaStanuDawki!)
+        const przypomnienie = await pobierzRepozytorium('przypomnienia').pobierz(akcja.przypomnienieId!)
+        if (!przypomnienie?.dawkaLeku || przypomnienie.dawkaLeku.wersjaStanu !== akcja.wersjaStanuDawki) throw new Error('Ten alarm jest nieaktualny. Sprawdź aktualny stan dawki.')
+        nawiguj(sciezkaAlarmuDawki(przypomnienie, akcja.typ === 'wykonane' ? undefined : akcja.typ))
+      })().catch((blad) => ustawKomunikat(blad instanceof Error ? blad.message : 'Nie udało się sprawdzić dawki.'))
+      return
+    }
     if (akcja.typ === 'otworz') {
       void obslugaCelow.current?.obsluz(akcja.sciezka, akcja.sourceRef)
       return
@@ -44,6 +55,10 @@ export function NawigacjaPlatformy() {
       const repozytorium = pobierzRepozytorium('przypomnienia')
       const przypomnienie = await repozytorium.pobierz(przypomnienieId)
       if (!przypomnienie || ['wykonane', 'pominiete'].includes(przypomnienie.stan)) return
+      if (przypomnienie.dawkaLeku) {
+        ustawKomunikat('Otwórz aktualną dawkę w module Zdrowie i potwierdź swoją decyzję.')
+        return
+      }
       if (akcja.typ === 'odrocz') {
         await repozytorium.zapisz(odroczPrzypomnienie(przypomnienie, 15))
         return
@@ -52,7 +67,7 @@ export function NawigacjaPlatformy() {
       if (wynik.nastepne) await repozytorium.zapiszWiele([wynik.wykonane, wynik.nastepne])
       else await repozytorium.zapisz(wynik.wykonane)
     })().catch(() => undefined)
-  }), [moze])
+  }), [moze, nawiguj])
 
   useEffect(() => () => obslugaCelow.current?.zakoncz(), [])
 

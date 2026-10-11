@@ -24,6 +24,13 @@ vi.mock('../hooks/useRepozytorium', () => ({
   }),
 }))
 
+vi.mock('../services/PrzypomnieniaLekow', () => ({
+  uzgodnijPrzypomnieniaLekow: () => Promise.resolve(stan.dane),
+  oznaczDostarczeniePrzypomnienia: vi.fn(),
+  sprawdzAlarmDawki: vi.fn(),
+  sciezkaAlarmuDawki: vi.fn(),
+}))
+
 vi.mock('../platform/platforma', () => ({
   platforma: {
     natywna: true,

@@ -52,6 +52,9 @@ try {
   }
 
   const serviceWorker = await fetch(`${ADRES}/sw.js`).then((odpowiedz) => odpowiedz.text())
+  zapewnij(serviceWorker.includes('powiadomienia-sw.js'), 'Service worker nie importuje obsługi kliknięcia alarmu.')
+  const obslugaPowiadomien = await fetch(`${ADRES}/powiadomienia-sw.js`)
+  zapewnij(obslugaPowiadomien.ok && (await obslugaPowiadomien.text()).includes('notificationclick'), 'Brak obsługi kliknięcia powiadomienia PWA.')
   zapewnij(serviceWorker.includes('NetworkOnly'), 'Service worker nie wymusza dostępu sieciowego dla API.')
   zapewnij(serviceWorker.includes('/api/'), 'Service worker nie zawiera reguły wykluczającej cache API.')
   zapewnij(/denylist:\[[^\]]*health/.test(serviceWorker), 'Service worker kieruje healthcheck do fallbacku HTML.')

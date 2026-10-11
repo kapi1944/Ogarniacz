@@ -1,18 +1,23 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRepozytorium } from '../hooks/useRepozytorium'
 import { aktywnePrzypomnienia } from '../services/PrzypomnieniaService'
 import { platforma } from '../platform/platforma'
 import { sciezkaDlaSourceRef } from '../platform/trasy'
 import { useAplikacja } from './KontekstAplikacji'
+import { Komunikat } from '../components/Interfejs'
+import { oznaczDostarczeniePrzypomnienia, sciezkaAlarmuDawki, sprawdzAlarmDawki, uzgodnijPrzypomnieniaLekow } from '../services/PrzypomnieniaLekow'
 
 export function SilnikPrzypomnien() {
   const { dane, repozytorium } = useRepozytorium('przypomnienia')
+  const { dane: leki } = useRepozytorium('leki')
+  const { dane: wpisy } = useRepozytorium('dziennikLekow')
+  const kolejka = useRef(Promise.resolve())
   const { ustawienia } = useAplikacja()
   const [teraz, ustawTeraz] = useState(() => new Date())
   const [wznowienie, ustawWznowienie] = useState(0)
+  const [blad, ustawBlad] = useState('')
 
   useEffect(() => {
-    if (platforma.natywna) return
     const zegar = window.setInterval(() => ustawTeraz(new Date()), 60_000)
     return () => window.clearInterval(zegar)
   }, [])
@@ -35,26 +40,34 @@ export function SilnikPrzypomnien() {
   useEffect(() => {
     let anulowano = false
     const dostarcz = async () => {
+      const uzgodnione = await uzgodnijPrzypomnieniaLekow()
+      if (anulowano) return
       if (platforma.natywna) {
-        await platforma.powiadomienia.synchronizuj(dane, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach)
+        await platforma.powiadomienia.synchronizuj(uzgodnione, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach)
         return
       }
 
       if (!ustawienia.powiadomienia) return
-      for (const element of aktywnePrzypomnienia(dane, teraz).filter((przypomnienie) => przypomnienie.stan === 'nowe')) {
+      for (const element of aktywnePrzypomnienia(uzgodnione, new Date()).filter((przypomnienie) => przypomnienie.stan === 'nowe' || przypomnienie.dawkaLeku && przypomnienie.stan === 'odroczone')) {
+        if (anulowano) return
+        if (element.dawkaLeku) {
+          try { await sprawdzAlarmDawki(element.id, element.dawkaLeku.wersjaStanu) } catch { continue }
+        }
         const pokazano = await platforma.powiadomienia.pokaz({
           tytul: 'Ogarniacz',
           tresc: ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach && ['leki', 'wizyty', 'skierowania', 'zdrowie'].includes(element.zrodlo?.typ ?? '') ? 'Przypomnienie dotyczące zdrowia' : element.tytul,
-          sciezka: sciezkaDlaSourceRef(element.zrodlo, element.id),
+          sciezka: element.dawkaLeku ? sciezkaAlarmuDawki(element) : sciezkaDlaSourceRef(element.zrodlo, element.id),
         })
-        if (pokazano && !anulowano) await repozytorium.zapisz({ ...element, stan: 'dostarczone' })
+        if (pokazano && !anulowano) await oznaczDostarczeniePrzypomnienia(element)
       }
     }
-    void dostarcz()
+    kolejka.current = kolejka.current.then(dostarcz).then(() => { if (!anulowano) ustawBlad('') }).catch(() => {
+      if (!anulowano) ustawBlad('Nie udało się uzgodnić przypomnień. Sprawdź dawki w module Zdrowie; aplikacja ponowi próbę.')
+    })
     return () => {
       anulowano = true
     }
-  }, [dane, repozytorium, teraz, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach, ustawienia.updatedAt, wznowienie])
+  }, [dane, leki, wpisy, repozytorium, teraz, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach, ustawienia.updatedAt, wznowienie])
 
-  return null
+  return blad ? <Komunikat typ="blad">{blad}</Komunikat> : null
 }

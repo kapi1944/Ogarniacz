@@ -4,10 +4,12 @@ import { czasUruchomienia } from '../services/PrzypomnieniaService'
 import {
   identyfikatorNatywnyWystapienia,
   TYP_AKCJI_PRZYPOMNIENIA,
+  TYP_AKCJI_DAWKI,
   utworzHarmonogramPrzypomnienAndroid,
   wersjaNatywnegoPowiadomienia,
 } from './HarmonogramPrzypomnienAndroid'
 import { normalizujSciezkePowiadomienia, poprawnePowiazanieEncji, sciezkaDlaSourceRef } from './trasy'
+import { sciezkaAlarmuDawki } from '../services/PrzypomnieniaLekow'
 import type {
   AkcjaPowiadomienia,
   DanePowiadomienia,
@@ -56,8 +58,9 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
   const termin = czasUruchomienia(przypomnienie)
   if (!termin || Number.isNaN(termin.getTime())) return undefined
   const kanal = kanalDlaPrzypomnienia(przypomnienie)
-  const sciezka = sciezkaDlaSourceRef(przypomnienie.zrodlo, przypomnienie.id)
-  const wymagaDokladnosci = przypomnienie.priorytet === 'krytyczny' && przypomnienie.typ === 'absolutne'
+  if (przypomnienie.dawkaLeku?.nieaktualne) return undefined
+  const sciezka = przypomnienie.dawkaLeku ? sciezkaAlarmuDawki(przypomnienie) : sciezkaDlaSourceRef(przypomnienie.zrodlo, przypomnienie.id)
+  const wymagaDokladnosci = (Boolean(przypomnienie.dawkaLeku) || przypomnienie.priorytet === 'krytyczny') && przypomnienie.typ === 'absolutne'
   const tresc = ukrywajSzczegolyZdrowotne && czyZdrowotne(przypomnienie) ? 'Przypomnienie dotyczące zdrowia' : przypomnienie.tytul
   const wersja = wersjaNatywnegoPowiadomienia([termin.toISOString(), tresc, kanal, sciezka, String(wymagaDokladnosci)])
   return {
@@ -71,6 +74,7 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
     sciezka,
     wymagaDokladnosci,
     wersja,
+    ...(przypomnienie.dawkaLeku ? { dawkaLeku: przypomnienie.dawkaLeku } : {}),
   }
 }
 
@@ -118,6 +122,13 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
           { id: AKCJA_WYKONANE, title: 'Wykonane' },
           { id: AKCJA_ODROCZ, title: 'Za 15 min' },
         ],
+      }, {
+        id: TYP_AKCJI_DAWKI,
+        actions: [
+          { id: 'przyjeto', title: 'Przyjęto', foreground: true },
+          { id: AKCJA_ODROCZ, title: 'Odroczono', foreground: true },
+          { id: 'pominieto', title: 'Pominięto', foreground: true },
+        ],
       }],
     })
   }
@@ -135,9 +146,10 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
         }
         const przypomnienieId = notification.extra?.przypomnienieId
         if (typeof sciezka !== 'string' || typeof przypomnienieId !== 'string') return
-        const typ = actionId === AKCJA_WYKONANE ? 'wykonane' : actionId === AKCJA_ODROCZ ? 'odrocz' : 'otworz'
+        const typ = actionId === AKCJA_WYKONANE ? 'wykonane' : actionId === AKCJA_ODROCZ ? 'odrocz' : actionId === 'przyjeto' ? 'przyjeto' : actionId === 'pominieto' ? 'pominieto' : 'otworz'
         const sourceRef = poprawnePowiazanieEncji(notification.extra?.sourceRef) ? notification.extra.sourceRef : undefined
-        przekazAkcje({ typ, przypomnienieId, sciezka, sourceRef })
+        const wersjaStanuDawki = notification.extra?.dawkaLeku?.wersjaStanu
+        przekazAkcje({ typ, przypomnienieId, sciezka, sourceRef, ...(typeof wersjaStanuDawki === 'string' ? { wersjaStanuDawki } : {}) })
       }),
     ]).then(() => undefined).catch(() => undefined)
     return inicjalizacja
@@ -202,7 +214,14 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
       return true
     }
     if (!('Notification' in window) || Notification.permission !== 'granted') return false
-    const powiadomienie = new Notification(tytul, { body: tresc, ...(rodzaj === 'synchronizacja' ? { tag: 'ogarniacz-synchronizacja', icon: '/ikona-192.png' } : {}) })
+    if (rodzaj !== 'synchronizacja' && 'serviceWorker' in navigator) {
+      const rejestracja = await navigator.serviceWorker.getRegistration()
+      if (rejestracja?.active && rejestracja.showNotification) {
+        await rejestracja.showNotification(tytul, { body: tresc, icon: '/ikona-192.png', tag: sciezka, data: { sciezka } })
+        return true
+      }
+    }
+    const powiadomienie = new Notification(tytul, { body: tresc, ...(rodzaj === 'synchronizacja' ? { tag: 'ogarniacz-synchronizacja', icon: '/ikona-192.png' } : { tag: sciezka }) })
     if (sciezka) powiadomienie.onclick = () => {
       window.focus()
       przekazAkcje({ typ: 'otworz', sciezka })

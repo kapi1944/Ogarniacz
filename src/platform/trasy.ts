@@ -80,7 +80,7 @@ function normalizujSciezke(sciezka: string): string | null {
     for (const [nazwa, wartosc] of url.searchParams) {
       const dozwolony = znormalizowanaSciezka === '/dodaj'
         ? (nazwa === 'typ' && TYPY_SZYBKIEGO_DODAWANIA.has(wartosc as TypSzybkiegoDodawania)) || (nazwa === 'tekst' && wartosc.length <= 10_000)
-        : DOZWOLONE_PARAMETRY.has(nazwa) && wartosc.length <= 200
+        : (DOZWOLONE_PARAMETRY.has(nazwa) || znormalizowanaSciezka === '/zdrowie/leki' && ['dataDawki', 'wersjaDawki', 'akcjaDawki'].includes(nazwa)) && wartosc.length <= 200
       if (!dozwolony || !wartosc || url.searchParams.getAll(nazwa).length !== 1) return null
     }
 

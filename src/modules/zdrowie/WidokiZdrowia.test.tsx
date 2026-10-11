@@ -3,11 +3,13 @@ import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { utworzMetadane } from '../../domain/fabryki'
 import type { Lek } from '../../domain/typy'
-import { RozbieznoscApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from '../../services/LekiService'
+import { generujDawkiDnia, RozbieznoscApteczki, wersjaStanuDawki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from '../../services/LekiService'
+import { dzisiajIso } from '../../domain/fabryki'
+import { sciezkaAlarmuDawki } from '../../services/PrzypomnieniaLekow'
 import { WidokLekow } from './WidokiZdrowia'
 
 const stan = vi.hoisted(() => ({ leki: [] as Lek[] }))
-vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ ustawienia: { harmonogram: { koniecSnu: '07:00', poczatekSnu: '22:00' } } }) }))
+vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ moze: () => true, zapiszUstawienia: vi.fn(), ustawienia: { harmonogram: { koniecSnu: '07:00', poczatekSnu: '22:00' } } }) }))
 vi.mock('../../hooks/useRepozytorium', () => ({ useRepozytorium: (tabela: string) => ({ dane: tabela === 'leki' ? stan.leki : [], repozytorium: {} }) }))
 vi.mock('../../services/LekiService', async (oryginal) => ({ ...await oryginal<typeof import('../../services/LekiService')>(), zapiszStatusDawkiZApteczka: vi.fn(), zapiszLekZDodanymZapasem: vi.fn() }))
 
@@ -70,6 +72,35 @@ describe('formularz wersji dawkowania', () => {
 })
 
 describe('formularz statusu dawki', () => {
+  it('otwiera dokładne wystąpienie z alarmu i wymaga potwierdzenia z warunkiem aktualnego stanu', async () => {
+    const dawka = generujDawkiDnia(stan.leki, [], dzisiajIso())[0]
+    const wersja = wersjaStanuDawki(dawka)
+    const sciezka = sciezkaAlarmuDawki({ dawkaLeku: { lekId: dawka.lek.id, dawkaId: dawka.dawka.id, idWystapienia: dawka.idWystapienia, data: dawka.data, planowanyCzas: dawka.planowanyCzas!, status: dawka.status, wersjaStanu: wersja } } as import('../../domain/typy').Przypomnienie)
+    pokaz(<MemoryRouter initialEntries={[sciezka]}><WidokLekow /></MemoryRouter>)
+    expect(ekran.getByText('Dawka z powiadomienia')).toBeInTheDocument()
+    expect(zapiszStatusDawkiZApteczka).not.toHaveBeenCalled()
+    zdarzenie.click(ekran.getByRole('button', { name: 'Pominięto' }))
+    zdarzenie.click(ekran.getByRole('button', { name: 'Zapisz' }))
+    await poczekaj(() => expect(zapiszStatusDawkiZApteczka).toHaveBeenCalledWith(expect.objectContaining({ idWystapienia: dawka.idWystapienia }), 'pominiete', undefined, { oczekiwanaWersjaStanu: wersja }))
+  })
+
+  it('nie udostępnia decyzji dla nieaktualnego alarmu', () => {
+    pokaz(<MemoryRouter initialEntries={['/zdrowie/leki?element=lek-test&wystapienie=stare&dataDawki=2026-10-11&wersjaDawki=stara']}><WidokLekow /></MemoryRouter>)
+    expect(ekran.getByText(/Ten alarm jest nieaktualny/)).toBeInTheDocument()
+    expect(ekran.queryByRole('button', { name: 'Przyjęto' })).not.toBeInTheDocument()
+    expect(zapiszStatusDawkiZApteczka).not.toHaveBeenCalled()
+  })
+
+  it('akcja Androida otwiera formularz odroczenia bez zapisu ani edytora schematu', () => {
+    const dawka = generujDawkiDnia(stan.leki, [], dzisiajIso())[0]
+    const parametry = new URLSearchParams({ element: dawka.lek.id, wystapienie: dawka.idWystapienia, dataDawki: dawka.data, wersjaDawki: wersjaStanuDawki(dawka), akcjaDawki: 'odrocz' })
+    pokaz(<MemoryRouter initialEntries={[`/zdrowie/leki?${parametry}`]}><WidokLekow /></MemoryRouter>)
+    expect(ekran.getByLabelText('Odroczone do')).toBeRequired()
+    expect(ekran.queryByLabelText('Nowy schemat obowiązuje od')).not.toBeInTheDocument()
+    expect(zapiszStatusDawkiZApteczka).not.toHaveBeenCalled()
+    zdarzenie.click(ekran.getByRole('button', { name: 'Anuluj' }))
+    expect(ekran.queryByLabelText('Nowy schemat obowiązuje od')).not.toBeInTheDocument()
+  })
   it('przekazuje faktyczny czas i ilość oraz wymaga osobnego potwierdzenia rozbieżności', async () => {
     vi.mocked(zapiszStatusDawkiZApteczka).mockRejectedValueOnce(new RozbieznoscApteczki('Niedobór zapasu: potwierdź rozbieżność.')).mockResolvedValue(undefined)
     pokaz(<MemoryRouter><WidokLekow /></MemoryRouter>)
@@ -80,7 +111,7 @@ describe('formularz statusu dawki', () => {
     await ekran.findByText('Niedobór zapasu: potwierdź rozbieżność.')
     expect(ekran.getByRole('button', { name: 'Zapisz' })).toBeDisabled()
     expect(zapiszStatusDawkiZApteczka).toHaveBeenCalledTimes(1)
-    zdarzenie.click(ekran.getByRole('checkbox'))
+    zdarzenie.click(ekran.getByRole('checkbox', { name: /Potwierdzam faktyczne przyjęcie/ }))
     zdarzenie.click(ekran.getByRole('button', { name: 'Zapisz' }))
     await poczekaj(() => expect(zapiszStatusDawkiZApteczka).toHaveBeenLastCalledWith(expect.anything(), 'zazyte', undefined, { przyjetoAt: '2026-08-14T09:15', przyjetaIlosc: 3, przyjetaJednostka: 'szt.', potwierdzRozbieznosc: true }))
   })

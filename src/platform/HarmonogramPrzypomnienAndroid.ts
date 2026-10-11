@@ -6,6 +6,7 @@ import {
 import type { PowiadomieniePlatformowe } from './typy'
 
 export const TYP_AKCJI_PRZYPOMNIENIA = 'ogarniacz-przypomnienie'
+export const TYP_AKCJI_DAWKI = 'ogarniacz-dawka'
 
 function skrot32(tekst: string) {
   let wynik = 2166136261
@@ -34,6 +35,7 @@ function daneDodatkowe(powiadomienie: PowiadomieniePlatformowe) {
     przypomnienieId: powiadomienie.przypomnienieId,
     sciezka: powiadomienie.sciezka,
     wersja: powiadomienie.wersja,
+    ...(powiadomienie.dawkaLeku ? { dawkaLeku: powiadomienie.dawkaLeku, sourceRef: powiadomienie.sourceRef } : {}),
   }
 }
 
@@ -46,7 +48,7 @@ function schematNatywny(powiadomienie: PowiadomieniePlatformowe, exactAlarmsDost
     channelId: powiadomienie.kanal,
     autoCancel: true,
     group: 'ogarniacz-przypomnienia',
-    actionTypeId: TYP_AKCJI_PRZYPOMNIENIA,
+    actionTypeId: powiadomienie.dawkaLeku ? TYP_AKCJI_DAWKI : TYP_AKCJI_PRZYPOMNIENIA,
     extra: daneDodatkowe(powiadomienie),
     isExactNotification: dokladne,
     isExactMandatory: false,

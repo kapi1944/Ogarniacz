@@ -46,6 +46,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ['/powiadomienia-sw.js'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/health\/?$/],
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],

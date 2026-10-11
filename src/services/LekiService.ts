@@ -323,6 +323,8 @@ export function zapiszStatusDawki(dawka: DawkaDnia, status: DziennikLeku['status
 }
 
 export interface DanePrzyjeciaDawki {
+  /** Warunek zapisu z alarmu, sprawdzany pod blokadą tej samej transakcji. */
+  oczekiwanaWersjaStanu?: string
   przyjetoAt?: string
   przyjetaIlosc?: number
   przyjetaJednostka?: string
@@ -330,6 +332,10 @@ export interface DanePrzyjeciaDawki {
 }
 
 export class RozbieznoscApteczki extends Error {}
+
+export function wersjaStanuDawki(dawka: DawkaDnia): string {
+  return [dawka.status, dawka.wpis?.updatedAt ?? '', dawka.wersjaDawkowaniaId ?? '', dawka.planowanyCzas ?? '', dawka.wpis?.odroczoneDo ?? ''].join('|')
+}
 
 /** Jedyny zapis domenowy dawki: dziennik, apteczka i kolejka w jednej transakcji. */
 export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: DziennikLeku['status'], odroczoneDo?: string, dane: DanePrzyjeciaDawki = {}): Promise<void> {
@@ -341,6 +347,10 @@ export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: Dzien
     const wpisy = (await tabelaDziennika.where('lekId').equals(lek.id).toArray()).filter((wpis) => !wpis.usunietoAt)
     const aktualna = generujDawkiDnia([lek], wpisy, dawka.data).find((element) => element.idWystapienia === dawka.idWystapienia)
     if (!aktualna || !lek.aktywny) throw new Error('Harmonogram dawki uległ zmianie. Odśwież widok.')
+    if (dane.oczekiwanaWersjaStanu !== undefined && (wersjaStanuDawki(aktualna) !== dane.oczekiwanaWersjaStanu
+      || !generujDawkiDnia([lek], [], dawka.data).some((element) => element.idWystapienia === dawka.idWystapienia))) {
+      throw new Error('Ten alarm jest nieaktualny. Odśwież stan dawki przed kolejną decyzją.')
+    }
     const poprzedniWpis = aktualna.wpis
     const teraz = terazIso()
     const poprawnyTermin = (termin: string | undefined) => Boolean(termin && /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)?$/.test(termin) && Number.isFinite(parseISO(termin).getTime()))

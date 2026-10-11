@@ -10,7 +10,8 @@ import { dzisiajIso, noweId, terazIso, utworzMetadane } from '../../domain/fabry
 import type { DawkaLeku, JednostkaLeku, KonfiguracjaDawkowaniaLeku, Lek, PozycjaRecepty, PostacLeku, Przypomnienie, Recepta, Skierowanie, Terapia, UstawieniaHarmonogramu, Wizyta } from '../../domain/typy'
 import { usePodswietlenie } from '../../hooks/usePodswietlenie'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { RozbieznoscApteczki, type DawkaDnia, aktualnySchematLeku, jednostkaZapasuLeku, dawkiLeku, generujDawkiDnia, mozliweChwileSchematu, proponujGodzinyDawek, przewidywanaDataWyczerpania, stanApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from '../../services/LekiService'
+import { RozbieznoscApteczki, type DawkaDnia, aktualnySchematLeku, jednostkaZapasuLeku, dawkiLeku, generujDawkiDnia, mozliweChwileSchematu, proponujGodzinyDawek, przewidywanaDataWyczerpania, stanApteczki, wersjaStanuDawki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from '../../services/LekiService'
+import { PrzypomnieniaDawek } from './PrzypomnieniaDawek'
 import { ocrLekow } from '../../services/LekiOcrService'
 import type { WynikOcrLeku } from '../../services/LekiOcrParser'
 import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
@@ -335,7 +336,7 @@ function RejestrLekow({ leki, repozytorium, wybranyElementId, harmonogram }: { l
   </section>
 }
 
-function FormularzStatusuDawki({ dawka, status, zamknij }: { dawka: DawkaDnia; status: DawkaDnia['status']; zamknij: () => void }) {
+function FormularzStatusuDawki({ dawka, status, zamknij, oczekiwanaWersja }: { dawka: DawkaDnia; status: DawkaDnia['status']; zamknij: () => void; oczekiwanaWersja?: string }) {
   const lokalnyCzas = (czas: string) => format(new Date(czas), "yyyy-MM-dd'T'HH:mm")
   const [termin, ustawTermin] = useState(status === 'zazyte' ? lokalnyCzas(dawka.wpis?.przyjetoAt ?? new Date().toISOString()) : '')
   const [ilosc, ustawIlosc] = useState(String(dawka.wpis?.przyjetaIlosc ?? dawka.dawka.ilosc ?? ''))
@@ -348,7 +349,7 @@ function FormularzStatusuDawki({ dawka, status, zamknij }: { dawka: DawkaDnia; s
     zdarzenie.preventDefault()
     ustawZapisuje(true)
     try {
-      await zapiszStatusDawkiZApteczka(dawka, status, status === 'odroczone' ? termin : undefined, status === 'zazyte' ? { przyjetoAt: termin, przyjetaIlosc: ilosc === '' ? undefined : Number(ilosc), przyjetaJednostka: jednostka || undefined, potwierdzRozbieznosc: potwierdzona } : {})
+      await zapiszStatusDawkiZApteczka(dawka, status, status === 'odroczone' ? termin : undefined, { ...(status === 'zazyte' ? { przyjetoAt: termin, przyjetaIlosc: ilosc === '' ? undefined : Number(ilosc), przyjetaJednostka: jednostka || undefined, potwierdzRozbieznosc: potwierdzona } : {}), ...(oczekiwanaWersja !== undefined ? { oczekiwanaWersjaStanu: oczekiwanaWersja } : {}) })
       zamknij()
     } catch (przyczyna) {
       ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać dawki.')
@@ -366,25 +367,48 @@ function FormularzStatusuDawki({ dawka, status, zamknij }: { dawka: DawkaDnia; s
 }
 
 export function WidokLekow() {
-  const [parametryAdresu] = useSearchParams()
-  const { ustawienia } = useAplikacja()
+  const [parametryAdresu, ustawParametryAdresu] = useSearchParams()
+  const { ustawienia, moze } = useAplikacja()
   const { dane: leki, repozytorium } = useRepozytorium('leki')
   const { dane: wpisy } = useRepozytorium('dziennikLekow')
   const [historia, ustawHistorie] = useState(false)
-  const [zmianaDawki, ustawZmianeDawki] = useState<{ dawka: DawkaDnia; status: DawkaDnia['status'] }>()
+  const [zmianaDawki, ustawZmianeDawki] = useState<{ dawka: DawkaDnia; status: DawkaDnia['status']; oczekiwanaWersja?: string }>()
   const data = dzisiajIso()
   const dawki = generujDawkiDnia(leki, wpisy, data)
+  const idAlarmu = parametryAdresu.get('wystapienie')
+  const wersjaAlarmu = parametryAdresu.get('wersjaDawki')
+  const dataAlarmu = parametryAdresu.get('dataDawki')
+  const dawkaAlarmu = dataAlarmu && /^\d{4}-\d{2}-\d{2}$/.test(dataAlarmu) ? generujDawkiDnia(leki, wpisy, dataAlarmu).find((dawka) => dawka.idWystapienia === idAlarmu && dawka.lek.id === parametryAdresu.get('element')) : undefined
+  const aktualnyAlarm = dawkaAlarmu && dawkaAlarmu.lek.aktywny && ['oczekuje', 'odroczone'].includes(dawkaAlarmu.status)
+    && wersjaStanuDawki(dawkaAlarmu) === wersjaAlarmu
+    && generujDawkiDnia([dawkaAlarmu.lek], [], dawkaAlarmu.data).some((dawka) => dawka.idWystapienia === idAlarmu)
+  const akcjaAlarmu = parametryAdresu.get('akcjaDawki')
+  const [otwartyAlarm, ustawOtwartyAlarm] = useState('')
+  const kluczAlarmu = `${idAlarmu}:${wersjaAlarmu}:${akcjaAlarmu}`
+  useEffect(() => {
+    const status = akcjaAlarmu === 'przyjeto' ? 'zazyte' : akcjaAlarmu === 'odrocz' ? 'odroczone' : akcjaAlarmu === 'pominieto' ? 'pominiete' : undefined
+    if (status && aktualnyAlarm && dawkaAlarmu && wersjaAlarmu && kluczAlarmu !== otwartyAlarm && moze('leki', 'edycja')) {
+      ustawOtwartyAlarm(kluczAlarmu)
+      ustawZmianeDawki({ dawka: dawkaAlarmu, status, oczekiwanaWersja: wersjaAlarmu })
+    }
+  }, [akcjaAlarmu, aktualnyAlarm, dawkaAlarmu, wersjaAlarmu, kluczAlarmu, otwartyAlarm, moze])
 
   return <div className="widok">
     <NaglowekWidoku tytul="Leki" opis="Harmonogram i historia świadomych reakcji na dawki wpisane przez użytkownika." akcje={<button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawHistorie(!historia)}><History aria-hidden="true" />{historia ? 'Ukryj historię' : 'Historia'}</button>} />
     <Karta klasa="karta-bezpieczenstwa"><ShieldAlert aria-hidden="true" /><div><strong>Ogarniacz nie udziela porad medycznych.</strong><p>Nie dobiera leków ani dawek i nie zmienia zaleceń. Przechowuje wyłącznie informacje wpisane przez użytkownika.</p></div></Karta>
+    <PrzypomnieniaDawek />
+    {wersjaAlarmu && <Karta><h2>Dawka z powiadomienia</h2>{aktualnyAlarm && dawkaAlarmu ? <>
+      <p>{dawkaAlarmu.lek.nazwa} — {new Date(dawkaAlarmu.planowanyCzas!).toLocaleString('pl-PL', { timeZoneName: 'short' })}</p>
+      <p>Potwierdź faktyczne przyjęcie, wybierz termin odroczenia albo świadomie pomiń dawkę.</p>
+      {moze('leki', 'edycja') && <div className="akcje-formularza">{(['zazyte', 'odroczone', 'pominiete'] as const).map((status) => <button key={status} type="button" className="przycisk" onClick={() => ustawZmianeDawki({ dawka: dawkaAlarmu, status, oczekiwanaWersja: wersjaAlarmu })}>{{ zazyte: 'Przyjęto', odroczone: 'Odroczono', pominiete: 'Pominięto' }[status]}</button>)}</div>}
+    </> : <p role="status">Ten alarm jest nieaktualny. Sprawdź aktualny harmonogram i historię przyjęć.</p>}</Karta>}
     <Karta>
       <h2>Dzisiejsze dawki</h2>
       {dawki.length === 0 ? <PustyStan tytul="Brak aktywnych dawek" opis="Dodaj lek i co najmniej jedną dawkę." /> : <div className="lista-dawek lista-dawek--duza">{dawki.map((dawka) => <div key={dawka.idWystapienia}><time>{dawka.planowanaGodzina}</time><div><strong>{dawka.lek.nazwa}</strong><small>{dawka.dawka.instrukcja || (dawka.dawka.ilosc !== undefined ? `${dawka.dawka.ilosc}${dawka.jednostkaDawki ? ` ${dawka.jednostkaDawki}` : ''}` : 'Uzupełnij ilość dawki')}</small>{dawka.wpis?.rozbieznoscApteczki && <p role="status">{dawka.wpis.rozbieznoscApteczki} Nierozliczone: {dawka.wpis.nierozliczonaIlosc ?? 'ilość nieznana'} {dawka.wpis.przyjetaJednostka}</p>}</div><select aria-label={`Status ${dawka.lek.nazwa} ${dawka.planowanaGodzina}`} value={dawka.status} onChange={(e) => ustawZmianeDawki({ dawka, status: e.target.value as DawkaDnia['status'] })}><option value="oczekuje">Oczekuje</option><option value="zazyte">Zażyte</option><option value="odroczone">Odroczone</option><option value="pominiete">Pominięte</option></select></div>)}</div>}
     </Karta>
     {historia && <Karta><h2>Historia reakcji</h2>{wpisy.length === 0 ? <p className="tekst-pomocniczy">Brak zapisanych reakcji.</p> : <div className="tabela-przewijana"><table><thead><tr><th>Data</th><th>Godzina</th><th>Lek</th><th>Status</th><th>Schemat / planowana ilość</th><th>Faktyczne przyjęcie</th><th>Zapis / edycja</th><th>Rozliczenie apteczki</th></tr></thead><tbody>{[...wpisy].sort((a, b) => b.data.localeCompare(a.data)).map((wpis) => <tr key={wpis.id}><td>{wpis.data}</td><td>{wpis.planowanaGodzina}</td><td>{leki.find((lek) => lek.id === wpis.lekId)?.nazwa ?? 'Usunięty lek'}</td><td><Znacznik wariant={wpis.status === 'zazyte' ? 'sukces' : wpis.status === 'pominiete' ? 'blad' : 'ostrzezenie'}>{{ oczekuje: 'Oczekuje', zazyte: 'Zażyte', odroczone: 'Odroczone', pominiete: 'Pominięte' }[wpis.status]}</Znacznik></td><td>{etykietaWersjiDawkowania(leki.find((lek) => lek.id === wpis.lekId), wpis.wersjaDawkowaniaId)} — {wpis.planowanaDawka?.ilosc ?? 'planowana ilość nieznana'} {wpis.planowanaJednostka}</td><td>{wpis.przyjetoAt ? new Date(wpis.przyjetoAt).toLocaleString('pl-PL') : 'Nieznane'}{wpis.przyjetaIlosc !== undefined && ` — ${wpis.przyjetaIlosc} ${wpis.przyjetaJednostka ?? ''}`}</td><td>{new Date(wpis.updatedAt).toLocaleString('pl-PL')}</td><td>{wpis.rozbieznoscApteczki ? `${wpis.rozbieznoscApteczki} Nierozliczone: ${wpis.nierozliczonaIlosc ?? 'ilość nieznana'} ${wpis.przyjetaJednostka ?? ''}` : '—'}</td></tr>)}</tbody></table></div>}</Karta>}
-    {zmianaDawki && <FormularzStatusuDawki dawka={zmianaDawki.dawka} status={zmianaDawki.status} zamknij={() => ustawZmianeDawki(undefined)} />}
-    <RejestrLekow leki={leki} repozytorium={repozytorium} wybranyElementId={parametryAdresu.get('element') ?? undefined} harmonogram={ustawienia.harmonogram} />
+    {zmianaDawki && <FormularzStatusuDawki dawka={zmianaDawki.dawka} status={zmianaDawki.status} oczekiwanaWersja={zmianaDawki.oczekiwanaWersja} zamknij={() => { ustawZmianeDawki(undefined); if (wersjaAlarmu) { const nowe = new URLSearchParams(parametryAdresu); for (const klucz of ['wersjaDawki', 'akcjaDawki', 'dataDawki', 'wystapienie', 'element']) nowe.delete(klucz); ustawParametryAdresu(nowe, { replace: true }) } }} />}
+    <RejestrLekow leki={leki} repozytorium={repozytorium} wybranyElementId={wersjaAlarmu ? undefined : parametryAdresu.get('element') ?? undefined} harmonogram={ustawienia.harmonogram} />
   </div>
 }
 

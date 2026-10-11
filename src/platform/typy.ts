@@ -6,9 +6,10 @@ export type RodzajPlatformy = 'web' | 'android'
 export type StanCykluZycia = 'aktywny' | 'nieaktywny'
 export type StanZgody = 'przyznana' | 'odrzucona' | 'pytaj' | 'niedostepna'
 export type KanalPowiadomienia = 'ogarniacz-wazne' | 'ogarniacz-zwykle' | 'ogarniacz-zdrowie' | 'ogarniacz-finanse'
-export type TypAkcjiPowiadomienia = 'otworz' | 'wykonane' | 'odrocz'
+export type TypAkcjiPowiadomienia = 'otworz' | 'wykonane' | 'odrocz' | 'przyjeto' | 'pominieto'
 
 export interface AkcjaPowiadomienia {
+  wersjaStanuDawki?: string
   typ: TypAkcjiPowiadomienia
   przypomnienieId?: string
   sciezka: string
@@ -23,6 +24,7 @@ export interface DanePowiadomienia {
 }
 
 export interface PowiadomieniePlatformowe {
+  dawkaLeku?: Przypomnienie['dawkaLeku']
   id: number
   przypomnienieId: string
   tytul: string
