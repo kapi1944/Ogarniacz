@@ -19,6 +19,10 @@ import { utworzDomyslnyRejestrNarzedziEcho, WykonawcaNarzedziEcho } from './echo
 import { zapiszLekZDodanymZapasem } from './LekiService'
 import { czyKontoZgodneZDanymiLokalnymi } from './KontaService'
 import { SyncEngine } from './SyncEngine'
+import { zapiszSesje } from './PsychoterapiaService'
+import { zapiszWynikBadania } from './BadaniaService'
+import type { ZmianaSynchronizacji } from '../data/DostawcaSynchronizacji'
+import { nasluchujZmianDanych } from '../data/ZdarzeniaDanych'
 
 const lek: Lek = { ...utworzMetadane('lek'), nazwa: 'Sekret zdrowotny', dawkaInstrukcja: '1', godziny: ['08:00'], aktywny: true }
 const dokument: Dokument = { ...utworzMetadane('dokument'), nazwa: 'Sekret medyczny', medyczne: { kategoria: 'wynik' }, powiazania: [] }
@@ -28,7 +32,7 @@ const grant: Uprawnienie = { ...utworzMetadane('grant'), editorId: 'edytor', own
 
 describe.sequential('Granice prywatności Health 2.0', () => {
   beforeEach(async () => {
-    ustawBiezacyDostep(undefined)
+    ustawBiezacyDostep(() => true)
     baza.close(); await Dexie.delete('ogarniacz-v1'); await inicjalizujBaze()
     await baza.tabela('kolejkaSynchronizacji').clear()
     await baza.tabela('leki').put(lek)
@@ -115,6 +119,71 @@ describe.sequential('Granice prywatności Health 2.0', () => {
     await baza.tabela('kolejkaSynchronizacji').put({ ...utworzMetadane('stara-zmiana'), tabela: 'wpisyTerapii', rekordId: sesja.id, rekord: sesja, operacja: 'utworzenie', liczbaProb: 0 })
     expect(await pobierzKolejkeSynchronizacji()).toEqual([])
     expect(await baza.tabela('wpisyTerapii').get(sesja.id)).toEqual(sesja)
+  })
+
+  it.each(['sesja', 'wynik'] as const)('utrwala klasyfikację dokumentu powiązanego ze źródłem %s, aktualizuje starą kolejkę i chroni po odpięciu', async (zrodlo) => {
+    const zwykly = (await baza.tabela('dokumenty').get('zwykly'))!
+    await pobierzRepozytorium('dokumenty').zapisz(zwykly)
+    const staraZmiana = (await pobierzKolejkeSynchronizacji())[0]
+    const zmianaDanych = vi.fn()
+    const zakonczNasluchiwanie = nasluchujZmianDanych(zmianaDanych)
+    try {
+      if (zrodlo === 'sesja') {
+        await zapiszSesje({ ...sesja, id: 'nowa-sesja', terapiaId: '', psychoterapia: { dokumentyIds: ['zwykly'] } }, { sesje: () => true, dziennik: () => true, zadania: () => true, zrodla: () => true })
+      } else {
+        await zapiszWynikBadania({ ...utworzMetadane('wynik'), parametr: 'Prywatny parametr', dataPobrania: '2026-10-11', oryginalnyWynik: '5', kwalifikator: 'rowne', dokumentId: 'zwykly' }, () => true, () => true)
+      }
+      const wymagane = zrodlo === 'sesja' ? ['dokumentacja', 'psychoterapia'] : ['dokumentacja']
+      expect((await baza.tabela('dokumenty').get('zwykly'))?.sekcjePrywatnosci).toEqual(wymagane)
+      expect(zmianaDanych).toHaveBeenCalledWith('dokumenty')
+      const kolejka = await pobierzKolejkeSynchronizacji()
+      expect(kolejka).toHaveLength(1)
+      expect(kolejka[0].rekord).toMatchObject({ id: 'zwykly', sekcjePrywatnosci: wymagane })
+      expect(kolejka[0].bazowyUpdatedAt).toBe(staraZmiana.bazowyUpdatedAt)
+      expect(JSON.stringify(kolejka)).not.toContain('Prywatny parametr')
+      expect(JSON.stringify(kolejka)).not.toContain('Sekret terapeutyczny')
+      if (zrodlo === 'sesja') {
+        const zapisana = (await baza.tabela('wpisyTerapii').get('nowa-sesja'))!
+        await zapiszSesje({ ...zapisana, psychoterapia: {} }, { sesje: () => true, dziennik: () => true, zadania: () => true })
+      } else {
+        const zapisany = (await baza.tabela('wynikiBadan').get('wynik'))!
+        await pobierzRepozytorium('wynikiBadan', () => true).zapisz({ ...zapisany, dokumentId: 'dokument' })
+      }
+      const chroniony = (await baza.tabela('dokumenty').get('zwykly'))!
+      await expect(pobierzRepozytorium('dokumenty').zapisz({ ...chroniony, sekcjePrywatnosci: [] })).rejects.toThrow('ochrony')
+      await expect(pobierzRepozytorium('dokumenty').zapiszWiele([{ ...chroniony, id: 'nowy' }, { ...chroniony, id: 'nowy', sekcjePrywatnosci: [] }])).rejects.toThrow('ochrony')
+      expect(await baza.tabela('dokumenty').get('nowy')).toBeUndefined()
+      ustawBiezacyDostep((_modul, _operacja, sekcja) => !sekcja)
+      expect(await pobierzRepozytorium('dokumenty').pobierz('zwykly')).toBeUndefined()
+    } finally { zakonczNasluchiwanie() }
+  })
+
+  it('migruje dawną relację i wysyła tylko klasyfikację na zdalnej wersji przed konfliktem treści', async () => {
+    const dawny = (await baza.tabela('dokumenty').get('zwykly'))!
+    await baza.tabela('wpisyTerapii').put({ ...sesja, psychoterapia: { dokumentyIds: ['zwykly'] } })
+    await baza.tabela('stanSynchronizacji').update('glowny', { kolejkaZmigrowana: true })
+    const zdalny = { ...dawny, nazwa: 'Nowsza nazwa serwera', updatedAt: '2099-01-01T00:00:00.000Z' }
+    const wyslijZmiany = vi.fn(async (_zmiany: ZmianaSynchronizacji[]) => undefined)
+    const silnik = new SyncEngine({ czyOnline: () => true, installationId: () => 'lokalna', opoznieniePonowieniaMs: 0 })
+    const wynik = await silnik.synchronizuj({ pobierzZmiany: async () => [{ tabela: 'dokumenty', rekord: zdalny, installationId: 'inna' }], wyslijZmiany })
+    expect(wynik.konflikty).toBe(1)
+    expect(wyslijZmiany.mock.calls[0][0]).toEqual([{ tabela: 'dokumenty', rekord: { ...zdalny, sekcjePrywatnosci: ['dokumentacja', 'psychoterapia'] }, bazowyUpdatedAt: zdalny.updatedAt, installationId: 'lokalna' }])
+    await silnik.rozstrzygnijKonflikt('dokumenty:zwykly', { typ: 'zdalny' })
+    expect((await baza.tabela('dokumenty').get('zwykly'))?.sekcjePrywatnosci).toEqual(['dokumentacja', 'psychoterapia'])
+    expect(await baza.tabela('wpisyTerapii').get(sesja.id)).toMatchObject({ tresc: sesja.tresc })
+  })
+
+  it('bez kontekstu blokuje chroniony zapis, jawny tryb lokalny i właściciel działają, a wyłączenie kontekstu odmawia', async () => {
+    ustawBiezacyDostep(undefined)
+    await expect(pobierzRepozytorium('dokumenty').zapisz(dokument)).rejects.toThrow('uprawnienia')
+    ustawBiezacyDostep(() => true)
+    await pobierzRepozytorium('dokumenty').zapisz(dokument)
+    ustawBiezacyDostep(undefined)
+    localStorage.setItem('ogarniacz-konto-offline', JSON.stringify({ zalogowany: true, rola: 'wlasciciel', wlascicielId: 'pierwszy' }))
+    expect(await pobierzRepozytorium('dokumenty').pobierz(dokument.id)).toBeDefined()
+    ustawBiezacyDostep(() => false)
+    await expect(pobierzRepozytorium('dokumenty').zapisz(dokument)).rejects.toThrow('uprawnienia')
+    expect(await pobierzRepozytorium('dokumenty').pobierz(dokument.id)).toBeUndefined()
   })
 
   it('inne konto właściciela nie przejmuje lokalnego zdrowia ani eksportu; powrót przywraca dostęp', async () => {

@@ -24,6 +24,20 @@ Diagnostyka nie kopiuje rekordów, treści odpowiedzi, stack trace, emaila konta
 
 ## Konflikty
 
+### Health 2.0 — prywatne źródła dokumentów i starsze APK
+
+Dokument powiązany z lokalnym wynikiem badania otrzymuje `sekcjePrywatnosci: ['dokumentacja']`, a materiał sesji — `['dokumentacja', 'psychoterapia']`. Pole zawiera wyłącznie klasyfikację uprawnień, bez treści ani ID sesji/wyniku. Edytor potrzebuje grantu Dokumenty oraz aktywnych grantów odpowiednich sekcji Zdrowia. Zwykłe dokumenty zachowują dotychczasową synchronizację.
+
+Klasyfikacja narasta: odpięcie lub zmiana źródła nie zdejmuje ochrony. Repozytorium odrzuca jej usunięcie; serwer zachowuje sumę zapisanej i przesłanej klasyfikacji, także przy zapisie ze starszego klienta. Zapis źródła, klasyfikacja dokumentu i aktualizacja oczekującej zmiany odbywają się w jednej transakcji. Istniejące relacje są uzgadniane idempotentnie przed odczytem kolejki; opcjonalne pole nie wymaga nowych tabel ani indeksów Dexie. Pull i rozstrzygnięcie konfliktu zachowują klasyfikację lokalną.
+
+Przed konfliktem treści klient przesyła klasyfikację na pobranej wersji dokumentu. Serwer utrwala samo zaostrzenie dostępu do istniejącego dokumentu również wtedy, gdy późniejszy zapis treści kończy się `409`; treść i `updatedAt` tej wersji pozostają wtedy bez zmian. Ochrona dawnych dokumentów na serwerze zaczyna obowiązywać dopiero po przekazaniu klasyfikacji przez zaktualizowanego klienta do zaktualizowanego serwera. Serwer nie może odtworzyć nieznanych mu lokalnych relacji. Nie usuwa się zdalnych rekordów.
+
+`POST /api/sync/changes` nadal zwraca `200` dla poprawnej paczki, ale pomija całą tabelę `wpisyTerapii` przed kontrolą grantów, konfliktów i zapisem. Historyczne rekordy pozostają nienaruszone, a odczyt nadal wymaga właściwych uprawnień. Odpowiedź ma postać `{ zapisano, pominiete }`: `zapisano` liczy rzeczywiste zapisy (bez pominiętych i wcześniej przetworzonych zmian), a `pominiete` zawiera `{ tabela, rekordId, zmianaId?, powod: 'tabela_lokalna' }`, bez prywatnych treści. Pozostałe prawidłowe rekordy w tej samej paczce synchronizują się normalnie.
+
+**Starsze APK wymagają aktualizacji klienta.** Dotychczasowy klient ignorujący body odpowiedzi `200` może pokazać wysłaną notatkę jako zsynchronizowaną, choć serwer jej nie zapisał. Nie da się poprawić takiego komunikatu w już zainstalowanym APK samą zmianą serwera. Aktualny klient wyklucza `wpisyTerapii` z transportu; nie ma retry blokującego całą paczkę przez lokalną tabelę.
+
+Brak zarejestrowanego kontekstu odmawia chronionych operacji, z wyjątkiem zgodnego konta właściciela. Świadomy tryb lokalny działa po odczytaniu ustawień i zarejestrowaniu kontroli kontekstu; domyślne ustawienia renderowania nie otwierają dostępu przed ich odczytem. Wyłączenie kontekstu rejestruje odmowę również dla właściciela.
+
 Jeżeli lokalna i zdalna wersja tego samego rekordu zmieniły się od ostatniego sync i nie są identyczne, żadna nie nadpisuje drugiej. Obie wersje oraz identyfikatory instalacji trafiają do lokalnego rejestru konfliktów. Ustawienia pozwalają wybrać wersję lokalną albo zdalną. Nie zastosowano CRDT.
 
 Reguły w prostym języku:

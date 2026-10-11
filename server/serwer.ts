@@ -189,6 +189,9 @@ export function utworzSerwer(
         if (zadanie.method === 'POST' && zadanie.url === '/api/sync/changes') {
           const paczka = await odczytajPaczkeSynchronizacji(zadanie)
           if (paczka.installationId !== installationId) throw new Error('Niezgodny installationId.')
+          const pominiete = paczka.zmiany.filter((zmiana) => zmiana.tabela === 'wpisyTerapii')
+            .map((zmiana) => ({ tabela: zmiana.tabela, rekordId: zmiana.rekord.id, zmianaId: zmiana.zmianaId, powod: 'tabela_lokalna' }))
+          paczka.zmiany = paczka.zmiany.filter((zmiana) => zmiana.tabela !== 'wpisyTerapii')
           if (paczka.zmiany.some((zmiana) => {
             const poprzedni = baza.prepare('SELECT dane_json FROM rekordy_synchronizacji WHERE uzytkownik_id = ? AND tabela = ? AND rekord_id = ?').get(kontekst.wlascicielId, zmiana.tabela, zmiana.rekord.id)
             return !czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'edycja', zmiana.rekord)
@@ -197,8 +200,8 @@ export function utworzSerwer(
             odpowiedzJson(odpowiedz, 403, { error: 'Grant nie zezwala na zapis tych danych.' })
             return
           }
-          zapiszZmianySynchronizacji(baza, kontekst.wlascicielId, paczka)
-          odpowiedzJson(odpowiedz, 200, { zapisano: paczka.zmiany.length })
+          const zapisano = zapiszZmianySynchronizacji(baza, kontekst.wlascicielId, paczka)
+          odpowiedzJson(odpowiedz, 200, { zapisano, pominiete })
           return
         }
         odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu synchronizacji.' })

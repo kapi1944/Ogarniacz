@@ -206,13 +206,14 @@ export class SyncEngine implements DostawcaSynchronizacji {
     const kolejka = tabelaKolejki()
     await baza.transaction('rw', [tabelaLokalna(tabela), baza.tabela('konfliktySynchronizacji'), kolejka], async () => {
       if (czyPrywatnaPsychoterapia(tabela, await tabelaLokalna(tabela).get(rekord.id)) || czyPrywatnaPsychoterapia(tabela, rekord)) throw new Error('Prywatna sesja lub ćwiczenie nie podlega synchronizacji.')
-      await tabelaLokalna(tabela).put(zachowajLokalneSamopoczucie(tabela, rekord, await tabelaLokalna(tabela).get(rekord.id)))
+      const zabezpieczony = zachowajLokalneSamopoczucie(tabela, rekord, await tabelaLokalna(tabela).get(rekord.id))
+      await tabelaLokalna(tabela).put(zabezpieczony)
       await baza.tabela('konfliktySynchronizacji').delete(id)
       if (wyborZdalny) {
         const oczekujace = await kolejka.where('[tabela+rekordId]').equals([tabela, rekord.id]).primaryKeys()
         await usunWyslaneZmiany(oczekujace)
       } else {
-        await dodajDoKolejkiSynchronizacji(tabela, rekord, konflikt.zdalny)
+        await dodajDoKolejkiSynchronizacji(tabela, zabezpieczony, konflikt.zdalny)
       }
     })
     await this.ustawStanPoKonfliktach()
@@ -275,6 +276,20 @@ export class SyncEngine implements DostawcaSynchronizacji {
       ])
       if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto zmieniło się podczas synchronizacji.')
       walidujZmianyZdalne(wszystkieZdalne)
+      // Ochrona istniejącego dokumentu dociera na serwer także przed rozstrzygnięciem konfliktu treści.
+      const klasyfikacje: ZmianaSynchronizacji[] = []
+      for (const zmiana of wszystkieZdalne) {
+        if (zmiana.tabela !== 'dokumenty') continue
+        const lokalny = await baza.tabela('dokumenty').get(zmiana.rekord.id)
+        const zabezpieczony = zachowajLokalneSamopoczucie('dokumenty', zmiana.rekord, lokalny)
+        if (takieSame(zabezpieczony, zmiana.rekord)) continue
+        klasyfikacje.push({ tabela: 'dokumenty', rekord: zabezpieczony, bazowyUpdatedAt: zmiana.rekord.updatedAt, installationId })
+        zmiana.rekord = zabezpieczony
+      }
+      if (klasyfikacje.length) await this.zPonowieniami(() => {
+        if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto zmieniło się przed wysłaniem danych.')
+        return repozytoriumZdalne.wyslijZmiany(klasyfikacje, od)
+      })
       await this.zapiszStan({ ostatniPull: this.teraz(), polaczenie: 'dostepne', sesjaWymagaLogowania: false })
       const zdalne: ZmianaSynchronizacji[] = []
       for (const zmiana of wszystkieZdalne) {
@@ -320,7 +335,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       const stan = await this.ustawStanPoKonfliktach({
         ostatniSync: repozytoriumZdalne.pobierzKursor?.() ?? synchronizowanoDo,
       })
-      return { wyslane: doWyslania.length, pobrane: doPobrania.length, konflikty: konflikty.length, stan }
+      return { wyslane: doWyslania.length + klasyfikacje.length, pobrane: doPobrania.length, konflikty: konflikty.length, stan }
     } catch (blad) {
       const kod = sklasyfikujBladSynchronizacji(blad)
       const komunikat = komunikatyBledowSynchronizacji[kod]

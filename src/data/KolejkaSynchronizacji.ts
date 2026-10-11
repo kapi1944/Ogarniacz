@@ -1,6 +1,6 @@
 import type { Table } from 'dexie'
 import { noweId } from '../domain/fabryki'
-import type { EncjaBazowa, NazwaTabeli, ZmianaKolejkiSynchronizacji } from '../domain/typy'
+import type { Dokument, EncjaBazowa, NazwaTabeli, ZmianaKolejkiSynchronizacji } from '../domain/typy'
 import { baza, nazwyTabel } from './BazaOgarniacza'
 import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 
@@ -30,8 +30,34 @@ export function rekordDoSynchronizacji(tabela: NazwaTabeli, rekord: EncjaBazowa)
 
 export function zachowajLokalneSamopoczucie(tabela: NazwaTabeli, rekord: EncjaBazowa, lokalny?: EncjaBazowa): EncjaBazowa {
   const kopia = rekordDoSynchronizacji(tabela, rekord)
+  if (tabela === 'dokumenty') {
+    const sekcje = [...new Set([...(lokalny as Dokument | undefined)?.sekcjePrywatnosci ?? [], ...(rekord as Dokument).sekcjePrywatnosci ?? []])].sort()
+    if (sekcje.length) (kopia as Dokument).sekcjePrywatnosci = sekcje
+  }
   if (tabela === 'ustawienia' && lokalny && 'samopoczucie' in lokalny) Object.assign(kopia, { samopoczucie: structuredClone(lokalny.samopoczucie) })
   return kopia
+}
+
+/** Idempotentna migracja klasyfikacji dawnych relacji, także przed pierwszym wysłaniem. */
+export async function uzgodnijPrywatnoscDokumentow(ids?: string[], sekcje: NonNullable<Dokument['sekcjePrywatnosci']> = []): Promise<void> {
+  await baza.transaction('rw', [baza.tabela('dokumenty'), baza.tabela('wpisyTerapii'), baza.tabela('wynikiBadan'), baza.tabela('wizyty'), tabelaKolejki()], async () => {
+    const [dokumenty, sesje, wyniki] = await Promise.all([
+      ids ? baza.tabela('dokumenty').bulkGet(ids) : baza.tabela('dokumenty').toArray(),
+      baza.tabela('wpisyTerapii').toArray(), baza.tabela('wynikiBadan').toArray(),
+    ])
+    for (const dokument of dokumenty) {
+      if (!dokument) continue
+      const wymagane = new Set(dokument.sekcjePrywatnosci ?? [])
+      for (const sekcja of sekcje) wymagane.add(sekcja)
+      if (wyniki.some((wynik) => wynik.dokumentId === dokument.id)) wymagane.add('dokumentacja')
+      if (sesje.some((sesja) => sesja.psychoterapia?.dokumentyIds?.includes(dokument.id))) { wymagane.add('dokumentacja'); wymagane.add('psychoterapia') }
+      const klasyfikacja = [...wymagane].sort()
+      if (JSON.stringify(klasyfikacja) === JSON.stringify(dokument.sekcjePrywatnosci ?? [])) continue
+      const zmieniony = { ...dokument, sekcjePrywatnosci: klasyfikacja, updatedAt: new Date(Math.max(Date.now(), Date.parse(dokument.updatedAt) + 1)).toISOString() }
+      await baza.tabela('dokumenty').put(zmieniony)
+      await dodajDoKolejkiSynchronizacji('dokumenty', zmieniony, dokument)
+    }
+  })
 }
 
 export function tabelaKolejki(): Table<ZmianaKolejkiSynchronizacji, string> {
@@ -63,13 +89,14 @@ export async function dodajDoKolejkiSynchronizacji(
 }
 
 export async function pobierzKolejkeSynchronizacji(): Promise<ZmianaKolejkiSynchronizacji[]> {
+  await uzgodnijPrywatnoscDokumentow()
   const zmiany = await tabelaKolejki().orderBy('createdAt').toArray()
   const bezpieczne: ZmianaKolejkiSynchronizacji[] = []
   for (const zmiana of zmiany) {
     const tabela = zmiana.tabela as NazwaTabeli
     if (!nazwyTabel.includes(tabela) || !czyTabelaSynchronizowana(tabela)) continue
     if (czyPrywatnaPsychoterapia(tabela, zmiana.rekord) || czyPrywatnaPsychoterapia(tabela, await baza.tabela(tabela).get(zmiana.rekordId))) continue
-    bezpieczne.push(zmiana)
+    bezpieczne.push({ ...zmiana, rekord: zachowajLokalneSamopoczucie(tabela, zmiana.rekord, await baza.tabela(tabela).get(zmiana.rekordId)) })
   }
   return bezpieczne
     .map((zmiana) => ({ ...zmiana, rekord: rekordDoSynchronizacji(zmiana.tabela as NazwaTabeli, zmiana.rekord) }))

@@ -28,7 +28,8 @@ const KontekstAplikacji = createContext<WartoscKontekstu | null>(null)
 
 export function DostawcaAplikacji({ children }: { children: ReactNode }) {
   const { konto } = useKonto()
-  const zapisaneUstawienia = useLiveQuery(() => repozytoriumUstawien.wczytaj(), [], DOMYSLNE_USTAWIENIA)
+  const wczytaneUstawienia = useLiveQuery(() => repozytoriumUstawien.wczytaj(), [])
+  const zapisaneUstawienia = wczytaneUstawienia ?? DOMYSLNE_USTAWIENIA
   const { dane: uprawnienia } = useRepozytorium('uprawnienia')
   const [szybkieDodawanie, ustawSzybkieDodawanie] = useState<DaneSzybkiegoDodawania | null>(null)
   const [wyszukiwanie, ustawWyszukiwanie] = useState(false)
@@ -117,13 +118,17 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
         && (operacja === 'odczyt' ? grant.odczyt : grant.edycja),
       )
     }
+    if (!wczytaneUstawienia) return false
     return czyDozwolone(ustawienia.trybUzytkownika, uprawnienia, modul, operacja, ustawienia.aktywnyEdytorId, sekcja)
   }
 
   const dostepRef = useRef(moze)
   dostepRef.current = moze
   ustawBiezacyDostep((modul, operacja, sekcja) => dostepRef.current(modul, operacja, sekcja))
-  useEffect(() => () => ustawBiezacyDostep(() => false), [])
+  useEffect(() => {
+    ustawBiezacyDostep((modul, operacja, sekcja) => dostepRef.current(modul, operacja, sekcja))
+    return () => ustawBiezacyDostep(() => false)
+  }, [])
 
   return (
     <KontekstAplikacji.Provider key={JSON.stringify([konto?.uzytkownikId, konto?.rola, konto?.granty, ustawienia.trybUzytkownika, ustawienia.aktywnyEdytorId, uprawnienia])} value={{

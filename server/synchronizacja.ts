@@ -75,6 +75,8 @@ function walidujZmiane(zmiana: unknown, installationId: string): asserts zmiana 
     || !poprawnyIso(rekord.updatedAt)
     || (rekord.usunietoAt !== undefined && !poprawnyIso(rekord.usunietoAt))
   ) throw new Error('Niepoprawna zmiana synchronizacji.')
+  if (kandydat.tabela === 'dokumenty' && rekord.sekcjePrywatnosci !== undefined
+    && (!Array.isArray(rekord.sekcjePrywatnosci) || rekord.sekcjePrywatnosci.some((sekcja) => !['dokumentacja', 'psychoterapia'].includes(sekcja)))) throw new Error('Niepoprawna klasyfikacja dokumentu.')
 }
 
 export function zapewnijProfilSynchronizacji(baza: DatabaseSync, userId: string, installationId: string): void {
@@ -100,7 +102,9 @@ export function pobierzZmianySynchronizacji(baza: DatabaseSync, userId: string, 
   }))
 }
 
-export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, paczka: PaczkaSynchronizacji): void {
+export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, paczka: PaczkaSynchronizacji): number {
+  // Historyczne notatki pozostają w bazie, ale żaden klient nie może ich ponownie zapisać.
+  const zmiany = paczka.zmiany.filter((zmiana) => zmiana.tabela !== 'wpisyTerapii')
   const czyPrzetworzona = baza.prepare(`
     SELECT 1 FROM przetworzone_zmiany_synchronizacji WHERE uzytkownik_id = ? AND zmiana_id = ?
   `)
@@ -110,9 +114,22 @@ export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, p
     WHERE uzytkownik_id = ? AND tabela = ? AND rekord_id = ?
   `)
   const konflikty: string[] = []
-  for (const zmiana of paczka.zmiany) {
+  for (const zmiana of zmiany) {
     if (zmiana.zmianaId && czyPrzetworzona.get(userId, zmiana.zmianaId)) continue
     const istniejacy = pobierzIstniejacy.get(userId, zmiana.tabela, zmiana.rekord.id)
+    if (zmiana.tabela === 'dokumenty' && istniejacy) {
+      const poprzedni = JSON.parse(String(istniejacy.dane_json)) as RekordSynchronizacji
+      const sekcje = [...new Set([...(poprzedni.sekcjePrywatnosci as string[] | undefined) ?? [], ...(zmiana.rekord.sekcjePrywatnosci as string[] | undefined) ?? []])].sort()
+      if (sekcje.length) zmiana.rekord = { ...zmiana.rekord, sekcjePrywatnosci: sekcje }
+      if (sekcje.length && JSON.stringify(sekcje) !== JSON.stringify(poprzedni.sekcjePrywatnosci ?? [])) {
+        // Zaostrzenie dostępu nie czeka na konflikt treści; nie zmienia treści ani jej znacznika aktualności.
+        const chroniony = JSON.stringify({ ...poprzedni, sekcjePrywatnosci: sekcje })
+        baza.prepare(`UPDATE rekordy_synchronizacji SET dane_json = ?, version = version + 1, server_updated_at = ?
+          WHERE uzytkownik_id = ? AND tabela = 'dokumenty' AND rekord_id = ?`)
+          .run(chroniony, new Date().toISOString(), userId, zmiana.rekord.id)
+        istniejacy.dane_json = chroniony
+      }
+    }
     if (
       istniejacy
       && (zmiana.bazowyUpdatedAt
@@ -141,9 +158,17 @@ export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, p
     VALUES (?, ?, ?)
   `)
   baza.exec('BEGIN')
+  let zapisano = 0
   try {
-    for (const zmiana of paczka.zmiany) {
+    for (const zmiana of zmiany) {
       if (zmiana.zmianaId && czyPrzetworzona.get(userId, zmiana.zmianaId)) continue
+      // Kolejna zmiana tego samego ID w paczce również nie może zdjąć wcześniejszej ochrony.
+      if (zmiana.tabela === 'dokumenty') {
+        const istniejacy = pobierzIstniejacy.get(userId, zmiana.tabela, zmiana.rekord.id)
+        const poprzedni = istniejacy ? JSON.parse(String(istniejacy.dane_json)) as RekordSynchronizacji : undefined
+        const sekcje = [...new Set([...(poprzedni?.sekcjePrywatnosci as string[] | undefined) ?? [], ...(zmiana.rekord.sekcjePrywatnosci as string[] | undefined) ?? []])].sort()
+        if (sekcje.length) zmiana.rekord = { ...zmiana.rekord, sekcjePrywatnosci: sekcje }
+      }
       zapisz.run(
         userId,
         zmiana.tabela,
@@ -156,12 +181,14 @@ export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, p
         new Date().toISOString(),
       )
       if (zmiana.zmianaId) oznaczPrzetworzona.run(userId, zmiana.zmianaId, new Date().toISOString())
+      zapisano += 1
     }
     baza.exec('COMMIT')
   } catch (blad) {
     baza.exec('ROLLBACK')
     throw blad
   }
+  return zapisano
 }
 
 export function poczatekSynchronizacji(): string {

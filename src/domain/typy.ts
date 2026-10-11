@@ -447,6 +447,8 @@ export interface Kontakt extends EncjaBazowa {
 }
 
 export interface Dokument extends EncjaBazowa {
+  /** Trwała klasyfikacja uprawnień; bez treści i identyfikatorów prywatnych źródeł. */
+  sekcjePrywatnosci?: ('dokumentacja' | 'psychoterapia')[]
   medyczne?: import('./badania').MetadaneMedyczne
   nazwa: string
   typ?: string

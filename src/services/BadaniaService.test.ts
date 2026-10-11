@@ -36,7 +36,7 @@ describe.sequential('Badania i dokumenty medyczne', () => {
     expect(zapisany).toMatchObject({ oryginalnyWynik: zapis, kwalifikator, dokumentId: 'dokument' })
     expect(zapisany.wartoscLiczbowa).toBe(liczba); expect(zapisany.wartoscTekstowa).toBe(tekst)
     expect(zapisany.jednostka).toBeUndefined(); expect(zapisany.zakresReferencyjny).toBeUndefined()
-    expect(await baza.tabela('kolejkaSynchronizacji').count()).toBe(0)
+    expect((await pobierzKolejkeSynchronizacji()).map((zmiana) => zmiana.tabela)).toEqual(['dokumenty'])
     expect(await baza.tabela('historiaZmian').count()).toBe(0)
   })
 

@@ -17,7 +17,7 @@ export function czyBiezacyDostep(modul: NazwaModulu, operacja: 'odczyt' | 'edycj
   if (['zdrowie', 'leki', 'wizyty', 'skierowania', 'dokumenty', 'ustawienia'].includes(modul) && !czyKontoZgodneZDanymiLokalnymi()) return false
   const konto = pobierzKontoOffline()
   if (konto?.rola === 'edytor' && (modul === 'ustawienia' || modul === 'echo' || !konto.granty?.some((grant) => grant.status === 'aktywne' && grant.modul === modul && czyPasujeSekcja(modul, grant.sekcja, sekcja) && (operacja === 'odczyt' ? grant.odczyt : grant.edycja)))) return false
-  return biezacyDostep?.(modul, operacja, sekcja) ?? true
+  return biezacyDostep?.(modul, operacja, sekcja) ?? (konto?.rola === 'wlasciciel')
 }
 
 export function sprawdzBiezacyDostep(modul: NazwaModulu, operacja: 'odczyt' | 'edycja', sekcja?: string): void {
@@ -25,6 +25,7 @@ export function sprawdzBiezacyDostep(modul: NazwaModulu, operacja: 'odczyt' | 'e
 }
 
 export function zakresDanychZdrowotnych(tabela: NazwaTabeli, rekord?: EncjaBazowa): { modul: NazwaModulu; sekcja?: string } | undefined {
+  if (tabela === 'dokumenty' && rekord && 'sekcjePrywatnosci' in rekord && Array.isArray(rekord.sekcjePrywatnosci) && rekord.sekcjePrywatnosci.length) return { modul: 'zdrowie', sekcja: 'dokumentacja' }
   if (tabela === 'wpisySamopoczucia') return { modul: 'zdrowie', sekcja: 'samopoczucie' }
   if (tabela === 'wpisyTerapii' || tabela === 'zadania' && rekord && 'sesjaTerapiiId' in rekord) return { modul: 'zdrowie', sekcja: 'psychoterapia' }
   if (tabela === 'wynikiBadan') return { modul: 'zdrowie', sekcja: 'badania' }

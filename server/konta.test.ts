@@ -265,6 +265,103 @@ test('ogólny grant nie udostępnia dokumentacji ani dawnych sesji, także przy 
   })
 })
 
+test('starszy klient wysyła notatki razem ze zwykłym rekordem; tylko zwykły rekord jest zapisany, historia pozostaje', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'wlasciciel', 'owner@example.test')
+    dodajSesje(baza, 'token-wlasciciela', 'csrf-wlasciciela', 'wlasciciel')
+    const historyczny = { id: 'dawna', createdAt: TERAZ, updatedAt: TERAZ, tresc: 'Dawna prywatna notatka' }
+    baza.prepare(`INSERT INTO rekordy_synchronizacji
+      (uzytkownik_id, tabela, rekord_id, dane_json, created_at, updated_at, version, ostatnia_instalacja_id, server_updated_at)
+      VALUES ('wlasciciel', 'wpisyTerapii', 'dawna', ?, ?, ?, 1, 'instalacja-serwera', ?)`)
+      .run(JSON.stringify(historyczny), TERAZ, TERAZ, TERAZ)
+    const historiaPrzed = baza.prepare("SELECT * FROM rekordy_synchronizacji WHERE tabela = 'wpisyTerapii'").all()
+    const installationId = 'instalacja-testowa'
+    const zmiany = [
+      { zmianaId: 'stara-notatka-1', tabela: 'wpisyTerapii', rekord: { ...historyczny, tresc: 'Zmiana starego APK' }, installationId },
+      { zmianaId: 'stara-notatka-2', tabela: 'wpisyTerapii', rekord: { ...historyczny, id: 'nowa' }, installationId },
+      { zmianaId: 'zwykle-zadanie-1', tabela: 'zadania', rekord: { id: 'zadanie', createdAt: TERAZ, updatedAt: TERAZ, tytul: 'Zwykłe zadanie' }, installationId },
+    ]
+    const wyslij = () => fetch(`${adres}/api/sync/changes`, { method: 'POST', headers: naglowki('token-wlasciciela', 'csrf-wlasciciela'), body: JSON.stringify({ od: '1970-01-01T00:00:00.000Z', installationId, zmiany }) })
+    const odpowiedz = await wyslij()
+    assert.equal(odpowiedz.status, 200)
+    const wynik = await odpowiedz.json() as { zapisano: number; pominiete: { rekordId: string; powod: string }[] }
+    assert.equal(wynik.zapisano, 1)
+    assert.deepEqual(wynik.pominiete.map((zmiana) => zmiana.rekordId), ['dawna', 'nowa'])
+    assert.ok(wynik.pominiete.every((zmiana) => zmiana.powod === 'tabela_lokalna'))
+    assert.deepEqual(baza.prepare("SELECT * FROM rekordy_synchronizacji WHERE tabela = 'wpisyTerapii'").all(), historiaPrzed)
+    assert.equal((await (await wyslij()).json() as { zapisano: number }).zapisano, 0)
+    assert.equal(baza.prepare("SELECT COUNT(*) AS liczba FROM przetworzone_zmiany_synchronizacji WHERE zmiana_id LIKE 'stara-notatka-%'").get()?.liczba, 0)
+  })
+})
+
+test('klasyfikacja dokumentu wymaga grantów sekcji, przetrwa próbę usunięcia i cofnięcie grantu', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'wlasciciel', 'owner@example.test')
+    dodajSesje(baza, 'token-wlasciciela', 'csrf-wlasciciela', 'wlasciciel')
+    baza.prepare('INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)').run('edytor', 'editor@example.test', 'hash-testowy', TERAZ, TERAZ)
+    dodajSesje(baza, 'token-edytora', 'csrf-edytora', 'edytor', 'wlasciciel', 'edytor')
+    const grant = (id: string, modul: string, sekcja: string) => baza.prepare(`INSERT INTO granty_dostepu
+      (id, wlasciciel_id, edytor_id, modul, sekcja, odczyt, edycja, status, utworzono_at, zaktualizowano_at)
+      VALUES (?, 'wlasciciel', 'edytor', ?, ?, 1, 1, 'aktywne', ?, ?)`).run(id, modul, sekcja, TERAZ, TERAZ)
+    grant('dokumenty', 'dokumenty', '')
+    const installationId = 'instalacja-testowa'
+    const rekord = { id: 'plik', nazwa: 'Zwykły dokument', powiazania: [], createdAt: TERAZ, updatedAt: TERAZ }
+    const wyslij = (rekord: Record<string, unknown>, token = 'token-wlasciciela', csrf = 'csrf-wlasciciela') => fetch(`${adres}/api/sync/changes`, { method: 'POST', headers: naglowki(token, csrf), body: JSON.stringify({ od: TERAZ, installationId, zmiany: [{ tabela: 'dokumenty', rekord, installationId }] }) })
+    const odczytaj = async () => (await (await fetch(`${adres}/api/sync/changes?od=1970-01-01T00%3A00%3A00.000Z`, { headers: naglowki('token-edytora') })).json() as { zmiany: { rekord: { id: string } }[] }).zmiany
+    assert.equal((await wyslij(rekord)).status, 200)
+    assert.equal((await odczytaj()).length, 1)
+    assert.equal((await wyslij({ ...rekord, sekcjePrywatnosci: ['dokumentacja', 'psychoterapia'] })).status, 200)
+    assert.deepEqual(await odczytaj(), [])
+    grant('dokumentacja', 'zdrowie', 'dokumentacja')
+    assert.deepEqual(await odczytaj(), [])
+    grant('psychoterapia', 'zdrowie', 'psychoterapia')
+    assert.equal((await odczytaj()).length, 1)
+    assert.equal((await wyslij({ ...rekord, sekcjePrywatnosci: [] }, 'token-edytora', 'csrf-edytora')).status, 200)
+    assert.deepEqual(JSON.parse(String(baza.prepare("SELECT dane_json FROM rekordy_synchronizacji WHERE rekord_id = 'plik'").get()?.dane_json)).sekcjePrywatnosci, ['dokumentacja', 'psychoterapia'])
+    baza.prepare("UPDATE granty_dostepu SET status = 'cofniete' WHERE id = 'psychoterapia'").run()
+    assert.deepEqual(await odczytaj(), [])
+    assert.equal((await wyslij(rekord, 'token-edytora', 'csrf-edytora')).status, 403)
+    assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM rekordy_synchronizacji').get()?.liczba, 1)
+    const podwojny = await fetch(`${adres}/api/sync/changes`, { method: 'POST', headers: naglowki('token-wlasciciela', 'csrf-wlasciciela'), body: JSON.stringify({ od: TERAZ, installationId, zmiany: [
+      { tabela: 'dokumenty', rekord: { ...rekord, id: 'nowy-plik', sekcjePrywatnosci: ['dokumentacja', 'psychoterapia'] }, installationId },
+      { tabela: 'dokumenty', rekord: { ...rekord, id: 'nowy-plik' }, installationId },
+    ] }) })
+    assert.equal(podwojny.status, 200)
+    assert.deepEqual(JSON.parse(String(baza.prepare("SELECT dane_json FROM rekordy_synchronizacji WHERE rekord_id = 'nowy-plik'").get()?.dane_json)).sekcjePrywatnosci, ['dokumentacja', 'psychoterapia'])
+    assert.deepEqual(await odczytaj(), [])
+  })
+})
+
+test('klasyfikacja dokumentu wyniku chroni istniejącą treść również przy konflikcie zapisu', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'wlasciciel', 'owner@example.test')
+    dodajSesje(baza, 'token-wlasciciela', 'csrf-wlasciciela', 'wlasciciel')
+    baza.prepare('INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)').run('edytor', 'editor@example.test', 'hash-testowy', TERAZ, TERAZ)
+    dodajSesje(baza, 'token-edytora', 'csrf-edytora', 'edytor', 'wlasciciel', 'edytor')
+    const grant = (id: string, modul: string, sekcja: string) => baza.prepare(`INSERT INTO granty_dostepu
+      (id, wlasciciel_id, edytor_id, modul, sekcja, odczyt, edycja, status, utworzono_at, zaktualizowano_at)
+      VALUES (?, 'wlasciciel', 'edytor', ?, ?, 1, 1, 'aktywne', ?, ?)`).run(id, modul, sekcja, TERAZ, TERAZ)
+    grant('dokumenty', 'dokumenty', '')
+    const zdalny = { id: 'plik-wyniku', createdAt: TERAZ, updatedAt: TERAZ, nazwa: 'Treść istniejąca na serwerze' }
+    baza.prepare(`INSERT INTO rekordy_synchronizacji
+      (uzytkownik_id, tabela, rekord_id, dane_json, created_at, updated_at, version, ostatnia_instalacja_id, server_updated_at)
+      VALUES ('wlasciciel', 'dokumenty', ?, ?, ?, ?, 1, 'inna-instalacja', ?)`)
+      .run(zdalny.id, JSON.stringify(zdalny), TERAZ, TERAZ, TERAZ)
+    const odpowiedz = await fetch(`${adres}/api/sync/changes`, { method: 'POST', headers: naglowki('token-wlasciciela', 'csrf-wlasciciela'), body: JSON.stringify({
+      od: '1970-01-01T00:00:00.000Z', installationId: 'instalacja-testowa', zmiany: [{ tabela: 'dokumenty', installationId: 'instalacja-testowa', rekord: { ...zdalny, nazwa: 'Nieaktualna treść klienta', sekcjePrywatnosci: ['dokumentacja'] } }],
+    }) })
+    assert.equal(odpowiedz.status, 409)
+    const zapisany = JSON.parse(String(baza.prepare("SELECT dane_json FROM rekordy_synchronizacji WHERE rekord_id = 'plik-wyniku'").get()?.dane_json))
+    assert.deepEqual(zapisany, { ...zdalny, sekcjePrywatnosci: ['dokumentacja'] })
+    const odczytaj = async () => (await (await fetch(`${adres}/api/sync/changes?od=1970-01-01T00%3A00%3A00.000Z`, { headers: naglowki('token-edytora') })).json() as { zmiany: unknown[] }).zmiany
+    assert.deepEqual(await odczytaj(), [])
+    grant('dokumentacja', 'zdrowie', 'dokumentacja')
+    assert.equal((await odczytaj()).length, 1)
+    baza.prepare("UPDATE granty_dostepu SET status = 'cofniete' WHERE id = 'dokumentacja'").run()
+    assert.deepEqual(await odczytaj(), [])
+  })
+})
+
 test('cofnięcie Edytora unieważnia jego sesję', async () => {
   await zSerwerem(async (adres, baza) => {
     dodajUzytkownika(baza, 'wlasciciel', 'owner@example.test')

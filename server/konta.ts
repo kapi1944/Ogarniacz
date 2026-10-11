@@ -214,6 +214,13 @@ export function czyDozwolonaTabela(
   const sekcja = tabela === 'wpisyTerapii' || tabela === 'zadania' && rekord && 'sesjaTerapiiId' in rekord ? 'psychoterapia'
     : tabela === 'dokumenty' && rekord && ('medyczne' in rekord && rekord.medyczne !== undefined || Array.isArray(rekord.powiazania) && rekord.powiazania.some((relacja) => relacja && ['zdrowie', 'wizyty', 'skierowania', 'leki'].includes(relacja.typ))) ? 'dokumentacja' : undefined
   const sekcje = new Set<string>(sekcja ? [sekcja] : [])
+  if (tabela === 'dokumenty' && Array.isArray(rekord?.sekcjePrywatnosci)) {
+    for (const sekcjaDokumentu of rekord.sekcjePrywatnosci) {
+      if (!['dokumentacja', 'psychoterapia'].includes(sekcjaDokumentu)) return false
+      sekcje.add('dokumentacja')
+      sekcje.add(sekcjaDokumentu)
+    }
+  }
   if (tabela === 'dokumenty' && rekord?.id) {
     const zrodla = baza.prepare("SELECT tabela, dane_json FROM rekordy_synchronizacji WHERE uzytkownik_id = ? AND tabela IN ('wizyty', 'wpisyTerapii')").all(kontekst.wlascicielId)
     for (const zrodlo of zrodla) {
