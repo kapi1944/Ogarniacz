@@ -43,7 +43,7 @@ function stanZgody(wartosc: string): StanZgody {
 }
 
 function czyZdrowotne(przypomnienie: Przypomnienie): boolean {
-  return ['leki', 'wizyty', 'skierowania', 'zdrowie'].includes(przypomnienie.zrodlo?.typ ?? '')
+  return Boolean(przypomnienie.dawkaLeku) || ['leki', 'wizyty', 'skierowania', 'zdrowie'].includes(przypomnienie.zrodlo?.typ ?? '')
 }
 
 function kanalDlaPrzypomnienia(przypomnienie: Przypomnienie): KanalPowiadomienia {
@@ -57,6 +57,7 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
   if (przypomnienie.usunietoAt) return undefined
   const zakres = zakresDanychZdrowotnych('przypomnienia', przypomnienie)
   if (zakres && !czyBiezacyDostep(zakres.modul, 'odczyt', zakres.sekcja)) return undefined
+  if (przypomnienie.dawkaLeku && !czyBiezacyDostep('leki', 'odczyt')) return undefined
   if (!STANY_DO_DOSTARCZENIA.has(przypomnienie.stan)) return undefined
   const termin = czasUruchomienia(przypomnienie)
   if (!termin || Number.isNaN(termin.getTime())) return undefined
@@ -65,7 +66,7 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
   const sciezka = przypomnienie.dawkaLeku ? sciezkaAlarmuDawki(przypomnienie) : sciezkaDlaSourceRef(przypomnienie.zrodlo, przypomnienie.id)
   const wymagaDokladnosci = (Boolean(przypomnienie.dawkaLeku) || przypomnienie.priorytet === 'krytyczny') && przypomnienie.typ === 'absolutne'
   const tresc = ukrywajSzczegolyZdrowotne && czyZdrowotne(przypomnienie) ? 'Przypomnienie dotyczące zdrowia' : przypomnienie.tytul
-  const wersja = wersjaNatywnegoPowiadomienia([termin.toISOString(), tresc, kanal, sciezka, String(wymagaDokladnosci)])
+  const wersja = wersjaNatywnegoPowiadomienia([termin.toISOString(), tresc, kanal, sciezka, String(wymagaDokladnosci), przypomnienie.dawkaLeku?.wersjaStanu ?? ''])
   return {
     id: identyfikatorNatywnyWystapienia('przypomnienie', przypomnienie.id),
     przypomnienieId: przypomnienie.id,
@@ -148,8 +149,13 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
           return
         }
         const przypomnienieId = notification.extra?.przypomnienieId
-        if (typeof sciezka !== 'string' || typeof przypomnienieId !== 'string') return
+        if (typeof przypomnienieId !== 'string') return
         const typ = actionId === AKCJA_WYKONANE ? 'wykonane' : actionId === AKCJA_ODROCZ ? 'odrocz' : actionId === 'przyjeto' ? 'przyjeto' : actionId === 'pominieto' ? 'pominieto' : 'otworz'
+        if (notification.extra?.ogarniacz === true && typeof notification.extra?.wersja === 'string') {
+          przekazAkcje({ typ, przypomnienieId, sciezka: '/przypomnienia', wersjaPowiadomienia: notification.extra.wersja })
+          return
+        }
+        if (typeof sciezka !== 'string') return
         const sourceRef = poprawnePowiazanieEncji(notification.extra?.sourceRef) ? notification.extra.sourceRef : undefined
         const wersjaStanuDawki = notification.extra?.dawkaLeku?.wersjaStanu
         przekazAkcje({ typ, przypomnienieId, sciezka, sourceRef, ...(typeof wersjaStanuDawki === 'string' ? { wersjaStanuDawki } : {}) })
@@ -243,6 +249,7 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     const dostarczone = wszystkieDostarczone.filter(czyOgarniacza)
     if (!wlaczone) {
       await harmonogram.anuluj(oczekujace.map((element) => element.id))
+      await harmonogram.usunDostarczone(dostarczone.map((element) => element.id))
       return { zaplanowanePrzypomnieniaIds: [] }
     }
 
@@ -265,19 +272,20 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     for (const { powiadomienie } of docelowe) {
       const istniejace = oczekujacePoId.get(powiadomienie.id)
       const wyswietlone = dostarczonePoId.get(powiadomienie.id)
+      const przestarzaleWyswietlone = wyswietlone && wersjaNatywnego(wyswietlone) !== powiadomienie.wersja
+      if (przestarzaleWyswietlone) dostarczoneDoZastapienia.push(powiadomienie.id)
       if (istniejace) {
         if (wersjaNatywnego(istniejace) !== powiadomienie.wersja) zmienione.push(powiadomienie)
       } else if (!wyswietlone) {
         nowe.push(powiadomienie)
-      } else if (Date.parse(powiadomienie.termin) > teraz && wersjaNatywnego(wyswietlone) !== powiadomienie.wersja) {
-        dostarczoneDoZastapienia.push(powiadomienie.id)
+      } else if (przestarzaleWyswietlone && Date.parse(powiadomienie.termin) > teraz) {
         nowe.push(powiadomienie)
       }
     }
     const stan = await sprawdzStan()
     if (stan.zgoda !== 'przyznana' || !stan.systemoweWlaczone) {
-      await harmonogram.anuluj(zmienione.map((element) => element.id))
-      await harmonogram.usunDostarczone(dostarczoneDoZastapienia)
+      await harmonogram.anuluj(oczekujace.map((element) => element.id))
+      await harmonogram.usunDostarczone(dostarczone.map((element) => element.id))
       return { zaplanowanePrzypomnieniaIds: [] }
     }
     await harmonogram.usunDostarczone(dostarczoneDoZastapienia)

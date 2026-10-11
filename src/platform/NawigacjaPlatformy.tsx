@@ -10,11 +10,12 @@ import { odroczPrzypomnienie, zakonczPrzypomnienie } from '../services/Przypomni
 import { Komunikat } from '../components/Interfejs'
 import { utworzObslugeCelowPlatformy } from './ObslugaCelowPlatformy'
 import { sciezkaAlarmuDawki, sprawdzAlarmDawki } from '../services/PrzypomnieniaLekow'
+import { mapujPrzypomnienieNaPowiadomienie } from './NotificationService'
 
 export function NawigacjaPlatformy() {
   const polozenie = useLocation()
   const nawiguj = useNavigate()
-  const { moze, otworzSzybkieDodawanieZDanymi } = useAplikacja()
+  const { moze, otworzSzybkieDodawanieZDanymi, ustawienia, gotowyDostep } = useAplikacja()
   const historia = useRef([polozenie.key])
   const [komunikat, ustawKomunikat] = useState('')
   const obslugaCelow = useRef<ReturnType<typeof utworzObslugeCelowPlatformy> | undefined>(undefined)
@@ -34,40 +35,47 @@ export function NawigacjaPlatformy() {
     return () => clearTimeout(ukryjKomunikat)
   }, [komunikat])
 
-  useEffect(() => platforma.powiadomienia.nasluchujAkcji((akcja) => {
-    if (akcja.wersjaStanuDawki !== undefined && akcja.przypomnienieId) {
+  useEffect(() => {
+    if (gotowyDostep === false) return
+    return platforma.powiadomienia.nasluchujAkcji((akcjaNatywna) => {
       void (async () => {
-        if (!moze('leki', 'edycja')) throw new Error('Brak uprawnienia do zmiany statusu leku.')
-        await sprawdzAlarmDawki(akcja.przypomnienieId!, akcja.wersjaStanuDawki!)
-        const przypomnienie = await pobierzRepozytorium('przypomnienia').pobierz(akcja.przypomnienieId!)
-        if (!przypomnienie?.dawkaLeku || przypomnienie.dawkaLeku.wersjaStanu !== akcja.wersjaStanuDawki) throw new Error('Ten alarm jest nieaktualny. Sprawdź aktualny stan dawki.')
-        nawiguj(sciezkaAlarmuDawki(przypomnienie, akcja.typ === 'wykonane' ? undefined : akcja.typ))
-      })().catch((blad) => ustawKomunikat(blad instanceof Error ? blad.message : 'Nie udało się sprawdzić dawki.'))
-      return
-    }
-    if (akcja.typ === 'otworz') {
-      void obslugaCelow.current?.obsluz(akcja.sciezka, akcja.sourceRef)
-      return
-    }
-    if (!akcja.przypomnienieId || !moze('przypomnienia', 'edycja')) return
-    const przypomnienieId = akcja.przypomnienieId
-    void (async () => {
-      const repozytorium = pobierzRepozytorium('przypomnienia')
-      const przypomnienie = await repozytorium.pobierz(przypomnienieId)
-      if (!przypomnienie || ['wykonane', 'pominiete'].includes(przypomnienie.stan)) return
-      if (przypomnienie.dawkaLeku) {
-        ustawKomunikat('Otwórz aktualną dawkę w module Zdrowie i potwierdź swoją decyzję.')
-        return
-      }
-      if (akcja.typ === 'odrocz') {
-        await repozytorium.zapisz(odroczPrzypomnienie(przypomnienie, 15))
-        return
-      }
-      const wynik = zakonczPrzypomnienie(przypomnienie)
-      if (wynik.nastepne) await repozytorium.zapiszWiele([wynik.wykonane, wynik.nastepne])
-      else await repozytorium.zapisz(wynik.wykonane)
-    })().catch(() => undefined)
-  }), [moze, nawiguj])
+        let akcja = akcjaNatywna
+        const repozytorium = pobierzRepozytorium('przypomnienia')
+        if (akcja.wersjaPowiadomienia !== undefined && akcja.przypomnienieId) {
+          const przypomnienie = await repozytorium.pobierz(akcja.przypomnienieId)
+          const powiadomienie = przypomnienie && mapujPrzypomnienieNaPowiadomienie(przypomnienie, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach)
+          if (!przypomnienie || !powiadomienie || powiadomienie.wersja !== akcja.wersjaPowiadomienia) throw new Error('Ten alarm jest niedostępny lub nieaktualny. Sprawdź aktualne przypomnienia.')
+          akcja = { ...akcja, sciezka: powiadomienie.sciezka, sourceRef: przypomnienie.zrodlo, wersjaStanuDawki: przypomnienie.dawkaLeku?.wersjaStanu }
+        }
+        if (akcja.wersjaStanuDawki !== undefined && akcja.przypomnienieId) {
+          if (!moze('leki', akcja.typ === 'otworz' ? 'odczyt' : 'edycja')) throw new Error('Brak uprawnienia do leku.')
+          await sprawdzAlarmDawki(akcja.przypomnienieId, akcja.wersjaStanuDawki)
+          const przypomnienie = await repozytorium.pobierz(akcja.przypomnienieId)
+          if (!przypomnienie?.dawkaLeku || przypomnienie.dawkaLeku.wersjaStanu !== akcja.wersjaStanuDawki) throw new Error('Ten alarm jest nieaktualny. Sprawdź aktualny stan dawki.')
+          nawiguj(sciezkaAlarmuDawki(przypomnienie, akcja.typ === 'wykonane' ? undefined : akcja.typ))
+          return
+        }
+        if (akcja.typ === 'otworz') {
+          await obslugaCelow.current?.obsluz(akcja.sciezka, akcja.sourceRef)
+          return
+        }
+        if (!akcja.przypomnienieId || !moze('przypomnienia', 'edycja')) return
+        const przypomnienie = await repozytorium.pobierz(akcja.przypomnienieId)
+        if (!przypomnienie || ['wykonane', 'pominiete'].includes(przypomnienie.stan)) return
+        if (przypomnienie.dawkaLeku) {
+          ustawKomunikat('Otwórz aktualną dawkę w module Zdrowie i potwierdź swoją decyzję.')
+          return
+        }
+        if (akcja.typ === 'odrocz') {
+          await repozytorium.zapisz(odroczPrzypomnienie(przypomnienie, 15))
+          return
+        }
+        const wynik = zakonczPrzypomnienie(przypomnienie)
+        if (wynik.nastepne) await repozytorium.zapiszWiele([wynik.wykonane, wynik.nastepne])
+        else await repozytorium.zapisz(wynik.wykonane)
+      })().catch((blad) => ustawKomunikat(blad instanceof Error ? blad.message : 'Nie udało się sprawdzić przypomnienia.'))
+    })
+  }, [moze, nawiguj, gotowyDostep, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach])
 
   useEffect(() => () => obslugaCelow.current?.zakoncz(), [])
 

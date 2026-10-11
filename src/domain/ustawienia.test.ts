@@ -20,6 +20,16 @@ describe.sequential('ustawienia aplikacji', () => {
     expect(niepelne.nawigacja).toEqual(DOMYSLNE_USTAWIENIA.nawigacja)
   })
 
+  it('nowa instalacja ukrywa szczegóły zdrowotne, a zapisane preferencje pozostają świadomym wyborem', async () => {
+    expect((await repozytoriumUstawien.wczytaj()).ukrywajSzczegolyZdrowotneWPowiadomieniach).toBe(true)
+    for (const wartosc of [false, true]) {
+      await repozytoriumUstawien.zapisz({ ...await repozytoriumUstawien.wczytaj(), ukrywajSzczegolyZdrowotneWPowiadomieniach: wartosc })
+      baza.close(); await baza.open()
+      expect((await repozytoriumUstawien.wczytaj()).ukrywajSzczegolyZdrowotneWPowiadomieniach).toBe(wartosc)
+      expect(normalizujUstawienia({ ukrywajSzczegolyZdrowotneWPowiadomieniach: wartosc }).ukrywajSzczegolyZdrowotneWPowiadomieniach).toBe(wartosc)
+    }
+  })
+
   it('zamienia błędne wartości enum na domyślne', () => {
     const wynik = normalizujUstawienia({
       wyglad: { motyw: 'neonowy' },

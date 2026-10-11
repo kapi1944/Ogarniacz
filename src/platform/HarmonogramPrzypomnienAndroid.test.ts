@@ -77,11 +77,12 @@ describe('natywny harmonogram przypomnień Androida', () => {
     expect(schemat.extra).toEqual({
       ogarniacz: true,
       przypomnienieId: 'wystapienie-1',
-      sciezka: '/zadania?element=zadanie-1',
       wersja: element.wersja,
     })
     expect(JSON.stringify(schemat.extra)).not.toContain(element.tresc)
     expect(schemat.extra).not.toHaveProperty('sourceRef')
+    expect(schemat.extra).not.toHaveProperty('sciezka')
+    expect(schemat.extra).not.toHaveProperty('dawkaLeku')
   })
 
   it('przeplanowuje przez anulowanie starego alarmu przed utworzeniem nowego', async () => {
@@ -120,6 +121,14 @@ describe('natywny harmonogram przypomnień Androida', () => {
 
     await utworzHarmonogramPrzypomnienAndroid(true).zaplanuj([powiadomienie()])
 
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it('po utracie zgody usuwa stary alarm również przy bezpośrednim przeplanowaniu', async () => {
+    lokalnePowiadomienia.checkPermissions.mockResolvedValue({ display: 'denied' })
+    const element = powiadomienie()
+    await utworzHarmonogramPrzypomnienAndroid(true).przeplanuj([element])
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: element.id }] })
     expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
   })
 

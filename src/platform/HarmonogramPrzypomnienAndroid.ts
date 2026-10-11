@@ -22,7 +22,7 @@ export function identyfikatorNatywnyWystapienia(typEncji: string, wystapienieId:
 }
 
 export function wersjaNatywnegoPowiadomienia(wartosci: readonly string[]) {
-  return `v2-${skrot32(wartosci.join('\u001f')).toString(16).padStart(8, '0')}`
+  return `v3-${skrot32(wartosci.join('\u001f')).toString(16).padStart(8, '0')}`
 }
 
 function unikalnePoId<T extends { id: number }>(elementy: T[]) {
@@ -33,9 +33,7 @@ function daneDodatkowe(powiadomienie: PowiadomieniePlatformowe) {
   return {
     ogarniacz: true,
     przypomnienieId: powiadomienie.przypomnienieId,
-    sciezka: powiadomienie.sciezka,
     wersja: powiadomienie.wersja,
-    ...(powiadomienie.dawkaLeku ? { dawkaLeku: powiadomienie.dawkaLeku, sourceRef: powiadomienie.sourceRef } : {}),
   }
 }
 
@@ -100,8 +98,9 @@ export function utworzHarmonogramPrzypomnienAndroid(czyAndroid: boolean) {
 
   const przeplanuj = async (powiadomienia: PowiadomieniePlatformowe[]) => {
     const unikalne = unikalnePoId(powiadomienia)
-    if (unikalne.length === 0 || !await czyDostarczenieDostepne()) return
+    if (unikalne.length === 0) return
     await anuluj(unikalne.map((element) => element.id))
+    if (!await czyDostarczenieDostepne()) return
     const exactAlarmsDostepne = await czyExactAlarmsDostepne()
     await LocalNotifications.schedule({
       notifications: unikalne.map((element) => schematNatywny(element, exactAlarmsDostepne)),

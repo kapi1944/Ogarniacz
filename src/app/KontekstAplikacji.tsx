@@ -13,6 +13,7 @@ import { SilnikPrzypomnien } from './SilnikPrzypomnien'
 import { useKonto } from './DostawcaKonta'
 
 interface WartoscKontekstu {
+  gotowyDostep: boolean
   ustawienia: Ustawienia
   zapisaneUstawienia: Ustawienia
   zapiszUstawienia: (zmiany: Partial<Ustawienia>) => Promise<void>
@@ -132,6 +133,7 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
 
   return (
     <KontekstAplikacji.Provider key={JSON.stringify([konto?.uzytkownikId, konto?.rola, konto?.granty, ustawienia.trybUzytkownika, ustawienia.aktywnyEdytorId, uprawnienia])} value={{
+      gotowyDostep: Boolean(wczytaneUstawienia),
       ustawienia,
       zapisaneUstawienia,
       zapiszUstawienia,

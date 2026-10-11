@@ -83,7 +83,7 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
     nieTylkoKolor: true,
   },
   powiadomienia: false,
-  ukrywajSzczegolyZdrowotneWPowiadomieniach: false,
+  ukrywajSzczegolyZdrowotneWPowiadomieniach: true,
   proaktywnoscEcho: true,
   echoWyciszone: false,
   glosEcho: true,

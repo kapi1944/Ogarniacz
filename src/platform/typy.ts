@@ -9,6 +9,7 @@ export type KanalPowiadomienia = 'ogarniacz-wazne' | 'ogarniacz-zwykle' | 'ogarn
 export type TypAkcjiPowiadomienia = 'otworz' | 'wykonane' | 'odrocz' | 'przyjeto' | 'pominieto'
 
 export interface AkcjaPowiadomienia {
+  wersjaPowiadomienia?: string
   wersjaStanuDawki?: string
   typ: TypAkcjiPowiadomienia
   przypomnienieId?: string

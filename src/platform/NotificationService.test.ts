@@ -4,6 +4,7 @@ import type { Przypomnienie } from '../domain/typy'
 import { odroczPrzypomnienie, zakonczPrzypomnienie } from '../services/PrzypomnieniaService'
 import { mapujPrzypomnienieNaPowiadomienie, utworzUslugePowiadomien } from './NotificationService'
 import { sciezkaDlaSourceRef } from './trasy'
+import { ustawBiezacyDostep } from '../services/UprawnieniaService'
 
 const lokalnePowiadomienia = vi.hoisted(() => ({
   addListener: vi.fn(),
@@ -73,7 +74,7 @@ describe('kanały alarmów lekowych', () => {
     const natywne = lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0]
     expect(natywne.body).toBe('Przypomnienie dotyczące zdrowia')
     expect(natywne.actionTypeId).toBe('ogarniacz-dawka')
-    expect(natywne.extra.dawkaLeku).toEqual(przypomnienieDawki.dawkaLeku)
+    expect(natywne.extra).toEqual({ ogarniacz: true, przypomnienieId: przypomnienieDawki.id, wersja: mapujPrzypomnienieNaPowiadomienie(przypomnienieDawki, true)!.wersja })
     expect(natywne.isExactNotification).toBe(true)
     expect(JSON.stringify(natywne.extra)).not.toContain('Prywatna nazwa')
     const obsluga = vi.fn()
@@ -82,7 +83,7 @@ describe('kanały alarmów lekowych', () => {
     akcja({ actionId: 'przyjeto', notification: natywne })
     akcja({ actionId: 'przyjeto', notification: natywne })
     expect(obsluga).toHaveBeenCalledTimes(1)
-    expect(obsluga).toHaveBeenCalledWith(expect.objectContaining({ typ: 'przyjeto', przypomnienieId: przypomnienieDawki.id, wersjaStanuDawki: przypomnienieDawki.dawkaLeku!.wersjaStanu }))
+    expect(obsluga).toHaveBeenCalledWith({ typ: 'przyjeto', przypomnienieId: przypomnienieDawki.id, wersjaPowiadomienia: natywne.extra.wersja, sciezka: '/przypomnienia' })
   })
 
   it('bez dokładnych alarmów stosuje istniejący fallback, a bez zgody nie planuje', async () => {
@@ -92,6 +93,58 @@ describe('kanały alarmów lekowych', () => {
     lokalnePowiadomienia.schedule.mockClear()
     lokalnePowiadomienia.checkPermissions.mockResolvedValue({ display: 'denied' })
     await utworzUslugePowiadomien(true).synchronizuj([alarm()], true)
+    expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+  })
+
+  it.each(['grant', 'konto', 'zgoda', 'system', 'wylaczone'])('anuluje oczekujące i wyświetlone alarmy po utracie dostępu: %s', async (powod) => {
+    const element = alarm()
+    const powiadomienie = mapujPrzypomnienieNaPowiadomienie(element, true)!
+    const natywne = { id: powiadomienie.id, extra: { ogarniacz: true, wersja: powiadomienie.wersja } }
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [natywne] })
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [natywne] })
+    if (powod === 'grant') ustawBiezacyDostep((modul) => modul !== 'leki')
+    if (powod === 'konto') {
+      localStorage.setItem('ogarniacz-wlasciciel-danych', 'pierwszy')
+      localStorage.setItem('ogarniacz-konto-offline', JSON.stringify({ zalogowany: true, rola: 'wlasciciel', wlascicielId: 'drugi' }))
+    }
+    if (powod === 'zgoda') lokalnePowiadomienia.checkPermissions.mockResolvedValue({ display: 'denied' })
+    if (powod === 'system') lokalnePowiadomienia.areEnabled.mockResolvedValue({ value: false })
+    try {
+      await utworzUslugePowiadomien(true).synchronizuj([element], powod !== 'wylaczone', true)
+      expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: natywne.id }] })
+      expect(lokalnePowiadomienia.removeDeliveredNotificationsById).toHaveBeenCalledWith({ ids: [natywne.id] })
+      expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
+    } finally {
+      ustawBiezacyDostep(() => true)
+      localStorage.removeItem('ogarniacz-wlasciciel-danych')
+      localStorage.removeItem('ogarniacz-konto-offline')
+    }
+  })
+
+  it('zmiana samego stanu dawki zmienia niejawny token i zastępuje alarm z dawnymi metadanymi', async () => {
+    const element = alarm()
+    const stare = mapujPrzypomnienieNaPowiadomienie(element, true)!
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [{ id: stare.id, extra: { ogarniacz: true, wersja: stare.wersja.replace('v3-', 'v2-'), dawkaLeku: element.dawkaLeku, sourceRef: element.zrodlo } }] })
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [{ id: stare.id, extra: { ogarniacz: true, wersja: stare.wersja.replace('v3-', 'v2-'), dawkaLeku: element.dawkaLeku } }] })
+    const nowe = { ...element, dawkaLeku: { ...element.dawkaLeku!, wersjaStanu: 'inna-wersja-bez-zmiany-terminu' } }
+    expect(mapujPrzypomnienieNaPowiadomienie(nowe, true)!.wersja).not.toBe(stare.wersja)
+    await utworzUslugePowiadomien(true).synchronizuj([nowe], true, true)
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: stare.id }] })
+    expect(lokalnePowiadomienia.removeDeliveredNotificationsById).toHaveBeenCalledWith({ ids: [stare.id] })
+    expect(lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0].extra).toEqual({ ogarniacz: true, przypomnienieId: element.id, wersja: mapujPrzypomnienieNaPowiadomienie(nowe, true)!.wersja })
+  })
+
+  it('ukrywa szczegóły dawki także przy braku dodatkowego powiązania źródła', () => {
+    expect(mapujPrzypomnienieNaPowiadomienie({ ...alarm(), zrodlo: undefined }, true)?.tresc).toBe('Przypomnienie dotyczące zdrowia')
+  })
+
+  it('usuwa także już wyświetlony stary alarm z metadanymi dawki bez ponownego dostarczenia', async () => {
+    const element = alarm()
+    element.czas = '2026-08-31T08:00:00.000Z'
+    const stare = mapujPrzypomnienieNaPowiadomienie(element, true)!
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [{ id: stare.id, extra: { ogarniacz: true, wersja: stare.wersja.replace('v3-', 'v2-'), dawkaLeku: element.dawkaLeku } }] })
+    await utworzUslugePowiadomien(true).synchronizuj([element], true, true)
+    expect(lokalnePowiadomienia.removeDeliveredNotificationsById).toHaveBeenCalledWith({ ids: [stare.id] })
     expect(lokalnePowiadomienia.schedule).not.toHaveBeenCalled()
   })
 
@@ -229,7 +282,7 @@ describe('mapowanie przypomnienia na kanał platformowy', () => {
   it('nie zapisuje treści przypomnienia w technicznej wersji payloadu', () => {
     const wynik = mapujPrzypomnienieNaPowiadomienie(przypomnienie())
 
-    expect(wynik?.wersja).toMatch(/^v2-[a-f0-9]{8}$/)
+    expect(wynik?.wersja).toMatch(/^v3-[a-f0-9]{8}$/)
     expect(wynik?.wersja).not.toContain('Zadzwoń do dentysty')
   })
 })
