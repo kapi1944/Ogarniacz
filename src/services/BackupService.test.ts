@@ -297,6 +297,8 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     ['recepty', { pozycje: [{ id: 'pozycja', nazwaLeku: 'Test', ilosc: 'dwie', iloscZrealizowana: 0 }] }],
     ['terapie', { rodzaj: 123 }],
     ['wpisyTerapii', { terapiaId: 123 }],
+    ['wpisyTerapii', { psychoterapia: { wpisySamopoczuciaIds: [123] } }],
+    ['wpisyTerapii', { psychoterapia: { pytaniaSesjiIds: ['sesja', 'sesja'] } }],
   ] as const)('odrzuca niepoprawny rekord tabeli %s przed zmianą danych', async (tabela, zmiana) => {
     const przed = await zapiszDaneZdrowotne()
     const backup = await utworzBackup(['zdrowie'], () => STALA_DATA)

@@ -5,6 +5,7 @@ import type { Table } from 'dexie'
 import { czyHistoriaWlaczona, zbudujWpisHistorii } from '../services/HistoriaZmianService'
 import { powiadomOZmianieDanych } from './ZdarzeniaDanych'
 import { dodajDoKolejkiSynchronizacji, tabelaKolejki } from './KolejkaSynchronizacji'
+import { czyPrywatnaPsychoterapia, schematSzczegolowPsychoterapii } from '../domain/psychoterapia'
 
 const modulyZrodelPrzypomnien: Partial<Record<NazwaTabeli, NazwaModulu>> = {
   wizyty: 'wizyty',
@@ -50,7 +51,23 @@ export interface Repozytorium<T extends EncjaBazowa> {
 }
 
 class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
-  constructor(private readonly nazwa: NazwaTabeli) {}
+  constructor(private readonly nazwa: NazwaTabeli, private readonly dostepDoPsychoterapii?: (operacja: 'odczyt' | 'edycja') => boolean) {}
+
+  private sprawdzDostep(encja?: T): void {
+    if (czyPrywatnaPsychoterapia(this.nazwa, encja) && !this.dostepDoPsychoterapii?.('edycja')) throw new Error('Brak uprawnienia do prywatnych danych psychoterapii.')
+  }
+
+  private sprawdzZmiane(przed: T | undefined, po: T): void {
+    this.sprawdzDostep(przed)
+    this.sprawdzDostep(po)
+    if (czyPrywatnaPsychoterapia(this.nazwa, przed) && !czyPrywatnaPsychoterapia(this.nazwa, po)) throw new Error('Nie można usunąć ochrony danych psychoterapii.')
+    if (czyPrywatnaPsychoterapia(this.nazwa, po)) {
+      if (this.nazwa === 'wpisyTerapii') schematSzczegolowPsychoterapii.parse('psychoterapia' in po ? po.psychoterapia : undefined)
+      if (this.nazwa === 'zadania' && (!('sesjaTerapiiId' in po) || typeof po.sesjaTerapiiId !== 'string' || !po.sesjaTerapiiId.trim())) throw new Error('Nie można usunąć ochrony danych psychoterapii.')
+    }
+    // Dwie szybkie edycje prywatnej sesji muszą mieć różne znaczniki aktualności.
+    if (czyPrywatnaPsychoterapia(this.nazwa, po) && przed && Date.parse(po.updatedAt) <= Date.parse(przed.updatedAt)) po.updatedAt = new Date(Date.parse(przed.updatedAt) + 1).toISOString()
+  }
 
   private tabela(): Table<T, string> {
     return baza.table(this.nazwa) as Table<T, string>
@@ -114,13 +131,13 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   async lista(): Promise<T[]> {
     const wszystkie = await this.tabela().toArray()
     return wszystkie
-      .filter((encja) => !encja.usunietoAt)
+      .filter((encja) => !encja.usunietoAt && (!czyPrywatnaPsychoterapia(this.nazwa, encja) || this.dostepDoPsychoterapii?.('odczyt')))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
   async pobierz(id: string): Promise<T | undefined> {
     const encja = (await this.tabela().get(id)) as T | undefined
-    return encja?.usunietoAt ? undefined : encja
+    return encja?.usunietoAt || czyPrywatnaPsychoterapia(this.nazwa, encja) && !this.dostepDoPsychoterapii?.('odczyt') ? undefined : encja
   }
 
   async zapisz(encja: T): Promise<string> {
@@ -132,6 +149,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       let id = encja.id
       await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
         przed = await tabela.get(encja.id)
+        this.sprawdzZmiane(przed, zapisana)
         id = await tabela.put(zapisana)
         await dodajDoKolejkiSynchronizacji(this.nazwa, zapisana, przed)
       })
@@ -143,6 +161,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     let przed: T | undefined
     const id = await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
       przed = await tabela.get(encja.id)
+      this.sprawdzZmiane(przed, zapisana)
       const id = await tabela.put(zapisana)
       const wpis = zbudujWpisHistorii(this.nazwa, przed, zapisana, przed ? 'aktualizacja' : 'utworzenie', teraz)
       if (wpis) await historia.put(wpis)
@@ -162,6 +181,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       let poprzednie: (T | undefined)[] = []
       await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
         poprzednie = await tabela.bulkGet(encje.map((encja) => encja.id))
+        zapisane.forEach((encja, indeks) => this.sprawdzZmiane(poprzednie[indeks], encja))
         await tabela.bulkPut(zapisane)
         for (let indeks = 0; indeks < zapisane.length; indeks += 1) {
           await dodajDoKolejkiSynchronizacji(this.nazwa, zapisane[indeks], poprzednie[indeks])
@@ -175,6 +195,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     let poprzednie: (T | undefined)[] = []
     await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
       poprzednie = await tabela.bulkGet(encje.map((encja) => encja.id))
+      zapisane.forEach((encja, indeks) => this.sprawdzZmiane(poprzednie[indeks], encja))
       await tabela.bulkPut(zapisane)
       const wpisy = zapisane
         .map((encja, indeks) => zbudujWpisHistorii(this.nazwa, poprzednie[indeks], encja, poprzednie[indeks] ? 'aktualizacja' : 'utworzenie', teraz))
@@ -193,6 +214,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     if (!czyHistoriaWlaczona(this.nazwa)) {
       await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
         const encja = await tabela.get(id)
+        this.sprawdzDostep(encja)
         if (!encja) return
         const teraz = terazIso()
         const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }
@@ -206,6 +228,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     const historia = baza.tabela('historiaZmian')
     await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
       const encja = await tabela.get(id)
+      this.sprawdzDostep(encja)
       if (!encja) return
       const teraz = terazIso()
       const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }
@@ -223,6 +246,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     if (!czyHistoriaWlaczona(this.nazwa)) {
       await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
         const encja = await tabela.get(id)
+        this.sprawdzDostep(encja)
         if (!encja) return
         const teraz = terazIso()
         const kopia = { ...encja, updatedAt: teraz }
@@ -236,6 +260,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     const historia = baza.tabela('historiaZmian')
     await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
       const encja = await tabela.get(id)
+      this.sprawdzDostep(encja)
       if (!encja) return
       const teraz = terazIso()
       const kopia = { ...encja, updatedAt: teraz }
@@ -249,6 +274,6 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   }
 }
 
-export function pobierzRepozytorium<K extends NazwaTabeli>(nazwa: K): Repozytorium<MapaTabel[K]> {
-  return new RepozytoriumDexie<MapaTabel[K]>(nazwa)
+export function pobierzRepozytorium<K extends NazwaTabeli>(nazwa: K, dostepDoPsychoterapii?: (operacja: 'odczyt' | 'edycja') => boolean): Repozytorium<MapaTabel[K]> {
+  return new RepozytoriumDexie<MapaTabel[K]>(nazwa, dostepDoPsychoterapii)
 }

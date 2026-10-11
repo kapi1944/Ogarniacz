@@ -27,6 +27,8 @@ export interface RegulaPowtarzania {
 }
 
 export interface Zadanie extends EncjaBazowa {
+  /** Lokalna, prywatna relacja ćwiczenia do istniejącego wpisu terapii. */
+  sesjaTerapiiId?: Id
   tytul: string
   opis: string
   status: 'otwarte' | 'w_toku' | 'wykonane'
@@ -303,6 +305,8 @@ export interface Terapia extends EncjaBazowa {
 }
 
 export interface WpisTerapii extends EncjaBazowa {
+  /** Obecność tego pola chroni cały wpis jako lokalną sesję psychoterapii. */
+  psychoterapia?: import('./psychoterapia').SzczegolyPsychoterapii
   terapiaId: Id
   dataCzas: string
   tytul?: string

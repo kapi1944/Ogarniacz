@@ -1,4 +1,5 @@
 import { baza } from '../data/BazaOgarniacza'
+import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 import { noweId } from '../domain/fabryki'
 import type { EncjaBazowa, ModulHistorii, NazwaTabeli, OperacjaHistorii, WpisHistoriiZmian } from '../domain/typy'
 
@@ -60,6 +61,7 @@ export function zbudujWpisHistorii(
   operacja: OperacjaHistorii,
   znacznikCzasu: string,
 ): WpisHistoriiZmian | undefined {
+  if (czyPrywatnaPsychoterapia(nazwaTabeli, przed) || czyPrywatnaPsychoterapia(nazwaTabeli, po)) return undefined
   const konfiguracja = konfiguracjaHistorii[nazwaTabeli]
   const encja = po ?? przed
   if (!konfiguracja || !encja) return undefined

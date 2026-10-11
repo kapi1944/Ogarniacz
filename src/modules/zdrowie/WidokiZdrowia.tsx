@@ -1,3 +1,5 @@
+import { SesjePsychoterapii } from './SesjePsychoterapii'
+import './psychoterapia.css'
 import { EdytorPolaRejestru, normalizujStarePolaRejestru, type DefinicjaPola } from '../../components/EdytorPolaRejestru'
 import { useEffect, useState } from 'react'
 import { format } from 'date-fns'
@@ -114,15 +116,14 @@ export function WidokRecept() {
 
 export function WidokDziennikaTerapii() {
   const [parametryAdresu] = useSearchParams()
+  const { moze } = useAplikacja()
   const { dane: terapie, repozytorium: repozytoriumTerapii } = useRepozytorium('terapie')
-  const { dane: wpisy, repozytorium: repozytoriumWpisow } = useRepozytorium('wpisyTerapii')
-  const { dane: wizyty } = useRepozytorium('wizyty')
-  return <div className="widok"><WidokRejestru tytul="Dziennik terapii" opis="Terapie i krótkie wpisy prowadzone przez użytkownika." etykietaDodawania="Dodaj terapię" dane={terapie} repozytorium={repozytoriumTerapii}
+  return <div className="widok"><SesjePsychoterapii />
+    {moze('zdrowie', 'odczyt', 'psychoterapia') && <details><summary>Zarządzaj terapiami</summary>
+      <WidokRejestru tytul="Terapie" opis="Terapie prowadzone przez użytkownika." etykietaDodawania="Dodaj terapię" dane={terapie} repozytorium={repozytoriumTerapii}
     pola={[{ klucz: 'nazwa', etykieta: 'Nazwa', wymagane: true }, { klucz: 'rodzaj', etykieta: 'Rodzaj', typ: 'select', opcje: [{ wartosc: 'psychoterapia', etykieta: 'Psychoterapia' }, { wartosc: 'rehabilitacja', etykieta: 'Rehabilitacja' }, { wartosc: 'leczenie', etykieta: 'Leczenie' }, { wartosc: 'inne', etykieta: 'Inne' }] }, { klucz: 'dataRozpoczecia', etykieta: 'Data rozpoczęcia', typ: 'date' }, { klucz: 'status', etykieta: 'Status', typ: 'select', wymagane: true, domyslnaWartosc: 'aktywna', opcje: [{ wartosc: 'aktywna', etykieta: 'Aktywna' }, { wartosc: 'wstrzymana', etykieta: 'Wstrzymana' }, { wartosc: 'zakonczona', etykieta: 'Zakończona' }] }, { klucz: 'notatka', etykieta: 'Opis / notatka', typ: 'textarea' }]}
     zbuduj={(formularz, istniejaca) => ({ ...(istniejaca ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), rodzaj: formularz.rodzaj as Terapia['rodzaj'] || undefined, dataRozpoczecia: formularz.dataRozpoczecia || undefined, status: (formularz.status || 'aktywna') as Terapia['status'], notatka: formularz.notatka || undefined, updatedAt: terazIso() })} etykieta={(terapia) => terapia.nazwa} wybranyElementId={parametryAdresu.get('element') ?? undefined} szczegoly={(terapia) => <><Znacznik wariant={terapia.status === 'aktywna' ? 'sukces' : 'neutralny'}>{terapia.status}</Znacznik>{terapia.notatka && <p>{terapia.notatka}</p>}</>} />
-    <WidokRejestru tytul="Wpisy terapii" opis="Najważniejsza jest treść wpisu; pozostałe pola są opcjonalne." etykietaDodawania="Dodaj wpis" dane={wpisy} repozytorium={repozytoriumWpisow}
-      pola={[{ klucz: 'terapiaId', etykieta: 'Terapia', typ: 'select', wymagane: true, opcje: terapie.map((terapia) => ({ wartosc: terapia.id, etykieta: terapia.nazwa })) }, { klucz: 'dataCzas', etykieta: 'Data i czas', typ: 'text', wymagane: true, domyslnaWartosc: terazIso().slice(0, 16) }, { klucz: 'tytul', etykieta: 'Tytuł' }, { klucz: 'tresc', etykieta: 'Treść', typ: 'textarea', wymagane: true }, { klucz: 'samopoczucie', etykieta: 'Samopoczucie (1–5)', typ: 'number', min: 1 }, { klucz: 'obserwacje', etykieta: 'Obserwacje', typ: 'textarea' }, { klucz: 'zalecenia', etykieta: 'Zadania / zalecenia', typ: 'textarea' }, { klucz: 'tematNastepnegoSpotkania', etykieta: 'Temat na kolejne spotkanie', typ: 'textarea' }, { klucz: 'wizytaId', etykieta: 'Powiązana wizyta', typ: 'select', opcje: wizyty.map((wizyta) => ({ wartosc: wizyta.id, etykieta: wizyta.nazwa })) }]}
-      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), terapiaId: formularz.terapiaId, dataCzas: formularz.dataCzas, tytul: formularz.tytul || undefined, tresc: formularz.tresc.trim(), samopoczucie: formularz.samopoczucie ? Math.min(5, Math.max(1, Number(formularz.samopoczucie))) : undefined, obserwacje: formularz.obserwacje || undefined, zalecenia: formularz.zalecenia || undefined, tematNastepnegoSpotkania: formularz.tematNastepnegoSpotkania || undefined, wizytaId: formularz.wizytaId || undefined, updatedAt: terazIso() })} etykieta={(wpis) => wpis.tytul || terapie.find((terapia) => terapia.id === wpis.terapiaId)?.nazwa || 'Wpis terapii'} szczegoly={(wpis) => <><span>{wpis.dataCzas}</span><p>{wpis.tresc}</p>{wpis.samopoczucie && <span>Samopoczucie: {wpis.samopoczucie}/5</span>}</>} />
+    </details>}
   </div>
 }
 

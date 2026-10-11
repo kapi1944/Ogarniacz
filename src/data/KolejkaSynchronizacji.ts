@@ -2,6 +2,7 @@ import type { Table } from 'dexie'
 import { noweId } from '../domain/fabryki'
 import type { EncjaBazowa, NazwaTabeli, ZmianaKolejkiSynchronizacji } from '../domain/typy'
 import { baza, nazwyTabel } from './BazaOgarniacza'
+import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 
 const TABELE_LOKALNE = new Set<NazwaTabeli>([
   'wpisySamopoczucia',
@@ -43,6 +44,7 @@ export async function dodajDoKolejkiSynchronizacji(
   const kolejka = tabelaKolejki()
   const poprzedniaZmiana = await kolejka.where('[tabela+rekordId]').equals([tabela, rekord.id]).first()
   if (poprzedniaZmiana) await kolejka.delete(poprzedniaZmiana.id)
+  if (czyPrywatnaPsychoterapia(tabela, rekord)) return
   const teraz = new Date().toISOString()
   await kolejka.add({
     id: noweId(),
@@ -58,7 +60,15 @@ export async function dodajDoKolejkiSynchronizacji(
 }
 
 export async function pobierzKolejkeSynchronizacji(): Promise<ZmianaKolejkiSynchronizacji[]> {
-  return (await tabelaKolejki().orderBy('createdAt').toArray()).filter((zmiana) => nazwyTabel.includes(zmiana.tabela as NazwaTabeli) && czyTabelaSynchronizowana(zmiana.tabela as NazwaTabeli))
+  const zmiany = await tabelaKolejki().orderBy('createdAt').toArray()
+  const bezpieczne: ZmianaKolejkiSynchronizacji[] = []
+  for (const zmiana of zmiany) {
+    const tabela = zmiana.tabela as NazwaTabeli
+    if (!nazwyTabel.includes(tabela) || !czyTabelaSynchronizowana(tabela)) continue
+    if (czyPrywatnaPsychoterapia(tabela, zmiana.rekord) || czyPrywatnaPsychoterapia(tabela, await baza.tabela(tabela).get(zmiana.rekordId))) continue
+    bezpieczne.push(zmiana)
+  }
+  return bezpieczne
     .map((zmiana) => ({ ...zmiana, rekord: rekordDoSynchronizacji(zmiana.tabela as NazwaTabeli, zmiana.rekord) }))
 }
 

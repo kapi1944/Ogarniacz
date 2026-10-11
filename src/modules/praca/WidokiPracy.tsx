@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { useAplikacja } from '../../app/KontekstAplikacji'
 import { Check, RotateCcw, Share2, Undo2 } from 'lucide-react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { WidokRejestru } from '../../components/WidokRejestru'
@@ -21,8 +22,10 @@ const opcjePriorytetu = [
 ]
 
 export function WidokZadan() {
+  const { moze } = useAplikacja()
+  const dostepDoPsychoterapii = useCallback((operacja: 'odczyt' | 'edycja') => moze('zdrowie', operacja, 'psychoterapia') && moze('zadania', operacja), [moze])
   const [parametryAdresu] = useSearchParams()
-  const { dane: zadania, repozytorium } = useRepozytorium('zadania')
+  const { dane: zadania, repozytorium } = useRepozytorium('zadania', dostepDoPsychoterapii)
   const { dane: projekty } = useRepozytorium('projekty')
   const { dane: miejsca } = useRepozytorium('miejsca')
   const [filtr, ustawFiltr] = useState<'otwarte' | 'dzisiaj' | 'zalegle' | 'nadchodzace' | 'wykonane' | 'wszystkie'>('otwarte')
@@ -183,6 +186,7 @@ export function WidokZadan() {
     }}
     etykieta={(zadanie) => zadanie.tytul}
     szczegoly={(zadanie) => <>
+      {zadanie.sesjaTerapiiId && <Link to={`/zdrowie/dziennik-terapii?sesja=${encodeURIComponent(zadanie.sesjaTerapiiId)}`}>Powiązana sesja psychoterapii</Link>}
       <Znacznik wariant={zadanie.status === 'wykonane' ? 'sukces' : czyZadanieZalegle(zadanie) ? 'blad' : 'neutralny'}>{czyZadanieZalegle(zadanie) ? 'zaległe' : zadanie.status === 'w_toku' ? 'w toku' : zadanie.status}</Znacznik>
       <Znacznik wariant={zadanie.priorytet === 'krytyczny' ? 'blad' : zadanie.priorytet === 'wysoki' ? 'ostrzezenie' : 'neutralny'}>priorytet: {zadanie.priorytet}</Znacznik>
       {zadanie.termin && <span className={czyZadanieZalegle(zadanie) ? 'tekst-bledu' : undefined}>{czyZadanieZalegle(zadanie) ? 'Termin minął' : 'Termin'}: {zadanie.termin}</span>}

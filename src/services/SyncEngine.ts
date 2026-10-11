@@ -11,6 +11,7 @@ import { BladKonfliktuSynchronizacji } from '../data/DostawcaSynchronizacji'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki, zachowajLokalneSamopoczucie } from '../data/KolejkaSynchronizacji'
 import { utworzMetadane } from '../domain/fabryki'
+import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 import type { EncjaBazowa, KonfliktSynchronizacji, StanSynchronizacji } from '../domain/typy'
 import { pobierzInstallationId } from './InstallationService'
 import { komunikatyBledowSynchronizacji, sklasyfikujBladSynchronizacji } from './DiagnostykaSynchronizacji'
@@ -200,6 +201,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
     const wyborZdalny = rozstrzygniecie.typ === 'zdalny'
     const kolejka = tabelaKolejki()
     await baza.transaction('rw', [tabelaLokalna(tabela), baza.tabela('konfliktySynchronizacji'), kolejka], async () => {
+      if (czyPrywatnaPsychoterapia(tabela, await tabelaLokalna(tabela).get(rekord.id)) || czyPrywatnaPsychoterapia(tabela, rekord)) throw new Error('Prywatna sesja lub ćwiczenie nie podlega synchronizacji.')
       await tabelaLokalna(tabela).put(zachowajLokalneSamopoczucie(tabela, rekord, await tabelaLokalna(tabela).get(rekord.id)))
       await baza.tabela('konfliktySynchronizacji').delete(id)
       if (wyborZdalny) {
@@ -268,7 +270,12 @@ export class SyncEngine implements DostawcaSynchronizacji {
       ])
       walidujZmianyZdalne(wszystkieZdalne)
       await this.zapiszStan({ ostatniPull: this.teraz(), polaczenie: 'dostepne', sesjaWymagaLogowania: false })
-      const zdalne = wszystkieZdalne.filter((zmiana) => zmiana.installationId !== installationId)
+      const zdalne: ZmianaSynchronizacji[] = []
+      for (const zmiana of wszystkieZdalne) {
+        if (zmiana.installationId === installationId || czyPrywatnaPsychoterapia(zmiana.tabela, zmiana.rekord)
+          || czyPrywatnaPsychoterapia(zmiana.tabela, await tabelaLokalna(zmiana.tabela).get(zmiana.rekord.id))) continue
+        zdalne.push(zmiana)
+      }
       const lokalnePoKluczu = new Map(lokalne.map((zmiana) => [kluczZmiany(zmiana), zmiana]))
       const zdalnePoKluczu = new Map(zdalne.map((zmiana) => [kluczZmiany(zmiana), zmiana]))
       const konflikty: { lokalna: ZmianaSynchronizacji; zdalna: ZmianaSynchronizacji }[] = []
@@ -336,7 +343,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
     for (const [tabela, rekordy] of grupy) {
       await baza.transaction('rw', tabelaLokalna(tabela), async () => {
         const lokalne = await tabelaLokalna(tabela).bulkGet(rekordy.map((rekord) => rekord.id))
-        await tabelaLokalna(tabela).bulkPut(rekordy.map((rekord, indeks) => zachowajLokalneSamopoczucie(tabela, rekord, lokalne[indeks])))
+        await tabelaLokalna(tabela).bulkPut(rekordy.flatMap((rekord, indeks) => czyPrywatnaPsychoterapia(tabela, lokalne[indeks]) || czyPrywatnaPsychoterapia(tabela, rekord) ? [] : [zachowajLokalneSamopoczucie(tabela, rekord, lokalne[indeks])]))
       })
       powiadomOZmianieDanych(tabela)
     }

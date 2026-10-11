@@ -1,5 +1,5 @@
 import Dexie from 'dexie'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { baza, inicjalizujBaze } from '../../data/BazaOgarniacza'
@@ -7,6 +7,8 @@ import { pobierzRepozytorium } from '../../data/Repozytorium'
 import { utworzMetadane } from '../../domain/fabryki'
 import type { Zadanie } from '../../domain/typy'
 import { WidokZadan } from './WidokiPracy'
+
+vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ moze: () => true }) }))
 
 describe.sequential('Rejestr Zadania', () => {
   beforeEach(async () => { baza.close(); await Dexie.delete('ogarniacz-v1'); await inicjalizujBaze() })

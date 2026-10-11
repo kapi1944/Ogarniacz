@@ -4,6 +4,7 @@ import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { normalizujUstawienia, WERSJA_USTAWIEN } from '../domain/ustawienia'
 import { ROLE_SEMANTYCZNE_REJESTRU } from '../domain/rejestr'
 import { schematUstawienSamopoczucia, schematWpisuSamopoczucia } from '../domain/samopoczucie'
+import { schematSzczegolowPsychoterapii } from '../domain/psychoterapia'
 import type { NazwaTabeli } from '../domain/typy'
 import { pobierzInstallationId } from './InstallationService'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
@@ -136,6 +137,7 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     zadania: z.record(z.string(), z.unknown()),
   }),
   zadania: schematEncji.extend({
+    sesjaTerapiiId: z.string().min(1).optional(),
     tytul: z.string(),
     opis: z.string(),
     status: z.enum(['otwarte', 'w_toku', 'wykonane']),
@@ -228,6 +230,7 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     notatka: z.string().optional(),
   }),
   wpisyTerapii: schematEncji.extend({
+    psychoterapia: schematSzczegolowPsychoterapii.optional(),
     terapiaId: z.string(),
     dataCzas: z.string(),
     tytul: z.string().optional(),
