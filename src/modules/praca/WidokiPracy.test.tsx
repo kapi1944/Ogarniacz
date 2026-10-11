@@ -16,6 +16,7 @@ const stan = vi.hoisted(() => ({
 }))
 
 vi.mock('../../hooks/usePodswietlenie', () => ({ usePodswietlenie: vi.fn() }))
+vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ moze: () => true }) }))
 vi.mock('../../hooks/useRepozytorium', () => ({
   useRepozytorium: (tabela: string) => {
     if (tabela === 'zadania') return { dane: stan.zadania, repozytorium: { zapisz: stan.zapiszZadanie, usun: stan.usunZadanie } }

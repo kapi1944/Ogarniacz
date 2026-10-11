@@ -249,7 +249,7 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
         const klucz = await wyprowadzanie.mock.results[0].value
         expect(klucz.extractable).toBe(false)
         expect(klucz.algorithm).toMatchObject({ name: 'AES-GCM', length: 256 })
-        await expect(kryptografiaWezla.subtle.exportKey('raw', klucz)).rejects.toMatchObject({ name: 'InvalidAccessException' })
+        await expect(kryptografiaWezla.subtle.exportKey('raw', klucz)).rejects.toMatchObject({ name: expect.stringMatching(/^InvalidAccess(Error|Exception)$/) })
         expect(JSON.stringify(await odczytajStanBazy())).not.toContain(hasloTestowe)
       } finally {
         wyprowadzanie.mockRestore()
