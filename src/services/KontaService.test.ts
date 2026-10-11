@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CapacitorHttp } from '@capacitor/core'
 import { pobierzCsrfKonta, pobierzSesjeKonta, uruchomAktualizacjeRaspberry, zaloguj } from './KontaService'
 
+// Setup uprawnień ładuje usługę kont; usuń ten cache przed zastosowaniem mocków.
+vi.hoisted(() => vi.resetModules())
+
 vi.mock('@capacitor/core', async (oryginal) => ({
   ...await oryginal<typeof import('@capacitor/core')>(),
   CapacitorHttp: { request: vi.fn() },
