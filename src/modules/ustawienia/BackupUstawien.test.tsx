@@ -3,17 +3,18 @@ import { MemoryRouter as RouterPamieci } from 'react-router-dom'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { DOMYSLNE_USTAWIENIA } from '../../domain/ustawienia'
 import { WidokUstawien } from './WidokUstawien'
+import { platforma } from '../../platform/platforma'
 
-const { szyfruj, przygotuj, przywroc, zapiszPlik } = vi.hoisted(() => ({ szyfruj: vi.fn(), przygotuj: vi.fn(), przywroc: vi.fn(), zapiszPlik: vi.fn() }))
+const { szyfruj, przygotuj, przywroc, zapiszPlik, zapisWBazie, zapiszUstawienia } = vi.hoisted(() => ({ szyfruj: vi.fn(), przygotuj: vi.fn(), przywroc: vi.fn(), zapiszPlik: vi.fn(), zapisWBazie: vi.fn(), zapiszUstawienia: vi.fn() }))
 
-vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ ustawienia: DOMYSLNE_USTAWIENIA, zapiszUstawienia: vi.fn() }) }))
+vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ ustawienia: DOMYSLNE_USTAWIENIA, zapiszUstawienia }) }))
 vi.mock('../../app/DostawcaKonta', () => ({ useKonto: () => ({ konto: undefined }) }))
 vi.mock('../../hooks/useRepozytorium', () => ({ useRepozytorium: () => ({ dane: [], repozytorium: {} }) }))
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (_zapytanie: unknown, _zaleznosci: unknown, domyslne: unknown) => domyslne }))
 vi.mock('./PanelUstawienAplikacji', () => ({ PanelUstawienAplikacji: () => null }))
 vi.mock('./SekcjaPolaczeniaIAktualizacji', () => ({ SekcjaPolaczeniaIAktualizacji: () => null }))
 vi.mock('../../services/DaneDemonstracyjneService', () => ({ czyMoznaWczytacDemo: () => false }))
-vi.mock('../../platform/platforma', () => ({ platforma: { rodzaj: 'web', natywna: false, haptyka: { ostrzezenie: async () => undefined }, powiadomienia: { sprawdzStan: async () => ({}) }, pliki: { zapisz: zapiszPlik } } }))
+vi.mock('../../platform/platforma', () => ({ platforma: { rodzaj: 'web', natywna: false, haptyka: { ostrzezenie: async () => undefined }, powiadomienia: { sprawdzStan: async () => ({}) }, udostepnianie: { dostepne: () => false }, pliki: { zapisz: zapiszPlik } } }))
 vi.mock('../../services/BackupService', async (importujOryginal) => {
   const oryginal = await importujOryginal<typeof import('../../services/BackupService')>()
   return { ...oryginal, utworzBackup: vi.fn(async () => kopiaTestowa), szyfrujBackup: szyfruj, przygotujBackupDoPrzywracania: przygotuj, przywrocBackup: przywroc }
@@ -24,12 +25,19 @@ const kopiaTestowa = {
   payload: { notatki: { notatki: [] } },
 }
 const kopertaTestowa = { naglowek: { format: 'ogarniacz-backup-szyfrowany', wersja: 1 }, szyfrogram: 'test' }
+const kopiaOchronna = { ...kopiaTestowa, manifest: { ...kopiaTestowa.manifest, backupType: 'before-restore' } }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  platforma.natywna = false
   szyfruj.mockResolvedValue(kopertaTestowa)
   przygotuj.mockResolvedValue(kopiaTestowa)
   zapiszPlik.mockResolvedValue(true)
+  przywroc.mockImplementation(async (_backup, _sekcje, opcje) => {
+    await opcje.poUtworzeniuKopii(kopiaOchronna)
+    zapisWBazie()
+    return { backupPrzedPrzywracaniem: kopiaOchronna, liczbaRekordow: 0 }
+  })
   renderuj(<RouterPamieci><WidokUstawien /></RouterPamieci>)
 })
 afterEach(wyczysc)
@@ -50,6 +58,8 @@ async function wybierzKoperte() {
 it('pobiera wyłącznie zaszyfrowany plik, bez zapisywania hasła w ustawieniach', async () => {
   wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Utwórz zaszyfrowany backup' }))
   expect(ekran.getByLabelText('Hasło kopii zapasowej')).toHaveAttribute('type', 'password')
+  expect(ekran.getByLabelText('Hasło kopii zapasowej')).not.toHaveFocus()
+  expect(ekran.getByLabelText('Hasło kopii zapasowej')).not.toHaveAttribute('autofocus')
   wpiszHaslo()
   wywolajZdarzenie.click(ekran.getByRole('button', { name: /^Zaszyfruj$/ }))
   await czekajNa(() => expect(ekran.queryByRole('dialog')).not.toBeInTheDocument())
@@ -60,6 +70,8 @@ it('pobiera wyłącznie zaszyfrowany plik, bez zapisywania hasła w ustawieniach
   const tresc = await new Promise<string>((rozwiaz) => { const czytnik = new FileReader(); czytnik.onload = () => rozwiaz(String(czytnik.result)); czytnik.readAsText(plik) })
   expect(JSON.parse(tresc)).toEqual(kopertaTestowa)
   expect(JSON.stringify({ ...localStorage })).not.toContain('Wyłącznie testowe hasło')
+  expect(JSON.stringify({ ...sessionStorage })).not.toContain('Wyłącznie testowe hasło')
+  expect(zapiszUstawienia).not.toHaveBeenCalled()
 })
 
 it('po błędzie kryptografii nie udostępnia jawnego eksportu', async () => {
@@ -89,17 +101,116 @@ it('pyta o hasło przed importem, pozwala ponowić błąd i pokazuje restore dop
   expect(przygotuj).toHaveBeenLastCalledWith(JSON.stringify(kopertaTestowa), 'Wyłącznie testowe hasło')
 })
 
-it('szyfruje również pobieraną kopię before-restore', async () => {
-  const kopiaOchronna = { ...kopiaTestowa, manifest: { ...kopiaTestowa.manifest, backupType: 'before-restore' } }
-  przywroc.mockResolvedValue({ backupPrzedPrzywracaniem: kopiaOchronna, liczbaRekordow: 0 })
+it('czeka na zapis szyfrowanej kopii before-restore i potwierdzenie pobrania w PWA', async () => {
   await wybierzKoperte()
   wpiszHaslo()
   wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Odszyfruj i sprawdź' }))
   wywolajZdarzenie.click(await ekran.findByRole('button', { name: 'Przywróć wybrane sekcje' }))
-  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Utwórz kopię i przywróć' }))
-  wywolajZdarzenie.click(await ekran.findByRole('button', { name: 'Zaszyfruj i pobierz kopię' }))
   wpiszHaslo()
-  wywolajZdarzenie.click(ekran.getByRole('button', { name: /^Zaszyfruj$/ }))
-  await czekajNa(() => expect(zapiszPlik).toHaveBeenCalledOnce())
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Zapisz kopię ochronną i przywróć' }))
+  const potwierdzenie = await ekran.findByRole('button', { name: 'Mam zapisaną kopię — przywróć' })
+  expect(zapiszPlik).toHaveBeenCalledOnce()
+  expect(zapisWBazie).not.toHaveBeenCalled()
   expect(szyfruj).toHaveBeenCalledWith(kopiaOchronna, 'Wyłącznie testowe hasło')
+  wywolajZdarzenie.click(potwierdzenie)
+  await czekajNa(() => expect(zapisWBazie).toHaveBeenCalledOnce())
+  expect(zapiszUstawienia).not.toHaveBeenCalled()
+})
+
+it('pokazuje oba hasła dopiero po wybraniu opcji i sprawdza ich zgodność', async () => {
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Utwórz zaszyfrowany backup' }))
+  wpiszHaslo()
+  wywolajZdarzenie.click(ekran.getByLabelText('Pokaż hasło'))
+  expect(ekran.getByLabelText('Hasło kopii zapasowej')).toHaveAttribute('type', 'text')
+  expect(ekran.getByLabelText('Powtórz hasło')).toHaveAttribute('type', 'text')
+  wywolajZdarzenie.change(ekran.getByLabelText('Powtórz hasło'), { target: { value: 'inne' } })
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: /^Zaszyfruj$/ }))
+  await ekran.findByText('Hasła muszą być identyczne.')
+  expect(szyfruj).not.toHaveBeenCalled()
+  expect(ekran.getByLabelText('Hasło kopii zapasowej')).toHaveValue('')
+})
+
+it('anulowanie importu usuwa formularz i nie uruchamia walidacji ani restore', async () => {
+  await wybierzKoperte()
+  wpiszHaslo()
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Anuluj' }))
+  expect(ekran.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(przygotuj).not.toHaveBeenCalled()
+  expect(przywroc).not.toHaveBeenCalled()
+})
+
+it.each([1, 2, 3])('rozpoznaje historyczny plik v%i bez pytania o hasło i informuje o braku zabezpieczenia', async (wersja) => {
+  const historyczna = { ...kopiaTestowa, manifest: { ...kopiaTestowa.manifest, formatVersion: wersja } }
+  const plik = new File([], 'historyczna.json', { type: 'application/json' })
+  Object.defineProperty(plik, 'text', { value: async () => JSON.stringify(historyczna) })
+  wywolajZdarzenie.change(ekran.getByLabelText('Wybierz backup do restore'), { target: { files: [plik] } })
+  await ekran.findByText('Plik historyczny bez zabezpieczenia hasłem — integralność zweryfikowana.')
+  expect(przygotuj).toHaveBeenCalledWith(JSON.stringify(historyczna))
+  expect(ekran.queryByRole('dialog')).not.toBeInTheDocument()
+  expect(przywroc).not.toHaveBeenCalled()
+})
+
+async function rozpocznijPrzywracanie() {
+  await wybierzKoperte()
+  wpiszHaslo()
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Odszyfruj i sprawdź' }))
+  wywolajZdarzenie.click(await ekran.findByRole('button', { name: 'Przywróć wybrane sekcje' }))
+  wpiszHaslo()
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Zapisz kopię ochronną i przywróć' }))
+}
+
+it.each(['szyfrowanie', 'zapis'])('blokuje modyfikacje bazy po błędzie kopii ochronnej: %s', async (etap) => {
+  if (etap === 'szyfrowanie') szyfruj.mockRejectedValue(new Error('Błąd szyfrowania kopii ochronnej'))
+  if (etap === 'zapis') zapiszPlik.mockResolvedValue(false)
+  await rozpocznijPrzywracanie()
+  await czekajNa(() => expect(ekran.getAllByText(etap === 'szyfrowanie' ? 'Błąd szyfrowania kopii ochronnej' : 'Nie udało się zapisać szyfrowanej kopii ochronnej. Przywracanie nie zostało rozpoczęte.').length).toBeGreaterThan(0))
+  expect(zapisWBazie).not.toHaveBeenCalled()
+  if (etap === 'szyfrowanie') expect(zapiszPlik).not.toHaveBeenCalled()
+})
+
+it('anulowanie po pobraniu kopii ochronnej nie zmienia bazy', async () => {
+  await rozpocznijPrzywracanie()
+  await ekran.findByRole('button', { name: 'Mam zapisaną kopię — przywróć' })
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Anuluj' }))
+  await ekran.findByText('Przywracanie anulowano przed zmianą danych.')
+  expect(zapisWBazie).not.toHaveBeenCalled()
+})
+
+it('zamknięcie panelu podczas oczekiwania na kopię ochronną blokuje restore', async () => {
+  await rozpocznijPrzywracanie()
+  await ekran.findByRole('button', { name: 'Mam zapisaną kopię — przywróć' })
+  wyczysc()
+  await czekajNa(() => expect(przywroc.mock.results[0].value).rejects.toThrow('Przywracanie anulowano'))
+  expect(zapisWBazie).not.toHaveBeenCalled()
+})
+
+it('na Androidzie czeka na wynik zapisu pliku przed restore', async () => {
+  platforma.natywna = true
+  let zakonczZapis!: (zapisano: boolean) => void
+  zapiszPlik.mockImplementationOnce(() => new Promise<boolean>((rozwiaz) => { zakonczZapis = rozwiaz }))
+  await rozpocznijPrzywracanie()
+  await czekajNa(() => expect(zapiszPlik).toHaveBeenCalledOnce())
+  expect(zapisWBazie).not.toHaveBeenCalled()
+  zakonczZapis(true)
+  await czekajNa(() => expect(zapisWBazie).toHaveBeenCalledOnce())
+  expect(ekran.queryByRole('button', { name: 'Mam zapisaną kopię — przywróć' })).not.toBeInTheDocument()
+})
+
+it('przekazuje tylko zaznaczone sekcje i blokuje pusty wybór', async () => {
+  przygotuj.mockResolvedValue({ ...kopiaTestowa, manifest: { ...kopiaTestowa.manifest, sections: ['notatki', 'zdrowie'], recordCounts: { notatki: 0, zdrowie: 0 } } })
+  await wybierzKoperte()
+  wpiszHaslo()
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Odszyfruj i sprawdź' }))
+  await ekran.findByRole('button', { name: 'Przywróć wybrane sekcje' })
+  wywolajZdarzenie.click(ekran.getByLabelText('Pozostałe dane zdrowotne (0)'))
+  wywolajZdarzenie.click(ekran.getByLabelText('Notatki (0)'))
+  expect(ekran.getByRole('button', { name: 'Przywróć wybrane sekcje' })).toBeDisabled()
+  wywolajZdarzenie.click(ekran.getByLabelText('Notatki (0)'))
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Przywróć wybrane sekcje' }))
+  wpiszHaslo()
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Zapisz kopię ochronną i przywróć' }))
+  await ekran.findByRole('button', { name: 'Mam zapisaną kopię — przywróć' })
+  expect(przywroc.mock.calls[0][1]).toEqual(['notatki'])
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Anuluj' }))
+  await ekran.findByText('Przywracanie anulowano przed zmianą danych.')
 })

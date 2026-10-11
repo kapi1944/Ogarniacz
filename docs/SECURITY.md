@@ -52,3 +52,21 @@ Import: rozpoznanie koperty → hasło → uwierzytelnione odszyfrowanie → dot
 Hasło żyje tylko w polu formularza i pamięci podczas operacji; pola są czyszczone przed przetwarzaniem lub po anulowaniu. Hasła i klucze nie trafiają do ustawień, storage, bazy ani logów. Bufory hasła i jawnych bajtów są zerowane po użyciu, ale JavaScript nie zapewnia wymuszonego wymazania stringów ani `CryptoKey` z pamięci.
 
 Ograniczenia: brak odzyskiwania zapomnianego hasła; bezpieczeństwo zależy też od jego siły i urządzenia. UI zaleca długie, unikalne hasło. Cały JSON i Base64 są przetwarzane w pamięci, bez strumieniowania; test dużej kopii obejmuje 5 MiB treści. Wewnętrzna baza i historyczne jawne pliki nie są szyfrowane tą funkcją. Testy Web Crypto w Node/jsdom nie zastępują próby w PWA lub na Androidzie.
+
+## Interfejs kopii — Health 2.0, etap 5.2
+
+Panel rozróżnia integralność kopii, szyfrowanie eksportowanego pliku, lokalną bazę i synchronizację. Historyczne pliki v1–v3 są rozpoznawane bez hasła i wyraźnie oznaczone jako niezabezpieczone hasłem. Dla zaszyfrowanej kopii podgląd i wybór sekcji pojawiają się dopiero po odszyfrowaniu i walidacji. Formularze backupu nie mają autofocus; opcja „Pokaż hasło” działa na obu polach i nie zapisuje hasła w ustawieniach.
+
+Przed przywracaniem użytkownik podaje nowe hasło dla pełnej kopii ochronnej bieżącego stanu. Istniejący `przywrocBackup` tworzy i waliduje `before-restore`, a następnie **czeka** na asynchroniczny callback `poUtworzeniuKopii`: szyfrowanie całej kopii oraz zapis wyłącznie zaszyfrowanego pliku przez istniejącą usługę plików. Błąd lub odrzucenie callbacku zatrzymuje operację przed transakcją zapisu. Nazwa pliku zawiera pełny czas, aby kolejne kopie w tym samym dniu nie nadpisywały wcześniejszych.
+
+Android czeka na wynik `Filesystem.writeFile`. PWA/desktopowa przeglądarka potwierdza tylko rozpoczęcie pobierania, więc dodatkowe potwierdzenie „Mam zapisaną kopię — przywróć” wymaga sprawdzenia pobranego pliku przez użytkownika. Anulowanie lub zamknięcie panelu przed zakończeniem zabezpieczenia kopii blokuje przywracanie. Ponowne pobranie dostępnej kopii ochronnej przekazuje już zaszyfrowany plik; nie eksportuje jawnych danych.
+
+### Próba na Samsungu (na wersji zawierającej etap 5.2)
+
+1. W Ustawieniach otwórz Dane / Backup. Sprawdź, że klawiatura nie otwiera się sama, także po wybraniu tworzenia kopii.
+2. Na danych testowych wybierz sekcje, utwórz zaszyfrowany backup, wpisz i potwierdź hasło. Sprawdź „Pokaż hasło”, następnie zapisz plik. W aplikacji Android szukaj go w Dokumenty/Ogarniacz; w PWA w pobranych plikach przeglądarki.
+3. Wybierz zapisany plik do przywracania. Anuluj pierwszą próbę, potem sprawdź błędne hasło. Podgląd sekcji nie powinien się pojawić. Przy poprawnym haśle sprawdź dane i wybór sekcji.
+4. Na danych testowych rozpocznij przywracanie, ustaw hasło kopii ochronnej i sprawdź zapis pliku `ogarniacz-before-restore-…json` przed zmianą danych. W PWA najpierw sprawdź pobrany plik i dopiero wtedy potwierdź przywrócenie. Anulowanie tego potwierdzenia nie zmienia bazy.
+5. Sprawdź import starszej jawnej kopii: bez pytania o hasło, z informacją o braku zabezpieczenia. Jej przywracanie nadal wymaga szyfrowanej kopii ochronnej.
+
+Automatyczne testy obejmują logikę Web Crypto, UI w jsdom oraz czekanie na callback przed zapisem w IndexedDB. Zmiana nie obejmuje SyncEngine, Echo ani logiki Zdrowia. Build webowy nie potwierdza działania fizycznej klawiatury Samsunga ani natywnego zapisu plików.

@@ -86,7 +86,7 @@ export interface WynikPrzywracania {
 
 export interface OpcjePrzywracania {
   utworzKopiePrzedPrzywracaniem?: () => Promise<OgarniaczBackup>
-  poUtworzeniuKopii?: (backup: OgarniaczBackup) => void
+  poUtworzeniuKopii?: (backup: OgarniaczBackup) => void | Promise<void>
 }
 
 interface DefinicjaSekcji {
@@ -904,7 +904,7 @@ export async function przywrocBackup(
   } catch (blad) {
     throw new BladBackupu('Automatyczna kopia before-restore zawiera niepoprawne lub niepełne dane.', 'BEFORE_RESTORE', blad)
   }
-  opcje.poUtworzeniuKopii?.(backupPrzedPrzywracaniem)
+  await opcje.poUtworzeniuKopii?.(backupPrzedPrzywracaniem)
 
   const definicje = wybraneSekcje.map((nazwa) => definicjeSekcji.find((element) => element.nazwa === nazwa)!)
   const tabele = [...new Set(definicje.flatMap((definicja) => definicja.tabele))]

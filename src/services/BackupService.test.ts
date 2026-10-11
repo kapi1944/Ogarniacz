@@ -394,6 +394,35 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     expect(await odczytajDaneZdrowotne()).toEqual(dane)
   })
 
+  it('czeka na asynchroniczne zabezpieczenie kopii ochronnej przed pierwszym zapisem', async () => {
+    const daneZKopii = await zapiszDaneZdrowotne()
+    const backup = await przygotuj(await utworzBackup(['zdrowie'], () => STALA_DATA))
+    await baza.tabela('wpisyTerapii').update('wpis-testowy', { tresc: 'Bieżąca treść przed zapisem kopii' })
+    const przed = await odczytajDaneZdrowotne()
+    let zakonczZapis!: () => void
+    const oczekiwanieNaZapis = new Promise<void>((rozwiaz) => { zakonczZapis = rozwiaz })
+    const zabezpieczKopie = vi.fn(async (kopia: OgarniaczBackup) => {
+      expect(kopia.payload.zdrowie).toEqual(przed)
+      expect(await checksumJestPoprawny(kopia)).toBe(true)
+      await oczekiwanieNaZapis
+    })
+    const przywracanie = przywrocBackup(backup, ['zdrowie'], { poUtworzeniuKopii: zabezpieczKopie })
+    await vi.waitFor(() => expect(zabezpieczKopie).toHaveBeenCalledOnce())
+    expect(await odczytajDaneZdrowotne()).toEqual(przed)
+    zakonczZapis()
+    await przywracanie
+    expect(await odczytajDaneZdrowotne()).toEqual(daneZKopii)
+  })
+
+  it.each(['błąd szyfrowania', 'błąd zapisu', 'anulowanie'])('odrzucenie asynchronicznej ochrony zatrzymuje restore bez zmian bazy: %s', async (przyczyna) => {
+    await zapiszDaneZdrowotne()
+    const backup = await przygotuj(await utworzBackup(['zdrowie'], () => STALA_DATA))
+    await baza.tabela('wpisyTerapii').update('wpis-testowy', { tresc: 'Chroniona bieżąca treść' })
+    const przed = await Promise.all(baza.tables.map(async (tabela) => [tabela.name, await tabela.toArray()]))
+    await expect(przywrocBackup(backup, ['zdrowie'], { poUtworzeniuKopii: async () => { await Promise.resolve(); throw new Error(przyczyna) } })).rejects.toThrow(przyczyna)
+    expect(await Promise.all(baza.tables.map(async (tabela) => [tabela.name, await tabela.toArray()]))).toEqual(przed)
+  })
+
   it.each(['brak sekcji', 'brak tabeli', 'błędna liczba', 'błędny rekord'] as const)(
     'blokuje restore bez zmian danych, gdy kopia ochronna zdrowia ma problem: %s', async (problem) => {
       await zapiszDaneZdrowotne()

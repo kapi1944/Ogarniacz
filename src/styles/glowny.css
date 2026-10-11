@@ -516,6 +516,21 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .konflikt-synchronizacji__wybor-pola input { margin-top: 2px; accent-color: var(--akcent); }
 .kopia-before-restore { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px; padding: 10px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-pola); }
 .kopia-before-restore span { flex: 1 1 220px; color: var(--tekst-2); }
+.widok-ustawien { grid-template-columns: minmax(0, 1fr); }
+.panel-backupu { min-width: 0; overflow-wrap: anywhere; }
+.panel-backupu .lista-sekcji-backupu { grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); }
+.bezpieczenstwo-backupu { display: grid; gap: 4px; margin: 0 0 18px; }
+.bezpieczenstwo-backupu dt { font-weight: 700; }
+.bezpieczenstwo-backupu dd { margin: 0 0 8px; color: var(--tekst-2); }
+.formularz-hasla-backupu { display: grid; gap: 14px; }
+.pokaz-haslo-backupu { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.pokaz-haslo-backupu input { width: 20px; height: 20px; accent-color: var(--akcent); }
+.formularz-hasla-backupu .akcje-formularza { flex-wrap: wrap; }
+.formularz-hasla-backupu .przycisk { min-height: 44px; white-space: normal; }
+@media (max-width: 600px) {
+  .panel-backupu .akcje-backupu > .przycisk, .formularz-hasla-backupu .akcje-formularza > .przycisk { flex: 1 1 100%; min-width: 0; justify-content: center; }
+  .panel-backupu .przycisk { white-space: normal; min-height: 44px; }
+}
 .lista-historii { display: grid; }
 .lista-historii > div { display: grid; grid-template-columns: minmax(150px, auto) minmax(150px, .7fr) 1fr; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--obramowanie); align-items: baseline; }
 .lista-historii time, .lista-historii span { color: var(--tekst-2); font-size: .78rem; }
