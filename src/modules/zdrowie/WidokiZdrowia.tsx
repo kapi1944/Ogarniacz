@@ -1,3 +1,4 @@
+import { dokumentyWizyty, zapiszWizyteZDokumentami, type DostepZrodel } from '../../services/BadaniaService'
 import { SesjePsychoterapii } from './SesjePsychoterapii'
 import './psychoterapia.css'
 import { EdytorPolaRejestru, normalizujStarePolaRejestru, type DefinicjaPola } from '../../components/EdytorPolaRejestru'
@@ -59,6 +60,7 @@ export function WidokZdrowia() {
     { adres: '/zdrowie/dziennik-terapii', tytul: 'Dziennik terapii', opis: aktywnaTerapia ? aktywnaTerapia.nazwa : 'Dodaj terapię', ikona: ClipboardList },
     { adres: '/zdrowie/skierowania', tytul: 'Skierowania', opis: wymagajaceDzialania.length ? `${wymagajaceDzialania.length} wymagają działania` : 'Zarządzaj skierowaniami', ikona: Stethoscope },
     { adres: '/zdrowie/recepty', tytul: 'Recepty', opis: receptaDoRealizacji ? 'Wymaga realizacji' : 'Zarządzaj receptami', ikona: FileText },
+    { adres: '/zdrowie/badania-dokumenty', tytul: 'Badania i dokumenty', opis: 'Wyniki i dokumentacja medyczna', ikona: FileText },
     { adres: '/zdrowie/historia', tytul: 'Historia zdrowia', opis: 'Chronologia zdarzeń zdrowotnych', ikona: History },
   ]
 
@@ -415,6 +417,8 @@ export function WidokLekow() {
 }
 
 export function WidokWizyt() {
+  const { moze } = useAplikacja()
+  const dostepZrodel: DostepZrodel = (tabela, operacja) => moze(tabela === 'terapie' || tabela === 'recepty' ? 'zdrowie' : tabela, operacja)
   const [parametryAdresu] = useSearchParams()
   const { dane: wizyty, repozytorium } = useRepozytorium('wizyty')
   const { dane: kontakty } = useRepozytorium('kontakty')
@@ -441,7 +445,12 @@ export function WidokWizyt() {
       opis="Sprawy do umówienia oraz umówione wizyty z kontaktem, pytaniami i checklistą."
       etykietaDodawania="Dodaj wizytę / sprawę"
       dane={wizyty}
-      repozytorium={repozytorium}
+      repozytorium={{
+        lista: () => repozytorium.lista(), pobierz: (id) => repozytorium.pobierz(id),
+        usun: (id) => repozytorium.usun(id), przywroc: (id) => repozytorium.przywroc(id),
+        zapiszWiele: (encje) => repozytorium.zapiszWiele(encje),
+        zapisz: (wizyta) => zapiszWizyteZDokumentami(wizyta, dostepZrodel),
+      }}
       pola={[
         { klucz: 'nazwa', etykieta: 'Nazwa / typ wizyty', wymagane: true },
         { klucz: 'status', etykieta: 'Stan', typ: 'select', wymagane: true, opcje: [{ wartosc: 'do_umowienia', etykieta: 'Do umówienia' }, { wartosc: 'umowiona', etykieta: 'Umówiona' }, { wartosc: 'odbyta', etykieta: 'Odbyta' }, { wartosc: 'anulowana', etykieta: 'Anulowana' }] },
@@ -452,17 +461,17 @@ export function WidokWizyt() {
         { klucz: 'lekarzPlacowka', etykieta: 'Lekarz / placówka' },
         { klucz: 'kontaktId', etykieta: 'Kontakt', typ: 'select', opcje: kontakty.map((kontakt) => ({ wartosc: kontakt.id, etykieta: kontakt.nazwa })) },
         { klucz: 'skierowanieId', etykieta: 'Skierowanie', typ: 'select', opcje: skierowania.map((x) => ({ wartosc: x.id, etykieta: x.nazwa })) },
-        { klucz: 'dokumentyNazwy', etykieta: 'Dokumenty', podpowiedz: dokumenty.map((x) => x.nazwa).join(', ') || 'brak dokumentów' },
+        { klucz: 'dokumentyIds', etykieta: 'Dokumenty', typ: 'multiselect', opcje: dokumenty.map((dokument, indeks) => ({ wartosc: dokument.id, etykieta: dokument.nazwa + ' · ' + (dokument.nazwaPliku ?? dokument.createdAt.slice(0, 10)) + ' · pozycja ' + (indeks + 1) })) },
         { klucz: 'notatkaPrzed', etykieta: 'Notatki przed wizytą', typ: 'textarea' },
         { klucz: 'notatkaPo', etykieta: 'Notatka po wizycie', typ: 'textarea' },
         { klucz: 'pytania', etykieta: 'Pytania', podpowiedz: 'oddzielone przecinkami' },
         { klucz: 'checklista', etykieta: 'Rzeczy do zabrania', podpowiedz: 'oddzielone przecinkami' },
       ]}
-      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), status: (formularz.status || 'do_umowienia') as Wizyta['status'], terminGraniczny: formularz.terminGraniczny || undefined, data: formularz.data || undefined, godzina: formularz.godzina || undefined, miejsce: formularz.miejsce || undefined, lekarzPlacowka: formularz.lekarzPlacowka || undefined, kontaktId: formularz.kontaktId || undefined, skierowanieId: formularz.skierowanieId || undefined, notatka: formularz.notatkaPrzed ?? '', notatkaPrzed: formularz.notatkaPrzed || undefined, notatkaPo: formularz.notatkaPo || undefined, pytania: formularz.pytania.split(',').map((x) => x.trim()).filter(Boolean), checklista: formularz.checklista.split(',').map((x) => x.trim()).filter(Boolean), dokumentyIds: formularz.dokumentyNazwy.split(',').map((n) => dokumenty.find((d) => d.nazwa.toLocaleLowerCase('pl') === n.trim().toLocaleLowerCase('pl'))?.id).filter((id): id is string => Boolean(id)), updatedAt: terazIso() })}
-      uzupelnijFormularz={(wizyta) => ({ dokumentyNazwy: wizyta.dokumentyIds.map((id) => dokumenty.find((x) => x.id === id)?.nazwa).filter(Boolean).join(', '), notatkaPrzed: wizyta.notatkaPrzed ?? wizyta.notatka, notatkaPo: wizyta.notatkaPo ?? '' })}
+      zbuduj={(formularz, istniejacy) => ({ ...(istniejacy ?? utworzMetadane()), nazwa: formularz.nazwa.trim(), status: (formularz.status || 'do_umowienia') as Wizyta['status'], terminGraniczny: formularz.terminGraniczny || undefined, data: formularz.data || undefined, godzina: formularz.godzina || undefined, miejsce: formularz.miejsce || undefined, lekarzPlacowka: formularz.lekarzPlacowka || undefined, kontaktId: formularz.kontaktId || undefined, skierowanieId: formularz.skierowanieId || undefined, notatka: formularz.notatkaPrzed ?? '', notatkaPrzed: formularz.notatkaPrzed || undefined, notatkaPo: formularz.notatkaPo || undefined, pytania: formularz.pytania.split(',').map((x) => x.trim()).filter(Boolean), checklista: formularz.checklista.split(',').map((x) => x.trim()).filter(Boolean), dokumentyIds: [...new Set([...(istniejacy?.dokumentyIds ?? []), ...formularz.dokumentyIds.split(',').filter(Boolean)])], updatedAt: terazIso() })}
+      uzupelnijFormularz={(wizyta) => ({ dokumentyIds: dokumentyWizyty(wizyta, dokumenty).join(','), notatkaPrzed: wizyta.notatkaPrzed ?? wizyta.notatka, notatkaPo: wizyta.notatkaPo ?? '' })}
       etykieta={(wizyta) => wizyta.nazwa}
       wybranyElementId={parametryAdresu.get('element') ?? undefined}
-      szczegoly={(wizyta) => <><Znacznik wariant={wizyta.status === 'odbyta' ? 'sukces' : wizyta.status === 'do_umowienia' ? 'ostrzezenie' : 'informacja'}>{wizyta.status.replaceAll('_', ' ')}</Znacznik>{wizyta.data && <span>{wizyta.data} {wizyta.godzina}</span>}{wizyta.terminGraniczny && <span>Umów do: {wizyta.terminGraniczny}</span>}{wizyta.miejsce && <span>{wizyta.miejsce}</span>}{wizyta.kontaktId && <span>Lekarz/kontakt: {kontakty.find((x) => x.id === wizyta.kontaktId)?.nazwa}</span>}{wizyta.skierowanieId && <span>Skierowanie: {skierowania.find((x) => x.id === wizyta.skierowanieId)?.nazwa}</span>}{wizyta.dokumentyIds.length > 0 && <span>Dokumenty: {wizyta.dokumentyIds.map((id) => dokumenty.find((x) => x.id === id)?.nazwa).filter(Boolean).join(', ')}</span>}{wizyta.pytania.length > 0 && <span>Pytania: {wizyta.pytania.join(', ')}</span>}{wizyta.checklista.length > 0 && <span>Przygotowanie: {wizyta.checklista.join(', ')}</span>}{wizyta.notatkaPrzed && <p>Przed wizytą: {wizyta.notatkaPrzed}</p>}{wizyta.notatkaPo && <p>Po wizycie: {wizyta.notatkaPo}</p>}<span>Powiązane notatki: {notatki.filter((x) => x.powiazania.some((p) => p.typ === 'wizyty' && p.id === wizyta.id)).map((x) => x.tytul).join(', ') || 'brak'}</span></>}
+      szczegoly={(wizyta) => <><Znacznik wariant={wizyta.status === 'odbyta' ? 'sukces' : wizyta.status === 'do_umowienia' ? 'ostrzezenie' : 'informacja'}>{wizyta.status.replaceAll('_', ' ')}</Znacznik>{wizyta.data && <span>{wizyta.data} {wizyta.godzina}</span>}{wizyta.terminGraniczny && <span>Umów do: {wizyta.terminGraniczny}</span>}{wizyta.miejsce && <span>{wizyta.miejsce}</span>}{wizyta.kontaktId && <span>Lekarz/kontakt: {kontakty.find((x) => x.id === wizyta.kontaktId)?.nazwa}</span>}{wizyta.skierowanieId && <span>Skierowanie: {skierowania.find((x) => x.id === wizyta.skierowanieId)?.nazwa}</span>}{dokumentyWizyty(wizyta, dokumenty).length > 0 && <span>Dokumenty: {dokumentyWizyty(wizyta, dokumenty).map((id) => dokumenty.find((x) => x.id === id)?.nazwa ?? 'Dokument niedostępny').join(', ')}</span>}{wizyta.pytania.length > 0 && <span>Pytania: {wizyta.pytania.join(', ')}</span>}{wizyta.checklista.length > 0 && <span>Przygotowanie: {wizyta.checklista.join(', ')}</span>}{wizyta.notatkaPrzed && <p>Przed wizytą: {wizyta.notatkaPrzed}</p>}{wizyta.notatkaPo && <p>Po wizycie: {wizyta.notatkaPo}</p>}<span>Powiązane notatki: {notatki.filter((x) => x.powiazania.some((p) => p.typ === 'wizyty' && p.id === wizyta.id)).map((x) => x.tytul).join(', ') || 'brak'}</span></>}
       akcje={(wizyta) => <><button type="button" className="przycisk-ikona" title="Dodaj przypomnienie dzień wcześniej" onClick={() => dodajPrzypomnienie(wizyta)}><BellPlus aria-hidden="true" /></button>{wizyta.status === 'odbyta' && <button type="button" className="przycisk przycisk--maly" onClick={() => repoZadan.zapisz(utworzZadanie({ tytul: `Follow-up po wizycie: ${wizyta.nazwa}`, opis: wizyta.notatkaPo ?? '', priorytet: 'normalny' }))}>Utwórz follow-up</button>}</>}
     />
   </div>

@@ -447,6 +447,7 @@ export interface Kontakt extends EncjaBazowa {
 }
 
 export interface Dokument extends EncjaBazowa {
+  medyczne?: import('./badania').MetadaneMedyczne
   nazwa: string
   typ?: string
   nazwaPliku?: string
@@ -786,6 +787,7 @@ export type NazwaModulu =
   | 'ustawienia'
 
 export interface MapaTabel {
+  wynikiBadan: import('./badania').WynikBadania
   wpisySamopoczucia: import('./samopoczucie').WpisSamopoczucia
   zadania: Zadanie
   projekty: Projekt

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { schematWynikuBadania, schematMetadanychMedycznych } from '../domain/badania'
 import { baza, nazwyTabel, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { normalizujUstawienia, WERSJA_USTAWIEN } from '../domain/ustawienia'
@@ -12,7 +13,7 @@ import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
 const WERSJA_APLIKACJI = '1.0.0'
-const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, WERSJA_SCHEMATU_BAZY]
+const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, 17, WERSJA_SCHEMATU_BAZY]
 
 export const SEKCJE_BACKUPU = [
   { nazwa: 'ustawienia', etykieta: 'Ustawienia' },
@@ -22,6 +23,7 @@ export const SEKCJE_BACKUPU = [
   { nazwa: 'leki', etykieta: 'Leki' },
   { nazwa: 'wizyty', etykieta: 'Wizyty' },
   { nazwa: 'zdrowie', etykieta: 'Pozostałe dane zdrowotne' },
+  { nazwa: 'badania', etykieta: 'Prywatne wyniki badań' },
   { nazwa: 'samopoczucie', etykieta: 'Prywatny dziennik samopoczucia' },
   { nazwa: 'finanse', etykieta: 'Finanse i rachunki' },
   { nazwa: 'samochod', etykieta: 'Samochód' },
@@ -146,6 +148,7 @@ const schematTransportowegoBlobu = z.object({
 }).strict()
 
 const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
+  wynikiBadan: schematWynikuBadania,
   wpisySamopoczucia: schematWpisuSamopoczucia,
   ustawienia: schematEncji.extend({
     samopoczucie: schematUstawienSamopoczucia.optional(),
@@ -306,6 +309,7 @@ const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
     kupione: z.boolean(),
   }),
   dokumenty: schematEncji.extend({
+    medyczne: schematMetadanychMedycznych.optional(),
     nazwa: z.string(),
     powiazania: z.array(z.unknown()),
     plik: schematTransportowegoBlobu.optional(),
@@ -528,6 +532,7 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('leki', ['leki', 'dziennikLekow']),
   zrodloRepozytoriow('wizyty', ['wizyty']),
   zrodloRepozytoriow('zdrowie', ['skierowania', 'recepty', 'terapie', 'wpisyTerapii']),
+  zrodloRepozytoriow('badania', ['wynikiBadan']),
   zrodloRepozytoriow('samopoczucie', ['wpisySamopoczucia']),
   zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'platnosciStale', 'planyRat', 'raty', 'budzety', 'kontaFinansowe']),
   zrodloRepozytoriow('samochod', ['pojazdy']),

@@ -15,6 +15,7 @@ const WidokProjektow = lazy(() => import('./modules/praca/WidokiPracy').then((mo
 const WidokPlanera = lazy(() => import('./modules/czas/WidokiCzasu').then((modul) => ({ default: modul.WidokPlanera })))
 const WidokGrafiku = lazy(() => import('./modules/czas/WidokiCzasu').then((modul) => ({ default: modul.WidokGrafiku })))
 const WidokZdrowia = lazy(() => import('./modules/zdrowie/WidokiZdrowia').then((modul) => ({ default: modul.WidokZdrowia })))
+const BadaniaDokumenty = lazy(() => import('./modules/zdrowie/BadaniaDokumenty'))
 const WidokSamopoczucia = lazy(() => import('./modules/zdrowie/WidokSamopoczucia'))
 const WidokLekow = lazy(() => import('./modules/zdrowie/WidokiZdrowia').then((modul) => ({ default: modul.WidokLekow })))
 const WidokWizyt = lazy(() => import('./modules/zdrowie/WidokiZdrowia').then((modul) => ({ default: modul.WidokWizyt })))
@@ -64,6 +65,7 @@ export default function App() {
     <Route path="/planer" element={chron('planer', <WidokPlanera />)} />
     <Route path="/grafik" element={chron('grafik', <WidokGrafiku />)} />
     <Route path="/zdrowie" element={chron('zdrowie', <WidokZdrowia />)} />
+    <Route path="/zdrowie/badania-dokumenty" element={chron('zdrowie', <BadaniaDokumenty />)} />
     <Route path="/zdrowie/samopoczucie" element={chron('zdrowie', <WidokSamopoczucia />)} />
     <Route path="/zdrowie/leki" element={chron('leki', <WidokLekow />)} />
     <Route path="/zdrowie/wizyty" element={chron('wizyty', <WidokWizyt />)} />

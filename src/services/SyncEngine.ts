@@ -188,6 +188,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
   async rozstrzygnijKonflikt(id: string, rozstrzygniecie: RozstrzygniecieKonfliktu): Promise<void> {
     const konflikt = await baza.tabela('konfliktySynchronizacji').get(id)
     if (!konflikt) return
+    if (!nazwyTabelSynchronizowanych.includes(konflikt.tabela as NazwaTabeliSynchronizowanej)) throw new Error('Tabela lokalna nie podlega rozstrzyganiu konfliktów synchronizacji.')
     const tabela = konflikt.tabela as NazwaTabeliSynchronizowanej
     const stan = await pobierzStanSynchronizacji()
     const teraz = this.teraz()
