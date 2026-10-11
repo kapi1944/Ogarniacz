@@ -218,6 +218,20 @@ describe.sequential('migracja historycznych baz Dexie do v15', () => {
     expect(await baza.tabela('widokiRejestru').count()).toBe(0)
   })
 
+  it('dodaje pusty dziennik w migracji 16 → 17 bez zmiany danych zdrowotnych', async () => {
+    baza.close()
+    await Dexie.delete('ogarniacz-v1')
+    const staraBaza = new Dexie('ogarniacz-v1')
+    staraBaza.version(16).stores({ leki: 'id, aktywny, updatedAt, usunietoAt', dziennikLekow: 'id, updatedAt', ustawienia: 'id, updatedAt' })
+    await staraBaza.open()
+    const lek = { id: 'zachowany', nazwa: 'Lek', historiaDawkowania: [{ id: 'wersja', obowiazujeOd: '2026-10-01T00:00:00Z' }], ...metadane }
+    await staraBaza.table('leki').put(lek)
+    staraBaza.close()
+    await baza.open()
+    expect(await baza.tabela('leki').get(lek.id)).toEqual(lek)
+    expect(await baza.tabela('wpisySamopoczucia').count()).toBe(0)
+  })
+
   it('nadaje revision istniejącej definicji własnego pola Rejestru', async () => {
     baza.close()
     await Dexie.delete('ogarniacz-v1')

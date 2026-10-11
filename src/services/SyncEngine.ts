@@ -9,7 +9,7 @@ import type {
 } from '../data/DostawcaSynchronizacji'
 import { BladKonfliktuSynchronizacji } from '../data/DostawcaSynchronizacji'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
-import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki } from '../data/KolejkaSynchronizacji'
+import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki, zachowajLokalneSamopoczucie } from '../data/KolejkaSynchronizacji'
 import { utworzMetadane } from '../domain/fabryki'
 import type { EncjaBazowa, KonfliktSynchronizacji, StanSynchronizacji } from '../domain/typy'
 import { pobierzInstallationId } from './InstallationService'
@@ -200,7 +200,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
     const wyborZdalny = rozstrzygniecie.typ === 'zdalny'
     const kolejka = tabelaKolejki()
     await baza.transaction('rw', [tabelaLokalna(tabela), baza.tabela('konfliktySynchronizacji'), kolejka], async () => {
-      await tabelaLokalna(tabela).put(rekord)
+      await tabelaLokalna(tabela).put(zachowajLokalneSamopoczucie(tabela, rekord, await tabelaLokalna(tabela).get(rekord.id)))
       await baza.tabela('konfliktySynchronizacji').delete(id)
       if (wyborZdalny) {
         const oczekujace = await kolejka.where('[tabela+rekordId]').equals([tabela, rekord.id]).primaryKeys()
@@ -334,7 +334,10 @@ export class SyncEngine implements DostawcaSynchronizacji {
       grupy.set(zmiana.tabela, [...(grupy.get(zmiana.tabela) ?? []), structuredClone(zmiana.rekord)])
     }
     for (const [tabela, rekordy] of grupy) {
-      await tabelaLokalna(tabela).bulkPut(rekordy)
+      await baza.transaction('rw', tabelaLokalna(tabela), async () => {
+        const lokalne = await tabelaLokalna(tabela).bulkGet(rekordy.map((rekord) => rekord.id))
+        await tabelaLokalna(tabela).bulkPut(rekordy.map((rekord, indeks) => zachowajLokalneSamopoczucie(tabela, rekord, lokalne[indeks])))
+      })
       powiadomOZmianieDanych(tabela)
     }
   }

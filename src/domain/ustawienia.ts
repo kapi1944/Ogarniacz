@@ -1,4 +1,5 @@
 import { utworzMetadane } from './fabryki'
+import { schematUstawienSamopoczucia } from './samopoczucie'
 import { DOMYSLNA_PERSONALIZACJA, normalizujPersonalizacje, zastosujPersonalizacje } from './personalizacja'
 import type {
   DostepnoscPlanistyczna,
@@ -183,6 +184,7 @@ function odrzuconeSugestieEcho(wartosc: unknown): string[] {
 
 export function normalizujUstawienia(wartosc: unknown): Ustawienia {
   const zrodlo = jakoRekord(wartosc)
+  const samopoczucie = zrodlo.samopoczucie === undefined ? undefined : schematUstawienSamopoczucia.parse(zrodlo.samopoczucie)
   const wyglad = jakoRekord(zrodlo.wyglad)
   const nawigacja = jakoRekord(zrodlo.nawigacja)
   const pulpit = jakoRekord(zrodlo.pulpit)
@@ -222,6 +224,7 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
     updatedAt: tekst(zrodlo.updatedAt, domyslne.updatedAt),
     ...(opcjonalnyTekst(zrodlo.usunietoAt) ? { usunietoAt: opcjonalnyTekst(zrodlo.usunietoAt) } : {}),
     wersja: WERSJA_USTAWIEN,
+    ...(samopoczucie ? { samopoczucie } : {}),
     wyglad: {
       motyw: enumWartosci<MotywAplikacji>(wyglad.motyw ?? staryMotyw, ['jasny', 'ciemny', 'systemowy'], domyslne.wyglad.motyw),
       gestosc: enumWartosci<GestoscInterfejsu>(wyglad.gestosc, ['komfortowa', 'zwarta'], domyslne.wyglad.gestosc),

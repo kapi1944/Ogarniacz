@@ -3,6 +3,7 @@ import { baza, nazwyTabel, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { normalizujUstawienia, WERSJA_USTAWIEN } from '../domain/ustawienia'
 import { ROLE_SEMANTYCZNE_REJESTRU } from '../domain/rejestr'
+import { schematUstawienSamopoczucia, schematWpisuSamopoczucia } from '../domain/samopoczucie'
 import type { NazwaTabeli } from '../domain/typy'
 import { pobierzInstallationId } from './InstallationService'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
@@ -10,7 +11,7 @@ import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
 const WERSJA_APLIKACJI = '1.0.0'
-const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, WERSJA_SCHEMATU_BAZY]
+const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, WERSJA_SCHEMATU_BAZY]
 
 export const SEKCJE_BACKUPU = [
   { nazwa: 'ustawienia', etykieta: 'Ustawienia' },
@@ -20,6 +21,7 @@ export const SEKCJE_BACKUPU = [
   { nazwa: 'leki', etykieta: 'Leki' },
   { nazwa: 'wizyty', etykieta: 'Wizyty' },
   { nazwa: 'zdrowie', etykieta: 'Pozostałe dane zdrowotne' },
+  { nazwa: 'samopoczucie', etykieta: 'Prywatny dziennik samopoczucia' },
   { nazwa: 'finanse', etykieta: 'Finanse i rachunki' },
   { nazwa: 'samochod', etykieta: 'Samochód' },
   { nazwa: 'zakupy', etykieta: 'Zakupy' },
@@ -123,7 +125,9 @@ const schematTransportowegoBlobu = z.object({
 }).strict()
 
 const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
+  wpisySamopoczucia: schematWpisuSamopoczucia,
   ustawienia: schematEncji.extend({
+    samopoczucie: schematUstawienSamopoczucia.optional(),
     wersja: z.literal(WERSJA_USTAWIEN),
     wyglad: z.record(z.string(), z.unknown()),
     nawigacja: z.record(z.string(), z.unknown()),
@@ -501,6 +505,7 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('leki', ['leki', 'dziennikLekow']),
   zrodloRepozytoriow('wizyty', ['wizyty']),
   zrodloRepozytoriow('zdrowie', ['skierowania', 'recepty', 'terapie', 'wpisyTerapii']),
+  zrodloRepozytoriow('samopoczucie', ['wpisySamopoczucia']),
   zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'platnosciStale', 'planyRat', 'raty', 'budzety', 'kontaFinansowe']),
   zrodloRepozytoriow('samochod', ['pojazdy']),
   zrodloRepozytoriow('zakupy', ['listyZakupow', 'pozycjeZakupow']),
@@ -794,8 +799,10 @@ export async function przywrocBackup(
   await baza.transaction('rw', tabele.map((tabela) => baza.table(tabela)), async () => {
     for (const tabela of tabele) {
       const repozytorium = baza.table(tabela)
+      const prywatneUstawienia = tabela === 'ustawienia' ? (await baza.tabela('ustawienia').get('glowne'))?.samopoczucie : undefined
       await repozytorium.clear()
       const rekordy = daneDoZapisu.get(tabela) ?? []
+      if (tabela === 'ustawienia' && prywatneUstawienia) for (const rekord of rekordy) if (rekord.id === 'glowne' && !('samopoczucie' in rekord)) rekord.samopoczucie = prywatneUstawienia
       if (rekordy.length > 0) await repozytorium.bulkPut(rekordy)
     }
   })

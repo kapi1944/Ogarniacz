@@ -729,6 +729,7 @@ export interface UstawieniaDostepnosci {
 }
 
 export interface Ustawienia extends EncjaBazowa {
+  samopoczucie?: import('./samopoczucie').UstawieniaSamopoczucia
   wersja: 1
   wyglad: UstawieniaWygladu
   nawigacja: UstawieniaNawigacji
@@ -781,6 +782,7 @@ export type NazwaModulu =
   | 'ustawienia'
 
 export interface MapaTabel {
+  wpisySamopoczucia: import('./samopoczucie').WpisSamopoczucia
   zadania: Zadanie
   projekty: Projekt
   skrzynka: ElementPoczekalni

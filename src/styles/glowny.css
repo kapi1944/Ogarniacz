@@ -2200,3 +2200,14 @@ input[type="radio"] {
 .strefa-pulpitu--wymaga-uwagi { border-color: color-mix(in srgb, var(--ostrzezenie) 55%, var(--obramowanie)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ostrzezenie) 18%, transparent), var(--cien); }
 .centrum-dowodzenia__podsumowanie { display: block; margin-top: 8px; color: var(--tekst-2); }
 .pulpit-sekcja--horyzont { display: grid; }
+/* Lokalny dziennik samopoczucia: wygodne kontrolki również na telefonie. */
+.samopoczucie-szybkie { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
+.samopoczucie-wskaznik { min-width: 0; border: 1px solid var(--obramowanie); border-radius: 12px; padding: 12px; }
+.samopoczucie-wskaznik input[type="range"] { width: 100%; min-height: 44px; }
+.samopoczucie-wskaznik button { min-height: 44px; }
+.samopoczucie-sekcja { margin-block: 12px; }
+.samopoczucie-sekcja summary, .samopoczucie-formularz summary { cursor: pointer; padding-block: 12px; }
+.samopoczucie-wpis { padding-block: 16px; border-bottom: 1px solid var(--obramowanie); overflow-wrap: anywhere; }
+.samopoczucie-wpis p { white-space: pre-wrap; }
+.samopoczucie-obserwacje { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 12px; }
+.samopoczucie-obserwacje small { display: block; }

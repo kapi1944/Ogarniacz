@@ -2,7 +2,7 @@ import { terazIso } from '../domain/fabryki'
 import { normalizujUstawienia } from '../domain/ustawienia'
 import type { Ustawienia } from '../domain/typy'
 import { baza } from './BazaOgarniacza'
-import { dodajDoKolejkiSynchronizacji, tabelaKolejki } from './KolejkaSynchronizacji'
+import { dodajDoKolejkiSynchronizacji, tabelaKolejki, rekordDoSynchronizacji } from './KolejkaSynchronizacji'
 
 export interface RepozytoriumUstawien {
   wczytaj(): Promise<Ustawienia>
@@ -20,8 +20,18 @@ class RepozytoriumUstawienDexie implements RepozytoriumUstawien {
     const tabela = baza.tabela('ustawienia')
     await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
       const poprzednie = await tabela.get(zapisane.id)
+      if (zapisane.samopoczucie && poprzednie?.samopoczucie) {
+        for (const stara of poprzednie.samopoczucie.definicje) {
+          const nowa = zapisane.samopoczucie.definicje.find((pole) => pole.id === stara.id && pole.wersja === stara.wersja)
+          if (JSON.stringify(nowa) !== JSON.stringify(stara)) throw new Error('Zachowaj wcześniejsze wersje wskaźników. Odśwież ustawienia przed zapisem.')
+        }
+      }
+      zapisane.samopoczucie ??= poprzednie?.samopoczucie
+      const porownywalne = (rekord: Ustawienia) => ({ ...rekordDoSynchronizacji('ustawienia', rekord), updatedAt: '' })
+      const zmienionoWspolne = !poprzednie || JSON.stringify(porownywalne(zapisane)) !== JSON.stringify(porownywalne(poprzednie))
+      if (!zmienionoWspolne && poprzednie) zapisane.updatedAt = poprzednie.updatedAt
       await tabela.put(zapisane)
-      await dodajDoKolejkiSynchronizacji('ustawienia', zapisane, poprzednie)
+      if (zmienionoWspolne) await dodajDoKolejkiSynchronizacji('ustawienia', zapisane, poprzednie)
     })
     return zapisane
   }

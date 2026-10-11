@@ -1,9 +1,10 @@
 import type { Table } from 'dexie'
 import { noweId } from '../domain/fabryki'
 import type { EncjaBazowa, NazwaTabeli, ZmianaKolejkiSynchronizacji } from '../domain/typy'
-import { baza } from './BazaOgarniacza'
+import { baza, nazwyTabel } from './BazaOgarniacza'
 
 const TABELE_LOKALNE = new Set<NazwaTabeli>([
+  'wpisySamopoczucia',
   'stanSynchronizacji',
   'konfliktySynchronizacji',
   'kolejkaSynchronizacji',
@@ -14,6 +15,19 @@ const TABELE_LOKALNE = new Set<NazwaTabeli>([
 
 export function czyTabelaSynchronizowana(tabela: NazwaTabeli): boolean {
   return !TABELE_LOKALNE.has(tabela)
+}
+
+/** Prywatne definicje i preferencje dziennika nigdy nie opuszczają ustawień lokalnych. */
+export function rekordDoSynchronizacji(tabela: NazwaTabeli, rekord: EncjaBazowa): EncjaBazowa {
+  const kopia = structuredClone(rekord) as EncjaBazowa & { samopoczucie?: unknown }
+  if (tabela === 'ustawienia') delete kopia.samopoczucie
+  return kopia
+}
+
+export function zachowajLokalneSamopoczucie(tabela: NazwaTabeli, rekord: EncjaBazowa, lokalny?: EncjaBazowa): EncjaBazowa {
+  const kopia = rekordDoSynchronizacji(tabela, rekord)
+  if (tabela === 'ustawienia' && lokalny && 'samopoczucie' in lokalny) Object.assign(kopia, { samopoczucie: structuredClone(lokalny.samopoczucie) })
+  return kopia
 }
 
 export function tabelaKolejki(): Table<ZmianaKolejkiSynchronizacji, string> {
@@ -37,14 +51,15 @@ export async function dodajDoKolejkiSynchronizacji(
     tabela,
     rekordId: rekord.id,
     operacja: rekord.usunietoAt ? 'usuniecie' : poprzedni ? 'aktualizacja' : 'utworzenie',
-    rekord: structuredClone(rekord),
+    rekord: rekordDoSynchronizacji(tabela, rekord),
     bazowyUpdatedAt: poprzedniaZmiana?.bazowyUpdatedAt ?? poprzedni?.updatedAt,
     liczbaProb: 0,
   })
 }
 
 export async function pobierzKolejkeSynchronizacji(): Promise<ZmianaKolejkiSynchronizacji[]> {
-  return tabelaKolejki().orderBy('createdAt').toArray()
+  return (await tabelaKolejki().orderBy('createdAt').toArray()).filter((zmiana) => nazwyTabel.includes(zmiana.tabela as NazwaTabeli) && czyTabelaSynchronizowana(zmiana.tabela as NazwaTabeli))
+    .map((zmiana) => ({ ...zmiana, rekord: rekordDoSynchronizacji(zmiana.tabela as NazwaTabeli, zmiana.rekord) }))
 }
 
 export async function usunWyslaneZmiany(ids: string[]): Promise<void> {

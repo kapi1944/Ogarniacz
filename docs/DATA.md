@@ -1,6 +1,8 @@
 ﻿# Model danych i migracje
 
 ## Zmiany modelu
+Szczegóły migracji Dexie 16 → 17 i prywatnego modelu dziennika Health 2.0: [Dziennik samopoczucia](DZIENNIK_SAMOPOCZUCIA.md). Nowa lokalna tabela przechowuje pełne chwile obserwacji i historyczne definicje skal; wcześniejsze rekordy pozostają zachowane. Backup zachowuje format 3, z dodatkową sekcją `samopoczucie`.
+
 - Model danych można zmieniać.
 - Każda zmiana wymaga migracji i zachowania kompatybilności danych użytkownika.
 - Stare pola i fallbacki utrzymujemy tylko wtedy, gdy istnieją realne dane, które ich wymagają. W przeciwnym razie usuwamy.

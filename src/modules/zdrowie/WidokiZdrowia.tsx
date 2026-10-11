@@ -62,6 +62,7 @@ export function WidokZdrowia() {
 
   return <div className="widok">
     <NaglowekWidoku tytul="Zdrowie" opis="Najważniejsze informacje i organizacja spraw zdrowotnych." />
+    <Karta><h2>Jak się dziś czujesz?</h2><p>Zapisz wybraną obserwację lub krótką notatkę.</p><Link className="przycisk przycisk--glowny" to="/zdrowie/samopoczucie">Otwórz dziennik samopoczucia</Link></Karta>
     <Karta><h2>Najbliższe / wymagające uwagi</h2><div className="lista-kompaktowa">
       {najblizszaWizyta && <div><div><Link to={`/zdrowie/wizyty?element=${najblizszaWizyta.id}`}><strong>Najbliższa wizyta: {najblizszaWizyta.nazwa}</strong></Link><small>{opisTerminu(najblizszaWizyta.data, najblizszaWizyta.godzina)}</small></div></div>}
       {najblizszaDawka && <div><div><Link to={`/zdrowie/leki?element=${najblizszaDawka.lek.id}`}><strong>Najbliższa dawka: {najblizszaDawka.lek.nazwa}</strong></Link><small>Dzisiaj o {najblizszaDawka.planowanaGodzina}</small></div></div>}
