@@ -206,10 +206,29 @@ export function czyDozwolonaTabela(
   kontekst: KontekstDostepu,
   tabela: string,
   operacja: 'odczyt' | 'edycja',
+  rekord?: Record<string, unknown>,
 ): boolean {
   if (kontekst.rola === 'wlasciciel') return true
   const modul = MODUL_TABELI[tabela]
   if (!modul || modul === 'ustawienia' || modul === 'echo') return false
+  const sekcja = tabela === 'wpisyTerapii' || tabela === 'zadania' && rekord && 'sesjaTerapiiId' in rekord ? 'psychoterapia'
+    : tabela === 'dokumenty' && rekord && ('medyczne' in rekord && rekord.medyczne !== undefined || Array.isArray(rekord.powiazania) && rekord.powiazania.some((relacja) => relacja && ['zdrowie', 'wizyty', 'skierowania', 'leki'].includes(relacja.typ))) ? 'dokumentacja' : undefined
+  const sekcje = new Set<string>(sekcja ? [sekcja] : [])
+  if (tabela === 'dokumenty' && rekord?.id) {
+    const zrodla = baza.prepare("SELECT tabela, dane_json FROM rekordy_synchronizacji WHERE uzytkownik_id = ? AND tabela IN ('wizyty', 'wpisyTerapii')").all(kontekst.wlascicielId)
+    for (const zrodlo of zrodla) {
+      const dane = JSON.parse(String(zrodlo.dane_json))
+      if (zrodlo.tabela === 'wizyty' && dane.dokumentyIds?.includes(rekord.id)) sekcje.add('dokumentacja')
+      if (zrodlo.tabela === 'wpisyTerapii' && dane.psychoterapia?.dokumentyIds?.includes(rekord.id)) { sekcje.add('dokumentacja'); sekcje.add('psychoterapia') }
+    }
+  }
+  for (const prywatnaSekcja of sekcje) {
+    const prywatnyGrant = baza.prepare(`SELECT odczyt, edycja FROM granty_dostepu
+      WHERE wlasciciel_id = ? AND edytor_id = ? AND modul = 'zdrowie' AND sekcja = ? AND status = 'aktywne'`)
+      .get(kontekst.wlascicielId, kontekst.uzytkownikId, prywatnaSekcja)
+    if (!prywatnyGrant || Number(operacja === 'odczyt' ? prywatnyGrant.odczyt : prywatnyGrant.edycja) !== 1) return false
+  }
+  if (tabela === 'wpisyTerapii' && sekcje.size) return true
   const wiersz = baza.prepare(`
     SELECT odczyt, edycja FROM granty_dostepu
     WHERE wlasciciel_id = ? AND edytor_id = ? AND modul = ? AND sekcja = '' AND status = 'aktywne'

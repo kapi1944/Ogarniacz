@@ -1,3 +1,4 @@
+import { czyKontoZgodneZDanymiLokalnymi } from './KontaService'
 import type { Table } from 'dexie'
 import { baza, nazwyTabel } from '../data/BazaOgarniacza'
 import type {
@@ -62,7 +63,7 @@ function takieSame(a: EncjaBazowa, b: EncjaBazowa): boolean {
 }
 
 function walidujZmianyZdalne(zmiany: ZmianaSynchronizacji[]): void {
-  const dozwoloneTabele = new Set<string>(nazwyTabelSynchronizowanych)
+  const dozwoloneTabele = new Set<string>([...nazwyTabelSynchronizowanych, 'wpisyTerapii'])
   for (const zmiana of zmiany) {
     if (
       !dozwoloneTabele.has(zmiana.tabela)
@@ -142,7 +143,8 @@ export async function oznaczSynchronizacjeOffline(): Promise<void> {
 export async function odtworzOczekujacaSynchronizacje(online = typeof navigator === 'undefined' || navigator.onLine): Promise<boolean> {
   const obecny = await pobierzStanSynchronizacji()
   if (obecny.stan === 'konflikt') return false
-  await uzupelnijKolejkePoMigracji()
+  if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto nie jest powiązane z lokalną bazą.')
+      await uzupelnijKolejkePoMigracji()
   const liczbaOczekujacych = await tabelaKolejki().count()
 
   if (obecny.stan === 'synchronizacja') {
@@ -186,6 +188,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
   }
 
   async rozstrzygnijKonflikt(id: string, rozstrzygniecie: RozstrzygniecieKonfliktu): Promise<void> {
+    if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('To konto nie jest powiązane z lokalną bazą. Użyj osobnego profilu urządzenia lub przeglądarki.')
     const konflikt = await baza.tabela('konfliktySynchronizacji').get(id)
     if (!konflikt) return
     if (!nazwyTabelSynchronizowanych.includes(konflikt.tabela as NazwaTabeliSynchronizowanej)) throw new Error('Tabela lokalna nie podlega rozstrzyganiu konfliktów synchronizacji.')
@@ -262,6 +265,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
     await this.zapiszStan({ stan: 'synchronizacja', ostatniBlad: undefined })
 
     try {
+      if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto nie jest powiązane z lokalną bazą.')
       await uzupelnijKolejkePoMigracji()
       this.powiadomOEtapie('pobieranie')
       const installationId = this.installationId()
@@ -269,11 +273,12 @@ export class SyncEngine implements DostawcaSynchronizacji {
         pobierzLokalneZmiany(installationId),
         this.zPonowieniami(() => repozytoriumZdalne.pobierzZmiany(od)),
       ])
+      if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto zmieniło się podczas synchronizacji.')
       walidujZmianyZdalne(wszystkieZdalne)
       await this.zapiszStan({ ostatniPull: this.teraz(), polaczenie: 'dostepne', sesjaWymagaLogowania: false })
       const zdalne: ZmianaSynchronizacji[] = []
       for (const zmiana of wszystkieZdalne) {
-        if (zmiana.installationId === installationId || czyPrywatnaPsychoterapia(zmiana.tabela, zmiana.rekord)
+        if (!czyTabelaSynchronizowana(zmiana.tabela) || zmiana.installationId === installationId || czyPrywatnaPsychoterapia(zmiana.tabela, zmiana.rekord)
           || czyPrywatnaPsychoterapia(zmiana.tabela, await tabelaLokalna(zmiana.tabela).get(zmiana.rekord.id))) continue
         zdalne.push(zmiana)
       }
@@ -301,7 +306,10 @@ export class SyncEngine implements DostawcaSynchronizacji {
 
       if (doWyslania.length > 0) {
         this.powiadomOEtapie('wysylanie')
-        await this.zPonowieniami(() => repozytoriumZdalne.wyslijZmiany(doWyslania, od))
+        await this.zPonowieniami(() => {
+          if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto zmieniło się przed wysłaniem danych.')
+          return repozytoriumZdalne.wyslijZmiany(doWyslania, od)
+        })
         await this.zapiszStan({ ostatniPush: this.teraz(), polaczenie: 'dostepne', sesjaWymagaLogowania: false })
         await usunWyslaneZmiany(doWyslania.flatMap((zmiana) => zmiana.zmianaId ? [zmiana.zmianaId] : []))
       }
@@ -343,6 +351,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
     }
     for (const [tabela, rekordy] of grupy) {
       await baza.transaction('rw', tabelaLokalna(tabela), async () => {
+        if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto zmieniło się przed zapisem danych.')
         const lokalne = await tabelaLokalna(tabela).bulkGet(rekordy.map((rekord) => rekord.id))
         await tabelaLokalna(tabela).bulkPut(rekordy.flatMap((rekord, indeks) => czyPrywatnaPsychoterapia(tabela, lokalne[indeks]) || czyPrywatnaPsychoterapia(tabela, rekord) ? [] : [zachowajLokalneSamopoczucie(tabela, rekord, lokalne[indeks])]))
       })

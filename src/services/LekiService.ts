@@ -1,3 +1,4 @@
+import { sprawdzBiezacyDostep } from './UprawnieniaService'
 import { addDays, differenceInCalendarDays, format, getDay, parseISO } from 'date-fns'
 import { noweId, terazIso, utworzMetadane } from '../domain/fabryki'
 import { baza } from '../data/BazaOgarniacza'
@@ -219,6 +220,7 @@ export async function zapiszLekZDodanymZapasem(lek: Lek, dodanyZapas?: number, z
   if (dodanyZapas !== undefined && (!Number.isFinite(dodanyZapas) || dodanyZapas < 0)) throw new Error('Podaj nieujemną ilość zapasu.')
   const tabelaLekow = baza.tabela('leki')
   await baza.transaction('rw', [tabelaLekow, tabelaKolejki()], async () => {
+    sprawdzBiezacyDostep('leki', 'edycja')
     const poprzedni = await tabelaLekow.get(lek.id)
     const teraz = terazIso()
     if (poprzedni?.historiaDawkowania && JSON.stringify(lek.historiaDawkowania) !== JSON.stringify(poprzedni.historiaDawkowania)) throw new Error('Historia schematów uległa zmianie. Odśwież formularz.')
@@ -342,6 +344,7 @@ export async function zapiszStatusDawkiZApteczka(dawka: DawkaDnia, status: Dzien
   const tabelaLekow = baza.tabela('leki')
   const tabelaDziennika = baza.tabela('dziennikLekow')
   await baza.transaction('rw', [tabelaLekow, tabelaDziennika, tabelaKolejki()], async () => {
+    sprawdzBiezacyDostep('leki', 'edycja')
     const lek = await tabelaLekow.get(dawka.lek.id)
     if (!lek || lek.usunietoAt) throw new Error('Nie znaleziono leku dla tej dawki.')
     const wpisy = (await tabelaDziennika.where('lekId').equals(lek.id).toArray()).filter((wpis) => !wpis.usunietoAt)

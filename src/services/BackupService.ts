@@ -1,3 +1,4 @@
+import { sprawdzBiezacyDostep } from './UprawnieniaService'
 import { z } from 'zod'
 import { schematWaznejInformacjiZdrowotnej } from '../domain/historiaZdrowia'
 import { schematWynikuBadania, schematMetadanychMedycznych } from '../domain/badania'
@@ -597,6 +598,7 @@ export async function utworzBackup(
   teraz: () => string = () => new Date().toISOString(),
   typBackupu: TypBackupu = 'export',
 ): Promise<OgarniaczBackup> {
+  sprawdzBiezacyDostep('ustawienia', 'odczyt')
   const unikalneSekcje = SEKCJE_BACKUPU.map(({ nazwa }) => nazwa).filter((nazwa) => wybraneSekcje.includes(nazwa))
   if (unikalneSekcje.length === 0) throw new BladBackupu('Wybierz co najmniej jedną sekcję backupu.', 'BRAK_SEKCJI')
 
@@ -628,6 +630,7 @@ export async function utworzBackup(
     schemaVersions,
   }
   const checksum = await obliczChecksum({ manifest: manifestBezChecksum, payload })
+  sprawdzBiezacyDostep('ustawienia', 'odczyt')
   return { manifest: { ...manifestBezChecksum, checksum }, payload }
 }
 
@@ -860,6 +863,7 @@ export async function odszyfrujBackup(tresc: string, haslo?: string): Promise<st
 }
 
 export async function przygotujBackupDoPrzywracania(tresc: string, haslo?: string): Promise<OgarniaczBackup> {
+  sprawdzBiezacyDostep('ustawienia', 'odczyt')
   const surowaZawartosc = parsujJson(tresc)
   const zawartosc = czyKopertaSzyfrowania(surowaZawartosc) ? parsujJson(await odszyfrujBackup(tresc, haslo)) : surowaZawartosc
   const wynikStruktury = schematSurowegoBackupu.safeParse(zawartosc)
@@ -889,6 +893,7 @@ export async function przywrocBackup(
   sekcje: readonly NazwaSekcjiBackupu[] = backup.manifest.sections,
   opcje: OpcjePrzywracania = {},
 ): Promise<WynikPrzywracania> {
+  sprawdzBiezacyDostep('ustawienia', 'edycja')
   if (!await checksumJestPoprawny(backup)) {
     throw new BladBackupu('Checksum backupu jest niepoprawny.', 'CHECKSUM')
   }
@@ -929,6 +934,7 @@ export async function przywrocBackup(
   }
 
   await baza.transaction('rw', tabele.map((tabela) => baza.table(tabela)), async () => {
+    sprawdzBiezacyDostep('ustawienia', 'edycja')
     for (const tabela of tabele) {
       const repozytorium = baza.table(tabela)
       const prywatneUstawienia = tabela === 'ustawienia' ? (await baza.tabela('ustawienia').get('glowne'))?.samopoczucie : undefined

@@ -1,3 +1,4 @@
+import { czyBiezacyDostep, zakresDanychZdrowotnych } from '../services/UprawnieniaService'
 import { useEffect, useRef, useState } from 'react'
 import { useRepozytorium } from '../hooks/useRepozytorium'
 import { aktywnePrzypomnienia } from '../services/PrzypomnieniaService'
@@ -40,7 +41,7 @@ export function SilnikPrzypomnien() {
   useEffect(() => {
     let anulowano = false
     const dostarcz = async () => {
-      const uzgodnione = await uzgodnijPrzypomnieniaLekow()
+      const uzgodnione = (await uzgodnijPrzypomnieniaLekow()).filter((element) => { const zakres = zakresDanychZdrowotnych('przypomnienia', element); return !zakres || czyBiezacyDostep(zakres.modul, 'odczyt', zakres.sekcja) })
       if (anulowano) return
       if (platforma.natywna) {
         await platforma.powiadomienia.synchronizuj(uzgodnione, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach)

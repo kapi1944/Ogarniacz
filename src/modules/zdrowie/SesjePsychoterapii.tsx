@@ -106,7 +106,7 @@ export function SesjePsychoterapii() {
     const [sesje, terapie, daneWizyt, daneKontaktow, daneDokumentow, daneDziennika, daneZadan] = await Promise.all([
       pobierzRepozytorium('wpisyTerapii', dostep.sesje).lista(), pobierzRepozytorium('terapie').lista(),
       wizyty ? pobierzRepozytorium('wizyty').lista() : [], kontakty ? pobierzRepozytorium('kontakty').lista() : [], dokumenty ? pobierzRepozytorium('dokumenty').lista() : [],
-      dziennik ? pobierzRepozytorium('wpisySamopoczucia').lista() : [], zadania ? pobierzRepozytorium('zadania', dostep.sesje).lista() : [],
+      dziennik ? pobierzRepozytorium('wpisySamopoczucia', dostep.dziennik).lista() : [], zadania ? pobierzRepozytorium('zadania', dostep.sesje).lista() : [],
     ])
     return { sesje, terapie, wizyty: daneWizyt, kontakty: daneKontaktow, dokumenty: daneDokumentow, dziennik: daneDziennika, zadania: daneZadan }
   }, [odczyt, dziennik, zadania, kontakty, dokumenty, wizyty], pusteDane) ?? pusteDane

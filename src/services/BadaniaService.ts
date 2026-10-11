@@ -14,14 +14,14 @@ function sprawdzEdycje(dostep: DostepBadan) {
 export async function zapiszWynikBadania(wynik: WynikBadania, dostep: DostepBadan, zrodla: DostepZrodel): Promise<void> {
   sprawdzEdycje(dostep)
   const poprawny = schematWynikuBadania.parse({ ...wynik, wartoscLiczbowa: undefined, wartoscTekstowa: undefined, ...odczytajWartoscBadania(wynik.oryginalnyWynik) }) as WynikBadania
-  await baza.transaction('rw', [baza.tabela('wynikiBadan'), baza.tabela('dokumenty'), baza.tabela('wizyty'), tabelaKolejki()], async () => {
+  await baza.transaction('rw', [baza.tabela('wynikiBadan'), baza.tabela('wpisyTerapii'), baza.tabela('dokumenty'), baza.tabela('wizyty'), tabelaKolejki()], async () => {
     sprawdzEdycje(dostep)
     const poprzedni = await baza.tabela('wynikiBadan').get(wynik.id)
     if (poprzedni && (poprzedni.usunietoAt || poprzedni.updatedAt !== wynik.updatedAt)) throw new Error('Wynik uległ zmianie. Otwórz go ponownie.')
     for (const [tabela, id, poprzednieId] of [['dokumenty', poprawny.dokumentId, poprzedni?.dokumentId], ['wizyty', poprawny.wizytaId, poprzedni?.wizytaId]] as const) {
       if (!id || id === poprzednieId) continue
       if (!zrodla(tabela, 'odczyt')) throw new Error('Brak uprawnienia do źródła wyniku.')
-      const rekord = await baza.tabela(tabela).get(id)
+      const rekord = await pobierzRepozytorium(tabela, (operacja) => zrodla(tabela, operacja)).pobierz(id)
       if (!rekord || rekord.usunietoAt) throw new Error('Źródło wyniku jest niedostępne.')
     }
     if (poprawny.grupaId) {
@@ -42,7 +42,7 @@ export function dokumentyWizyty(wizyta: Wizyta, dokumenty: Dokument[]): string[]
   return [...new Set([...wizyta.dokumentyIds, ...dokumenty.filter((dokument) => dokument.powiazania.some((relacja) => relacja.typ === 'wizyty' && relacja.id === wizyta.id)).map((dokument) => dokument.id)])]
 }
 
-const tabeleRelacji = () => [baza.tabela('dokumenty'), baza.tabela('wizyty'), baza.tabela('przypomnienia'), baza.tabela('historiaZmian'), tabelaKolejki()]
+const tabeleRelacji = () => [baza.tabela('wynikiBadan'), baza.tabela('wpisyTerapii'), baza.tabela('dokumenty'), baza.tabela('wizyty'), baza.tabela('przypomnienia'), baza.tabela('historiaZmian'), tabelaKolejki()]
 
 export async function zapiszWizyteZDokumentami(wizyta: Wizyta, dostep: DostepZrodel): Promise<string> {
   if (!dostep('wizyty', 'edycja')) throw new Error('Brak uprawnienia do wizyt.')

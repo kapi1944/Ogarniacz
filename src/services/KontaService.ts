@@ -3,6 +3,7 @@ import { pobierzKonfiguracjeSynchronizacji } from './KonfiguracjaSynchronizacji'
 
 const KLUCZ_CSRF = 'ogarniacz-csrf'
 const KLUCZ_KONTA_OFFLINE = 'ogarniacz-konto-offline'
+const KLUCZ_WLASCICIELA_DANYCH = 'ogarniacz-wlasciciel-danych'
 let odswiezanieSesji: Promise<KontoUzytkownika> | undefined
 
 export interface GrantKonta {
@@ -65,9 +66,19 @@ function adresApi(): string {
 }
 
 function zapiszKonto(konto: KontoUzytkownika): KontoUzytkownika {
+  if (!localStorage.getItem(KLUCZ_WLASCICIELA_DANYCH)) localStorage.setItem(KLUCZ_WLASCICIELA_DANYCH, konto.wlascicielId)
   if (konto.csrf) sessionStorage.setItem(KLUCZ_CSRF, konto.csrf)
   localStorage.setItem(KLUCZ_KONTA_OFFLINE, JSON.stringify({ ...konto, csrf: undefined, kodyOdzyskiwania: undefined }))
   return konto
+}
+
+/** Wylogowanie nie przenosi istniejącej bazy pod kolejne konto. */
+export function czyKontoZgodneZDanymiLokalnymi(): boolean {
+  const konto = pobierzKontoOffline()
+  if (!konto) return true
+  // Zachowaj istniejącą sesję offline podczas pierwszego uruchomienia po aktualizacji.
+  if (!localStorage.getItem(KLUCZ_WLASCICIELA_DANYCH)) localStorage.setItem(KLUCZ_WLASCICIELA_DANYCH, konto.wlascicielId)
+  return localStorage.getItem(KLUCZ_WLASCICIELA_DANYCH) === konto.wlascicielId
 }
 
 export function wyczyscKontoLokalne(): void {
@@ -147,8 +158,8 @@ export async function zaprosEdytora(email: string): Promise<{ token: string; wyg
   return wykonaj('POST', '/api/account/invitations', { email }, true)
 }
 
-export async function zapiszGrant(editorId: string, modul: string, odczyt: boolean, edycja: boolean): Promise<void> {
-  await wykonaj('PUT', '/api/account/grants', { editorId, modul, odczyt, edycja }, true)
+export async function zapiszGrant(editorId: string, modul: string, odczyt: boolean, edycja: boolean, sekcja?: string): Promise<void> {
+  await wykonaj('PUT', '/api/account/grants', { editorId, modul, sekcja, odczyt, edycja }, true)
 }
 
 export async function cofnijGrant(id: string): Promise<void> {

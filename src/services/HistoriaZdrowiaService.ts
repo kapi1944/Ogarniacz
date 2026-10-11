@@ -4,6 +4,7 @@ import { tabelaKolejki } from '../data/KolejkaSynchronizacji'
 import type { MapaTabel } from '../domain/typy'
 import { KATEGORIE_WAZNYCH_INFORMACJI, STATUSY_POTWIERDZENIA, TABELE_HISTORII_ZDROWIA, opisChwiliZdrowia, opisDatyZdrowia, schematDatyZdrowia, schematWaznejInformacjiZdrowotnej, type DataZdrowia, type TabelaHistoriiZdrowia, type WaznaInformacjaZdrowotna, type ZdarzenieZdrowia, type ZrodloZdrowia } from '../domain/historiaZdrowia'
 import { aktualnySchematLeku } from './LekiService'
+import { czyBiezacyDostep, zakresDanychZdrowotnych } from './UprawnieniaService'
 
 export type DostepHistoriiZdrowia = (tabela: TabelaHistoriiZdrowia, operacja: 'odczyt' | 'edycja') => boolean
 export type DaneHistoriiZdrowia = { [K in TabelaHistoriiZdrowia]: MapaTabel[K][] }
@@ -17,6 +18,9 @@ export async function odczytajZrodloZdrowia(zrodlo: ZrodloZdrowia, dostep: Doste
   const rekord = await baza.tabela(zrodlo.tabela).get(zrodlo.id)
   if (!rekord) return { stan: 'brak' as const }
   if (rekord.usunietoAt) return { stan: 'usuniete' as const }
+  if (!await pobierzRepozytorium(zrodlo.tabela, (operacja) => dostep(zrodlo.tabela, operacja)).pobierz(zrodlo.id)) return { stan: 'brak_uprawnien' as const }
+  const zakres = zakresDanychZdrowotnych(zrodlo.tabela, rekord)
+  if (zakres && !czyBiezacyDostep(zakres.modul, 'odczyt', zakres.sekcja)) return { stan: 'brak_uprawnien' as const }
   if (zrodlo.szczegolId && (zrodlo.tabela !== 'leki' || !('historiaDawkowania' in rekord) || !rekord.historiaDawkowania?.some((wersja) => wersja.id === zrodlo.szczegolId))) return { stan: 'brak' as const }
   return { stan: 'dostepne' as const, rekord }
 }

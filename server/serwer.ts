@@ -182,14 +182,18 @@ export function utworzSerwer(
           const od = new URL(zadanie.url, 'http://localhost').searchParams.get('od') ?? ''
           const synchronizowanoDo = new Date().toISOString()
           const zmiany = pobierzZmianySynchronizacji(baza, kontekst.wlascicielId, od)
-            .filter((zmiana) => czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'odczyt'))
+            .filter((zmiana) => czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'odczyt', zmiana.rekord))
           odpowiedzJson(odpowiedz, 200, { zmiany, synchronizowanoDo })
           return
         }
         if (zadanie.method === 'POST' && zadanie.url === '/api/sync/changes') {
           const paczka = await odczytajPaczkeSynchronizacji(zadanie)
           if (paczka.installationId !== installationId) throw new Error('Niezgodny installationId.')
-          if (paczka.zmiany.some((zmiana) => !czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'edycja'))) {
+          if (paczka.zmiany.some((zmiana) => {
+            const poprzedni = baza.prepare('SELECT dane_json FROM rekordy_synchronizacji WHERE uzytkownik_id = ? AND tabela = ? AND rekord_id = ?').get(kontekst.wlascicielId, zmiana.tabela, zmiana.rekord.id)
+            return !czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'edycja', zmiana.rekord)
+              || Boolean(poprzedni && !czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'edycja', JSON.parse(String(poprzedni.dane_json))))
+          })) {
             odpowiedzJson(odpowiedz, 403, { error: 'Grant nie zezwala na zapis tych danych.' })
             return
           }

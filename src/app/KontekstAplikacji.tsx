@@ -1,10 +1,11 @@
+import { czyKontoZgodneZDanymiLokalnymi } from '../services/KontaService'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useRepozytorium } from '../hooks/useRepozytorium'
 import type { DaneSzybkiegoDodawania, NazwaModulu, Ustawienia } from '../domain/typy'
 import { DOMYSLNE_USTAWIENIA, normalizujUstawienia, zastosujUstawieniaInterfejsu } from '../domain/ustawienia'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
-import { czyDozwolone } from '../services/UprawnieniaService'
+import { czyDozwolone, czyPasujeSekcja, ustawBiezacyDostep } from '../services/UprawnieniaService'
 import { platforma } from '../platform/platforma'
 import { SzybkieDodawanie } from './SzybkieDodawanie'
 import { WyszukiwanieGlobalne } from './WyszukiwanieGlobalne'
@@ -105,21 +106,27 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
   }
 
   const moze = (modul: NazwaModulu, operacja: 'odczyt' | 'edycja' = 'odczyt', sekcja?: string) => {
+    if (['zdrowie', 'leki', 'wizyty', 'skierowania', 'dokumenty', 'ustawienia'].includes(modul) && !czyKontoZgodneZDanymiLokalnymi()) return false
     if (konto?.rola === 'wlasciciel') return true
     if (konto?.rola === 'edytor') {
       if (modul === 'ustawienia' || modul === 'echo') return false
       return konto.granty.some((grant) =>
         grant.status === 'aktywne'
         && grant.modul === modul
-        && (!grant.sekcja || grant.sekcja === sekcja)
+        && czyPasujeSekcja(modul, grant.sekcja, sekcja)
         && (operacja === 'odczyt' ? grant.odczyt : grant.edycja),
       )
     }
     return czyDozwolone(ustawienia.trybUzytkownika, uprawnienia, modul, operacja, ustawienia.aktywnyEdytorId, sekcja)
   }
 
+  const dostepRef = useRef(moze)
+  dostepRef.current = moze
+  ustawBiezacyDostep((modul, operacja, sekcja) => dostepRef.current(modul, operacja, sekcja))
+  useEffect(() => () => ustawBiezacyDostep(() => false), [])
+
   return (
-    <KontekstAplikacji.Provider value={{
+    <KontekstAplikacji.Provider key={JSON.stringify([konto?.uzytkownikId, konto?.rola, konto?.granty, ustawienia.trybUzytkownika, ustawienia.aktywnyEdytorId, uprawnienia])} value={{
       ustawienia,
       zapisaneUstawienia,
       zapiszUstawienia,

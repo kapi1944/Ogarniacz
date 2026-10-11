@@ -57,7 +57,7 @@ describe.sequential('Sesje psychoterapii w istniejących tabelach', () => {
     await zapiszSesje({ ...sesja(), psychoterapia: { wpisySamopoczuciaIds: ['dziennik'] } }, dostep)
     const powiazana = (await repoSesji().pobierz('sesja'))!
     expect(JSON.stringify(powiazana)).not.toContain('Wrażliwa obserwacja')
-    await pobierzRepozytorium('wpisySamopoczucia').usun('dziennik')
+    await pobierzRepozytorium('wpisySamopoczucia', dostep.dziennik).usun('dziennik')
     expect(await pobierzRepozytorium('wpisySamopoczucia').pobierz('dziennik')).toBeUndefined()
     await zapiszSesje({ ...powiazana, obserwacje: 'Refleksja po usunięciu źródła' }, { ...dostep, dziennik: () => false })
     expect((await repoSesji().pobierz('sesja'))?.psychoterapia?.wpisySamopoczuciaIds).toEqual(['dziennik'])

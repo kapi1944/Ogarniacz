@@ -1068,7 +1068,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     }),
     ryzyko: "niskie",
     wykonaj: async ({ terapiaId, limit = 5 }) =>
-      (await pobierzRepozytorium("wpisyTerapii").lista())
+      (await pobierzRepozytorium("wpisyTerapii", () => false).lista())
         .filter((x) => x.terapiaId === terapiaId)
         .sort((a, b) => b.dataCzas.localeCompare(a.dataCzas))
         .slice(0, limit)
@@ -1333,7 +1333,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
         );
       const [notatki, dokumenty, pomysly, kontakty] = await Promise.all([
         pobierzRepozytorium("notatki").lista(),
-        pobierzRepozytorium("dokumenty").lista(),
+        pobierzRepozytorium("dokumenty", () => false).lista(),
         pobierzRepozytorium("pomysly").lista(),
         pobierzRepozytorium("kontakty").lista(),
       ]);
@@ -1997,7 +1997,7 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     schematArgumentow: z.object({}),
     ryzyko: "niskie",
     wykonaj: async () =>
-      (await pobierzRepozytorium("dokumenty").lista()).map(
+      (await pobierzRepozytorium("dokumenty", () => false).lista()).map(
         ({ plik: _plik, ...x }) => ({ ...x, tytul: x.nazwa, typ: "dokument" }),
       ),
   });

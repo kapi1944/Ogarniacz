@@ -1,3 +1,4 @@
+import { czyBiezacyDostep, sprawdzBiezacyDostep } from './UprawnieniaService'
 import { addDays, format } from 'date-fns'
 import { baza } from '../data/BazaOgarniacza'
 import { dodajDoKolejkiSynchronizacji, tabelaKolejki } from '../data/KolejkaSynchronizacji'
@@ -16,6 +17,7 @@ function obowiazujacaDawka(powiazanie: NonNullable<Przypomnienie['dawkaLeku']>, 
 
 /** Uzgodnienie istniejących przypomnień. Dostarcza je wyłącznie SilnikPrzypomnien. */
 export async function uzgodnijPrzypomnieniaLekow(teraz = new Date()): Promise<Przypomnienie[]> {
+  if (!czyBiezacyDostep('leki', 'odczyt') || !czyBiezacyDostep('leki', 'edycja')) return (await baza.tabela('przypomnienia').toArray()).filter((element) => (!element.dawkaLeku || czyBiezacyDostep('leki', 'odczyt')) && (!element.zrodlo || czyBiezacyDostep(element.zrodlo.typ, 'odczyt')))
   const tabela = baza.tabela('przypomnienia')
   let zmieniono = false
   const wynik = await baza.transaction('rw', [baza.tabela('leki'), baza.tabela('dziennikLekow'), tabela, tabelaKolejki()], async () => {
@@ -72,6 +74,7 @@ export async function uzgodnijPrzypomnieniaLekow(teraz = new Date()): Promise<Pr
 
 export async function sprawdzAlarmDawki(przypomnienieId: string, oczekiwanaWersja: string): Promise<DawkaDnia> {
   return baza.transaction('r', [baza.tabela('przypomnienia'), baza.tabela('leki'), baza.tabela('dziennikLekow')], async () => {
+    sprawdzBiezacyDostep('leki', 'odczyt')
     const przypomnienie = await baza.tabela('przypomnienia').get(przypomnienieId)
     const powiazanie = przypomnienie?.dawkaLeku
     const dawka = powiazanie && obowiazujacaDawka(powiazanie, await baza.tabela('leki').toArray(), (await baza.tabela('dziennikLekow').toArray()).filter((wpis) => !wpis.usunietoAt))

@@ -21,14 +21,14 @@ export async function zapiszSesje(wpis: WpisTerapii, dostep: DostepPsychoterapii
   sprawdzEdycje(dostep)
   const szczegoly = schematSzczegolowPsychoterapii.parse(wpis.psychoterapia ?? {})
   if (!Number.isFinite(Date.parse(wpis.dataCzas))) throw new Error('Podaj poprawną datę i godzinę sesji.')
-  await baza.transaction('rw', [baza.tabela('wpisyTerapii'), baza.tabela('terapie'), baza.tabela('wizyty'), baza.tabela('kontakty'), baza.tabela('dokumenty'), baza.tabela('wpisySamopoczucia'), baza.tabela('zadania'), tabelaKolejki()], async () => {
+  await baza.transaction('rw', [baza.tabela('wynikiBadan'), baza.tabela('wpisyTerapii'), baza.tabela('terapie'), baza.tabela('wizyty'), baza.tabela('kontakty'), baza.tabela('dokumenty'), baza.tabela('wpisySamopoczucia'), baza.tabela('zadania'), tabelaKolejki()], async () => {
     sprawdzEdycje(dostep)
     const poprzedni = await baza.tabela('wpisyTerapii').get(wpis.id)
     if (poprzedni && (poprzedni.usunietoAt || poprzedni.updatedAt !== wpis.updatedAt)) throw new Error('Sesja uległa zmianie. Otwórz ją ponownie.')
     for (const id of szczegoly.wpisySamopoczuciaIds ?? []) {
       if (poprzedni?.psychoterapia?.wpisySamopoczuciaIds?.includes(id)) continue
       if (!dostep.dziennik()) throw new Error('Brak uprawnienia do dziennika samopoczucia.')
-      const zrodlo = await pobierzRepozytorium('wpisySamopoczucia').pobierz(id)
+      const zrodlo = await pobierzRepozytorium('wpisySamopoczucia', dostep.dziennik).pobierz(id)
       if (!zrodlo?.doOmowienia) throw new Error('Wybierz dostępny wpis oznaczony „Do omówienia na terapii”.')
     }
     for (const klucz of ['ustaleniaSesjiIds', 'pytaniaSesjiIds'] as const) {

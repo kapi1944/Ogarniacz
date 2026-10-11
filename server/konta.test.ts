@@ -233,6 +233,38 @@ test('Edytor nie przekracza grantu, a cofnięty grant natychmiast blokuje synchr
   })
 })
 
+test('ogólny grant nie udostępnia dokumentacji ani dawnych sesji, także przy próbie usunięcia ochrony', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'wlasciciel', 'owner@example.test')
+    baza.prepare('INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)').run('edytor', 'editor@example.test', 'hash-testowy', TERAZ, TERAZ)
+    dodajSesje(baza, 'token-edytora', 'csrf-edytora', 'edytor', 'wlasciciel', 'edytor')
+    const dodajGrant = (id: string, modul: string, sekcja: string) => baza.prepare(`INSERT INTO granty_dostepu
+      (id, wlasciciel_id, edytor_id, modul, sekcja, odczyt, edycja, status, utworzono_at, zaktualizowano_at)
+      VALUES (?, 'wlasciciel', 'edytor', ?, ?, 1, 1, 'aktywne', ?, ?)`).run(id, modul, sekcja, TERAZ, TERAZ)
+    dodajGrant('zdrowie', 'zdrowie', '')
+    dodajGrant('dokumenty', 'dokumenty', '')
+    const rekord = { id: 'medyczny', nazwa: 'Prywatny plik', medyczne: {}, createdAt: TERAZ, updatedAt: TERAZ }
+    const zapisz = baza.prepare(`INSERT INTO rekordy_synchronizacji
+      (uzytkownik_id, tabela, rekord_id, dane_json, created_at, updated_at, version, ostatnia_instalacja_id, server_updated_at)
+      VALUES ('wlasciciel', ?, ?, ?, ?, ?, 1, 'instalacja-serwera', ?)`)
+    zapisz.run('dokumenty', rekord.id, JSON.stringify(rekord), TERAZ, TERAZ, TERAZ)
+    zapisz.run('wpisyTerapii', 'stara-sesja', JSON.stringify({ ...rekord, id: 'stara-sesja', tresc: 'Prywatna sesja' }), TERAZ, TERAZ, TERAZ)
+    const url = `${adres}/api/sync/changes`
+    const odczytaj = async () => (await (await fetch(`${url}?od=1970-01-01T00%3A00%3A00.000Z`, { headers: naglowki('token-edytora') })).json() as { zmiany: { rekord: { id: string } }[] }).zmiany
+    assert.deepEqual(await odczytaj(), [])
+    const { medyczne: _medyczne, ...bezOchrony } = rekord
+    const paczka = { od: TERAZ, installationId: 'instalacja-testowa', zmiany: [{ tabela: 'dokumenty', rekord: { ...bezOchrony, updatedAt: '2026-09-09T13:00:00.000Z' }, installationId: 'instalacja-testowa' }] }
+    assert.equal((await fetch(url, { method: 'POST', headers: naglowki('token-edytora', 'csrf-edytora'), body: JSON.stringify(paczka) })).status, 403)
+    dodajGrant('dokumentacja', 'zdrowie', 'dokumentacja')
+    assert.deepEqual((await odczytaj()).map((zmiana) => zmiana.rekord.id), ['medyczny'])
+    dodajGrant('psychoterapia', 'zdrowie', 'psychoterapia')
+    assert.deepEqual((await odczytaj()).map((zmiana) => zmiana.rekord.id).sort(), ['medyczny', 'stara-sesja'])
+    baza.prepare("UPDATE granty_dostepu SET status = 'cofniete' WHERE sekcja != ''").run()
+    assert.deepEqual(await odczytaj(), [])
+    assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM rekordy_synchronizacji').get()?.liczba, 2)
+  })
+})
+
 test('cofnięcie Edytora unieważnia jego sesję', async () => {
   await zSerwerem(async (adres, baza) => {
     dodajUzytkownika(baza, 'wlasciciel', 'owner@example.test')

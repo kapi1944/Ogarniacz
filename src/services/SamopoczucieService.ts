@@ -16,13 +16,13 @@ export async function zapiszWpisSamopoczucia(wpis: WpisSamopoczucia, dostep: () 
       const definicja = zachowana?.definicja ?? biezaceWskazniki(ustawienia).find((pole) => pole.id === obserwacja.definicja.id && pole.aktywny)
       if (!definicja || JSON.stringify(definicja) !== JSON.stringify(obserwacja.definicja)) throw new Error('Definicja wskaźnika uległa zmianie. Odśwież formularz.')
     }
-    await pobierzRepozytorium('wpisySamopoczucia').zapisz({ ...poprawny, createdAt: poprzedni?.createdAt ?? poprawny.createdAt })
+    await pobierzRepozytorium('wpisySamopoczucia', dostep).zapisz({ ...poprawny, createdAt: poprzedni?.createdAt ?? poprawny.createdAt })
   })
 }
 
 export async function usunWpisSamopoczucia(id: string, dostep: () => boolean): Promise<void> {
   if (!dostep()) throw new Error('Brak uprawnienia do edycji dziennika samopoczucia.')
-  await pobierzRepozytorium('wpisySamopoczucia').usun(id)
+  await pobierzRepozytorium('wpisySamopoczucia', dostep).usun(id)
 }
 
 export function dodajWersjeWskaznika(ustawienia: UstawieniaSamopoczucia, definicja: WskaznikSamopoczucia): UstawieniaSamopoczucia {

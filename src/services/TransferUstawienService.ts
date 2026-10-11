@@ -1,3 +1,4 @@
+import { sprawdzBiezacyDostep } from './UprawnieniaService'
 import { z } from 'zod'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { normalizujUstawienia, WERSJA_USTAWIEN } from '../domain/ustawienia'
@@ -20,10 +21,11 @@ const schematEksportuUstawien = z.object({
 export async function utworzEksportUstawien(
   teraz: () => string = () => new Date().toISOString(),
 ): Promise<EksportUstawien> {
+  sprawdzBiezacyDostep('ustawienia', 'odczyt')
   return {
     formatVersion: WERSJA_FORMATU_USTAWIEN,
     createdAt: teraz(),
-    settings: await repozytoriumUstawien.wczytaj(),
+    settings: { ...await repozytoriumUstawien.wczytaj(), samopoczucie: undefined },
   }
 }
 
@@ -40,6 +42,7 @@ export function przygotujImportUstawien(tresc: string): Ustawienia {
 }
 
 export async function importujUstawienia(tresc: string): Promise<Ustawienia> {
+  sprawdzBiezacyDostep('ustawienia', 'edycja')
   const ustawienia = przygotujImportUstawien(tresc)
   return repozytoriumUstawien.zapisz(ustawienia)
 }

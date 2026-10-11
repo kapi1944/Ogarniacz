@@ -1,3 +1,4 @@
+import { czyBiezacyDostep, zakresDanychZdrowotnych } from '../services/UprawnieniaService'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import type { Przypomnienie } from '../domain/typy'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
@@ -54,6 +55,8 @@ function kanalDlaPrzypomnienia(przypomnienie: Przypomnienie): KanalPowiadomienia
 
 export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, ukrywajSzczegolyZdrowotne = false): PowiadomieniePlatformowe | undefined {
   if (przypomnienie.usunietoAt) return undefined
+  const zakres = zakresDanychZdrowotnych('przypomnienia', przypomnienie)
+  if (zakres && !czyBiezacyDostep(zakres.modul, 'odczyt', zakres.sekcja)) return undefined
   if (!STANY_DO_DOSTARCZENIA.has(przypomnienie.stan)) return undefined
   const termin = czasUruchomienia(przypomnienie)
   if (!termin || Number.isNaN(termin.getTime())) return undefined

@@ -115,7 +115,7 @@ export default function WidokSamopoczucia() {
   const { ustawienia, zapiszUstawienia, moze } = useAplikacja()
   const odczyt = moze('zdrowie', 'odczyt', 'samopoczucie')
   const edycja = () => moze('zdrowie', 'edycja', 'samopoczucie')
-  const wpisy = useLiveQuery(() => odczyt ? pobierzRepozytorium('wpisySamopoczucia').lista() : [], [odczyt], []) ?? []
+  const wpisy = useLiveQuery(() => odczyt ? pobierzRepozytorium('wpisySamopoczucia', (operacja) => moze('zdrowie', operacja, 'samopoczucie')).lista() : [], [odczyt], []) ?? []
   const [formularz, ustawFormularz] = useState<{ wpis?: WpisSamopoczucia }>()
   const [konfiguracja, ustawKonfiguracje] = useState(false)
   const [doUsuniecia, ustawDoUsuniecia] = useState<WpisSamopoczucia>()
@@ -131,7 +131,7 @@ export default function WidokSamopoczucia() {
   return <div className="widok">
     <NaglowekWidoku tytul="Dziennik samopoczucia" opis="Twoje obserwacje, bez automatycznej oceny i diagnoz." akcje={edycja() && <button type="button" className="przycisk przycisk--glowny" onClick={() => ustawFormularz({})}>Jak się czujesz? Dodaj wpis</button>} />
     <Link to="/zdrowie">Wróć do Zdrowia</Link>
-    <Karta><p>Dziennik i definicje wskaźników pozostają lokalne. Nie trafiają do Echo, powiadomień ani synchronizacji. Kopia zapasowa może zawierać pełną treść; baza i backup nie są szyfrowane.</p>{moze('ustawienia', 'edycja') && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawKonfiguracje(true)}>Ustawienia dziennika</button>}</Karta>
+    <Karta><p>Dziennik i definicje wskaźników pozostają lokalne. Nie trafiają do Echo, powiadomień ani synchronizacji. Kopia zapasowa może zawierać pełną treść; lokalna baza nie jest szyfrowana, a plik backupu z Ustawień chroni hasło.</p>{moze('ustawienia', 'edycja') && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawKonfiguracje(true)}>Ustawienia dziennika</button>}</Karta>
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
     <Karta><h2>Historia obserwacji</h2><div className="formularz"><label className="pole"><span>Obserwacje od</span><input type="date" value={od} onChange={(zdarzenie) => ustawOd(zdarzenie.target.value)} /></label><label className="pole"><span>Obserwacje do</span><input type="date" value={doDaty} onChange={(zdarzenie) => ustawDo(zdarzenie.target.value)} /></label><label className="pole"><span><input type="checkbox" checked={tylkoOmowienie} onChange={(zdarzenie) => ustawTylkoOmowienie(zdarzenie.target.checked)} /> Tylko do omówienia na terapii</span></label></div>
       {dni.length === 0 && <PustyStan tytul="Brak obserwacji w wybranym zakresie" opis="Możesz zapisać jeden wskaźnik lub krótką notatkę." />}

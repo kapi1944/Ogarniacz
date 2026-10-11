@@ -20,7 +20,7 @@ function useDaneOsiZdrowia() {
     if (tabela === 'wpisySamopoczucia') return moze('zdrowie', operacja, 'samopoczucie')
     if (tabela === 'wazneInformacjeZdrowotne') return moze('zdrowie', operacja, 'wazne_informacje')
     if (tabela === 'recepty' || tabela === 'terapie') return moze('zdrowie', operacja)
-    return moze(tabela, operacja)
+    return tabela === 'dokumenty' ? moze('dokumenty', operacja) && moze('zdrowie', operacja, 'dokumentacja') : moze(tabela, operacja)
   }, [moze])
   const dane = useLiveQuery(() => pobierzDaneHistoriiZdrowia(dostep), [dostep])
   const [strefa, ustawStrefe] = useState(() => Intl.DateTimeFormat().resolvedOptions().timeZone)

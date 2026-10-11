@@ -8,6 +8,7 @@ import { czyHistoriaWlaczona, zbudujWpisHistorii } from '../services/HistoriaZmi
 import { powiadomOZmianieDanych } from './ZdarzeniaDanych'
 import { dodajDoKolejkiSynchronizacji, tabelaKolejki } from './KolejkaSynchronizacji'
 import { czyPrywatnaPsychoterapia, schematSzczegolowPsychoterapii } from '../domain/psychoterapia'
+import { czyBiezacyDostep, zakresDanychZdrowotnych } from '../services/UprawnieniaService'
 
 const modulyZrodelPrzypomnien: Partial<Record<NazwaTabeli, NazwaModulu>> = {
   wizyty: 'wizyty',
@@ -55,14 +56,17 @@ export interface Repozytorium<T extends EncjaBazowa> {
 class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   constructor(private readonly nazwa: NazwaTabeli, private readonly dostepDoDanychPrywatnych?: (operacja: 'odczyt' | 'edycja') => boolean) {}
 
-  private sprawdzDostep(encja?: T): void {
+  private async sprawdzDostep(encja?: T): Promise<void> {
+    if (!await this.czyDostepPowiazanegoDokumentu(encja, 'odczyt') || !await this.czyDostepPowiazanegoDokumentu(encja, 'edycja')) throw new Error('Brak uprawnienia do powiązanego dokumentu zdrowotnego.')
+    if (!this.czyDostep(encja, 'odczyt') || !this.czyDostep(encja, 'edycja')) throw new Error('Brak uprawnienia do danych zdrowotnych.')
     if ((this.nazwa === 'wynikiBadan' || this.nazwa === 'wazneInformacjeZdrowotne') && (!this.dostepDoDanychPrywatnych?.('odczyt') || !this.dostepDoDanychPrywatnych?.('edycja'))) throw new Error('Brak uprawnienia do prywatnych danych zdrowotnych.')
     if (czyPrywatnaPsychoterapia(this.nazwa, encja) && !this.dostepDoDanychPrywatnych?.('edycja')) throw new Error('Brak uprawnienia do prywatnych danych psychoterapii.')
   }
 
-  private sprawdzZmiane(przed: T | undefined, po: T): void {
-    this.sprawdzDostep(przed)
-    this.sprawdzDostep(po)
+  private async sprawdzZmiane(przed: T | undefined, po: T): Promise<void> {
+    await this.sprawdzDostep(przed)
+    await this.sprawdzDostep(po)
+    if (zakresDanychZdrowotnych(this.nazwa, przed)?.sekcja === 'dokumentacja' && zakresDanychZdrowotnych(this.nazwa, po)?.sekcja !== 'dokumentacja') throw new Error('Nie można usunąć ochrony dokumentacji medycznej.')
     if (this.nazwa === 'wynikiBadan') schematWynikuBadania.parse(po)
     if (this.nazwa === 'wazneInformacjeZdrowotne') schematWaznejInformacjiZdrowotnej.parse(po)
     if (czyPrywatnaPsychoterapia(this.nazwa, przed) && !czyPrywatnaPsychoterapia(this.nazwa, po)) throw new Error('Nie można usunąć ochrony danych psychoterapii.')
@@ -76,6 +80,29 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
 
   private tabela(): Table<T, string> {
     return baza.table(this.nazwa) as Table<T, string>
+  }
+
+  private tabeleZrodelDokumentu() {
+    return this.nazwa === 'dokumenty' ? [baza.tabela('wizyty'), baza.tabela('wynikiBadan'), baza.tabela('wpisyTerapii')] : []
+  }
+
+  private async czyDostepPowiazanegoDokumentu(encja: T | undefined, operacja: 'odczyt' | 'edycja'): Promise<boolean> {
+    if (this.nazwa !== 'dokumenty' || !encja) return true
+    const [wizyty, wyniki, sesje] = await Promise.all([baza.tabela('wizyty').toArray(), baza.tabela('wynikiBadan').toArray(), baza.tabela('wpisyTerapii').toArray()])
+    const materialTerapii = sesje.some((sesja) => sesja.psychoterapia?.dokumentyIds?.includes(encja.id))
+    const medyczny = materialTerapii || wizyty.some((wizyta) => wizyta.dokumentyIds.includes(encja.id)) || wyniki.some((wynik) => wynik.dokumentId === encja.id)
+    if (!medyczny) return true
+    return czyBiezacyDostep('zdrowie', operacja, 'dokumentacja') && (!materialTerapii || czyBiezacyDostep('zdrowie', operacja, 'psychoterapia')) && (!this.dostepDoDanychPrywatnych || this.dostepDoDanychPrywatnych(operacja))
+  }
+
+  private czyDostep(encja: T | undefined, operacja: 'odczyt' | 'edycja'): boolean {
+    if (this.nazwa === 'dokumenty' && !czyBiezacyDostep('dokumenty', operacja)) return false
+    const zakres = zakresDanychZdrowotnych(this.nazwa, encja)
+    if (!zakres) return true
+    if (!czyBiezacyDostep(zakres.modul, operacja, zakres.sekcja)) return false
+    if (zakres.sekcja && this.dostepDoDanychPrywatnych && !this.dostepDoDanychPrywatnych(operacja)) return false
+    if (this.nazwa === 'wpisySamopoczucia' && !this.dostepDoDanychPrywatnych?.(operacja)) return false
+    return true
   }
 
   private async oznaczPowiazanePrzypomnieniaJakoUsuniete(id: string): Promise<void> {
@@ -135,14 +162,15 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
 
   async lista(): Promise<T[]> {
     const wszystkie = await this.tabela().toArray()
+    const dostepneDokumenty = new Set((await Promise.all(wszystkie.map(async (encja) => await this.czyDostepPowiazanegoDokumentu(encja, 'odczyt') ? encja.id : undefined))).filter(Boolean))
     return wszystkie
-      .filter((encja) => !encja.usunietoAt && (this.nazwa !== 'wynikiBadan' && this.nazwa !== 'wazneInformacjeZdrowotne' && !czyPrywatnaPsychoterapia(this.nazwa, encja) || this.dostepDoDanychPrywatnych?.('odczyt')))
+      .filter((encja) => dostepneDokumenty.has(encja.id) && !encja.usunietoAt && this.czyDostep(encja, 'odczyt') && (this.nazwa !== 'wynikiBadan' && this.nazwa !== 'wazneInformacjeZdrowotne' && !czyPrywatnaPsychoterapia(this.nazwa, encja) || this.dostepDoDanychPrywatnych?.('odczyt')))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
   async pobierz(id: string): Promise<T | undefined> {
     const encja = (await this.tabela().get(id)) as T | undefined
-    return encja?.usunietoAt || (this.nazwa === 'wynikiBadan' || this.nazwa === 'wazneInformacjeZdrowotne') && !this.dostepDoDanychPrywatnych?.('odczyt') || czyPrywatnaPsychoterapia(this.nazwa, encja) && !this.dostepDoDanychPrywatnych?.('odczyt') ? undefined : encja
+    return !await this.czyDostepPowiazanegoDokumentu(encja, 'odczyt') || encja?.usunietoAt || !this.czyDostep(encja, 'odczyt') || (this.nazwa === 'wynikiBadan' || this.nazwa === 'wazneInformacjeZdrowotne') && !this.dostepDoDanychPrywatnych?.('odczyt') || czyPrywatnaPsychoterapia(this.nazwa, encja) && !this.dostepDoDanychPrywatnych?.('odczyt') ? undefined : encja
   }
 
   async zapisz(encja: T): Promise<string> {
@@ -152,9 +180,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     if (!czyHistoriaWlaczona(this.nazwa)) {
       let przed: T | undefined
       let id = encja.id
-      await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
+      await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), tabelaKolejki()], async () => {
         przed = await tabela.get(encja.id)
-        this.sprawdzZmiane(przed, zapisana)
+        await this.sprawdzZmiane(przed, zapisana)
         id = await tabela.put(zapisana)
         await dodajDoKolejkiSynchronizacji(this.nazwa, zapisana, przed)
       })
@@ -164,9 +192,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     }
     const historia = baza.tabela('historiaZmian')
     let przed: T | undefined
-    const id = await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
+    const id = await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), historia, tabelaKolejki()], async () => {
       przed = await tabela.get(encja.id)
-      this.sprawdzZmiane(przed, zapisana)
+      await this.sprawdzZmiane(przed, zapisana)
       const id = await tabela.put(zapisana)
       const wpis = zbudujWpisHistorii(this.nazwa, przed, zapisana, przed ? 'aktualizacja' : 'utworzenie', teraz)
       if (wpis) await historia.put(wpis)
@@ -184,9 +212,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     const zapisane = encje.map((encja) => ({ ...encja, updatedAt: teraz }))
     if (!czyHistoriaWlaczona(this.nazwa)) {
       let poprzednie: (T | undefined)[] = []
-      await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
+      await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), tabelaKolejki()], async () => {
         poprzednie = await tabela.bulkGet(encje.map((encja) => encja.id))
-        zapisane.forEach((encja, indeks) => this.sprawdzZmiane(poprzednie[indeks], encja))
+        for (const [indeks, encja] of zapisane.entries()) await this.sprawdzZmiane(poprzednie[indeks], encja)
         await tabela.bulkPut(zapisane)
         for (let indeks = 0; indeks < zapisane.length; indeks += 1) {
           await dodajDoKolejkiSynchronizacji(this.nazwa, zapisane[indeks], poprzednie[indeks])
@@ -198,9 +226,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     }
     const historia = baza.tabela('historiaZmian')
     let poprzednie: (T | undefined)[] = []
-    await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
+    await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), historia, tabelaKolejki()], async () => {
       poprzednie = await tabela.bulkGet(encje.map((encja) => encja.id))
-      zapisane.forEach((encja, indeks) => this.sprawdzZmiane(poprzednie[indeks], encja))
+      for (const [indeks, encja] of zapisane.entries()) await this.sprawdzZmiane(poprzednie[indeks], encja)
       await tabela.bulkPut(zapisane)
       const wpisy = zapisane
         .map((encja, indeks) => zbudujWpisHistorii(this.nazwa, poprzednie[indeks], encja, poprzednie[indeks] ? 'aktualizacja' : 'utworzenie', teraz))
@@ -217,9 +245,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   async usun(id: string): Promise<void> {
     const tabela = this.tabela()
     if (!czyHistoriaWlaczona(this.nazwa)) {
-      await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
+      await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), tabelaKolejki()], async () => {
         const encja = await tabela.get(id)
-        this.sprawdzDostep(encja)
+        await this.sprawdzDostep(encja)
         if (!encja) return
         const teraz = terazIso()
         const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }
@@ -231,9 +259,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       return
     }
     const historia = baza.tabela('historiaZmian')
-    await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
+    await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), historia, tabelaKolejki()], async () => {
       const encja = await tabela.get(id)
-      this.sprawdzDostep(encja)
+      await this.sprawdzDostep(encja)
       if (!encja) return
       const teraz = terazIso()
       const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }
@@ -249,9 +277,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   async przywroc(id: string): Promise<void> {
     const tabela = this.tabela()
     if (!czyHistoriaWlaczona(this.nazwa)) {
-      await baza.transaction('rw', [tabela, tabelaKolejki()], async () => {
+      await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), tabelaKolejki()], async () => {
         const encja = await tabela.get(id)
-        this.sprawdzDostep(encja)
+        await this.sprawdzDostep(encja)
         if (!encja) return
         const teraz = terazIso()
         const kopia = { ...encja, updatedAt: teraz }
@@ -263,9 +291,9 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       return
     }
     const historia = baza.tabela('historiaZmian')
-    await baza.transaction('rw', [tabela, historia, tabelaKolejki()], async () => {
+    await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), historia, tabelaKolejki()], async () => {
       const encja = await tabela.get(id)
-      this.sprawdzDostep(encja)
+      await this.sprawdzDostep(encja)
       if (!encja) return
       const teraz = terazIso()
       const kopia = { ...encja, updatedAt: teraz }

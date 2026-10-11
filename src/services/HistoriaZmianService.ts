@@ -1,4 +1,5 @@
-import { baza } from '../data/BazaOgarniacza'
+import { baza, nazwyTabel } from '../data/BazaOgarniacza'
+import { czyBiezacyDostep, zakresDanychZdrowotnych } from './UprawnieniaService'
 import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 import { noweId } from '../domain/fabryki'
 import type { EncjaBazowa, ModulHistorii, NazwaTabeli, OperacjaHistorii, WpisHistoriiZmian } from '../domain/typy'
@@ -93,5 +94,14 @@ export function zbudujWpisHistorii(
 
 export async function pobierzNajnowszaHistorie(limit = 50): Promise<WpisHistoriiZmian[]> {
   const bezpiecznyLimit = Math.min(200, Math.max(1, Math.trunc(limit)))
-  return baza.tabela('historiaZmian').orderBy('znacznikCzasu').reverse().limit(bezpiecznyLimit).toArray()
+  const wpisy = await baza.tabela('historiaZmian').orderBy('znacznikCzasu').reverse().toArray()
+  const widoczne = await Promise.all(wpisy.map(async (wpis) => {
+    if (!nazwyTabel.includes(wpis.typEncji as NazwaTabeli)) return undefined
+    const tabela = wpis.typEncji as NazwaTabeli
+    const rekord = await baza.table(wpis.typEncji).get(wpis.encjaId) as EncjaBazowa | undefined
+    if (czyPrywatnaPsychoterapia(tabela, rekord)) return undefined
+    const zakres = zakresDanychZdrowotnych(tabela, rekord)
+    return zakres && !czyBiezacyDostep(zakres.modul, 'odczyt', zakres.sekcja) ? undefined : wpis
+  }))
+  return widoczne.filter((wpis): wpis is WpisHistoriiZmian => Boolean(wpis)).slice(0, bezpiecznyLimit)
 }
