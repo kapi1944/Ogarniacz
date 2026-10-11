@@ -58,6 +58,26 @@ export interface OgarniaczBackup {
   payload: Partial<Record<NazwaSekcjiBackupu, DaneSekcji>>
 }
 
+const LICZBA_ITERACJI_KDF = 600_000
+const schematBase64Szyfrowania = z.string().refine((tresc) => tresc.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(tresc))
+const schematZaszyfrowanegoBackupu = z.object({
+  naglowek: z.object({
+    format: z.literal('ogarniacz-backup-szyfrowany'),
+    wersja: z.literal(1),
+    szyfr: z.literal('AES-256-GCM'),
+    kdf: z.object({
+      algorytm: z.literal('PBKDF2'),
+      hash: z.literal('SHA-256'),
+      iteracje: z.literal(LICZBA_ITERACJI_KDF),
+      sol: schematBase64Szyfrowania.refine((tresc) => tresc.length === 24),
+    }).strict(),
+    iv: schematBase64Szyfrowania.refine((tresc) => tresc.length === 16),
+  }).strict(),
+  szyfrogram: schematBase64Szyfrowania.min(24),
+}).strict()
+
+export type ZaszyfrowanyBackup = z.infer<typeof schematZaszyfrowanegoBackupu>
+
 export interface WynikPrzywracania {
   backupPrzedPrzywracaniem: OgarniaczBackup
   przywroconeSekcje: NazwaSekcjiBackupu[]
@@ -368,7 +388,7 @@ function bajtyNaBase64(bajty: Uint8Array): string {
   return wynik
 }
 
-function base64NaBajty(base64: string): Uint8Array {
+function base64NaBajty(base64: string): Uint8Array<ArrayBuffer> {
   const alfabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
   const oczyszczony = base64.replace(/=+$/, '')
   const wynik = new Uint8Array(Math.floor((oczyszczony.length * 6) / 8))
@@ -732,8 +752,108 @@ function walidujCaloscBackupu(backup: SurowyBackup): OgarniaczBackup {
   return backup as OgarniaczBackup
 }
 
-export async function przygotujBackupDoPrzywracania(tresc: string): Promise<OgarniaczBackup> {
-  const wynikStruktury = schematSurowegoBackupu.safeParse(parsujJson(tresc))
+function czyKopertaSzyfrowania(wartosc: unknown): boolean {
+  return !!wartosc && typeof wartosc === 'object'
+    && ('naglowek' in wartosc || 'szyfrogram' in wartosc)
+}
+
+export function czyBackupZaszyfrowany(tresc: string): boolean {
+  return czyKopertaSzyfrowania(parsujJson(tresc))
+}
+
+function pobierzKryptografie(): Crypto {
+  const kryptografia = globalThis.crypto
+  if (!kryptografia?.getRandomValues || !kryptografia.subtle?.importKey
+    || !kryptografia.subtle.deriveKey || !kryptografia.subtle.encrypt || !kryptografia.subtle.decrypt) {
+    throw new BladBackupu('Bezpieczna kryptografia Web Crypto jest niedostępna. Otwórz aplikację w bezpiecznym kontekście HTTPS lub localhost.', 'BRAK_KRYPTOGRAFII')
+  }
+  return kryptografia
+}
+
+async function wyprowadzKlucz(kryptografia: Crypto, haslo: string, sol: Uint8Array<ArrayBuffer>, operacja: 'encrypt' | 'decrypt'): Promise<CryptoKey> {
+  if (!haslo.length) throw new BladBackupu('Podaj niepuste hasło kopii zapasowej.', 'HASLO_WYMAGANE')
+  const bajtyHasla = new TextEncoder().encode(haslo)
+  try {
+    const material = await kryptografia.subtle.importKey('raw', bajtyHasla, 'PBKDF2', false, ['deriveKey'])
+    return await kryptografia.subtle.deriveKey(
+      { name: 'PBKDF2', hash: 'SHA-256', iterations: LICZBA_ITERACJI_KDF, salt: sol },
+      material, { name: 'AES-GCM', length: 256 }, false, [operacja],
+    )
+  } catch {
+    throw new BladBackupu('Nie udało się wyprowadzić klucza. Wymagana jest obsługa PBKDF2 i AES-GCM przez Web Crypto.', 'BRAK_KRYPTOGRAFII')
+  } finally {
+    bajtyHasla.fill(0)
+  }
+}
+
+export async function szyfrujBackup(backup: OgarniaczBackup, haslo: string): Promise<ZaszyfrowanyBackup> {
+  const kryptografia = pobierzKryptografie()
+  await przygotujBackupDoPrzywracania(JSON.stringify(backup))
+  const sol = new Uint8Array(16)
+  const iv = new Uint8Array(12)
+  try {
+    kryptografia.getRandomValues(sol)
+    kryptografia.getRandomValues(iv)
+  } catch {
+    throw new BladBackupu('Nie można wygenerować bezpiecznej soli i IV. Kopia nie została zaszyfrowana.', 'BRAK_KRYPTOGRAFII')
+  }
+  const naglowek: ZaszyfrowanyBackup['naglowek'] = {
+    format: 'ogarniacz-backup-szyfrowany', wersja: 1, szyfr: 'AES-256-GCM',
+    kdf: { algorytm: 'PBKDF2', hash: 'SHA-256', iteracje: LICZBA_ITERACJI_KDF, sol: bajtyNaBase64(sol) },
+    iv: bajtyNaBase64(iv),
+  }
+  const klucz = await wyprowadzKlucz(kryptografia, haslo, sol, 'encrypt')
+  const bajty = new TextEncoder().encode(JSON.stringify(backup))
+  try {
+    const szyfrogram = await kryptografia.subtle.encrypt(
+      { name: 'AES-GCM', iv, tagLength: 128, additionalData: new TextEncoder().encode(kanonizuj(naglowek)) }, klucz, bajty,
+    )
+    return { naglowek, szyfrogram: bajtyNaBase64(new Uint8Array(szyfrogram)) }
+  } catch {
+    throw new BladBackupu('Nie udało się bezpiecznie zaszyfrować kopii. Nie utworzono nieszyfrowanego eksportu.', 'SZYFROWANIE')
+  } finally {
+    bajty.fill(0)
+  }
+}
+
+export async function odszyfrujBackup(tresc: string, haslo?: string): Promise<string> {
+  const surowy = parsujJson(tresc)
+  if (surowy && typeof surowy === 'object' && 'naglowek' in surowy) {
+    const naglowek = surowy.naglowek
+    if (naglowek && typeof naglowek === 'object' && 'wersja' in naglowek && naglowek.wersja !== 1) {
+      throw new BladBackupu('Nieobsługiwana wersja szyfrowania kopii zapasowej.', 'WERSJA_SZYFROWANIA')
+    }
+  }
+  const wynik = schematZaszyfrowanegoBackupu.safeParse(surowy)
+  if (!wynik.success) throw new BladBackupu('Niepoprawny lub nieobsługiwany format zaszyfrowanej kopii.', 'FORMAT_SZYFROWANIA')
+  const { naglowek, szyfrogram } = wynik.data
+  const sol = base64NaBajty(naglowek.kdf.sol)
+  const iv = base64NaBajty(naglowek.iv)
+  const bajty = base64NaBajty(szyfrogram)
+  if (sol.length !== 16 || iv.length !== 12 || bajty.length < 16
+    || bajtyNaBase64(sol) !== naglowek.kdf.sol || bajtyNaBase64(iv) !== naglowek.iv || bajtyNaBase64(bajty) !== szyfrogram) {
+    throw new BladBackupu('Uszkodzone dane zaszyfrowanej kopii.', 'FORMAT_SZYFROWANIA')
+  }
+  if (!haslo?.length) throw new BladBackupu('Podaj hasło zaszyfrowanej kopii zapasowej.', 'HASLO_WYMAGANE')
+  const kryptografia = pobierzKryptografie()
+  const klucz = await wyprowadzKlucz(kryptografia, haslo, sol, 'decrypt')
+  let odszyfrowane: Uint8Array<ArrayBuffer> | undefined
+  try {
+    odszyfrowane = new Uint8Array(await kryptografia.subtle.decrypt(
+      { name: 'AES-GCM', iv, tagLength: 128, additionalData: new TextEncoder().encode(kanonizuj(naglowek)) }, klucz, bajty,
+    ))
+    return new TextDecoder('utf-8', { fatal: true }).decode(odszyfrowane)
+  } catch {
+    throw new BladBackupu('Nie można odszyfrować kopii: błędne hasło lub uszkodzony plik.', 'ODSZYFROWANIE')
+  } finally {
+    odszyfrowane?.fill(0)
+  }
+}
+
+export async function przygotujBackupDoPrzywracania(tresc: string, haslo?: string): Promise<OgarniaczBackup> {
+  const surowaZawartosc = parsujJson(tresc)
+  const zawartosc = czyKopertaSzyfrowania(surowaZawartosc) ? parsujJson(await odszyfrujBackup(tresc, haslo)) : surowaZawartosc
+  const wynikStruktury = schematSurowegoBackupu.safeParse(zawartosc)
   if (!wynikStruktury.success) {
     throw new BladBackupu('Plik ma niepoprawną strukturę backupu.', 'STRUKTURA_BACKUPU', wynikStruktury.error)
   }

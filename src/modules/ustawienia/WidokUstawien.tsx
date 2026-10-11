@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Bell, Cloud, Database, Download, History as IkonaHistorii, RefreshCw, Share2, Shield, Sparkles, Upload, UserCog } from 'lucide-react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { Link } from 'react-router-dom'
@@ -8,7 +8,7 @@ import { inicjalizujBaze } from '../../data/BazaOgarniacza'
 import { terazIso, utworzMetadane } from '../../domain/fabryki'
 import type { NazwaModulu, PamiecEcho, ProfilEdytora, StatusSynchronizacji, Uprawnienie } from '../../domain/typy'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
-import { PODSTAWOWE_SEKCJE_BACKUPU, przygotujBackupDoPrzywracania, przywrocBackup, SEKCJE_BACKUPU, utworzBackup, wyczyscDane, type NazwaSekcjiBackupu, type OgarniaczBackup } from '../../services/BackupService'
+import { czyBackupZaszyfrowany, PODSTAWOWE_SEKCJE_BACKUPU, przygotujBackupDoPrzywracania, przywrocBackup, SEKCJE_BACKUPU, szyfrujBackup, utworzBackup, wyczyscDane, type ManifestBackupu, type NazwaSekcjiBackupu, type OgarniaczBackup, type ZaszyfrowanyBackup } from '../../services/BackupService'
 import { czyMoznaWczytacDemo, wczytajDaneDemonstracyjne } from '../../services/DaneDemonstracyjneService'
 import { importujUstawienia, utworzEksportUstawien } from '../../services/TransferUstawienService'
 import { pobierzNajnowszaHistorie } from '../../services/HistoriaZmianService'
@@ -67,7 +67,8 @@ export function WidokUstawien() {
   const [komunikat, ustawKomunikat] = useState('')
   const [blad, ustawBlad] = useState('')
   const [wybraneSekcje, ustawWybraneSekcje] = useState<NazwaSekcjiBackupu[]>(PODSTAWOWE_SEKCJE_BACKUPU)
-  const [backup, ustawBackup] = useState<OgarniaczBackup>()
+  const [backup, ustawBackup] = useState<{ manifest: ManifestBackupu; plik: ZaszyfrowanyBackup }>()
+  const [operacjaHasla, ustawOperacjeHasla] = useState<{ rodzaj: 'eksport' | 'kopia' } | { rodzaj: 'import'; tresc: string }>()
   const [backupDoPrzywracania, ustawBackupDoPrzywracania] = useState<OgarniaczBackup>()
   const [sekcjePrzywracania, ustawSekcjePrzywracania] = useState<NazwaSekcjiBackupu[]>([])
   const [backupPrzedPrzywracaniem, ustawBackupPrzedPrzywracaniem] = useState<OgarniaczBackup>()
@@ -104,16 +105,15 @@ export function WidokUstawien() {
     return () => { aktywny = false }
   }, [])
 
-  const przygotujBackup = async () => {
+  const przygotujBackup = async (haslo: string) => {
     ustawTworzenieBackupu(true)
     ustawBlad('')
     ustawBackup(undefined)
     try {
       const nowyBackup = await utworzBackup(wybraneSekcje)
-      ustawBackup(nowyBackup)
-      ustawKomunikat('Backup został bezpiecznie utworzony. Możesz zapisać lub udostępnić plik JSON.')
-    } catch (bladBackupu) {
-      ustawBlad(bladBackupu instanceof Error ? bladBackupu.message : 'Nie udało się utworzyć backupu.')
+      const plik = await szyfrujBackup(nowyBackup, haslo)
+      ustawBackup({ manifest: nowyBackup.manifest, plik })
+      ustawKomunikat('Backup został zaszyfrowany. Możesz zapisać lub udostępnić plik JSON.')
     } finally {
       ustawTworzenieBackupu(false)
     }
@@ -149,14 +149,37 @@ export function WidokUstawien() {
     ustawBlad('')
     ustawBackupDoPrzywracania(undefined)
     ustawBackupPrzedPrzywracaniem(undefined)
+    ustawOperacjeHasla(undefined)
     try {
-      const przygotowany = await przygotujBackupDoPrzywracania(await plik.text())
+      const tresc = await plik.text()
+      if (czyBackupZaszyfrowany(tresc)) {
+        ustawOperacjeHasla({ rodzaj: 'import', tresc })
+        return
+      }
+      const przygotowany = await przygotujBackupDoPrzywracania(tresc)
       ustawBackupDoPrzywracania(przygotowany)
       ustawSekcjePrzywracania(przygotowany.manifest.sections)
       ustawKomunikat('Backup przeszedł walidację. Sprawdź manifest i wybierz sekcje do przywrócenia.')
     } catch (bladBackupu) {
       ustawBlad(bladBackupu instanceof Error ? bladBackupu.message : 'Nie udało się zwalidować backupu.')
     }
+  }
+
+  const wykonajOperacjeZHaslem = async (haslo: string) => {
+    if (!operacjaHasla) return
+    ustawBlad('')
+    if (operacjaHasla.rodzaj === 'import') {
+      const przygotowany = await przygotujBackupDoPrzywracania(operacjaHasla.tresc, haslo)
+      ustawBackupDoPrzywracania(przygotowany)
+      ustawSekcjePrzywracania(przygotowany.manifest.sections)
+      ustawKomunikat('Kopia odszyfrowana i zwalidowana. Sprawdź manifest i wybierz sekcje do przywrócenia.')
+    } else if (operacjaHasla.rodzaj === 'kopia' && backupPrzedPrzywracaniem) {
+      const zaszyfrowana = await szyfrujBackup(backupPrzedPrzywracaniem, haslo)
+      await pobierzJson(zaszyfrowana, `ogarniacz-before-restore-${backupPrzedPrzywracaniem.manifest.createdAt.slice(0, 10)}.json`)
+    } else {
+      await przygotujBackup(haslo)
+    }
+    ustawOperacjeHasla(undefined)
   }
 
   const zmienSekcjePrzywracania = (nazwa: NazwaSekcjiBackupu, zaznaczona: boolean) => {
@@ -259,10 +282,10 @@ export function WidokUstawien() {
 
     <Karta><div className="naglowek-karty"><div><h2>Dane / Backup</h2><p>Desktop/PWA i Android używają tego samego wersjonowanego OgarniaczBackup, checksum oraz automatycznej kopii before-restore.</p></div></div>
       <div className="lista-sekcji-backupu">{SEKCJE_BACKUPU.map((sekcja) => <label key={sekcja.nazwa}><input type="checkbox" checked={wybraneSekcje.includes(sekcja.nazwa)} onChange={(e) => zmienSekcjeBackupu(sekcja.nazwa, e.target.checked)} /><span>{sekcja.etykieta}</span></label>)}</div>
-      <div className="akcje-backupu"><button type="button" className="przycisk przycisk--glowny" disabled={wybraneSekcje.length === 0 || tworzenieBackupu} onClick={przygotujBackup}>{tworzenieBackupu ? 'Tworzenie…' : 'Utwórz backup'}</button>{backup && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => pobierzJson(backup, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Download aria-hidden="true" />{platforma.natywna ? 'Zapisz plik JSON' : 'Pobierz plik JSON'}</button>}{backup && platforma.natywna && platforma.udostepnianie.dostepne() && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => udostepnijJson(backup, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Share2 aria-hidden="true" />Udostępnij backup</button>}<label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Wybierz backup do restore<input className="sr-only" type="file" accept="application/json,.json" onChange={(e) => { wybierzPlikBackupu(e.target.files?.[0]); e.target.value = '' }} /></label></div>
+      <div className="akcje-backupu"><button type="button" className="przycisk przycisk--glowny" disabled={wybraneSekcje.length === 0 || tworzenieBackupu} onClick={() => ustawOperacjeHasla({ rodzaj: 'eksport' })}>{tworzenieBackupu ? 'Tworzenie…' : 'Utwórz zaszyfrowany backup'}</button>{backup && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => pobierzJson(backup.plik, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Download aria-hidden="true" />{platforma.natywna ? 'Zapisz plik JSON' : 'Pobierz plik JSON'}</button>}{backup && platforma.natywna && platforma.udostepnianie.dostepne() && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => udostepnijJson(backup.plik, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Share2 aria-hidden="true" />Udostępnij backup</button>}<label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Wybierz backup do restore<input className="sr-only" type="file" accept="application/json,.json" onChange={(e) => { wybierzPlikBackupu(e.target.files?.[0]); e.target.value = '' }} /></label></div>
       {backup && <p className="tekst-pomocniczy">Utworzono: <strong>{new Date(backup.manifest.createdAt).toLocaleString('pl-PL')}</strong> · rekordów: <strong>{Object.values(backup.manifest.recordCounts).reduce((suma, liczba) => suma + (liczba ?? 0), 0)}</strong> · checksum: <code>{backup.manifest.checksum}</code></p>}
       {backupDoPrzywracania && <div className="podglad-manifestu"><h3>Zweryfikowany manifest przed restore</h3><p>Format v{backupDoPrzywracania.manifest.formatVersion} · aplikacja {backupDoPrzywracania.manifest.appVersion} · Dexie v{backupDoPrzywracania.manifest.dexieSchemaVersion} · instalacja źródłowa {backupDoPrzywracania.manifest.installationId} · {new Date(backupDoPrzywracania.manifest.createdAt).toLocaleString('pl-PL')}</p><code>{backupDoPrzywracania.manifest.checksum}</code><div className="lista-sekcji-backupu">{backupDoPrzywracania.manifest.sections.map((nazwa) => <label key={nazwa}><input type="checkbox" checked={sekcjePrzywracania.includes(nazwa)} onChange={(e) => zmienSekcjePrzywracania(nazwa, e.target.checked)} /><span>{SEKCJE_BACKUPU.find((sekcja) => sekcja.nazwa === nazwa)?.etykieta} ({backupDoPrzywracania.manifest.recordCounts[nazwa] ?? 0})</span></label>)}</div><button type="button" className="przycisk przycisk--niebezpieczny" disabled={sekcjePrzywracania.length === 0} onClick={() => ustawPotwierdzeniePrzywracania(true)}>Przywróć wybrane sekcje</button></div>}
-      {backupPrzedPrzywracaniem && <div className="kopia-before-restore"><strong>Kopia before-restore</strong><span>Pełny stan sprzed ostatniego przywracania.</span><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => pobierzJson(backupPrzedPrzywracaniem, `ogarniacz-before-restore-${backupPrzedPrzywracaniem.manifest.createdAt.slice(0, 10)}.json`)}><Download aria-hidden="true" />Pobierz kopię</button></div>}
+      {backupPrzedPrzywracaniem && <div className="kopia-before-restore"><strong>Kopia before-restore</strong><span>Pełny stan sprzed ostatniego przywracania.</span><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawOperacjeHasla({ rodzaj: 'kopia' })}><Download aria-hidden="true" />Zaszyfruj i pobierz kopię</button></div>}
       <div className="transfer-ustawien"><h3>Import / eksport samych ustawień</h3><p className="tekst-pomocniczy">Oddzielny format przechodzi przez normalizator AppSettings i nie uruchamia pełnego restore.</p><div className="akcje-backupu"><button type="button" className="przycisk przycisk--drugorzedny" onClick={eksportujSameUstawienia}><Download aria-hidden="true" />Eksportuj ustawienia</button><label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Importuj ustawienia<input className="sr-only" type="file" accept="application/json,.json" onChange={(e) => { wybierzPlikUstawien(e.target.files?.[0]); e.target.value = '' }} /></label></div></div>
     </Karta>
 
@@ -286,8 +309,48 @@ export function WidokUstawien() {
     </>} />
 
     {potwierdzeniePrzywracania && <ModalPotwierdzenia tytul="Przywrócić wybrane dane?" opis={`Wybrane sekcje (${sekcjePrzywracania.length}) zastąpią bieżące dane tych kategorii. Pozostałe kategorie nie zostaną zmienione. Przed zapisem system utworzy pełną kopię before-restore.`} etykietaAkcji="Utwórz kopię i przywróć" niebezpieczne anuluj={() => ustawPotwierdzeniePrzywracania(false)} potwierdz={wykonajPrzywracanie} />}
+    {operacjaHasla && <HasloBackupu importowanie={operacjaHasla.rodzaj === 'import'} anuluj={() => ustawOperacjeHasla(undefined)} wykonaj={wykonajOperacjeZHaslem} />}
     {czyszczenie && <PotwierdzenieCzyszczenia anuluj={() => ustawCzyszczenie(false)} wykonaj={async () => { await wyczyscDane(); await inicjalizujBaze(); window.location.assign('/') }} />}
   </div>
+}
+
+function HasloBackupu({ importowanie, anuluj, wykonaj }: { importowanie: boolean; anuluj: () => void; wykonaj: (haslo: string) => Promise<void> }) {
+  const poleHasla = useRef<HTMLInputElement>(null)
+  const polePowtorzenia = useRef<HTMLInputElement>(null)
+  const [trwaOperacja, ustawTrwaOperacje] = useState(false)
+  const [blad, ustawBlad] = useState('')
+  const wyczyscPola = () => {
+    if (poleHasla.current) poleHasla.current.value = ''
+    if (polePowtorzenia.current) polePowtorzenia.current.value = ''
+  }
+  const zatwierdz = async (zdarzenie: FormEvent) => {
+    zdarzenie.preventDefault()
+    if (trwaOperacja) return
+    const haslo = poleHasla.current?.value ?? ''
+    if (!importowanie && haslo !== polePowtorzenia.current?.value) {
+      ustawBlad('Hasła muszą być identyczne.')
+      wyczyscPola()
+      return
+    }
+    wyczyscPola()
+    ustawTrwaOperacje(true)
+    ustawBlad('')
+    try {
+      await wykonaj(haslo)
+    } catch (przyczyna) {
+      ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się przetworzyć kopii.')
+    } finally {
+      ustawTrwaOperacje(false)
+    }
+  }
+  return <Modal tytul={importowanie ? 'Odszyfruj kopię zapasową' : 'Zaszyfruj kopię zapasową'} opis={importowanie ? 'Podaj hasło użyte przy tworzeniu tej kopii.' : 'Użyj długiego, unikalnego hasła i zachowaj je w bezpiecznym miejscu. Bez hasła nie można odzyskać kopii. Hasło nie jest zapisywane przez Ogarniacza.'} zamknij={() => { if (!trwaOperacja) { wyczyscPola(); anuluj() } }}>
+    <form onSubmit={zatwierdz}>
+      <label className="pole pole--pelne"><span>Hasło kopii zapasowej</span><input ref={poleHasla} type="password" autoComplete="off" autoFocus required disabled={trwaOperacja} /></label>
+      {!importowanie && <label className="pole pole--pelne"><span>Powtórz hasło</span><input ref={polePowtorzenia} type="password" autoComplete="off" required disabled={trwaOperacja} /></label>}
+      {blad && <p role="alert">{blad}</p>}
+      <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" disabled={trwaOperacja} onClick={() => { wyczyscPola(); anuluj() }}>Anuluj</button><button type="submit" className="przycisk przycisk--glowny" disabled={trwaOperacja}>{trwaOperacja ? 'Przetwarzanie…' : importowanie ? 'Odszyfruj i sprawdź' : 'Zaszyfruj'}</button></div>
+    </form>
+  </Modal>
 }
 
 function PotwierdzenieCzyszczenia({ anuluj, wykonaj }: { anuluj: () => void; wykonaj: () => Promise<void> }) {

@@ -1,7 +1,9 @@
 import Dexie from 'dexie'
 // Vitest uruchamia test w JSDOM, a fake-indexeddb potrzebuje natywnego Blob z Node.
 // @ts-expect-error Projekt przeglądarkowy celowo nie dołącza globalnych typów Node.
-import { Blob as BlobWezla } from 'node:buffer'
+import { Blob as BlobWezla, Buffer as BuforWezla } from 'node:buffer'
+// @ts-expect-error Natywne Web Crypto i niezależny generator pliku są używane tylko w testach.
+import { webcrypto as kryptografiaWezla, pbkdf2Sync as wyprowadzKluczWezla, createCipheriv as utworzSzyfrWezla } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
@@ -13,10 +15,13 @@ import { pobierzInstallationId } from './InstallationService'
 import { generujDawkiDnia, stanApteczki, zapiszLekZDodanymZapasem, zapiszStatusDawkiZApteczka } from './LekiService'
 import {
   checksumJestPoprawny,
+  czyBackupZaszyfrowany,
+  odszyfrujBackup,
   obliczChecksum,
   PODSTAWOWE_SEKCJE_BACKUPU,
   przygotujBackupDoPrzywracania,
   przywrocBackup,
+  szyfrujBackup,
   utworzBackup,
   WERSJA_FORMATU_BACKUPU,
   type OgarniaczBackup,
@@ -113,6 +118,149 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
+  })
+
+  describe('szyfrowanie całej kopii', () => {
+    const hasloTestowe = 'Wyłącznie testowe hasło 🐈 2026'
+    beforeEach(() => { vi.stubGlobal('crypto', kryptografiaWezla) })
+
+    async function odczytajStanBazy() {
+      return Promise.all(baza.tables.map(async (tabela) => [tabela.name, await tabela.toArray()]))
+    }
+
+    // Niezależna implementacja Node sprawdza interoperacyjność i pozwala zaszyfrować błędny backup.
+    function zaszyfrujZewnetrznie(zawartosc: unknown) {
+      const sol = BuforWezla.alloc(16, 7)
+      const iv = BuforWezla.alloc(12, 9)
+      const naglowek = {
+        format: 'ogarniacz-backup-szyfrowany', iv: iv.toString('base64'),
+        kdf: { algorytm: 'PBKDF2', hash: 'SHA-256', iteracje: 600_000, sol: sol.toString('base64') },
+        szyfr: 'AES-256-GCM', wersja: 1,
+      }
+      const klucz = wyprowadzKluczWezla(hasloTestowe, sol, 600_000, 32, 'sha256')
+      const szyfr = utworzSzyfrWezla('aes-256-gcm', klucz, iv)
+      szyfr.setAAD(BuforWezla.from(JSON.stringify(naglowek)))
+      const szyfrogram = BuforWezla.concat([szyfr.update(JSON.stringify(zawartosc), 'utf8'), szyfr.final(), szyfr.getAuthTag()]).toString('base64')
+      return JSON.stringify({ naglowek, szyfrogram })
+    }
+
+    it('szyfruje cały backup, losuje sól i IV oraz przywraca dane z poprawnym hasłem', async () => {
+      const dane = await zapiszDaneZdrowotne()
+      const backup = await utworzBackup(['zdrowie'])
+      const pierwszy = await szyfrujBackup(backup, hasloTestowe)
+      const drugi = await szyfrujBackup(backup, hasloTestowe)
+      expect(pierwszy.naglowek.kdf.sol).not.toBe(drugi.naglowek.kdf.sol)
+      expect(pierwszy.naglowek.iv).not.toBe(drugi.naglowek.iv)
+      expect(pierwszy.szyfrogram).not.toBe(drugi.szyfrogram)
+      const tresc = JSON.stringify(pierwszy)
+      expect(czyBackupZaszyfrowany(tresc)).toBe(true)
+      for (const jawne of ['manifest', 'createdAt', 'installationId', 'zdrowie', 'Treść źródłowa', hasloTestowe, backup.manifest.checksum]) {
+        expect(tresc).not.toContain(jawne)
+      }
+      expect(await odszyfrujBackup(tresc, hasloTestowe)).toBe(JSON.stringify(backup))
+      await baza.tabela('wpisyTerapii').clear()
+      await przywrocBackup(await przygotujBackupDoPrzywracania(tresc, hasloTestowe))
+      expect(await odczytajDaneZdrowotne()).toEqual(dane)
+      expect(await przygotujBackupDoPrzywracania(zaszyfrujZewnetrznie(backup), hasloTestowe)).toEqual(backup)
+    })
+
+    it.each(['brak hasła', 'błędne hasło', 'szyfrogram', 'tag', 'sól', 'IV', 'wersja', 'algorytm', 'iteracje', 'base64', 'dodatkowe pole'])('odrzuca błąd bez zmiany żadnej tabeli: %s', async (przypadek) => {
+      await zapiszDaneZdrowotne()
+      const zaszyfrowany = await szyfrujBackup(await utworzBackup(['zdrowie']), hasloTestowe)
+      const surowy = zaszyfrowany as unknown as { naglowek: Record<string, unknown> & { kdf: Record<string, unknown> }; szyfrogram: string; dodatkowe?: string }
+      let haslo: string | undefined = hasloTestowe
+      if (przypadek === 'brak hasła') haslo = undefined
+      if (przypadek === 'błędne hasło') haslo = 'Niepoprawne hasło'
+      if (przypadek === 'szyfrogram') surowy.szyfrogram = (surowy.szyfrogram[0] === 'A' ? 'B' : 'A') + surowy.szyfrogram.slice(1)
+      if (przypadek === 'tag') surowy.szyfrogram = surowy.szyfrogram.slice(0, -4) + 'AAAA'
+      if (przypadek === 'sól') surowy.naglowek.kdf.sol = 'AAAAAAAAAAAAAAAAAAAAAA=='
+      if (przypadek === 'IV') surowy.naglowek.iv = 'AAAAAAAAAAAAAAAA'
+      if (przypadek === 'wersja') surowy.naglowek.wersja = 2
+      if (przypadek === 'algorytm') surowy.naglowek.szyfr = 'AES-CBC'
+      if (przypadek === 'iteracje') surowy.naglowek.kdf.iteracje = 1_000_000_000
+      if (przypadek === 'base64') surowy.szyfrogram = '!!!!'
+      if (przypadek === 'dodatkowe pole') surowy.dodatkowe = 'nieobsługiwane'
+      const stanPrzed = await odczytajStanBazy()
+      const stanPamieci = { lokalna: { ...localStorage }, sesji: { ...sessionStorage } }
+      const przygotujIPrzywroc = async () => przywrocBackup(await przygotujBackupDoPrzywracania(JSON.stringify(surowy), haslo))
+      await expect(przygotujIPrzywroc()).rejects.toMatchObject({ kod: ['brak hasła'].includes(przypadek) ? 'HASLO_WYMAGANE' : przypadek === 'wersja' ? 'WERSJA_SZYFROWANIA' : ['algorytm', 'iteracje', 'base64', 'dodatkowe pole'].includes(przypadek) ? 'FORMAT_SZYFROWANIA' : 'ODSZYFROWANIE' })
+      expect(await odczytajStanBazy()).toEqual(stanPrzed)
+      expect({ lokalna: { ...localStorage }, sesji: { ...sessionStorage } }).toEqual(stanPamieci)
+    })
+
+    it.each(['checksum', 'struktura', 'wersja formatu', 'wersja bazy'])('waliduje odszyfrowany backup przed zapisem: %s', async (przypadek) => {
+      await zapiszDaneZdrowotne()
+      const backup = await utworzBackup(['zdrowie'])
+      if (przypadek === 'checksum') backup.payload.zdrowie!.wpisyTerapii[0].tresc = 'Naruszona treść'
+      if (przypadek === 'struktura') backup.payload.zdrowie!.wpisyTerapii[0].terapiaId = 123
+      if (przypadek === 'wersja formatu') backup.manifest.formatVersion = 99
+      if (przypadek === 'wersja bazy') backup.manifest.dexieSchemaVersion = 99
+      if (przypadek !== 'checksum') await przeliczChecksum(backup)
+      const stanPrzed = await odczytajStanBazy()
+      await expect(przygotujBackupDoPrzywracania(zaszyfrujZewnetrznie(backup), hasloTestowe).then((dane) => przywrocBackup(dane))).rejects.toMatchObject({ kod: { checksum: 'CHECKSUM', struktura: 'MODEL_DANYCH', 'wersja formatu': 'WERSJA_FORMATU', 'wersja bazy': 'WERSJA_SCHEMATU_BAZY' }[przypadek] })
+      expect(await odczytajStanBazy()).toEqual(stanPrzed)
+    })
+
+    it.each([1, 2, 3])('importuje jawny i zaszyfrowany historyczny format v%i tym samym walidatorem', async (wersja) => {
+      const backup = await utworzBackup(['notatki'])
+      const stary = await zmienManifest(backup, (manifest) => {
+        manifest.formatVersion = wersja
+        if (wersja < 3) delete manifest.installationId
+        if (wersja === 1) { delete manifest.dexieSchemaVersion; delete manifest.backupType }
+      })
+      expect(czyBackupZaszyfrowany(JSON.stringify(stary))).toBe(false)
+      expect(await przygotujBackupDoPrzywracania(zaszyfrujZewnetrznie(stary), hasloTestowe)).toEqual(await przygotujBackupDoPrzywracania(JSON.stringify(stary)))
+    })
+
+    it.each([0, 5 * 1024 * 1024])('przenosi pustą sekcję lub duży backup (%i bajtów treści)', async (rozmiar) => {
+      if (rozmiar) await baza.tabela('notatki').put({ ...utworzNotatke('Duża notatka'), tresc: 'a'.repeat(rozmiar) })
+      const backup = await utworzBackup(['notatki'])
+      const zaszyfrowany = await szyfrujBackup(backup, hasloTestowe)
+      expect(await przygotujBackupDoPrzywracania(JSON.stringify(zaszyfrowany), hasloTestowe)).toEqual(backup)
+    }, 20_000)
+
+    it('przywraca dokument Blob z szyfrowanej kopii', async () => {
+      const dokument: Dokument = { ...utworzMetadane('blob-szyfrowany'), nazwa: 'Plik testowy', nazwaPliku: 'test.txt', mimeType: 'text/plain', rozmiar: 6, powiazania: [], plik: new Blob(['test 🐈'], { type: 'text/plain' }) }
+      await baza.tabela('dokumenty').put(dokument)
+      const zaszyfrowany = await szyfrujBackup(await utworzBackup(['dokumenty']), hasloTestowe)
+      await baza.tabela('dokumenty').clear()
+      await przywrocBackup(await przygotujBackupDoPrzywracania(JSON.stringify(zaszyfrowany), hasloTestowe))
+      const odtworzony = await baza.tabela('dokumenty').get(dokument.id)
+      expect(odtworzony?.plik).toBeInstanceOf(Blob)
+      expect(odtworzony?.plik?.type).toBe('text/plain')
+      expect(await odczytajTekstBlobu(odtworzony!.plik!)).toBe('test 🐈')
+    })
+
+    it('odrzuca puste hasło i brak Web Crypto bez nieszyfrowanego fallbacku', async () => {
+      const backup = await utworzBackup(['notatki'])
+      await expect(szyfrujBackup(backup, '')).rejects.toMatchObject({ kod: 'HASLO_WYMAGANE' })
+      const zaszyfrowany = await szyfrujBackup(backup, hasloTestowe)
+      const stanPrzed = await odczytajStanBazy()
+      vi.stubGlobal('crypto', undefined)
+      await expect(szyfrujBackup(backup, hasloTestowe)).rejects.toMatchObject({ kod: 'BRAK_KRYPTOGRAFII' })
+      await expect(przygotujBackupDoPrzywracania(JSON.stringify(zaszyfrowany), hasloTestowe)).rejects.toMatchObject({ kod: 'BRAK_KRYPTOGRAFII' })
+      expect(await odczytajStanBazy()).toEqual(stanPrzed)
+    })
+
+    it('używa nieeksportowalnego klucza AES-256 i nie zapisuje hasła w bazie', async () => {
+      const wyprowadzanie = vi.spyOn(kryptografiaWezla.subtle, 'deriveKey')
+      try {
+        await szyfrujBackup(await utworzBackup(['notatki']), hasloTestowe)
+        const klucz = await wyprowadzanie.mock.results[0].value
+        expect(klucz.extractable).toBe(false)
+        expect(klucz.algorithm).toMatchObject({ name: 'AES-GCM', length: 256 })
+        await expect(kryptografiaWezla.subtle.exportKey('raw', klucz)).rejects.toMatchObject({ name: 'InvalidAccessException' })
+        expect(JSON.stringify(await odczytajStanBazy())).not.toContain(hasloTestowe)
+      } finally {
+        wyprowadzanie.mockRestore()
+      }
+    })
+
+    it('czytelnie odrzuca niedziałający generator liczb losowych', async () => {
+      const backup = await utworzBackup(['notatki'])
+      vi.stubGlobal('crypto', { subtle: kryptografiaWezla.subtle, getRandomValues: () => { throw new Error('Błąd generatora') } })
+      await expect(szyfrujBackup(backup, hasloTestowe)).rejects.toMatchObject({ kod: 'BRAK_KRYPTOGRAFII' })
+    })
   })
 
   it('przywraca historię schematów, parametry planu i przyjęcia oraz ID i bilans apteczki', async () => {
