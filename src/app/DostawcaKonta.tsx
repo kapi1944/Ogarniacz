@@ -19,6 +19,7 @@ import {
   wyloguj,
   wylogujSesje,
   wylogujWszystkieSesje,
+  wylogujPozostaleSesje,
   zmienHaslo,
   zaloguj,
   zapiszGrant,
@@ -93,6 +94,7 @@ function PanelHaslaISesji({ odswiez, wyczysc }: { odswiez: () => Promise<void>; 
     <button className="przycisk przycisk--drugorzedny" type="button" disabled={zajety} onClick={() => void wykonaj(async () => ustawSesje(await pobierzListeSesji()))}>Pokaż aktywne sesje</button>
     {sesje?.length === 0 && <p>Brak aktywnych sesji.</p>}
     {sesje?.map((sesja) => <div className="wiersz-konta" key={sesja.id}>
+      <span>Wygasa: {sesja.wygasaAt ? new Date(sesja.wygasaAt).toLocaleString('pl-PL') : 'Brak informacji w starszym serwerze'}</span>
       <span>{sesja.biezaca ? 'Bieżąca sesja' : 'Inna sesja'} · Utworzona: {new Date(sesja.utworzonoAt).toLocaleString('pl-PL')} · Ostatnia aktywność: {new Date(sesja.ostatniaAktywnoscAt).toLocaleString('pl-PL')}</span>
       <button className="przycisk przycisk--tekstowy" type="button" disabled={zajety} onClick={() => void wykonaj(async () => {
         if (await wylogujSesje(sesja.id)) wyczysc()
@@ -100,6 +102,7 @@ function PanelHaslaISesji({ odswiez, wyczysc }: { odswiez: () => Promise<void>; 
       })}>Wyloguj sesję</button>
     </div>)}
     <div className="akcje-formularza">
+      <button type="button" className="przycisk przycisk--drugorzedny" disabled={zajety} onClick={() => void wykonaj(async () => { await wylogujPozostaleSesje(); ustawSesje(await pobierzListeSesji()); ustawKomunikat('Pozostałe sesje zostały wylogowane. Bieżąca sesja pozostaje aktywna.') })}>Wyloguj pozostałe sesje</button>
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={zajety} onClick={() => void wykonaj(async () => { await wyloguj(); wyczysc() })}><LogOut aria-hidden="true" />Wyloguj bieżącą sesję</button>
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={zajety} onClick={() => void wykonaj(async () => { await wylogujWszystkieSesje(); wyczysc() })}>Wyloguj wszystkie sesje</button>
     </div>

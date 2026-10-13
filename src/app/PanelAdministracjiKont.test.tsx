@@ -22,7 +22,7 @@ it('tworzy konto bez kopiowania uprawnień i czyści hasło; nie ustawia fokusu'
 
 it('reset wymaga potwierdzenia; anulowanie nie zmienia hasła', async () => {
   vi.mocked(pobierzUzytkownikow).mockResolvedValue([{ id: 'konto', email: 'konto@example.test', login: null, nazwa: null, rolaSystemowa: 'uzytkownik', statusKonta: 'aktywne' }])
-  vi.mocked(resetujHasloUzytkownika).mockResolvedValue(undefined)
+  vi.mocked(resetujHasloUzytkownika).mockResolvedValue({ kodOdzyskiwania: 'fikcyjny-jednorazowy-kod', wygasaAt: '2099-01-01T00:00:00Z' })
   render(<PanelAdministracjiKont />)
   fireEvent.click(screen.getByRole('button', { name: 'Pokaż konta' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Edytuj konto' }))
@@ -34,5 +34,7 @@ it('reset wymaga potwierdzenia; anulowanie nie zmienia hasła', async () => {
   fireEvent.change(screen.getByLabelText('Hasło tymczasowe'), { target: { value: 'Nowe-tymczasowe' } })
   fireEvent.click(screen.getByRole('button', { name: 'Resetuj hasło i wyloguj sesje' }))
   fireEvent.click(screen.getByRole('button', { name: 'Potwierdź reset hasła' }))
-  await vi.waitFor(() => expect(resetujHasloUzytkownika).toHaveBeenCalledWith('konto', 'Nowe-tymczasowe'))
+  await vi.waitFor(() => expect(resetujHasloUzytkownika).toHaveBeenCalledWith('konto'))
+  expect(await screen.findByLabelText('Jednorazowy kod odzyskiwania')).toHaveValue('fikcyjny-jednorazowy-kod')
+  expect(localStorage.getItem('fikcyjny-jednorazowy-kod')).toBeNull()
 })

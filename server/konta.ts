@@ -417,7 +417,7 @@ export async function obsluzKonta(
       }
       const uzytkownik = baza.prepare("SELECT id FROM uzytkownicy WHERE email = ? AND status_konta = 'aktywne'").get(email)
       const kodHash = hashSekretu(tekst(dane.kod))
-      const kod = uzytkownik && baza.prepare('SELECT 1 FROM kody_odzyskiwania WHERE uzytkownik_id = ? AND kod_hash = ? AND uzyto_at IS NULL').get(tekst(uzytkownik.id), kodHash)
+      const kod = uzytkownik && baza.prepare('SELECT 1 FROM kody_odzyskiwania WHERE uzytkownik_id = ? AND kod_hash = ? AND uzyto_at IS NULL AND (wygasa_at IS NULL OR wygasa_at > ?)').get(tekst(uzytkownik.id), kodHash, new Date().toISOString())
       if (!uzytkownik || !kod) {
         zarejestrujNieudaneLogowanie(zadanie, baza, email)
         odpowiedzJson(odpowiedz, 401, { error: 'Nieprawidłowy kod odzyskiwania.' })
@@ -425,10 +425,11 @@ export async function obsluzKonta(
       }
       const teraz = new Date().toISOString()
       const uzytkownikId = tekst(uzytkownik.id)
-      baza.exec('BEGIN')
+      baza.exec('BEGIN IMMEDIATE')
       try {
+        const zuzycie = baza.prepare('UPDATE kody_odzyskiwania SET uzyto_at = ? WHERE uzytkownik_id = ? AND kod_hash = ? AND uzyto_at IS NULL AND (wygasa_at IS NULL OR wygasa_at > ?)').run(teraz, uzytkownikId, kodHash, teraz)
+        if (!zuzycie.changes) throw new Error('Nieprawidłowy kod odzyskiwania.')
         baza.prepare('UPDATE uzytkownicy SET haslo_hash = ?, wymagana_zmiana_hasla = 0, zaktualizowano_at = ? WHERE id = ?').run(hashujHaslo(tekst(dane.noweHaslo)), teraz, uzytkownikId)
-        baza.prepare('UPDATE kody_odzyskiwania SET uzyto_at = ? WHERE uzytkownik_id = ? AND kod_hash = ?').run(teraz, uzytkownikId, kodHash)
         baza.prepare('DELETE FROM sesje WHERE uzytkownik_id = ?').run(uzytkownikId)
         baza.exec('COMMIT')
       } catch (blad) {
@@ -523,11 +524,12 @@ export async function obsluzKonta(
     }
     if (zadanie.method === 'GET' && sciezka === '/api/account/sessions') {
       const biezaca = hashSekretu(pobierzCookie(zadanie)!)
-      const sesje = baza.prepare(`SELECT id, utworzono_at, ostatnia_aktywnosc_at, token_hash = ? AS biezaca
+      const sesje = baza.prepare(`SELECT id, utworzono_at, ostatnia_aktywnosc_at, wygasa_at, token_hash = ? AS biezaca
         FROM sesje WHERE uzytkownik_id = ? AND wygasa_at > ? ORDER BY utworzono_at DESC`)
         .all(biezaca, kontekst.uzytkownikId, new Date().toISOString()).map((wiersz) => ({
           id: tekst(wiersz.id), utworzonoAt: tekst(wiersz.utworzono_at),
           ostatniaAktywnoscAt: tekst(wiersz.ostatnia_aktywnosc_at), biezaca: Number(wiersz.biezaca) === 1,
+          wygasaAt: tekst(wiersz.wygasa_at),
         }))
       odpowiedzJson(odpowiedz, 200, { sesje })
       return true
@@ -543,6 +545,11 @@ export async function obsluzKonta(
       baza.prepare('DELETE FROM sesje WHERE id = ? AND uzytkownik_id = ?').run(tekst(dane.id), kontekst.uzytkownikId)
       const biezaca = sesja.token_hash === hashSekretu(pobierzCookie(zadanie)!)
       odpowiedzJson(odpowiedz, 200, { wylogowano: true, biezaca }, biezaca ? wygasCookie() : undefined)
+      return true
+    }
+    if (zadanie.method === 'POST' && sciezka === '/api/account/sessions/revoke-others') {
+      baza.prepare('DELETE FROM sesje WHERE uzytkownik_id = ? AND token_hash <> ?').run(kontekst.uzytkownikId, hashSekretu(pobierzCookie(zadanie)!))
+      odpowiedzJson(odpowiedz, 200, { wylogowano: true })
       return true
     }
     if (zadanie.method === 'POST' && sciezka === '/api/account/sessions/revoke-all') {

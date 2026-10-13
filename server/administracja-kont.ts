@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { randomUUID, randomBytes, createHash } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 
 export function wskazPierwszegoAdministratora(baza: DatabaseSync, id: string): void {
@@ -22,18 +22,28 @@ export function wykonajAdministracjeKont(
   if (metoda === 'GET' && sciezka === '/api/account/users') {
     return { status: 200, dane: { uzytkownicy: baza.prepare('SELECT id, email, login, nazwa, rola_systemowa AS rolaSystemowa, status_konta AS statusKonta FROM uzytkownicy ORDER BY email').all() } }
   }
+  if (metoda === 'GET' && sciezka.startsWith('/api/account/users/')) {
+    const id = sciezka.slice('/api/account/users/'.length)
+    const konto = baza.prepare('SELECT id, email, login, nazwa, rola_systemowa AS rolaSystemowa, status_konta AS statusKonta, wymagana_zmiana_hasla AS wymaganaZmianaHasla FROM uzytkownicy WHERE id = ?').get(id)
+    return konto ? { status: 200, dane: { konto } } : { status: 404, dane: { error: 'Nie znaleziono konta.' } }
+  }
   const id = typeof dane.id === 'string' ? dane.id : ''
   const teraz = new Date().toISOString()
   if (metoda === 'POST' && sciezka === '/api/account/users/password') {
-    const hasloHash = hashujHaslo(typeof dane.haslo === 'string' ? dane.haslo : '')
+    // Starego hasła nie odczytujemy. Losowe nowe hasło nie jest ujawniane nikomu.
+    const hasloHash = hashujHaslo(randomBytes(32).toString('base64url'))
+    const kodOdzyskiwania = randomBytes(32).toString('base64url')
+    const kodHash = createHash('sha256').update(kodOdzyskiwania).digest('hex')
+    const wygasaAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
     baza.exec('BEGIN IMMEDIATE')
     try {
       if (!baza.prepare('UPDATE uzytkownicy SET haslo_hash = ?, wymagana_zmiana_hasla = 1, zaktualizowano_at = ? WHERE id = ?').run(hasloHash, teraz, id).changes) throw new Error('Nie znaleziono konta.')
       baza.prepare('DELETE FROM sesje WHERE uzytkownik_id = ?').run(id)
       baza.prepare('DELETE FROM kody_odzyskiwania WHERE uzytkownik_id = ?').run(id)
+      baza.prepare('INSERT INTO kody_odzyskiwania (uzytkownik_id, kod_hash, utworzono_at, wygasa_at) VALUES (?, ?, ?, ?)').run(id, kodHash, teraz, wygasaAt)
       baza.exec('COMMIT')
     } catch (blad) { baza.exec('ROLLBACK'); throw blad }
-    return { status: 200, dane: { zmieniono: true } }
+    return { status: 200, dane: { zmieniono: true, kodOdzyskiwania, wygasaAt } }
   }
   if (sciezka !== '/api/account/users' || !['POST', 'PUT'].includes(metoda)) return { status: 404, dane: { error: 'Nie znaleziono operacji.' } }
   const email = typeof dane.email === 'string' ? dane.email.trim().toLowerCase() : ''

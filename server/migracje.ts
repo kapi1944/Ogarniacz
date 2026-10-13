@@ -147,6 +147,12 @@ const migracje: Migracja[] = [
         OR aktywny_wlasciciel_id IN (SELECT id FROM uzytkownicy WHERE status_konta <> 'aktywne');
     `,
   },
+  {
+    wersja: 7,
+    sql: `
+      ALTER TABLE kody_odzyskiwania ADD COLUMN wygasa_at TEXT;
+    `,
+  },
 ]
 
 export function uruchomMigracje(baza: DatabaseSync): number {

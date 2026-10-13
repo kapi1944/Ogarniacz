@@ -28,6 +28,7 @@ export interface SesjaKonta {
   utworzonoAt: string
   ostatniaAktywnoscAt: string
   biezaca: boolean
+  wygasaAt?: string
 }
 
 export interface KontoUzytkownika {
@@ -193,8 +194,8 @@ export async function zapiszUzytkownika(dane: Partial<KontoAdministracyjne> & { 
   await wykonaj(dane.id ? 'PUT' : 'POST', '/api/account/users', dane, true)
 }
 
-export async function resetujHasloUzytkownika(id: string, haslo: string): Promise<void> {
-  await wykonaj('POST', '/api/account/users/password', { id, haslo }, true)
+export async function resetujHasloUzytkownika(id: string): Promise<{ kodOdzyskiwania: string; wygasaAt: string }> {
+  return wykonaj('POST', '/api/account/users/password', { id }, true)
 }
 
 export async function utworzKontoWlasciciela(email: string, haslo: string, token: string): Promise<KontoUzytkownika> {
@@ -231,6 +232,10 @@ export async function wylogujSesje(id: string): Promise<boolean> {
 
 export async function wylogujWszystkieSesje(): Promise<void> {
   await zmienSesje(async () => { await wykonaj('POST', '/api/account/sessions/revoke-all', {}, true); wyczyscKontoLokalne() })
+}
+
+export async function wylogujPozostaleSesje(): Promise<void> {
+  await wykonaj('POST', '/api/account/sessions/revoke-others', {}, true)
 }
 
 export async function zaprosEdytora(email: string): Promise<{ token: string; wygasaAt: string }> {
