@@ -72,6 +72,7 @@ export function WidokUstawien() {
   const [operacjaHasla, ustawOperacjeHasla] = useState<{ rodzaj: 'eksport' | 'przywracanie' } | { rodzaj: 'import'; tresc: string }>()
   const [plikZaszyfrowany, ustawPlikZaszyfrowany] = useState<boolean>()
   const [backupDoPrzywracania, ustawBackupDoPrzywracania] = useState<OgarniaczBackup>()
+  const [przypiszStarszaKopie, ustawPrzypiszStarszaKopie] = useState(false)
   const [sekcjePrzywracania, ustawSekcjePrzywracania] = useState<NazwaSekcjiBackupu[]>([])
   const [backupPrzedPrzywracaniem, ustawBackupPrzedPrzywracaniem] = useState<{ manifest: ManifestBackupu; plik: ZaszyfrowanyBackup }>()
   const [potwierdzenieZapisu, ustawPotwierdzenieZapisu] = useState(false)
@@ -155,6 +156,7 @@ export function WidokUstawien() {
 
   const wybierzPlikBackupu = async (plik?: File) => {
     if (!plik) return
+    ustawPrzypiszStarszaKopie(false)
     ustawBlad('')
     ustawBackupDoPrzywracania(undefined)
     ustawPlikZaszyfrowany(undefined)
@@ -210,6 +212,7 @@ export function WidokUstawien() {
     ustawTrwaPrzywracanie(true)
     try {
       const wynik = await przywrocBackup(backupDoPrzywracania, sekcjePrzywracania, {
+        trybStarszejKopii: przypiszStarszaKopie ? 'przypisz-do-aktywnego-profilu' : undefined,
         poUtworzeniuKopii: async (kopia) => {
           const plik = await szyfrujBackup(kopia, haslo)
           const zapisano = await platforma.pliki.zapisz(`ogarniacz-before-restore-${kopia.manifest.createdAt.replace(/[:.]/g, '-')}.json`, utworzPlikJson(plik))
@@ -317,6 +320,7 @@ export function WidokUstawien() {
       <div className="lista-sekcji-backupu">{SEKCJE_BACKUPU.map((sekcja) => <label key={sekcja.nazwa}><input type="checkbox" disabled={trwaPrzywracanie} checked={wybraneSekcje.includes(sekcja.nazwa)} onChange={(e) => zmienSekcjeBackupu(sekcja.nazwa, e.target.checked)} /><span>{sekcja.etykieta}</span></label>)}</div>
       <div className="akcje-backupu"><button type="button" className="przycisk przycisk--glowny" disabled={wybraneSekcje.length === 0 || tworzenieBackupu || trwaPrzywracanie} onClick={() => ustawOperacjeHasla({ rodzaj: 'eksport' })}>{tworzenieBackupu ? 'Tworzenie…' : 'Utwórz zaszyfrowany backup'}</button>{backup && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => pobierzJson(backup.plik, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Download aria-hidden="true" />{platforma.natywna ? 'Zapisz plik JSON' : 'Pobierz plik JSON'}</button>}{backup && platforma.natywna && platforma.udostepnianie.dostepne() && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => udostepnijJson(backup.plik, `ogarniacz-backup-${backup.manifest.createdAt.slice(0, 10)}.json`)}><Share2 aria-hidden="true" />Udostępnij backup</button>}<label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Wybierz backup do restore<input className="sr-only" type="file" accept="application/json,.json" disabled={trwaPrzywracanie} onChange={(e) => { wybierzPlikBackupu(e.target.files?.[0]); e.target.value = '' }} /></label></div>
       {backup && <p className="tekst-pomocniczy">Utworzono: <strong>{new Date(backup.manifest.createdAt).toLocaleString('pl-PL')}</strong> · rekordów: <strong>{Object.values(backup.manifest.recordCounts).reduce((suma, liczba) => suma + (liczba ?? 0), 0)}</strong> · checksum: <code>{backup.manifest.checksum}</code></p>}
+      {backupDoPrzywracania && !backupDoPrzywracania.manifest.kontekst && <label className="pole pole-checkbox"><input type="checkbox" checked={przypiszStarszaKopie} onChange={(zdarzenie) => ustawPrzypiszStarszaKopie(zdarzenie.target.checked)} /><span>Świadomie przypisuję starszą kopię bez kontekstu konta do aktualnego profilu.</span></label>}
       {backupDoPrzywracania && <div className="podglad-manifestu"><h3>Podgląd kopii przed przywracaniem</h3><p><strong>{plikZaszyfrowany ? 'Plik zabezpieczony hasłem — odszyfrowany i zwalidowany.' : 'Plik historyczny bez zabezpieczenia hasłem — integralność zweryfikowana.'}</strong></p><p>Format v{backupDoPrzywracania.manifest.formatVersion} · aplikacja {backupDoPrzywracania.manifest.appVersion} · Dexie v{backupDoPrzywracania.manifest.dexieSchemaVersion} · instalacja źródłowa {backupDoPrzywracania.manifest.installationId} · {new Date(backupDoPrzywracania.manifest.createdAt).toLocaleString('pl-PL')}</p><code>{backupDoPrzywracania.manifest.checksum}</code><div className="lista-sekcji-backupu">{backupDoPrzywracania.manifest.sections.map((nazwa) => <label key={nazwa}><input type="checkbox" disabled={trwaPrzywracanie} checked={sekcjePrzywracania.includes(nazwa)} onChange={(e) => zmienSekcjePrzywracania(nazwa, e.target.checked)} /><span>{SEKCJE_BACKUPU.find((sekcja) => sekcja.nazwa === nazwa)?.etykieta} ({backupDoPrzywracania.manifest.recordCounts[nazwa] ?? 0})</span></label>)}</div><button type="button" className="przycisk przycisk--niebezpieczny" disabled={sekcjePrzywracania.length === 0 || trwaPrzywracanie} onClick={() => ustawOperacjeHasla({ rodzaj: 'przywracanie' })}>Przywróć wybrane sekcje</button></div>}
       {backupPrzedPrzywracaniem && <div className="kopia-before-restore"><strong>Szyfrowana kopia ochronna</strong><span>Pełny stan sprzed próby przywracania. Zabezpieczony wybranym przez Ciebie hasłem.</span><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => pobierzJson(backupPrzedPrzywracaniem.plik, `ogarniacz-before-restore-${backupPrzedPrzywracaniem.manifest.createdAt.replace(/[:.]/g, '-')}.json`)}><Download aria-hidden="true" />Pobierz szyfrowaną kopię ochronną</button></div>}
       <div className="transfer-ustawien"><h3>Import / eksport samych ustawień</h3><p className="tekst-pomocniczy">Oddzielny format przechodzi przez normalizator AppSettings i nie uruchamia pełnego restore.</p><div className="akcje-backupu"><button type="button" className="przycisk przycisk--drugorzedny" onClick={eksportujSameUstawienia}><Download aria-hidden="true" />Eksportuj ustawienia</button><label className="przycisk przycisk--drugorzedny"><Upload aria-hidden="true" />Importuj ustawienia<input className="sr-only" type="file" accept="application/json,.json" onChange={(e) => { wybierzPlikUstawien(e.target.files?.[0]); e.target.value = '' }} /></label></div></div>

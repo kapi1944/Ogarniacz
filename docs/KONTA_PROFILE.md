@@ -85,3 +85,16 @@ ale jego odpowiedź zostaje odrzucona po zamknięciu kontekstu.
 Nowy klient wiąże sync z użytkownikiem i Właścicielem przez nagłówki sprawdzane
 z cookie na serwerze. Starsze klienty zachowują istniejący kontrakt.
 Backend ponownie sprawdza sesję i CSRF po odebraniu ciała push.
+
+## Etap 7 — kopie w kontekście profilu
+
+Manifest v3 otrzymuje opcjonalny kontekst serwera i Właściciela. Cały manifest
+pozostaje wewnątrz szyfrogramu; publiczna koperta nie zawiera tożsamości.
+Import odrzuca innego Właściciela lub serwer, również w trybie anonimowym.
+Starsze kopie v1–v3 bez kontekstu wymagają w profilu jawnego wyboru przypisania.
+Odczyt i walidacja starych kopii pozostają zgodne.
+Eksport i restore sprawdzają niezmienność bazy i kontekstu także po operacjach
+asynchronicznych, po zapisie before-restore i wewnątrz transakcji zapisu.
+Kopia ochronna musi mieć ten sam profil. Konta, role systemowe, sesje i granty
+serwerowe nie są źródłami backupu i nie są modyfikowane przez import.
+Zgodność zwykłego ID i checksum nie jest kryptograficznym dowodem autorstwa.

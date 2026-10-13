@@ -1,4 +1,5 @@
 import { sprawdzBiezacyDostep } from './UprawnieniaService'
+import { pobierzAktywnyProfil, pobierzSygnalProfilu } from '../data/ProfileLokalne'
 import { z } from 'zod'
 import { schematWaznejInformacjiZdrowotnej } from '../domain/historiaZdrowia'
 import { schematWynikuBadania, schematMetadanychMedycznych } from '../domain/badania'
@@ -46,6 +47,7 @@ type RekordBackupu = Record<string, unknown>
 type DaneSekcji = Record<string, RekordBackupu[]>
 
 export interface ManifestBackupu {
+  kontekst?: { serwer: string; wlascicielId: string }
   formatVersion: number
   createdAt: string
   appVersion: string
@@ -90,6 +92,7 @@ export interface WynikPrzywracania {
 }
 
 export interface OpcjePrzywracania {
+  trybStarszejKopii?: 'przypisz-do-aktywnego-profilu'
   utworzKopiePrzedPrzywracaniem?: () => Promise<OgarniaczBackup>
   poUtworzeniuKopii?: (backup: OgarniaczBackup) => void | Promise<void>
 }
@@ -376,6 +379,7 @@ const schematSurowegoBackupu = z.object({
     recordCounts: z.record(z.string(), z.number().int().nonnegative()),
     schemaVersions: z.record(z.string(), z.number().int().positive()),
     checksum: z.string().regex(/^sha256:[a-f0-9]{64}$/),
+    kontekst: z.object({ serwer: z.url(), wlascicielId: z.string().min(1) }).strict().optional(),
   }).strict(),
   payload: z.record(z.string(), z.unknown()),
 }).strict()
@@ -598,6 +602,9 @@ export async function utworzBackup(
   teraz: () => string = () => new Date().toISOString(),
   typBackupu: TypBackupu = 'export',
 ): Promise<OgarniaczBackup> {
+  const profilPoczatkowy = pobierzAktywnyProfil()
+  const bazaPoczatkowa = baza
+  const sygnal = pobierzSygnalProfilu()
   sprawdzBiezacyDostep('ustawienia', 'odczyt')
   const unikalneSekcje = SEKCJE_BACKUPU.map(({ nazwa }) => nazwa).filter((nazwa) => wybraneSekcje.includes(nazwa))
   if (unikalneSekcje.length === 0) throw new BladBackupu('Wybierz co najmniej jedną sekcję backupu.', 'BRAK_SEKCJI')
@@ -628,8 +635,10 @@ export async function utworzBackup(
     sections: unikalneSekcje,
     recordCounts,
     schemaVersions,
+    ...(profilPoczatkowy ? { kontekst: { serwer: profilPoczatkowy.serwer, wlascicielId: profilPoczatkowy.wlascicielId } } : {}),
   }
   const checksum = await obliczChecksum({ manifest: manifestBezChecksum, payload })
+  if (sygnal.aborted || baza !== bazaPoczatkowa || pobierzAktywnyProfil()?.id !== profilPoczatkowy?.id) throw new BladBackupu('Profil zmienił się podczas eksportu.', 'KONTEKST_PROFILU')
   sprawdzBiezacyDostep('ustawienia', 'odczyt')
   return { manifest: { ...manifestBezChecksum, checksum }, payload }
 }
@@ -898,6 +907,16 @@ export async function przywrocBackup(
   sekcje: readonly NazwaSekcjiBackupu[] = backup.manifest.sections,
   opcje: OpcjePrzywracania = {},
 ): Promise<WynikPrzywracania> {
+  const profilPoczatkowy = pobierzAktywnyProfil()
+  const bazaPoczatkowa = baza
+  const sygnal = pobierzSygnalProfilu()
+  const sprawdzProfil = () => {
+    if (sygnal.aborted || baza !== bazaPoczatkowa || pobierzAktywnyProfil()?.id !== profilPoczatkowy?.id) throw new BladBackupu('Profil zmienił się podczas przywracania.', 'KONTEKST_PROFILU')
+    const kontekst = backup.manifest.kontekst
+    if (kontekst && (!profilPoczatkowy || kontekst.serwer !== profilPoczatkowy.serwer || kontekst.wlascicielId !== profilPoczatkowy.wlascicielId)) throw new BladBackupu('Kopia należy do innego serwera lub Właściciela.', 'KONTEKST_PROFILU')
+    if (!kontekst && profilPoczatkowy && opcje.trybStarszejKopii !== 'przypisz-do-aktywnego-profilu') throw new BladBackupu('Starsza kopia wymaga jawnego przypisania do aktywnego profilu.', 'MIGRACJA_STARSZEJ_KOPII')
+  }
+  sprawdzProfil()
   sprawdzBiezacyDostep('ustawienia', 'edycja')
   if (!await checksumJestPoprawny(backup)) {
     throw new BladBackupu('Checksum backupu jest niepoprawny.', 'CHECKSUM')
@@ -908,6 +927,8 @@ export async function przywrocBackup(
   const utworzKopie = opcje.utworzKopiePrzedPrzywracaniem
     ?? (() => utworzBackup(undefined, () => new Date().toISOString(), 'before-restore'))
   const backupPrzedPrzywracaniem = await utworzKopie()
+  sprawdzProfil()
+  if (profilPoczatkowy && (backupPrzedPrzywracaniem.manifest.kontekst?.serwer !== profilPoczatkowy.serwer || backupPrzedPrzywracaniem.manifest.kontekst?.wlascicielId !== profilPoczatkowy.wlascicielId)) throw new BladBackupu('Kopia ochronna ma niezgodny profil.', 'BEFORE_RESTORE')
   if (!await checksumJestPoprawny(backupPrzedPrzywracaniem)) {
     throw new BladBackupu('Automatyczna kopia before-restore ma niepoprawny checksum.', 'BEFORE_RESTORE')
   }
@@ -924,6 +945,7 @@ export async function przywrocBackup(
     throw new BladBackupu('Automatyczna kopia before-restore zawiera niepoprawne lub niepełne dane.', 'BEFORE_RESTORE', blad)
   }
   await opcje.poUtworzeniuKopii?.(backupPrzedPrzywracaniem)
+  sprawdzProfil()
 
   const definicje = wybraneSekcje.map((nazwa) => definicjeSekcji.find((element) => element.nazwa === nazwa)!)
   const tabele = [...new Set(definicje.flatMap((definicja) => definicja.tabele))]
@@ -939,6 +961,7 @@ export async function przywrocBackup(
   }
 
   await baza.transaction('rw', tabele.map((tabela) => baza.table(tabela)), async () => {
+    sprawdzProfil()
     sprawdzBiezacyDostep('ustawienia', 'edycja')
     for (const tabela of tabele) {
       const repozytorium = baza.table(tabela)
