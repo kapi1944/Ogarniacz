@@ -7,7 +7,9 @@ const NAZWA_COOKIE = 'ogarniacz_sesja'
 const MAKSYMALNY_ROZMIAR_JSON = 1024 * 1024
 const OKNO_PROB_LOGOWANIA_MS = 15 * 60 * 1000
 const LIMIT_PROB_LOGOWANIA = 10
-const probyLogowania = new Map<string, { liczba: number; od: number }>()
+const probyLogowania = new WeakMap<DatabaseSync, Map<string, { liczba: number; od: number }>>()
+const LIMIT_ADRESU = 50
+const LIMIT_KLUCZY = 10_000
 const MODULY = new Set([
   'zadania', 'projekty', 'skrzynka', 'planer', 'grafik', 'nawyki', 'leki', 'wizyty', 'zdrowie',
   'skierowania', 'przypomnienia', 'zakupy', 'rachunki', 'miasto', 'miejsca', 'cele', 'notatki',
@@ -76,33 +78,41 @@ function porownajSekrety(a: string, b: string): boolean {
   return buforA.length === buforB.length && timingSafeEqual(buforA, buforB)
 }
 
-function kluczLimitu(zadanie: IncomingMessage): string {
-  return zadanie.socket.remoteAddress ?? 'nieznany'
+function kluczeLimitu(zadanie: IncomingMessage, konto?: string): string[] {
+  // Nagłówki Forwarded/X-Forwarded-For nie stanowią dowodu adresu klienta.
+  return [`adres:${zadanie.socket.remoteAddress ?? 'nieznany'}`, ...(konto ? [`konto:${hashSekretu(konto)}`] : [])]
 }
 
-function czyZablokowaneLogowanie(zadanie: IncomingMessage): boolean {
-  const proba = probyLogowania.get(kluczLimitu(zadanie))
-  if (!proba) return false
-  if (Date.now() - proba.od >= OKNO_PROB_LOGOWANIA_MS) {
-    probyLogowania.delete(kluczLimitu(zadanie))
-    return false
+function pobierzProby(baza: DatabaseSync): Map<string, { liczba: number; od: number }> {
+  let proby = probyLogowania.get(baza)
+  if (!proby) {
+    proby = new Map()
+    probyLogowania.set(baza, proby)
   }
-  return proba.liczba >= LIMIT_PROB_LOGOWANIA
-}
-
-function zarejestrujNieudaneLogowanie(zadanie: IncomingMessage): void {
-  const klucz = kluczLimitu(zadanie)
-  const teraz = Date.now()
-  const poprzednia = probyLogowania.get(klucz)
-  if (!poprzednia || teraz - poprzednia.od >= OKNO_PROB_LOGOWANIA_MS) {
-    probyLogowania.set(klucz, { liczba: 1, od: teraz })
-    return
+  for (const [klucz, proba] of proby) {
+    if (Date.now() - proba.od >= OKNO_PROB_LOGOWANIA_MS) proby.delete(klucz)
   }
-  poprzednia.liczba += 1
+  return proby
 }
 
-function wyczyscNieudaneLogowania(zadanie: IncomingMessage): void {
-  probyLogowania.delete(kluczLimitu(zadanie))
+function czyZablokowaneLogowanie(zadanie: IncomingMessage, baza: DatabaseSync, konto?: string): boolean {
+  const proby = pobierzProby(baza)
+  return proby.size >= LIMIT_KLUCZY || kluczeLimitu(zadanie, konto).some((klucz) =>
+    (proby.get(klucz)?.liczba ?? 0) >= (klucz.startsWith('adres:') ? LIMIT_ADRESU : LIMIT_PROB_LOGOWANIA))
+}
+
+function zarejestrujNieudaneLogowanie(zadanie: IncomingMessage, baza: DatabaseSync, konto?: string): void {
+  const proby = pobierzProby(baza)
+  for (const klucz of kluczeLimitu(zadanie, konto)) {
+    const poprzednia = proby.get(klucz)
+    if (poprzednia) poprzednia.liczba += 1
+    else if (proby.size < LIMIT_KLUCZY) proby.set(klucz, { liczba: 1, od: Date.now() })
+  }
+}
+
+function wyczyscNieudaneLogowania(baza: DatabaseSync, konto: string): void {
+  // Sukces na jednym koncie nie zeruje limitu adresu dla ataków na inne konta.
+  pobierzProby(baza).delete(`konto:${hashSekretu(konto)}`)
 }
 
 function odpowiedzLimitu(odpowiedz: ServerResponse): void {
@@ -128,6 +138,7 @@ function czyIstniejeKontoWlasciciela(baza: DatabaseSync): boolean {
 }
 
 function sprawdzHaslo(haslo: string, zapisanyHash: string): boolean {
+  if (haslo.length > 200) return false
   const [algorytm, koszt, r, p, sol, oczekiwany] = zapisanyHash.split('$')
   if (algorytm !== 'scrypt' || !koszt || !r || !p || !sol || !oczekiwany) return false
   try {
@@ -189,7 +200,10 @@ export function pobierzKontekstDostepu(zadanie: IncomingMessage, baza: DatabaseS
     SELECT s.uzytkownik_id, s.aktywny_wlasciciel_id, s.csrf_hash, c.rola
     FROM sesje s
     JOIN czlonkostwa c ON c.wlasciciel_id = s.aktywny_wlasciciel_id AND c.uzytkownik_id = s.uzytkownik_id
+    JOIN uzytkownicy u ON u.id = s.uzytkownik_id
+    JOIN uzytkownicy w ON w.id = s.aktywny_wlasciciel_id
     WHERE s.token_hash = ? AND s.wygasa_at > ? AND c.status = 'aktywne'
+      AND u.status_konta = 'aktywne' AND w.status_konta = 'aktywne'
   `).get(hashSekretu(token), teraz)
   if (!wiersz) return undefined
   baza.prepare('UPDATE sesje SET ostatnia_aktywnosc_at = ? WHERE token_hash = ?').run(teraz, hashSekretu(token))
@@ -312,13 +326,13 @@ export async function obsluzKonta(
         odpowiedzJson(odpowiedz, 409, { error: 'Konto Właściciela już istnieje.' })
         return true
       }
-      if (czyZablokowaneLogowanie(zadanie)) {
+      if (czyZablokowaneLogowanie(zadanie, baza)) {
         odpowiedzLimitu(odpowiedz)
         return true
       }
       const dane = await odczytajJson(zadanie)
       if (!konfiguracja.ownerBootstrapToken || !porownajSekrety(tekst(dane.token), konfiguracja.ownerBootstrapToken)) {
-        zarejestrujNieudaneLogowanie(zadanie)
+        zarejestrujNieudaneLogowanie(zadanie, baza)
         odpowiedzJson(odpowiedz, 403, { error: 'Bootstrap Właściciela jest niedostępny.' })
         return true
       }
@@ -343,27 +357,33 @@ export async function obsluzKonta(
       }
       const kodyOdzyskiwania = utworzKodyOdzyskiwania(baza, uzytkownikId)
       const sesja = utworzSesje(baza, uzytkownikId, uzytkownikId, konfiguracja)
-      wyczyscNieudaneLogowania(zadanie)
+      wyczyscNieudaneLogowania(baza, email)
       odpowiedzJson(odpowiedz, 201, { ...daneKonta(baza, { uzytkownikId, wlascicielId: uzytkownikId, rola: 'wlasciciel' }, sesja.csrf), kodyOdzyskiwania }, sesja.cookie)
       return true
     }
 
     if (zadanie.method === 'POST' && sciezka === '/api/auth/login') {
-      if (czyZablokowaneLogowanie(zadanie)) {
+      if (czyZablokowaneLogowanie(zadanie, baza)) {
         odpowiedzLimitu(odpowiedz)
         return true
       }
       const dane = await odczytajJson(zadanie)
       const email = normalizujEmail(dane.email)
-      const uzytkownik = baza.prepare('SELECT id, haslo_hash FROM uzytkownicy WHERE email = ?').get(email)
-      if (!uzytkownik || !sprawdzHaslo(tekst(dane.haslo), tekst(uzytkownik.haslo_hash))) {
-        zarejestrujNieudaneLogowanie(zadanie)
+      if (czyZablokowaneLogowanie(zadanie, baza, email)) {
+        odpowiedzLimitu(odpowiedz)
+        return true
+      }
+      const uzytkownik = baza.prepare('SELECT id, haslo_hash, status_konta FROM uzytkownicy WHERE email = ?').get(email)
+      if (!uzytkownik || uzytkownik.status_konta !== 'aktywne' || !sprawdzHaslo(tekst(dane.haslo), tekst(uzytkownik.haslo_hash))) {
+        zarejestrujNieudaneLogowanie(zadanie, baza, email)
         odpowiedzJson(odpowiedz, 401, { error: 'Nieprawidłowy e-mail lub hasło.' })
         return true
       }
       const uzytkownikId = tekst(uzytkownik.id)
       const czlonkostwo = baza.prepare(`SELECT wlasciciel_id, rola FROM czlonkostwa
-        WHERE uzytkownik_id = ? AND status = 'aktywne' ORDER BY CASE WHEN rola = 'wlasciciel' THEN 0 ELSE 1 END LIMIT 1`).get(uzytkownikId)
+        WHERE uzytkownik_id = ? AND status = 'aktywne'
+          AND wlasciciel_id IN (SELECT id FROM uzytkownicy WHERE status_konta = 'aktywne')
+        ORDER BY CASE WHEN rola = 'wlasciciel' THEN 0 ELSE 1 END LIMIT 1`).get(uzytkownikId)
       if (!czlonkostwo) {
         odpowiedzJson(odpowiedz, 403, { error: 'Konto nie ma aktywnego dostępu.' })
         return true
@@ -371,23 +391,27 @@ export async function obsluzKonta(
       const wlascicielId = tekst(czlonkostwo.wlasciciel_id)
       const rola = tekst(czlonkostwo.rola) === 'wlasciciel' ? 'wlasciciel' : 'edytor'
       const sesja = utworzSesje(baza, uzytkownikId, wlascicielId, konfiguracja)
-      wyczyscNieudaneLogowania(zadanie)
+      wyczyscNieudaneLogowania(baza, email)
       odpowiedzJson(odpowiedz, 200, daneKonta(baza, { uzytkownikId, wlascicielId, rola }, sesja.csrf), sesja.cookie)
       return true
     }
 
     if (zadanie.method === 'POST' && sciezka === '/api/auth/recover') {
-      if (czyZablokowaneLogowanie(zadanie)) {
+      if (czyZablokowaneLogowanie(zadanie, baza)) {
         odpowiedzLimitu(odpowiedz)
         return true
       }
       const dane = await odczytajJson(zadanie)
       const email = normalizujEmail(dane.email)
-      const uzytkownik = baza.prepare('SELECT id FROM uzytkownicy WHERE email = ?').get(email)
+      if (czyZablokowaneLogowanie(zadanie, baza, email)) {
+        odpowiedzLimitu(odpowiedz)
+        return true
+      }
+      const uzytkownik = baza.prepare("SELECT id FROM uzytkownicy WHERE email = ? AND status_konta = 'aktywne'").get(email)
       const kodHash = hashSekretu(tekst(dane.kod))
       const kod = uzytkownik && baza.prepare('SELECT 1 FROM kody_odzyskiwania WHERE uzytkownik_id = ? AND kod_hash = ? AND uzyto_at IS NULL').get(tekst(uzytkownik.id), kodHash)
       if (!uzytkownik || !kod) {
-        zarejestrujNieudaneLogowanie(zadanie)
+        zarejestrujNieudaneLogowanie(zadanie, baza, email)
         odpowiedzJson(odpowiedz, 401, { error: 'Nieprawidłowy kod odzyskiwania.' })
         return true
       }
@@ -395,7 +419,7 @@ export async function obsluzKonta(
       const uzytkownikId = tekst(uzytkownik.id)
       baza.exec('BEGIN')
       try {
-        baza.prepare('UPDATE uzytkownicy SET haslo_hash = ?, zaktualizowano_at = ? WHERE id = ?').run(hashujHaslo(tekst(dane.noweHaslo)), teraz, uzytkownikId)
+        baza.prepare('UPDATE uzytkownicy SET haslo_hash = ?, wymagana_zmiana_hasla = 0, zaktualizowano_at = ? WHERE id = ?').run(hashujHaslo(tekst(dane.noweHaslo)), teraz, uzytkownikId)
         baza.prepare('UPDATE kody_odzyskiwania SET uzyto_at = ? WHERE uzytkownik_id = ? AND kod_hash = ?').run(teraz, uzytkownikId, kodHash)
         baza.prepare('DELETE FROM sesje WHERE uzytkownik_id = ?').run(uzytkownikId)
         baza.exec('COMMIT')
@@ -403,13 +427,13 @@ export async function obsluzKonta(
         baza.exec('ROLLBACK')
         throw blad
       }
-      wyczyscNieudaneLogowania(zadanie)
+      wyczyscNieudaneLogowania(baza, email)
       odpowiedzJson(odpowiedz, 200, { zmienionoHaslo: true })
       return true
     }
 
     if (zadanie.method === 'POST' && sciezka === '/api/auth/invitations/accept') {
-      if (czyZablokowaneLogowanie(zadanie)) {
+      if (czyZablokowaneLogowanie(zadanie, baza)) {
         odpowiedzLimitu(odpowiedz)
         return true
       }
@@ -418,14 +442,19 @@ export async function obsluzKonta(
       const zaproszenie = baza.prepare(`SELECT id, wlasciciel_id, email FROM zaproszenia_edytorow
         WHERE token_hash = ? AND status = 'oczekuje' AND wygasa_at > ?`).get(tokenHash, new Date().toISOString())
       if (!zaproszenie) {
-        zarejestrujNieudaneLogowanie(zadanie)
+        zarejestrujNieudaneLogowanie(zadanie, baza)
         odpowiedzJson(odpowiedz, 410, { error: 'Zaproszenie wygasło albo zostało cofnięte.' })
         return true
       }
       const email = tekst(zaproszenie.email)
-      const istniejacy = baza.prepare('SELECT id, haslo_hash FROM uzytkownicy WHERE email = ?').get(email)
-      if (istniejacy && !sprawdzHaslo(tekst(dane.haslo), tekst(istniejacy.haslo_hash))) {
-        zarejestrujNieudaneLogowanie(zadanie)
+      if (czyZablokowaneLogowanie(zadanie, baza, email)) {
+        odpowiedzLimitu(odpowiedz)
+        return true
+      }
+      const istniejacy = baza.prepare('SELECT id, haslo_hash, status_konta FROM uzytkownicy WHERE email = ?').get(email)
+      const wlasciciel = baza.prepare('SELECT status_konta FROM uzytkownicy WHERE id = ?').get(tekst(zaproszenie.wlasciciel_id))
+      if (wlasciciel?.status_konta !== 'aktywne' || istniejacy && (istniejacy.status_konta !== 'aktywne' || !sprawdzHaslo(tekst(dane.haslo), tekst(istniejacy.haslo_hash)))) {
+        zarejestrujNieudaneLogowanie(zadanie, baza, email)
         odpowiedzJson(odpowiedz, 401, { error: 'Podaj hasło istniejącego konta.' })
         return true
       }
@@ -448,11 +477,14 @@ export async function obsluzKonta(
       const kodyOdzyskiwania = istniejacy ? undefined : utworzKodyOdzyskiwania(baza, uzytkownikId)
       const wlascicielId = tekst(zaproszenie.wlasciciel_id)
       const sesja = utworzSesje(baza, uzytkownikId, wlascicielId, konfiguracja)
-      wyczyscNieudaneLogowania(zadanie)
+      wyczyscNieudaneLogowania(baza, email)
       odpowiedzJson(odpowiedz, 200, { ...daneKonta(baza, { uzytkownikId, wlascicielId, rola: 'edytor' }, sesja.csrf), kodyOdzyskiwania }, sesja.cookie)
       return true
     }
 
+    // Odczyt ciała może czekać na sieć; autoryzację sprawdzamy dopiero po nim.
+    const daneBezpieczenstwa = zadanie.method === 'POST' && ['/api/account/password', '/api/account/sessions/revoke'].includes(sciezka)
+      ? await odczytajJson(zadanie) : undefined
     const kontekst = pobierzKontekstDostepu(zadanie, baza)
     if (!kontekst) {
       odpowiedzJson(odpowiedz, 401, { error: 'Zaloguj się ponownie.' })
@@ -470,6 +502,64 @@ export async function obsluzKonta(
     if (zadanie.method === 'POST' && sciezka === '/api/auth/logout') {
       baza.prepare('DELETE FROM sesje WHERE token_hash = ?').run(hashSekretu(pobierzCookie(zadanie)!))
       odpowiedzJson(odpowiedz, 200, { wylogowano: true }, wygasCookie())
+      return true
+    }
+    if (zadanie.method === 'GET' && sciezka === '/api/account/sessions') {
+      const biezaca = hashSekretu(pobierzCookie(zadanie)!)
+      const sesje = baza.prepare(`SELECT id, utworzono_at, ostatnia_aktywnosc_at, token_hash = ? AS biezaca
+        FROM sesje WHERE uzytkownik_id = ? AND wygasa_at > ? ORDER BY utworzono_at DESC`)
+        .all(biezaca, kontekst.uzytkownikId, new Date().toISOString()).map((wiersz) => ({
+          id: tekst(wiersz.id), utworzonoAt: tekst(wiersz.utworzono_at),
+          ostatniaAktywnoscAt: tekst(wiersz.ostatnia_aktywnosc_at), biezaca: Number(wiersz.biezaca) === 1,
+        }))
+      odpowiedzJson(odpowiedz, 200, { sesje })
+      return true
+    }
+    if (zadanie.method === 'POST' && sciezka === '/api/account/sessions/revoke') {
+      const dane = daneBezpieczenstwa!
+      const sesja = baza.prepare('SELECT token_hash FROM sesje WHERE id = ? AND uzytkownik_id = ?')
+        .get(tekst(dane.id), kontekst.uzytkownikId)
+      if (!sesja) {
+        odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono sesji.' })
+        return true
+      }
+      baza.prepare('DELETE FROM sesje WHERE id = ? AND uzytkownik_id = ?').run(tekst(dane.id), kontekst.uzytkownikId)
+      const biezaca = sesja.token_hash === hashSekretu(pobierzCookie(zadanie)!)
+      odpowiedzJson(odpowiedz, 200, { wylogowano: true, biezaca }, biezaca ? wygasCookie() : undefined)
+      return true
+    }
+    if (zadanie.method === 'POST' && sciezka === '/api/account/sessions/revoke-all') {
+      baza.prepare('DELETE FROM sesje WHERE uzytkownik_id = ?').run(kontekst.uzytkownikId)
+      odpowiedzJson(odpowiedz, 200, { wylogowano: true }, wygasCookie())
+      return true
+    }
+    if (zadanie.method === 'POST' && sciezka === '/api/account/password') {
+      const dane = daneBezpieczenstwa!
+      const uzytkownik = baza.prepare('SELECT email, haslo_hash FROM uzytkownicy WHERE id = ?').get(kontekst.uzytkownikId)!
+      const email = tekst(uzytkownik.email)
+      if (czyZablokowaneLogowanie(zadanie, baza, email)) {
+        odpowiedzLimitu(odpowiedz)
+        return true
+      }
+      if (!sprawdzHaslo(tekst(dane.aktualneHaslo), tekst(uzytkownik.haslo_hash))) {
+        zarejestrujNieudaneLogowanie(zadanie, baza, email)
+        odpowiedzJson(odpowiedz, 400, { error: 'Aktualne hasło jest nieprawidłowe.' })
+        return true
+      }
+      const nowyHash = hashujHaslo(tekst(dane.noweHaslo))
+      baza.exec('BEGIN')
+      try {
+        baza.prepare('UPDATE uzytkownicy SET haslo_hash = ?, wymagana_zmiana_hasla = 0, zaktualizowano_at = ? WHERE id = ?')
+          .run(nowyHash, new Date().toISOString(), kontekst.uzytkownikId)
+        baza.prepare('DELETE FROM sesje WHERE uzytkownik_id = ? AND token_hash <> ?')
+          .run(kontekst.uzytkownikId, hashSekretu(pobierzCookie(zadanie)!))
+        baza.exec('COMMIT')
+      } catch (blad) {
+        baza.exec('ROLLBACK')
+        throw blad
+      }
+      wyczyscNieudaneLogowania(baza, email)
+      odpowiedzJson(odpowiedz, 200, { zmieniono: true })
       return true
     }
     if (kontekst.rola !== 'wlasciciel') {

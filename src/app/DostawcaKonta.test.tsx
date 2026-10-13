@@ -1,10 +1,13 @@
-import { cleanup as wyczysc, render, screen } from '@testing-library/react'
+import { cleanup as wyczysc, fireEvent as zdarzenie, render, screen } from '@testing-library/react'
 import { afterEach as poKazdym, beforeEach as przedKazdym, describe, expect, it, vi } from 'vitest'
 import {
   BladKonta,
   czyBootstrapDostepny,
   pobierzKontoOffline,
   pobierzSesjeKonta,
+  pobierzListeSesji,
+  zmienHaslo,
+  wyloguj,
   type KontoUzytkownika,
 } from '../services/KontaService'
 import { DostawcaKonta } from './DostawcaKonta'
@@ -20,6 +23,9 @@ vi.mock('../services/KontaService', async (importujOryginal) => {
     czyBootstrapDostepny: vi.fn(),
     pobierzKontoOffline: vi.fn(),
     pobierzSesjeKonta: vi.fn(),
+    pobierzListeSesji: vi.fn(),
+    zmienHaslo: vi.fn(),
+    wyloguj: vi.fn(),
   }
 })
 
@@ -47,6 +53,36 @@ poKazdym(() => {
 })
 
 describe('onboarding konta', () => {
+  it('zmienia hasło w panelu konta i czyści pola bez wylogowania bieżącej sesji', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
+    vi.mocked(zmienHaslo).mockResolvedValue(undefined)
+    render(<DostawcaKonta><div>Aplikacja działa</div></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Właściciel' }))
+    zdarzenie.change(screen.getByLabelText('Aktualne hasło'), { target: { value: 'Stare-haslo' } })
+    zdarzenie.change(screen.getByLabelText('Nowe hasło'), { target: { value: 'Nowe-haslo' } })
+    zdarzenie.change(screen.getByLabelText('Powtórz nowe hasło'), { target: { value: 'Nowe-haslo' } })
+    zdarzenie.click(screen.getByRole('button', { name: 'Zmień hasło' }))
+    expect(await screen.findByText('Hasło zmienione. Pozostałe sesje zostały wylogowane.')).toBeInTheDocument()
+    expect(zmienHaslo).toHaveBeenCalledWith('Stare-haslo', 'Nowe-haslo')
+    expect(screen.getByLabelText('Aktualne hasło')).toHaveValue('')
+    expect(screen.getByLabelText('Nowe hasło')).toHaveValue('')
+    expect(wyloguj).not.toHaveBeenCalled()
+  })
+
+  it('pokazuje błędy listy sesji i wylogowania, zachowując panel i konto', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
+    vi.mocked(pobierzListeSesji).mockRejectedValue(new Error('Lista sesji jest niedostępna.'))
+    vi.mocked(wyloguj).mockRejectedValue(new Error('Nie udało się unieważnić sesji.'))
+    render(<DostawcaKonta><div>Aplikacja działa</div></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Właściciel' }))
+    zdarzenie.click(screen.getByRole('button', { name: 'Pokaż aktywne sesje' }))
+    expect(await screen.findByText('Lista sesji jest niedostępna.')).toBeInTheDocument()
+    zdarzenie.click(screen.getByRole('button', { name: 'Wyloguj bieżącą sesję' }))
+    expect(await screen.findByText('Nie udało się unieważnić sesji.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Hasło i sesje' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Zaloguj się' })).not.toBeInTheDocument()
+  })
+
   it('istniejąca sesja omija onboarding', async () => {
     vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
 

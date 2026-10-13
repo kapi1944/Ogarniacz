@@ -1,5 +1,27 @@
 ﻿# Bezpieczeństwo i dane użytkownika
 
+## Hasła i sesje — etap 2
+
+API dostępne dla każdej aktywnej tożsamości, również Edytora:
+
+- `POST /api/account/password`: `aktualneHaslo`, `noweHaslo` (8–200 znaków); sukces unieważnia pozostałe sesje, zachowuje bieżącą.
+- `GET /api/account/sessions`: wyłącznie własne niewygasłe sesje: `id`, `utworzonoAt`, `ostatniaAktywnoscAt`, `biezaca`. ID jest losowe i niezależne od sekretu; odpowiedź nie zawiera tokenów ani hashy. Nie zbieramy User-Agent, IP ani identyfikatorów urządzeń do listy sesji.
+- `POST /api/account/sessions/revoke`: `id`, ograniczone do użytkownika sesji uwierzytelniającej. Cudze/nieistniejące ID daje ten sam 404.
+- `POST /api/account/sessions/revoke-all`: wszystkie sesje własnej tożsamości, niezależnie od aktywnego członkostwa, również bieżąca.
+- Dotychczasowe `POST /api/auth/logout` wylogowuje bieżącą sesję. Usunięcie bieżącej sesji wygasza cookie z dotychczasowymi HttpOnly, Secure, SameSite=None.
+
+Operacje zapisu wymagają istniejącego CSRF; listowanie nie rotuje CSRF. Odpowiedzi mają `Cache-Control: no-store`; istniejąca polityka CORS pozostaje zachowana. Panel nie zapisuje haseł ani listy sesji do storage i nie ustawia autofocus.
+
+Limit nieudanych prób: 10 dla znormalizowanego e-maila i 50 dla adresu połączenia w oknie 15 minut. Obejmuje logowanie, odzyskiwanie i sprawdzanie hasła istniejącego konta przy zaproszeniu oraz zmianie hasła. Nieudany bootstrap/nieprawidłowy token zaproszenia zwiększa licznik adresu. Udane logowanie czyści wyłącznie licznik konta, nigdy adresu. Klucze kont są hashowane; mapa jest ograniczona do 10 000 wpisów i czyści wygasłe okna, a przy zapełnieniu odrzuca dalsze próby. Nie ufa `Forwarded` ani `X-Forwarded-For`. Za proxy adresowy limit jest wspólny dla klientów proxy, ale limit konta działa niezależnie od nagłówków i adresu. Liczniki są lokalne dla procesu/bazy i zerują się po restarcie; brak rozproszonego limitera.
+
+### Ocena zwiększenia kosztu scrypt na Raspberry Pi 4
+
+Etap zachowuje zapis `scrypt$N$r$p$sol$hash`, dotychczasowe N=16384, r=8, p=1, klucz 64 bajty i maxmem=64 MiB. Weryfikacja odczytuje parametry z istniejącego hasha; nie ma masowego przeliczenia ani zmiany algorytmu. To słabszy koszt od obecnych zaleceń [OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt), np. N=131072/r=8/p=1 (około 128 MiB) albo N=32768/r=8/p=3 (około 32 MiB).
+
+Stopniowe przejście jest możliwe: najpierw pomiar N=32768/r=8/p=1, następnie wariantu OWASP 32768/8/3 lub 131072/8/1. Pierwszy krok sam nie osiąga wskazanego kosztu OWASP. Przy r=8 pamięć rośnie w przybliżeniu od 16 do 32 i 128 MiB; [Node.js](https://nodejs.org/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback) wymaga maxmem powyżej kosztu 128*N*r z zapasem (dla N=131072 np. 192 MiB). Zwiększanie p podnosi koszt CPU przy podobnym głównym koszcie pamięci.
+
+Nie wykonano pomiarów na Raspberry Pi 4 i nie zwiększono automatycznie parametrów. Przed podniesieniem kosztu trzeba zmierzyć czas logowania/zmiany hasła (w tym p95), RSS, temperaturę i opóźnienia pozostałych żądań na docelowym Pi z działającymi usługami. Obecny `scryptSync` blokuje pętlę zdarzeń: większy koszt wymaga oceny przejścia na asynchroniczny scrypt z ograniczoną liczbą równoległych operacji. Docelowy koszt można następnie stosować do nowych/zmienianych haseł i podnosić hash po poprawnym logowaniu, bez znajomości haseł z góry. Parametry starego hasha muszą nadal pozostawać obsługiwane; limit pamięci musi pozwalać sprawdzać najsilniejszy zapisany wariant także po cofnięciu konfiguracji. Te kroki wymagają osobnej implementacji i pomiarów.
+
 ## Nigdy nie rób
 - nie commituj sekretów, kluczy API, tokenów, keystore,
 - nie generuj nowego klucza podpisującego APK,

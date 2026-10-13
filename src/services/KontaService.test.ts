@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CapacitorHttp } from '@capacitor/core'
-import { pobierzCsrfKonta, pobierzSesjeKonta, uruchomAktualizacjeRaspberry, zaloguj } from './KontaService'
+import { pobierzCsrfKonta, pobierzKontoOffline, pobierzListeSesji, pobierzSesjeKonta, uruchomAktualizacjeRaspberry, wylogujSesje, wylogujWszystkieSesje, zaloguj, zmienHaslo } from './KontaService'
 
 // Setup uprawnień ładuje usługę kont; usuń ten cache przed zastosowaniem mocków.
 vi.hoisted(() => vi.resetModules())
@@ -32,6 +32,36 @@ beforeEach(() => {
 })
 
 describe('KontaService', () => {
+  it('nie utrwala hasła ani listy sesji i wysyła CSRF przy zmianie hasła', async () => {
+    sessionStorage.setItem('ogarniacz-csrf', 'csrf-testowy')
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: { zmieniono: true }, headers: {}, url: '' })
+    await zmienHaslo('Aktualne-haslo', 'Nowe-haslo')
+    expect(CapacitorHttp.request).toHaveBeenCalledWith(expect.objectContaining({
+      url: 'https://raspberrypi.tailnet.ts.net/api/account/password',
+      data: { aktualneHaslo: 'Aktualne-haslo', noweHaslo: 'Nowe-haslo' },
+      headers: { 'content-type': 'application/json', 'x-ogarniacz-csrf': 'csrf-testowy' },
+    }))
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: { sesje: [{ id: 'publiczne-id', biezaca: true }] }, headers: {}, url: '' })
+    expect(await pobierzListeSesji()).toEqual([{ id: 'publiczne-id', biezaca: true }])
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(1)
+  })
+
+  it('czyści lokalne konto dopiero po potwierdzonym unieważnieniu własnej sesji', async () => {
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: konto, headers: {}, url: '' })
+    await zaloguj('owner@example.test', 'tajne-haslo')
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: { biezaca: false }, headers: {}, url: '' })
+    expect(await wylogujSesje('inna')).toBe(false)
+    expect(pobierzKontoOffline()).toBeDefined()
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 403, data: { error: 'Odmowa' }, headers: {}, url: '' })
+    await expect(wylogujWszystkieSesje()).rejects.toThrow('Odmowa')
+    expect(pobierzKontoOffline()).toBeDefined()
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: { wylogowano: true }, headers: {}, url: '' })
+    await wylogujWszystkieSesje()
+    expect(pobierzKontoOffline()).toBeUndefined()
+    expect(pobierzCsrfKonta()).toBeUndefined()
+  })
+
   it('logowanie tworzy sesję przez API z credentials i zapisuje wyłącznie CSRF', async () => {
     vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: konto, headers: {}, url: '' })
 

@@ -1,5 +1,5 @@
 import { strict as assert } from 'node:assert'
-import { createHash } from 'node:crypto'
+import { createHash, scryptSync } from 'node:crypto'
 import { test } from 'node:test'
 import { DatabaseSync } from 'node:sqlite'
 import { utworzKonfiguracjeSerwera } from './config.ts'
@@ -70,6 +70,180 @@ function tokenZCookie(odpowiedz: Response): string {
   assert.ok(token)
   return decodeURIComponent(token)
 }
+
+function ustawHaslo(baza: DatabaseSync, id: string): string {
+  const sol = Buffer.from('testowa-sol-16-b!')
+  const zapisany = `scrypt$16384$8$1$${sol.toString('base64url')}$${scryptSync('Dotychczasowe-haslo', sol, 64, { N: 16384, r: 8, p: 1 }).toString('base64url')}`
+  baza.prepare('UPDATE uzytkownicy SET haslo_hash = ? WHERE id = ?').run(zapisany, id)
+  return zapisany
+}
+
+test('zmiana hasła wymaga aktualnego hasła i CSRF, zachowuje bieżącą sesję i unieważnia pozostałe', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'konto', 'haslo@example.test')
+    const staryHash = ustawHaslo(baza, 'konto')
+    baza.exec("UPDATE uzytkownicy SET wymagana_zmiana_hasla = 1 WHERE id = 'konto'")
+    dodajSesje(baza, 'biezaca', 'csrf', 'konto')
+    dodajSesje(baza, 'inna', 'csrf-inna', 'konto')
+    const zmien = (aktualneHaslo: string, noweHaslo: string, csrf?: string) => fetch(`${adres}/api/account/password`, {
+      method: 'POST', headers: naglowki('biezaca', csrf), body: JSON.stringify({ aktualneHaslo, noweHaslo }),
+    })
+    assert.equal((await zmien('Dotychczasowe-haslo', 'Nowe-haslo')).status, 403)
+    assert.equal((await zmien('Bledne-haslo', 'Nowe-haslo', 'csrf')).status, 400)
+    assert.equal((await zmien('Dotychczasowe-haslo', 'krotkie', 'csrf')).status, 400)
+    assert.equal(baza.prepare("SELECT haslo_hash FROM uzytkownicy WHERE id = 'konto'").get()?.haslo_hash, staryHash)
+    assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM sesje').get()?.liczba, 2)
+    assert.equal((await zmien('Dotychczasowe-haslo', 'Nowe-haslo', 'csrf')).status, 200)
+    assert.equal(baza.prepare("SELECT wymagana_zmiana_hasla FROM uzytkownicy WHERE id = 'konto'").get()?.wymagana_zmiana_hasla, 0)
+    assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('inna') })).status, 401)
+    assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('biezaca') })).status, 200)
+    for (const [haslo, status] of [['Dotychczasowe-haslo', 401], ['Nowe-haslo', 200]] as const) {
+      assert.equal((await fetch(`${adres}/api/auth/login`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'haslo@example.test', haslo }),
+      })).status, status)
+    }
+  })
+})
+
+test('błąd unieważniania sesji wycofuje zmianę hasła i znacznika w jednej transakcji', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'konto', 'transakcja@example.test')
+    ustawHaslo(baza, 'konto')
+    baza.exec("UPDATE uzytkownicy SET wymagana_zmiana_hasla = 1 WHERE id = 'konto'")
+    dodajSesje(baza, 'biezaca', 'csrf', 'konto')
+    dodajSesje(baza, 'inna', 'csrf-inna', 'konto')
+    const przed = baza.prepare("SELECT * FROM uzytkownicy WHERE id = 'konto'").get()
+    baza.exec("CREATE TEMP TRIGGER blad_usuwania BEFORE DELETE ON sesje BEGIN SELECT RAISE(ABORT, 'blad-testowy'); END;")
+    const odpowiedz = await fetch(`${adres}/api/account/password`, {
+      method: 'POST', headers: naglowki('biezaca', 'csrf'), body: JSON.stringify({ aktualneHaslo: 'Dotychczasowe-haslo', noweHaslo: 'Nowe-haslo' }),
+    })
+    assert.equal(odpowiedz.status, 400)
+    assert.deepEqual(baza.prepare("SELECT * FROM uzytkownicy WHERE id = 'konto'").get(), przed)
+    assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM sesje').get()?.liczba, 2)
+  })
+})
+
+test('lista i wylogowanie sesji są ograniczone do użytkownika, bez tokenów i hashy', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'konto', 'sesje@example.test')
+    dodajUzytkownika(baza, 'obce', 'obce@example.test')
+    dodajSesje(baza, 'biezaca', 'csrf', 'konto')
+    dodajSesje(baza, 'inna', 'csrf-inna', 'konto')
+    dodajSesje(baza, 'obca', 'csrf-obca', 'obce')
+    assert.equal((await fetch(`${adres}/api/account/sessions`)).status, 401)
+    const odpowiedz = await fetch(`${adres}/api/account/sessions`, { headers: naglowki('biezaca') })
+    assert.equal(odpowiedz.headers.get('cache-control'), 'no-store')
+    const dane = await odpowiedz.json() as { sesje: { id: string; biezaca: boolean }[] }
+    assert.equal(dane.sesje.length, 2)
+    assert.equal(dane.sesje.filter((sesja) => sesja.biezaca).length, 1)
+    for (const sesja of dane.sesje) {
+      assert.deepEqual(Object.keys(sesja).sort(), ['biezaca', 'id', 'ostatniaAktywnoscAt', 'utworzonoAt'])
+      assert.match(sesja.id, /^[a-f0-9]{32}$/)
+      assert.notEqual(sesja.id, hash('biezaca'))
+      assert.notEqual(sesja.id, hash('inna'))
+    }
+    const uniewaznij = (id: string, csrf?: string) => fetch(`${adres}/api/account/sessions/revoke`, {
+      method: 'POST', headers: naglowki('biezaca', csrf), body: JSON.stringify({ id }),
+    })
+    const obceId = String(baza.prepare('SELECT id FROM sesje WHERE token_hash = ?').get(hash('obca'))?.id)
+    assert.equal((await uniewaznij(obceId, 'csrf')).status, 404)
+    const inna = dane.sesje.find((sesja) => !sesja.biezaca)!
+    assert.equal((await uniewaznij(inna.id)).status, 403)
+    assert.equal((await uniewaznij(inna.id, 'csrf')).status, 200)
+    assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('inna') })).status, 401)
+    assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('obca') })).status, 200)
+    const biezaca = dane.sesje.find((sesja) => sesja.biezaca)!
+    const wylogowanie = await uniewaznij(biezaca.id, 'csrf')
+    assert.match(wylogowanie.headers.get('set-cookie') ?? '', /HttpOnly; Secure; SameSite=None; Max-Age=0/)
+    assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('biezaca') })).status, 401)
+  })
+})
+
+test('wylogowanie wszystkich sesji obejmuje wszystkie członkostwa użytkownika i chroni cudze sesje', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'konto', 'wszystkie@example.test')
+    dodajUzytkownika(baza, 'obce', 'obce@example.test')
+    dodajSesje(baza, 'biezaca', 'csrf', 'konto')
+    dodajSesje(baza, 'edytor', 'csrf-edytor', 'konto', 'obce', 'edytor')
+    dodajSesje(baza, 'obca', 'csrf-obca', 'obce')
+    const wyloguj = (csrf?: string) => fetch(`${adres}/api/account/sessions/revoke-all`, {
+      method: 'POST', headers: naglowki('biezaca', csrf), body: '{}',
+    })
+    assert.equal((await wyloguj()).status, 403)
+    const odpowiedz = await wyloguj('csrf')
+    assert.equal(odpowiedz.status, 200)
+    assert.match(odpowiedz.headers.get('set-cookie') ?? '', /Max-Age=0/)
+    for (const token of ['biezaca', 'edytor']) assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki(token) })).status, 401)
+    assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('obca') })).status, 200)
+  })
+})
+
+test('dezaktywacja i archiwizacja kasują sesje, blokują logowanie, odzyskiwanie i przyjęcie zaproszenia', async () => {
+  for (const status of ['nieaktywne', 'zarchiwizowane']) {
+    await zSerwerem(async (adres, baza) => {
+      dodajUzytkownika(baza, 'konto', 'dezaktywacja@example.test')
+      dodajUzytkownika(baza, 'wlasciciel', 'aktywny@example.test')
+      ustawHaslo(baza, 'konto')
+      dodajSesje(baza, 'stara', 'csrf', 'konto')
+      baza.prepare('INSERT INTO kody_odzyskiwania (uzytkownik_id, kod_hash, utworzono_at) VALUES (?, ?, ?)').run('konto', hash('kod'), TERAZ)
+      baza.prepare("INSERT INTO zaproszenia_edytorow (id, wlasciciel_id, email, token_hash, wygasa_at, utworzono_at) VALUES ('zaproszenie', 'wlasciciel', 'dezaktywacja@example.test', ?, ?, ?)").run(hash('zaproszenie'), WYGASA, TERAZ)
+      baza.prepare("UPDATE uzytkownicy SET status_konta = ? WHERE id = 'konto'").run(status)
+      assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM sesje').get()?.liczba, 0)
+      // Nawet sesja dodana poza normalnym API nie omija kontroli statusu.
+      dodajSesje(baza, 'nielegalna', 'csrf', 'konto')
+      assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('nielegalna') })).status, 401)
+      for (const [sciezka, dane] of [
+        ['/api/auth/login', { email: 'dezaktywacja@example.test', haslo: 'Dotychczasowe-haslo' }],
+        ['/api/auth/recover', { email: 'dezaktywacja@example.test', kod: 'kod', noweHaslo: 'Nowe-haslo' }],
+        ['/api/auth/invitations/accept', { token: 'zaproszenie', haslo: 'Dotychczasowe-haslo' }],
+      ] as const) {
+        assert.equal((await fetch(`${adres}${sciezka}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(dane) })).status, 401)
+      }
+      baza.exec("UPDATE uzytkownicy SET status_konta = 'aktywne' WHERE id = 'konto'")
+      assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('stara') })).status, 401)
+    })
+  }
+})
+
+test('limity konta ignorują fałszywe adresy proxy, a udane logowanie nie zeruje limitu adresu', async (kontekstTestu) => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'konto', 'limit@example.test')
+    const zapisany = ustawHaslo(baza, 'konto')
+    const zaloguj = (email: string, haslo: string, numer: number) => fetch(`${adres}/api/auth/login`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `192.0.2.${numer}`, forwarded: `for=192.0.2.${numer}` },
+      body: JSON.stringify({ email, haslo }),
+    })
+    for (let numer = 0; numer < 10; numer++) assert.equal((await zaloguj('limit@example.test', 'bledne-haslo', numer)).status, 401)
+    assert.equal((await zaloguj('LIMIT@example.test', 'Dotychczasowe-haslo', 11)).status, 429)
+    assert.equal(baza.prepare("SELECT haslo_hash FROM uzytkownicy WHERE id = 'konto'").get()?.haslo_hash, zapisany)
+    // Poprawne hasło innego konta nie daje możliwości resetowania wspólnego limitu IP.
+    dodajUzytkownika(baza, 'drugie', 'drugie@example.test')
+    ustawHaslo(baza, 'drugie')
+    assert.equal((await zaloguj('drugie@example.test', 'Dotychczasowe-haslo', 12)).status, 200)
+    for (let numer = 10; numer < 50; numer++) assert.equal((await zaloguj(`nieistniejace-${numer}@example.test`, 'bledne-haslo', numer)).status, 401)
+    const odpowiedz = await zaloguj('drugie@example.test', 'Dotychczasowe-haslo', 51)
+    assert.equal(odpowiedz.status, 429)
+    assert.equal(odpowiedz.headers.get('retry-after'), '900')
+    const teraz = Date.now()
+    kontekstTestu.mock.method(Date, 'now', () => teraz + 15 * 60 * 1000 + 1)
+    assert.equal((await zaloguj('drugie@example.test', 'Dotychczasowe-haslo', 52)).status, 200)
+  })
+})
+
+test('Edytor może zarządzać własnym hasłem i sesjami bez uprawnień Właściciela', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'konto', 'edytor@example.test')
+    dodajUzytkownika(baza, 'wlasciciel', 'wlasciciel@example.test')
+    ustawHaslo(baza, 'konto')
+    dodajSesje(baza, 'edytor', 'csrf', 'konto', 'wlasciciel', 'edytor')
+    assert.equal((await fetch(`${adres}/api/account/sessions`, { headers: naglowki('edytor') })).status, 200)
+    assert.equal((await fetch(`${adres}/api/account/password`, {
+      method: 'POST', headers: naglowki('edytor', 'csrf'), body: JSON.stringify({ aktualneHaslo: 'Dotychczasowe-haslo', noweHaslo: 'Nowe-haslo' }),
+    })).status, 200)
+    assert.equal((await fetch(`${adres}/api/auth/logout`, { method: 'POST', headers: naglowki('edytor', 'csrf'), body: '{}' })).status, 200)
+    assert.equal((await fetch(`${adres}/api/account`, { headers: naglowki('edytor') })).status, 401)
+  })
+})
 
 test('sync odrzuca GET, POST i Bearer bez normalnej sesji', async () => {
   await zSerwerem(async (adres) => {

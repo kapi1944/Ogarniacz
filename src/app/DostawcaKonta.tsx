@@ -11,14 +11,19 @@ import {
   odzyskajDostep,
   pobierzKontoOffline,
   pobierzSesjeKonta,
+  pobierzListeSesji,
   przyjmijZaproszenie,
   utworzKontoWlasciciela,
   wyczyscKontoLokalne,
   wyloguj,
+  wylogujSesje,
+  wylogujWszystkieSesje,
+  zmienHaslo,
   zaloguj,
   zapiszGrant,
   zaprosEdytora,
   type KontoUzytkownika,
+  type SesjaKonta,
 } from '../services/KontaService'
 
 interface WartoscKontekstuKonta {
@@ -31,6 +36,64 @@ const MODULY_GRANTOW = ['zadania', 'projekty', 'skrzynka', 'planer', 'grafik', '
 
 function powiadomOSesji(): void {
   window.dispatchEvent(new Event('ogarniacz:konto'))
+}
+
+function PanelHaslaISesji({ odswiez, wyczysc }: { odswiez: () => Promise<void>; wyczysc: () => void }) {
+  const [aktualneHaslo, ustawAktualneHaslo] = useState('')
+  const [noweHaslo, ustawNoweHaslo] = useState('')
+  const [powtorzoneHaslo, ustawPowtorzoneHaslo] = useState('')
+  const [sesje, ustawSesje] = useState<SesjaKonta[]>()
+  const [blad, ustawBlad] = useState('')
+  const [komunikat, ustawKomunikat] = useState('')
+  const [zajety, ustawZajety] = useState(false)
+
+  const wykonaj = async (operacja: () => Promise<void>) => {
+    if (zajety) return
+    ustawZajety(true)
+    ustawBlad('')
+    ustawKomunikat('')
+    try { await operacja() }
+    catch (przyczyna) { ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się wykonać operacji.') }
+    finally { ustawZajety(false) }
+  }
+
+  return <section>
+    <h3>Hasło i sesje</h3>
+    {blad && <Komunikat typ="blad">{blad}</Komunikat>}
+    {komunikat && <p role="status">{komunikat}</p>}
+    <form className="formularz" onSubmit={(zdarzenie) => {
+      zdarzenie.preventDefault()
+      if (noweHaslo !== powtorzoneHaslo) { ustawBlad('Nowe hasła muszą być jednakowe.'); return }
+      void wykonaj(async () => {
+        const aktualne = aktualneHaslo
+        const nowe = noweHaslo
+        ustawAktualneHaslo(''); ustawNoweHaslo(''); ustawPowtorzoneHaslo('')
+        await zmienHaslo(aktualne, nowe)
+        ustawKomunikat('Hasło zmienione. Pozostałe sesje zostały wylogowane.')
+        ustawSesje(undefined)
+        await odswiez()
+      })
+    }}>
+      <label className="pole"><span>Aktualne hasło</span><input type="password" autoComplete="current-password" required maxLength={200} value={aktualneHaslo} onChange={(zdarzenie) => ustawAktualneHaslo(zdarzenie.target.value)} /></label>
+      <label className="pole"><span>Nowe hasło</span><input type="password" autoComplete="new-password" required minLength={8} maxLength={200} value={noweHaslo} onChange={(zdarzenie) => ustawNoweHaslo(zdarzenie.target.value)} /></label>
+      <label className="pole"><span>Powtórz nowe hasło</span><input type="password" autoComplete="new-password" required minLength={8} maxLength={200} value={powtorzoneHaslo} onChange={(zdarzenie) => ustawPowtorzoneHaslo(zdarzenie.target.value)} /></label>
+      <p className="tekst-pomocniczy">Zmiana hasła wyloguje pozostałe sesje. Ta sesja pozostanie aktywna.</p>
+      <button className="przycisk przycisk--glowny" type="submit" disabled={zajety}>Zmień hasło</button>
+    </form>
+    <button className="przycisk przycisk--drugorzedny" type="button" disabled={zajety} onClick={() => void wykonaj(async () => ustawSesje(await pobierzListeSesji()))}>Pokaż aktywne sesje</button>
+    {sesje?.length === 0 && <p>Brak aktywnych sesji.</p>}
+    {sesje?.map((sesja) => <div className="wiersz-konta" key={sesja.id}>
+      <span>{sesja.biezaca ? 'Bieżąca sesja' : 'Inna sesja'} · Utworzona: {new Date(sesja.utworzonoAt).toLocaleString('pl-PL')} · Ostatnia aktywność: {new Date(sesja.ostatniaAktywnoscAt).toLocaleString('pl-PL')}</span>
+      <button className="przycisk przycisk--tekstowy" type="button" disabled={zajety} onClick={() => void wykonaj(async () => {
+        if (await wylogujSesje(sesja.id)) wyczysc()
+        else ustawSesje(await pobierzListeSesji())
+      })}>Wyloguj sesję</button>
+    </div>)}
+    <div className="akcje-formularza">
+      <button type="button" className="przycisk przycisk--drugorzedny" disabled={zajety} onClick={() => void wykonaj(async () => { await wyloguj(); wyczysc() })}><LogOut aria-hidden="true" />Wyloguj bieżącą sesję</button>
+      <button type="button" className="przycisk przycisk--drugorzedny" disabled={zajety} onClick={() => void wykonaj(async () => { await wylogujWszystkieSesje(); wyczysc() })}>Wyloguj wszystkie sesje</button>
+    </div>
+  </section>
 }
 
 function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { bootstrapDostepny: boolean; poZalogowaniu: (konto: KontoUzytkownika) => void; pracujLokalnie: () => void }) {
@@ -117,7 +180,7 @@ function PanelKonta({ konto, zamknij, odswiez, wyczysc }: { konto: KontoUzytkown
       {konto.edytorzy.length > 0 && <section><h3>Grant modułu</h3><form className="formularz" onSubmit={(e) => { e.preventDefault(); void zapiszGrant(editorId, modul, odczyt, edycja, modul === 'zdrowie' ? sekcja || undefined : undefined).then(odswiez).catch((przyczyna) => ustawBlad(String(przyczyna))) }}><label className="pole"><span>Edytor</span><select value={editorId} onChange={(e) => ustawEditorId(e.target.value)}>{konto.edytorzy.filter((x) => x.status === 'aktywne').map((x) => <option key={x.id} value={x.id}>{x.email}</option>)}</select></label><label className="pole"><span>Moduł</span><select value={modul} onChange={(e) => ustawModul(e.target.value)}>{MODULY_GRANTOW.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>{modul === 'zdrowie' && <label className="pole"><span>Kategoria danych</span><select value={sekcja} onChange={(e) => ustawSekcje(e.target.value)}><option value="">Ogólne dane zdrowotne</option>{Object.entries(PRYWATNE_SEKCJE_ZDROWIA).filter(([klucz]) => klucz !== 'nagrania').map(([klucz, etykieta]) => <option key={klucz} value={klucz}>{etykieta}</option>)}</select></label>}<label className="pole pole-checkbox"><input type="checkbox" checked={odczyt} onChange={(e) => ustawOdczyt(e.target.checked)} /><span>Odczyt</span></label><label className="pole pole-checkbox"><input type="checkbox" checked={edycja} onChange={(e) => ustawEdycja(e.target.checked)} /><span>Edycja</span></label><button className="przycisk przycisk--glowny" type="submit">Zapisz grant</button></form></section>}
       <section><h3>Aktywne granty</h3>{konto.granty.filter((x) => x.status === 'aktywne').map((grant) => <div className="wiersz-konta" key={grant.id}><span>{grant.modul}{grant.sekcja && ` · ${PRYWATNE_SEKCJE_ZDROWIA[grant.sekcja as keyof typeof PRYWATNE_SEKCJE_ZDROWIA] ?? 'Wybrana sekcja'}`}: {grant.odczyt ? 'odczyt' : ''}{grant.edycja ? ' + edycja' : ''}</span><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijGrant(grant.id).then(odswiez)}>Cofnij</button></div>)}</section>
     </>}
-    <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void wyloguj().finally(wyczysc)}><LogOut aria-hidden="true" />Wyloguj</button></div>
+    <PanelHaslaISesji odswiez={odswiez} wyczysc={wyczysc} />
   </Modal>
 }
 

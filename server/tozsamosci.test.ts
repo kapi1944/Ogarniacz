@@ -140,10 +140,16 @@ test('syntetyczna baza v4 zachowuje konta, hashe, sesje i wszystkie powiązania 
   try {
     const kontaPrzed = baza.prepare('SELECT * FROM uzytkownicy ORDER BY id').all()
     const tabele = ['czlonkostwa', 'granty_dostepu', 'sesje', 'instalacje', 'rekordy_synchronizacji', 'przetworzone_zmiany_synchronizacji', 'kody_odzyskiwania', 'zaproszenia_edytorow']
-    const przed = tabele.map((tabela) => baza.prepare(`SELECT * FROM ${tabela}`).all())
-    assert.equal(uruchomMigracje(baza), 5)
+    const przed = tabele.map((tabela) => baza.prepare(tabela === 'sesje' ? 'SELECT token_hash, uzytkownik_id, aktywny_wlasciciel_id, csrf_hash, wygasa_at, ostatnia_aktywnosc_at, utworzono_at FROM sesje' : `SELECT * FROM ${tabela}`).all())
+    assert.equal(uruchomMigracje(baza), 6)
     assert.deepEqual(baza.prepare('SELECT id, email, haslo_hash, utworzono_at, zaktualizowano_at FROM uzytkownicy ORDER BY id').all(), kontaPrzed)
-    assert.deepEqual(tabele.map((tabela) => baza.prepare(`SELECT * FROM ${tabela}`).all()), przed)
+    assert.deepEqual(tabele.map((tabela) => baza.prepare(tabela === 'sesje' ? 'SELECT token_hash, uzytkownik_id, aktywny_wlasciciel_id, csrf_hash, wygasa_at, ostatnia_aktywnosc_at, utworzono_at FROM sesje' : `SELECT * FROM ${tabela}`).all()), przed)
+    const sesjePo = baza.prepare('SELECT * FROM sesje').all()
+    assert.equal(new Set(sesjePo.map((sesja) => sesja.id)).size, sesjePo.length)
+    for (const sesja of sesjePo) {
+      assert.match(String(sesja.id), /^[a-f0-9]{32}$/)
+      assert.notEqual(sesja.id, sesja.token_hash)
+    }
     for (const konto of baza.prepare('SELECT * FROM uzytkownicy').all()) {
       assert.equal(konto.login, null)
       assert.equal(konto.nazwa, null)
@@ -154,12 +160,27 @@ test('syntetyczna baza v4 zachowuje konta, hashe, sesje i wszystkie powiązania 
     baza.prepare("UPDATE uzytkownicy SET login = 'wlasciciel', nazwa = 'Nazwa testowa', rola_systemowa = 'administrator' WHERE email = 'owner@example.test'").run()
     const po = baza.prepare('SELECT * FROM uzytkownicy ORDER BY id').all()
     const migracjePo = baza.prepare('SELECT * FROM migracje').all()
-    assert.equal(uruchomMigracje(baza), 5)
+    assert.equal(uruchomMigracje(baza), 6)
     assert.deepEqual(baza.prepare('SELECT * FROM uzytkownicy ORDER BY id').all(), po)
     assert.deepEqual(baza.prepare('SELECT * FROM migracje').all(), migracjePo)
-    assert.deepEqual(tabele.map((tabela) => baza.prepare(`SELECT * FROM ${tabela}`).all()), przed)
+    assert.deepEqual(baza.prepare('SELECT * FROM sesje').all(), sesjePo)
+    assert.deepEqual(tabele.map((tabela) => baza.prepare(tabela === 'sesje' ? 'SELECT token_hash, uzytkownik_id, aktywny_wlasciciel_id, csrf_hash, wygasa_at, ostatnia_aktywnosc_at, utworzono_at FROM sesje' : `SELECT * FROM ${tabela}`).all()), przed)
     assert.deepEqual(baza.prepare('PRAGMA foreign_key_check').all(), [])
     assert.equal(baza.prepare('PRAGMA integrity_check').get()?.integrity_check, 'ok')
+  } finally { baza.close() }
+})
+
+test('błąd migracji sesji wycofuje ID i zachowuje wcześniejsze sesje; ponowienie nadaje ID', () => {
+  const baza = staraBaza()
+  try {
+    const przed = baza.prepare('SELECT * FROM sesje').all()
+    baza.exec('CREATE INDEX idx_sesje_id ON sesje (token_hash)')
+    assert.throws(() => uruchomMigracje(baza), /already exists/)
+    assert.deepEqual(baza.prepare('SELECT * FROM sesje').all(), przed)
+    assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM migracje').get()?.liczba, 5)
+    baza.exec('DROP INDEX idx_sesje_id')
+    assert.equal(uruchomMigracje(baza), 6)
+    for (const sesja of baza.prepare('SELECT * FROM sesje').all()) assert.match(String(sesja.id), /^[a-f0-9]{32}$/)
   } finally { baza.close() }
 })
 
@@ -198,7 +219,7 @@ test('błąd migracji wycofuje wszystkie nowe kolumny i pozwala na bezstratne po
     assert.deepEqual(baza.prepare('SELECT * FROM uzytkownicy').all(), konta)
     assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM migracje').get()?.liczba, 4)
     baza.exec('DROP INDEX idx_uzytkownicy_login')
-    assert.equal(uruchomMigracje(baza), 5)
+    assert.equal(uruchomMigracje(baza), 6)
     assert.deepEqual(baza.prepare('SELECT id, email, haslo_hash, utworzono_at, zaktualizowano_at FROM uzytkownicy').all(), konta)
   } finally { baza.close() }
 })

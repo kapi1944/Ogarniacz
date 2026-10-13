@@ -128,6 +128,25 @@ const migracje: Migracja[] = [
       CREATE UNIQUE INDEX idx_uzytkownicy_login ON uzytkownicy (login);
     `,
   },
+  {
+    wersja: 6,
+    sql: `
+      ALTER TABLE sesje ADD COLUMN id TEXT;
+      UPDATE sesje SET id = lower(hex(randomblob(16)));
+      CREATE UNIQUE INDEX idx_sesje_id ON sesje (id);
+      CREATE TRIGGER nadaj_id_sesji AFTER INSERT ON sesje WHEN NEW.id IS NULL
+      BEGIN
+        UPDATE sesje SET id = lower(hex(randomblob(16))) WHERE token_hash = NEW.token_hash;
+      END;
+      CREATE TRIGGER uniewaznij_sesje_konta AFTER UPDATE OF status_konta ON uzytkownicy
+      WHEN NEW.status_konta <> 'aktywne'
+      BEGIN
+        DELETE FROM sesje WHERE uzytkownik_id = NEW.id OR aktywny_wlasciciel_id = NEW.id;
+      END;
+      DELETE FROM sesje WHERE uzytkownik_id IN (SELECT id FROM uzytkownicy WHERE status_konta <> 'aktywne')
+        OR aktywny_wlasciciel_id IN (SELECT id FROM uzytkownicy WHERE status_konta <> 'aktywne');
+    `,
+  },
 ]
 
 export function uruchomMigracje(baza: DatabaseSync): number {

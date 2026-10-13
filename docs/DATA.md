@@ -1,5 +1,13 @@
 ﻿# Model danych i migracje
 
+## Konta użytkowników — etap 2
+
+Migracja SQLite 5 → 6 rozszerza tylko sesje o niezależne, losowe publiczne `id` (16 bajtów, indeks unikalny). Zachowuje tokeny, hashe, terminy i powiązania aktywnych sesji; starsze sesje otrzymują ID w transakcji. Trigger nadaje ID także zapisom używającym dawnych kolumn. Ponowienie migracji nie zmienia ID.
+
+Trigger zmiany statusu konta na `nieaktywne` lub `zarchiwizowane` usuwa sesje tego użytkownika oraz sesje dostępu do niego jako Właściciela. Migracja usuwa również takie sesje istniejące przed jej uruchomieniem. Reaktywacja nie przywraca usuniętych sesji. Każde uwierzytelnienie dodatkowo sprawdza aktywność użytkownika i Właściciela. Logowanie, odzyskiwanie i przyjmowanie zaproszeń nie omijają statusu konta.
+
+Zmiana własnego hasła wymaga aktualnego hasła i CSRF; aktualizacja hasha, wyzerowanie znacznika wymaganej zmiany i unieważnienie pozostałych sesji są atomowe. Bieżąca sesja zostaje aktywna. Dane domenowe, IndexedDB i protokół synchronizacji pozostają bez zmian.
+
 ## Konta użytkowników — etap 1
 
 Migracja SQLite 4 → 5 rozszerza wyłącznie `uzytkownicy`: `login`, `nazwa`, `rola_systemowa`, `status_konta`, `wymagana_zmiana_hasla`. Działa w istniejącej transakcji migracyjnej, bez przebudowy tabeli i bez usuwania rekordów. Zachowuje UUID, e-maile, hashe, daty, członkostwa, granty, sesje i powiązania. Wykonana wersja nie jest uruchamiana ponownie; błąd wycofuje cały etap.

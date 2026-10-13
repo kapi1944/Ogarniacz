@@ -22,6 +22,13 @@ export interface EdytorKonta {
   status: 'aktywne' | 'cofniete'
 }
 
+export interface SesjaKonta {
+  id: string
+  utworzonoAt: string
+  ostatniaAktywnoscAt: string
+  biezaca: boolean
+}
+
 export interface KontoUzytkownika {
   zalogowany: true
   uzytkownikId: string
@@ -156,6 +163,26 @@ export async function odzyskajDostep(email: string, kod: string, noweHaslo: stri
 
 export async function wyloguj(): Promise<void> {
   await wykonaj('POST', '/api/auth/logout', {}, true)
+  wyczyscKontoLokalne()
+}
+
+export async function zmienHaslo(aktualneHaslo: string, noweHaslo: string): Promise<void> {
+  await wykonaj('POST', '/api/account/password', { aktualneHaslo, noweHaslo }, true)
+}
+
+export async function pobierzListeSesji(): Promise<SesjaKonta[]> {
+  const odpowiedz = await wykonaj<{ sesje: SesjaKonta[] }>('GET', '/api/account/sessions')
+  return odpowiedz.sesje
+}
+
+export async function wylogujSesje(id: string): Promise<boolean> {
+  const odpowiedz = await wykonaj<{ biezaca: boolean }>('POST', '/api/account/sessions/revoke', { id }, true)
+  if (odpowiedz.biezaca) wyczyscKontoLokalne()
+  return odpowiedz.biezaca
+}
+
+export async function wylogujWszystkieSesje(): Promise<void> {
+  await wykonaj('POST', '/api/account/sessions/revoke-all', {}, true)
   wyczyscKontoLokalne()
 }
 
