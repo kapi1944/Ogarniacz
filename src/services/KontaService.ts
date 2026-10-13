@@ -28,6 +28,11 @@ export interface KontoUzytkownika {
   wlascicielId: string
   email: string
   rola: 'wlasciciel' | 'edytor'
+  login?: string | null
+  nazwa?: string | null
+  rolaSystemowa?: 'administrator' | 'uzytkownik'
+  statusKonta?: 'aktywne' | 'nieaktywne' | 'zarchiwizowane'
+  wymaganaZmianaHasla?: boolean
   csrf?: string
   granty: GrantKonta[]
   edytorzy: EdytorKonta[]

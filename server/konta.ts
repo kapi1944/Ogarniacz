@@ -250,7 +250,7 @@ export function sprawdzCsrf(zadanie: IncomingMessage, kontekst: KontekstDostepu)
 }
 
 function daneKonta(baza: DatabaseSync, kontekst: KontekstDostepu, csrf?: string): Record<string, unknown> {
-  const uzytkownik = baza.prepare('SELECT email FROM uzytkownicy WHERE id = ?').get(kontekst.uzytkownikId)
+  const uzytkownik = baza.prepare('SELECT email, login, nazwa, rola_systemowa, status_konta, wymagana_zmiana_hasla FROM uzytkownicy WHERE id = ?').get(kontekst.uzytkownikId)
   const edytorzy = kontekst.rola === 'wlasciciel' ? baza.prepare(`
     SELECT u.id, u.email, c.status FROM czlonkostwa c JOIN uzytkownicy u ON u.id = c.uzytkownik_id
     WHERE c.wlasciciel_id = ? AND c.rola = 'edytor' ORDER BY u.email
@@ -268,6 +268,11 @@ function daneKonta(baza: DatabaseSync, kontekst: KontekstDostepu, csrf?: string)
     uzytkownikId: kontekst.uzytkownikId,
     wlascicielId: kontekst.wlascicielId,
     email: tekst(uzytkownik?.email),
+    login: uzytkownik?.login ?? null,
+    nazwa: uzytkownik?.nazwa ?? null,
+    rolaSystemowa: tekst(uzytkownik?.rola_systemowa),
+    statusKonta: tekst(uzytkownik?.status_konta),
+    wymaganaZmianaHasla: Number(uzytkownik?.wymagana_zmiana_hasla) === 1,
     rola: kontekst.rola,
     csrf,
     edytorzy: edytorzy.map((wiersz) => ({ id: tekst(wiersz.id), email: tekst(wiersz.email), status: tekst(wiersz.status) })),
@@ -323,9 +328,10 @@ export async function obsluzKonta(
       const uzytkownikId = randomUUID()
       baza.exec('BEGIN')
       try {
-        baza.prepare(`INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)
+        const rolaSystemowa = baza.prepare('SELECT 1 FROM uzytkownicy LIMIT 1').get() ? 'uzytkownik' : 'administrator'
+        baza.prepare(`INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at, rola_systemowa) VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT(id) DO UPDATE SET email = excluded.email, haslo_hash = excluded.haslo_hash, zaktualizowano_at = excluded.zaktualizowano_at`)
-          .run(uzytkownikId, email, hasloHash, teraz, teraz)
+          .run(uzytkownikId, email, hasloHash, teraz, teraz, rolaSystemowa)
         baza.prepare(`INSERT INTO czlonkostwa (wlasciciel_id, uzytkownik_id, rola, status, utworzono_at, zaktualizowano_at)
           VALUES (?, ?, 'wlasciciel', 'aktywne', ?, ?)
           ON CONFLICT(wlasciciel_id, uzytkownik_id) DO UPDATE SET rola = 'wlasciciel', status = 'aktywne', zaktualizowano_at = excluded.zaktualizowano_at`)

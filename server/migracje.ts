@@ -113,6 +113,21 @@ const migracje: Migracja[] = [
       );
     `,
   },
+  {
+    wersja: 5,
+    sql: `
+      ALTER TABLE uzytkownicy ADD COLUMN login TEXT COLLATE NOCASE
+        CHECK (login IS NULL OR (length(login) BETWEEN 1 AND 254 AND login = trim(login) AND login NOT GLOB '*[^a-z0-9._-]*'));
+      ALTER TABLE uzytkownicy ADD COLUMN nazwa TEXT;
+      ALTER TABLE uzytkownicy ADD COLUMN rola_systemowa TEXT NOT NULL DEFAULT 'uzytkownik'
+        CHECK (rola_systemowa IN ('administrator', 'uzytkownik'));
+      ALTER TABLE uzytkownicy ADD COLUMN status_konta TEXT NOT NULL DEFAULT 'aktywne'
+        CHECK (status_konta IN ('aktywne', 'nieaktywne', 'zarchiwizowane'));
+      ALTER TABLE uzytkownicy ADD COLUMN wymagana_zmiana_hasla INTEGER NOT NULL DEFAULT 0
+        CHECK (wymagana_zmiana_hasla IN (0, 1));
+      CREATE UNIQUE INDEX idx_uzytkownicy_login ON uzytkownicy (login);
+    `,
+  },
 ]
 
 export function uruchomMigracje(baza: DatabaseSync): number {

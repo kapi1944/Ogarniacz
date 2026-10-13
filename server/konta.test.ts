@@ -105,6 +105,7 @@ test('bootstrap przyjmuje hasło od 8 znaków i pozostaje jednorazowy', async ()
       body: JSON.stringify({ email: 'owner@example.test', haslo: '12345678', token: 'token-bootstrapu-testowy' }),
     })
     assert.equal(pierwszyBootstrap.status, 201)
+    assert.equal((await pierwszyBootstrap.json() as { rolaSystemowa: string }).rolaSystemowa, 'administrator')
 
     const drugiBootstrap = await fetch(`${adres}/api/auth/bootstrap`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -115,6 +116,21 @@ test('bootstrap przyjmuje hasło od 8 znaków i pozostaje jednorazowy', async ()
 
     const statusPo = await fetch(`${adres}/api/auth/bootstrap/status`)
     assert.deepEqual(await statusPo.json(), { dostepny: false })
+  }, { DATABASE_PATH: ':memory:', OWNER_BOOTSTRAP_TOKEN: 'token-bootstrapu-testowy' })
+})
+
+test('bootstrap przy istniejącej tożsamości bez członkostwa nie wybiera administratora', async () => {
+  await zSerwerem(async (adres, baza) => {
+    baza.prepare('INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)')
+      .run('dawna-tozsamosc', 'dawna@example.test', 'stary-hash', TERAZ, TERAZ)
+    const odpowiedz = await fetch(`${adres}/api/auth/bootstrap`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'owner@example.test', haslo: '12345678', token: 'token-bootstrapu-testowy' }),
+    })
+    assert.equal(odpowiedz.status, 201)
+    assert.equal((await odpowiedz.json() as { rolaSystemowa: string }).rolaSystemowa, 'uzytkownik')
+    assert.equal(baza.prepare("SELECT COUNT(*) AS liczba FROM uzytkownicy WHERE rola_systemowa = 'administrator'").get()?.liczba, 0)
+    assert.equal(baza.prepare("SELECT haslo_hash FROM uzytkownicy WHERE id = 'dawna-tozsamosc'").get()?.haslo_hash, 'stary-hash')
   }, { DATABASE_PATH: ':memory:', OWNER_BOOTSTRAP_TOKEN: 'token-bootstrapu-testowy' })
 })
 
@@ -173,13 +189,21 @@ test('bootstrap, logowanie, zaproszenie i jednorazowy kod odzyskiwania tworzą b
   }, { DATABASE_PATH: ':memory:', OWNER_BOOTSTRAP_TOKEN: 'token-bootstrapu-testowy' })
 })
 
-test('Właściciel A nie czyta ani nie zmienia danych Właściciela B', async () => {
+test('Administrator będący Właścicielem A nie czyta ani nie zmienia danych Właściciela B', async () => {
   await zSerwerem(async (adres, baza) => {
     dodajUzytkownika(baza, 'wlasciciel-a', 'a@example.test')
     dodajUzytkownika(baza, 'wlasciciel-b', 'b@example.test')
+    baza.prepare("UPDATE uzytkownicy SET rola_systemowa = 'administrator' WHERE id = 'wlasciciel-a'").run()
     dodajSesje(baza, 'token-a', 'csrf-a', 'wlasciciel-a')
     dodajRekord(baza, 'wlasciciel-a', 'zadanie-a', 'Dane A')
     dodajRekord(baza, 'wlasciciel-b', 'zadanie-b', 'Dane B')
+    for (const tabela of ['notatki', 'dokumenty', 'wpisyTerapii']) {
+      const rekord = { id: `prywatny-${tabela}`, tresc: 'Prywatne dane B', medyczne: {}, createdAt: TERAZ, updatedAt: TERAZ }
+      baza.prepare(`INSERT INTO rekordy_synchronizacji
+        (uzytkownik_id, tabela, rekord_id, dane_json, created_at, updated_at, server_updated_at)
+        VALUES ('wlasciciel-b', ?, ?, ?, ?, ?, ?)`).run(tabela, rekord.id, JSON.stringify(rekord), TERAZ, TERAZ, TERAZ)
+    }
+    const daneBPrzed = baza.prepare("SELECT * FROM rekordy_synchronizacji WHERE uzytkownik_id = 'wlasciciel-b'").all()
 
     const pobranie = await fetch(`${adres}/api/sync/changes?od=1970-01-01T00%3A00%3A00.000Z`, { headers: naglowki('token-a') })
     assert.equal(pobranie.status, 200)
@@ -200,6 +224,7 @@ test('Właściciel A nie czyta ani nie zmienia danych Właściciela B', async ()
     assert.deepEqual(await zapisBezCsrf.json(), { error: 'Sesja wymaga odświeżenia.' })
     const rekordB = baza.prepare('SELECT dane_json FROM rekordy_synchronizacji WHERE uzytkownik_id = ? AND rekord_id = ?').get('wlasciciel-b', 'zadanie-b')
     assert.equal(JSON.parse(String(rekordB?.dane_json)).tytul, 'Dane B')
+    assert.deepEqual(baza.prepare("SELECT * FROM rekordy_synchronizacji WHERE uzytkownik_id = 'wlasciciel-b'").all(), daneBPrzed)
   })
 })
 
@@ -233,10 +258,11 @@ test('Edytor nie przekracza grantu, a cofnięty grant natychmiast blokuje synchr
   })
 })
 
-test('ogólny grant nie udostępnia dokumentacji ani dawnych sesji, także przy próbie usunięcia ochrony', async () => {
+test('Administrator będący Edytorem z ogólnym grantem nie uzyskuje dokumentacji ani dawnych sesji', async () => {
   await zSerwerem(async (adres, baza) => {
     dodajUzytkownika(baza, 'wlasciciel', 'owner@example.test')
     baza.prepare('INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)').run('edytor', 'editor@example.test', 'hash-testowy', TERAZ, TERAZ)
+    baza.prepare("UPDATE uzytkownicy SET rola_systemowa = 'administrator' WHERE id = 'edytor'").run()
     dodajSesje(baza, 'token-edytora', 'csrf-edytora', 'edytor', 'wlasciciel', 'edytor')
     const dodajGrant = (id: string, modul: string, sekcja: string) => baza.prepare(`INSERT INTO granty_dostepu
       (id, wlasciciel_id, edytor_id, modul, sekcja, odczyt, edycja, status, utworzono_at, zaktualizowano_at)

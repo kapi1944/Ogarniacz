@@ -1,5 +1,17 @@
 ﻿# Model danych i migracje
 
+## Konta użytkowników — etap 1
+
+Migracja SQLite 4 → 5 rozszerza wyłącznie `uzytkownicy`: `login`, `nazwa`, `rola_systemowa`, `status_konta`, `wymagana_zmiana_hasla`. Działa w istniejącej transakcji migracyjnej, bez przebudowy tabeli i bez usuwania rekordów. Zachowuje UUID, e-maile, hashe, daty, członkostwa, granty, sesje i powiązania. Wykonana wersja nie jest uruchamiana ponownie; błąd wycofuje cały etap.
+
+Dotychczasowe konta otrzymują `login = NULL`, `nazwa = NULL`, `rola_systemowa = uzytkownik`, `status_konta = aktywne`, `wymagana_zmiana_hasla = 0`. Login jest opcjonalny i unikalny (indeks `NOCASE`); zapis dopuszcza 1–254 małych znaków ASCII: litery, cyfry, kropkę, podkreślenie i myślnik, bez spacji. Nie generujemy loginów ani e-maili. Logowanie nadal używa e-maila i obecnego hasła.
+
+Role systemowe `administrator` / `uzytkownik` są niezależne od członkostw `wlasciciel` / `edytor`. Nie nadają dostępu do danych innych właścicieli ani nie omijają grantów. Istniejące odpowiedzi konta zawierają dodatkowe metadane, bez hashy. Opcjonalność nowych pól w typie klienta zachowuje obsługę starszego backendu i zapamiętanej sesji offline.
+
+Migracja nie awansuje istniejących kont, nawet jedynego Właściciela. **W istniejącej instalacji pierwszego administratora należy wskazać decyzją użytkownika w osobnym kroku; etap 1 nie wykonuje takiego przypisania.** Jedynie obecny bootstrap zabezpieczony tokenem tworzy administratora, jeśli tabela użytkowników jest całkowicie pusta. Przy istniejącej tożsamości tworzy zwykłego użytkownika, bez awansu innych kont.
+
+Statusy `aktywne` / `nieaktywne` / `zarchiwizowane` i znacznik zmiany hasła są w tym etapie metadanymi. Egzekwowanie dezaktywacji, zmiana haseł i zarządzanie sesjami należą do etapu 2. Nie zmieniono IndexedDB, synchronizacji, sesji ani interfejsu zarządzania użytkownikami. Kontrola migracji odbywa się na syntetycznym schemacie v4, bez dostępu do produkcji. Etap 2 może korzystać z wcześniejszego raportu i tych kontraktów bez kolejnego pełnego audytu.
+
 ## Zmiany modelu
 Health 2.0, etap 7: [Oś czasu i ważne informacje](HISTORIA_ZDROWIA.md). Dexie 18 → 19 dodaje lokalną tabelę `wazneInformacjeZdrowotne`. Historia jest projekcją istniejących danych, bez dodatkowej tabeli wydarzeń. Backup w formacie 3 uwzględnia nową sekcję; starsze kopie bez niej zachowują bieżące ważne informacje.
 Health 2.0, etap 6: [Badania i dokumenty](BADANIA_DOKUMENTY.md). Dexie 17 → 18 dodaje lokalną tabelę `wynikiBadan`; `Dokument.medyczne` rozszerza istniejące dokumenty. Relacje dokument–wizyta zachowują sumę dawnych reprezentacji po ID. Backup w formacie 3 zawiera osobną sekcję `badania`; starsze kopie jej nie czyszczą.
