@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, scryptSync, timingSafeEqual } from
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { DatabaseSync } from 'node:sqlite'
 import type { KonfiguracjaSerwera } from './config.ts'
+import { wykonajAdministracjeKont } from './administracja-kont.ts'
 
 const NAZWA_COOKIE = 'ogarniacz_sesja'
 const MAKSYMALNY_ROZMIAR_JSON = 1024 * 1024
@@ -34,6 +35,7 @@ export interface KontekstDostepu {
   wlascicielId: string
   rola: 'wlasciciel' | 'edytor'
   csrfHash?: string
+  wymaganaZmianaHasla?: boolean
 }
 
 interface UtworzonaSesja {
@@ -192,12 +194,12 @@ function utworzKodyOdzyskiwania(baza: DatabaseSync, uzytkownikId: string): strin
   return kody
 }
 
-export function pobierzKontekstDostepu(zadanie: IncomingMessage, baza: DatabaseSync): KontekstDostepu | undefined {
+export function pobierzKontekstDostepu(zadanie: IncomingMessage, baza: DatabaseSync, dopuscZmianeHasla = false): KontekstDostepu | undefined {
   const token = pobierzCookie(zadanie)
   if (!token) return undefined
   const teraz = new Date().toISOString()
   const wiersz = baza.prepare(`
-    SELECT s.uzytkownik_id, s.aktywny_wlasciciel_id, s.csrf_hash, c.rola
+    SELECT s.uzytkownik_id, s.aktywny_wlasciciel_id, s.csrf_hash, c.rola, u.wymagana_zmiana_hasla
     FROM sesje s
     JOIN czlonkostwa c ON c.wlasciciel_id = s.aktywny_wlasciciel_id AND c.uzytkownik_id = s.uzytkownik_id
     JOIN uzytkownicy u ON u.id = s.uzytkownik_id
@@ -206,12 +208,14 @@ export function pobierzKontekstDostepu(zadanie: IncomingMessage, baza: DatabaseS
       AND u.status_konta = 'aktywne' AND w.status_konta = 'aktywne'
   `).get(hashSekretu(token), teraz)
   if (!wiersz) return undefined
+  if (Number(wiersz.wymagana_zmiana_hasla) === 1 && !dopuscZmianeHasla) return undefined
   baza.prepare('UPDATE sesje SET ostatnia_aktywnosc_at = ? WHERE token_hash = ?').run(teraz, hashSekretu(token))
   return {
     uzytkownikId: tekst(wiersz.uzytkownik_id),
     wlascicielId: tekst(wiersz.aktywny_wlasciciel_id),
     rola: tekst(wiersz.rola) === 'wlasciciel' ? 'wlasciciel' : 'edytor',
     csrfHash: tekst(wiersz.csrf_hash),
+    wymaganaZmianaHasla: Number(wiersz.wymagana_zmiana_hasla) === 1,
   }
 }
 
@@ -304,7 +308,7 @@ export async function obsluzKonta(
   if (!sciezka.startsWith('/api/auth/') && !sciezka.startsWith('/api/account')) return false
   try {
     if (zadanie.method === 'GET' && sciezka === '/api/auth/session') {
-      const kontekst = pobierzKontekstDostepu(zadanie, baza)
+      const kontekst = pobierzKontekstDostepu(zadanie, baza, true)
       if (!kontekst) odpowiedzJson(odpowiedz, 401, { zalogowany: false })
       else {
         const csrf = randomBytes(24).toString('base64url')
@@ -368,12 +372,12 @@ export async function obsluzKonta(
         return true
       }
       const dane = await odczytajJson(zadanie)
-      const email = normalizujEmail(dane.email)
+      const email = tekst(dane.email).trim().toLowerCase()
       if (czyZablokowaneLogowanie(zadanie, baza, email)) {
         odpowiedzLimitu(odpowiedz)
         return true
       }
-      const uzytkownik = baza.prepare('SELECT id, haslo_hash, status_konta FROM uzytkownicy WHERE email = ?').get(email)
+      const uzytkownik = baza.prepare('SELECT id, haslo_hash, status_konta FROM uzytkownicy WHERE email = ? OR login = ? COLLATE NOCASE').get(email, email)
       if (!uzytkownik || uzytkownik.status_konta !== 'aktywne' || !sprawdzHaslo(tekst(dane.haslo), tekst(uzytkownik.haslo_hash))) {
         zarejestrujNieudaneLogowanie(zadanie, baza, email)
         odpowiedzJson(odpowiedz, 401, { error: 'Nieprawidłowy e-mail lub hasło.' })
@@ -483,9 +487,9 @@ export async function obsluzKonta(
     }
 
     // Odczyt ciała może czekać na sieć; autoryzację sprawdzamy dopiero po nim.
-    const daneBezpieczenstwa = zadanie.method === 'POST' && ['/api/account/password', '/api/account/sessions/revoke'].includes(sciezka)
+    const daneBezpieczenstwa = (zadanie.method === 'POST' && ['/api/account/password', '/api/account/sessions/revoke'].includes(sciezka)) || (['POST', 'PUT'].includes(zadanie.method ?? '') && sciezka.startsWith('/api/account/users'))
       ? await odczytajJson(zadanie) : undefined
-    const kontekst = pobierzKontekstDostepu(zadanie, baza)
+    const kontekst = pobierzKontekstDostepu(zadanie, baza, true)
     if (!kontekst) {
       odpowiedzJson(odpowiedz, 401, { error: 'Zaloguj się ponownie.' })
       return true
@@ -495,6 +499,15 @@ export async function obsluzKonta(
       return true
     }
 
+    if (kontekst.wymaganaZmianaHasla && !['/api/account/password', '/api/auth/logout', '/api/account/sessions/revoke-all'].includes(sciezka)) {
+      odpowiedzJson(odpowiedz, 403, { error: 'Zmień hasło przed kontynuowaniem.' })
+      return true
+    }
+    if (sciezka.startsWith('/api/account/users')) {
+      const wynik = wykonajAdministracjeKont(baza, kontekst.uzytkownikId, zadanie.method ?? '', sciezka, daneBezpieczenstwa ?? {}, hashujHaslo)
+      odpowiedzJson(odpowiedz, wynik.status, wynik.dane)
+      return true
+    }
     if (zadanie.method === 'GET' && sciezka === '/api/account') {
       odpowiedzJson(odpowiedz, 200, daneKonta(baza, kontekst))
       return true
@@ -547,6 +560,10 @@ export async function obsluzKonta(
         return true
       }
       const nowyHash = hashujHaslo(tekst(dane.noweHaslo))
+      if (kontekst.wymaganaZmianaHasla && sprawdzHaslo(tekst(dane.noweHaslo), tekst(uzytkownik.haslo_hash))) {
+        odpowiedzJson(odpowiedz, 400, { error: 'Nowe hasło musi różnić się od tymczasowego.' })
+        return true
+      }
       baza.exec('BEGIN')
       try {
         baza.prepare('UPDATE uzytkownicy SET haslo_hash = ?, wymagana_zmiana_hasla = 0, zaktualizowano_at = ? WHERE id = ?')

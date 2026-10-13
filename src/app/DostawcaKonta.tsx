@@ -2,6 +2,7 @@ import { PRYWATNE_SEKCJE_ZDROWIA } from '../services/UprawnieniaService'
 import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { KeyRound, LogOut, ShieldCheck, UserPlus } from 'lucide-react'
 import { Komunikat, Modal } from '../components/Interfejs'
+import { PanelAdministracjiKont } from './PanelAdministracjiKont'
 import { pobierzKonfiguracjeSynchronizacji } from '../services/KonfiguracjaSynchronizacji'
 import {
   BladKonta,
@@ -138,7 +139,7 @@ function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { 
     <p>Dane lokalne pozostają na urządzeniu. Konto zabezpiecza synchronizację i współdzielenie.</p>
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
     <form className="formularz" onSubmit={wykonaj}>
-      {tryb !== 'zaproszenie' && <label className="pole pole--pelne"><span>E-mail</span><input type="email" autoComplete="email" required value={email} onChange={(e) => ustawEmail(e.target.value)} /></label>}
+      {tryb !== 'zaproszenie' && <label className="pole pole--pelne"><span>{tryb === 'logowanie' ? 'E-mail lub login' : 'E-mail'}</span><input type={tryb === 'logowanie' ? 'text' : 'email'} autoComplete="username" required value={email} onChange={(e) => ustawEmail(e.target.value)} /></label>}
       {(tryb === 'bootstrap' || tryb === 'zaproszenie') && <label className="pole pole--pelne"><span>{tryb === 'bootstrap' ? 'Token bootstrapu' : 'Token zaproszenia'}</span><input required value={token} onChange={(e) => ustawToken(e.target.value)} /></label>}
       {tryb === 'odzyskiwanie' && <label className="pole pole--pelne"><span>Kod odzyskiwania</span><input required value={kod} onChange={(e) => ustawKod(e.target.value)} /></label>}
       <label className="pole pole--pelne"><span>{tryb === 'odzyskiwanie' ? 'Nowe hasło' : 'Hasło'}</span><input type="password" autoComplete={tryb === 'logowanie' ? 'current-password' : 'new-password'} minLength={8} required value={haslo} onChange={(e) => ustawHaslo(e.target.value)} /><small className="tekst-pomocniczy">Minimum 8 znaków.</small></label>
@@ -181,6 +182,7 @@ function PanelKonta({ konto, zamknij, odswiez, wyczysc }: { konto: KontoUzytkown
       <section><h3>Aktywne granty</h3>{konto.granty.filter((x) => x.status === 'aktywne').map((grant) => <div className="wiersz-konta" key={grant.id}><span>{grant.modul}{grant.sekcja && ` · ${PRYWATNE_SEKCJE_ZDROWIA[grant.sekcja as keyof typeof PRYWATNE_SEKCJE_ZDROWIA] ?? 'Wybrana sekcja'}`}: {grant.odczyt ? 'odczyt' : ''}{grant.edycja ? ' + edycja' : ''}</span><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijGrant(grant.id).then(odswiez)}>Cofnij</button></div>)}</section>
     </>}
     <PanelHaslaISesji odswiez={odswiez} wyczysc={wyczysc} />
+    {konto.rolaSystemowa === 'administrator' && <PanelAdministracjiKont />}
   </Modal>
 }
 
@@ -217,6 +219,7 @@ export function DostawcaKonta({ children }: { children: ReactNode }) {
     {children}
     <button type="button" className="przycisk-konta" onClick={() => ustawOffline(false)} title="Połącz konto i synchronizację"><ShieldCheck aria-hidden="true" /><span>Tryb lokalny</span></button>
   </KontekstKonta.Provider>
+  if (konto.wymaganaZmianaHasla) return <main className="ekran-konta"><section className="karta"><h1>Wymagana zmiana hasła</h1><PanelHaslaISesji odswiez={odswiez} wyczysc={() => ustawKonto(undefined)} /></section></main>
   return <KontekstKonta.Provider value={{ konto, offline }}>
     {children}
     <button type="button" className="przycisk-konta" onClick={() => ustawPanel(true)} title="Konto i współdzielenie"><ShieldCheck aria-hidden="true" /><span>{offline ? 'Konto offline' : konto.rola === 'wlasciciel' ? 'Właściciel' : 'Edytor'}</span></button>

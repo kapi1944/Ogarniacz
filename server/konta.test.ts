@@ -5,6 +5,70 @@ import { DatabaseSync } from 'node:sqlite'
 import { utworzKonfiguracjeSerwera } from './config.ts'
 import { uruchomMigracje } from './migracje.ts'
 import { utworzSerwer } from './serwer.ts'
+import { wskazPierwszegoAdministratora } from './administracja-kont.ts'
+
+test('pierwszy administrator wymaga jawnego aktywnego konta i nie zmienia danych ani grantów', () => {
+  const baza = new DatabaseSync(':memory:')
+  try {
+    uruchomMigracje(baza)
+    dodajUzytkownika(baza, 'a', 'a@example.test')
+    dodajUzytkownika(baza, 'b', 'b@example.test')
+    dodajSesje(baza, 'token', 'csrf', 'a')
+    dodajRekord(baza, 'b', 'prywatny', 'Prywatna treść')
+    const dane = baza.prepare('SELECT * FROM rekordy_synchronizacji').all()
+    const czlonkostwa = baza.prepare('SELECT * FROM czlonkostwa').all()
+    assert.throws(() => wskazPierwszegoAdministratora(baza, 'nieistniejacy'))
+    wskazPierwszegoAdministratora(baza, 'a')
+    assert.throws(() => wskazPierwszegoAdministratora(baza, 'b'))
+    assert.equal(baza.prepare("SELECT haslo_hash FROM uzytkownicy WHERE id = 'a'").get()?.haslo_hash, 'hash-testowy')
+    assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM sesje').get()?.liczba, 0)
+    assert.deepEqual(baza.prepare('SELECT * FROM czlonkostwa').all(), czlonkostwa)
+    assert.deepEqual(baza.prepare('SELECT * FROM rekordy_synchronizacji').all(), dane)
+  } finally { baza.close() }
+})
+
+test('administracja kont: uprawnienia, CSRF, izolacja, login, reset, archiwizacja i ostatni administrator', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'admin', 'admin@example.test')
+    dodajUzytkownika(baza, 'zwykly', 'zwykly@example.test')
+    wskazPierwszegoAdministratora(baza, 'admin')
+    dodajSesje(baza, 'admin-token', 'admin-csrf', 'admin')
+    dodajSesje(baza, 'zwykly-token', 'zwykly-csrf', 'zwykly')
+    const wykonaj = (sciezka: string, metoda = 'GET', dane?: unknown, token = 'admin-token', csrf = 'admin-csrf') => fetch(adres + sciezka, { method: metoda, headers: naglowki(token, csrf), ...(dane ? { body: JSON.stringify(dane) } : {}) })
+    const sciezka = '/api/account/users'
+    const konto = { email: 'nowy@example.test', login: 'Nowy', nazwa: 'Nowy użytkownik', haslo: 'Haslo-tymczasowe-1', rolaSystemowa: 'uzytkownik', statusKonta: 'aktywne' }
+    assert.equal((await wykonaj(sciezka, 'GET', undefined, 'zwykly-token')).status, 403)
+    assert.equal((await wykonaj(sciezka, 'POST', konto, 'admin-token', '')).status, 403)
+    const utworzenie = await wykonaj(sciezka, 'POST', konto)
+    assert.equal(utworzenie.status, 201)
+    const { id } = await utworzenie.json() as { id: string }
+    assert.deepEqual(baza.prepare('SELECT wlasciciel_id, uzytkownik_id FROM czlonkostwa WHERE uzytkownik_id = ?').all(id), [{ wlasciciel_id: id, uzytkownik_id: id }].map((wiersz) => Object.assign(Object.create(null), wiersz)))
+    assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM granty_dostepu WHERE edytor_id = ?').get(id)?.liczba, 0)
+    assert.equal((await wykonaj(sciezka, 'POST', { ...konto, email: 'inny@example.test' })).status, 400)
+    assert.equal((await wykonaj(sciezka, 'POST', { ...konto, login: 'bad@login', email: 'inny@example.test' })).status, 400)
+    const logowanie = await wykonaj('/api/auth/login', 'POST', { email: 'NOWY', haslo: konto.haslo })
+    assert.equal(logowanie.status, 200)
+    const sesja = await logowanie.json() as { csrf: string; wymaganaZmianaHasla: boolean }
+    assert.equal(sesja.wymaganaZmianaHasla, true)
+    const token = (logowanie.headers.get('set-cookie') ?? '').split(';')[0].split('=')[1]
+    assert.equal((await wykonaj('/api/sync/changes?od=1970-01-01T00:00:00.000Z', 'GET', undefined, token)).status, 401)
+    assert.equal((await wykonaj('/api/account/password', 'POST', { aktualneHaslo: konto.haslo, noweHaslo: konto.haslo }, token, sesja.csrf)).status, 400)
+    assert.equal((await wykonaj('/api/account/password', 'POST', { aktualneHaslo: konto.haslo, noweHaslo: 'Haslo-wlasne-2' }, token, sesja.csrf)).status, 200)
+    dodajRekord(baza, id, 'dane-nowego', 'Prywatne dane nowego')
+    const prywatne = baza.prepare('SELECT * FROM rekordy_synchronizacji WHERE uzytkownik_id = ?').all(id)
+    assert.equal((await wykonaj(sciezka + '/password', 'POST', { id, haslo: 'Haslo-reset-3' })).status, 200)
+    assert.equal((await wykonaj('/api/auth/session', 'GET', undefined, token)).status, 401)
+    assert.equal((await wykonaj(sciezka, 'PUT', { ...konto, id, statusKonta: 'zarchiwizowane' })).status, 200)
+    assert.deepEqual(baza.prepare('SELECT * FROM rekordy_synchronizacji WHERE uzytkownik_id = ?').all(id), prywatne)
+    assert.equal((await wykonaj(sciezka, 'PUT', { ...konto, id, statusKonta: 'aktywne' })).status, 200)
+    assert.equal((await wykonaj('/api/auth/login', 'POST', { email: konto.email, haslo: 'Haslo-reset-3' })).status, 200)
+    for (const zmiana of [{ statusKonta: 'nieaktywne' }, { statusKonta: 'zarchiwizowane' }, { rolaSystemowa: 'uzytkownik' }]) {
+      assert.equal((await wykonaj(sciezka, 'PUT', { email: 'admin@example.test', id: 'admin', rolaSystemowa: 'administrator', statusKonta: 'aktywne', ...zmiana })).status, 400)
+    }
+    const lista = await (await wykonaj(sciezka)).text()
+    assert.ok(!lista.includes('haslo_hash') && !lista.includes('token_hash'))
+  })
+})
 
 const TERAZ = '2026-09-09T12:00:00.000Z'
 const WYGASA = '2099-01-01T00:00:00.000Z'

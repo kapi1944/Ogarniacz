@@ -149,6 +149,27 @@ export async function zaloguj(email: string, haslo: string): Promise<KontoUzytko
   return zapiszKonto(await wykonaj<KontoUzytkownika>('POST', '/api/auth/login', { email, haslo }))
 }
 
+export interface KontoAdministracyjne {
+  id: string
+  email: string
+  login: string | null
+  nazwa: string | null
+  rolaSystemowa: 'administrator' | 'uzytkownik'
+  statusKonta: 'aktywne' | 'nieaktywne' | 'zarchiwizowane'
+}
+
+export async function pobierzUzytkownikow(): Promise<KontoAdministracyjne[]> {
+  return (await wykonaj<{ uzytkownicy: KontoAdministracyjne[] }>('GET', '/api/account/users')).uzytkownicy
+}
+
+export async function zapiszUzytkownika(dane: Partial<KontoAdministracyjne> & { haslo?: string }): Promise<void> {
+  await wykonaj(dane.id ? 'PUT' : 'POST', '/api/account/users', dane, true)
+}
+
+export async function resetujHasloUzytkownika(id: string, haslo: string): Promise<void> {
+  await wykonaj('POST', '/api/account/users/password', { id, haslo }, true)
+}
+
 export async function utworzKontoWlasciciela(email: string, haslo: string, token: string): Promise<KontoUzytkownika> {
   return zapiszKonto(await wykonaj<KontoUzytkownika>('POST', '/api/auth/bootstrap', { email, haslo, token }))
 }

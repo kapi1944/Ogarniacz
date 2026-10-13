@@ -53,6 +53,20 @@ poKazdym(() => {
 })
 
 describe('onboarding konta', () => {
+  it('wymuszona zmiana hasła blokuje widok danych i nie otwiera klawiatury', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue({ ...konto, wymaganaZmianaHasla: true })
+    render(<DostawcaKonta><div>Prywatne dane</div></DostawcaKonta>)
+    expect(await screen.findByRole('heading', { name: 'Wymagana zmiana hasła' })).toBeInTheDocument()
+    expect(screen.queryByText('Prywatne dane')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Aktualne hasło')).not.toHaveFocus()
+  })
+
+  it('panel administracji jest dostępny wyłącznie dla administratora', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue({ ...konto, rolaSystemowa: 'administrator' })
+    render(<DostawcaKonta><div>Aplikacja działa</div></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Właściciel' }))
+    expect(screen.getByRole('heading', { name: 'Zarządzanie użytkownikami' })).toBeInTheDocument()
+  })
   it('zmienia hasło w panelu konta i czyści pola bez wylogowania bieżącej sesji', async () => {
     vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
     vi.mocked(zmienHaslo).mockResolvedValue(undefined)
