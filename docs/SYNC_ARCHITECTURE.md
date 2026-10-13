@@ -12,7 +12,9 @@ Serwer wyznacza właściciela danych z zalogowanej sesji `HttpOnly`, nie z danyc
 
 ## Endpoint i diagnostyka
 
-Jedynym źródłem adresu klienta jest `VITE_SYNC_API_URL` i musi ono wskazywać pełny origin HTTPS Tailscale Serve. Sesja jest losowym, hashowanym po stronie bazy tokenem w cookie `HttpOnly; Secure; SameSite=None`, a zapisy wymagają osobnego tokenu CSRF. Android nie ma wyjątku cleartext; surowy HTTP LAN nie jest obsługiwaną ścieżką synchronizacji.
+Adres klienta ustala centralny `RuntimeConfigService`. Web/PWA odczytuje `window.__OGARNIACZ_RUNTIME_CONFIG__.syncApiUrl`, następnie `VITE_SYNC_API_URL`; gdy endpoint jest pusty, korzysta z `location.origin` wyłącznie dla HTTPS. Dzięki temu Web/PWA serwowane przez własny backend używa same-origin `/api/auth/*` i `/api/sync/*` bez wpisywania adresu ani zmiennej buildu. Jawny endpoint pozostaje dostępny dla osobnego hostingu Web/PWA; błędny endpoint nie jest zastępowany fallbackiem. HTTP i origin `null` nie uruchamiają automatycznej konfiguracji.
+
+Android APK nadal odczytuje osobną konfigurację natywną przez `RuntimeConfigPlugin`, bez fallbacku do originu WebView (`https://localhost`), także przy błędzie odczytu wtyczki. Endpoint musi wskazywać pełny origin HTTPS Tailscale Serve. Sesja jest losowym, hashowanym po stronie bazy tokenem w cookie `HttpOnly; Secure; SameSite=None`, a zapisy wymagają osobnego tokenu CSRF. Android nie ma wyjątku cleartext; surowy HTTP LAN nie jest obsługiwaną ścieżką synchronizacji.
 
 `npm run sync:doctor` wykonuje wyłącznie odczyty: waliduje URL, DNS/IP, `/health`, preflight CORS i dostępność endpointu sesji. Uwierzytelniony sync wymaga interaktywnego logowania w aplikacji. `CORS_ALLOWED_ORIGINS` ogranicza originy i zezwala na credentials wyłącznie dla wpisanych adresów.
 
@@ -74,4 +76,4 @@ W prostym języku:
 
 Urządzenie pozostające offline może nadal mieć wcześniej pobraną lokalną kopię — cofnięcie dostępu nie jest zdalnym kasowaniem pamięci urządzenia. Po odzyskaniu sieci serwer nie zwróci już danych ani nie przyjmie kolejnych zmian cofniętego Edytora.
 
-Klient wymaga wyłącznie publicznego adresu `VITE_SYNC_API_URL`; uwierzytelnienie zapewnia sesja. Dane `Blob` korzystają z istniejącego kodowania transportowego backupu. Historia i pamięć Echo oraz lokalne tabele sterujące synchronizacją nie są wysyłane.
+Klient nie wymaga sekretów w konfiguracji; uwierzytelnienie zapewnia sesja. Web/PWA na własnym HTTPS nie wymaga `VITE_SYNC_API_URL`, natomiast APK zachowuje jawny adres w konfiguracji natywnej. Dane `Blob` korzystają z istniejącego kodowania transportowego backupu. Historia i pamięć Echo oraz lokalne tabele sterujące synchronizacją nie są wysyłane.

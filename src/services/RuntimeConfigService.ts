@@ -15,6 +15,7 @@ interface ZaleznosciKonfiguracjiRuntime {
   czyAndroid: boolean
   pobierzKonfiguracjeNatywna: () => Promise<Partial<KonfiguracjaRuntime>>
   konfiguracjaWeb: Partial<KonfiguracjaRuntime>
+  pochodzenieWeb?: string
 }
 
 const wtyczkaKonfiguracjiRuntime = registerPlugin<WtyczkaKonfiguracjiRuntime>('RuntimeConfig')
@@ -49,7 +50,13 @@ function pobierzKonfiguracjeWeb(): Partial<KonfiguracjaRuntime> {
 }
 
 export function utworzRuntimeConfigService(zaleznosci: ZaleznosciKonfiguracjiRuntime) {
-  let konfiguracja = utworzKonfiguracje(zaleznosci.konfiguracjaWeb, false)
+  const adresWlasnegoApi = !zaleznosci.czyAndroid && zaleznosci.pochodzenieWeb?.startsWith('https://')
+    ? zaleznosci.pochodzenieWeb
+    : undefined
+  let konfiguracja = utworzKonfiguracje({
+    ...zaleznosci.konfiguracjaWeb,
+    syncApiUrl: oczyscAdres(zaleznosci.konfiguracjaWeb.syncApiUrl) ?? adresWlasnegoApi,
+  }, false)
 
   return {
     inicjalizuj: async () => {
@@ -71,6 +78,7 @@ const serwisRuntimeConfig = utworzRuntimeConfigService({
   czyAndroid: Capacitor.getPlatform() === 'android' && Capacitor.isNativePlatform(),
   pobierzKonfiguracjeNatywna: () => wtyczkaKonfiguracjiRuntime.pobierzKonfiguracje(),
   konfiguracjaWeb: pobierzKonfiguracjeWeb(),
+  pochodzenieWeb: globalThis.location?.origin,
 })
 
 export const inicjalizujRuntimeConfig = () => serwisRuntimeConfig.inicjalizuj()

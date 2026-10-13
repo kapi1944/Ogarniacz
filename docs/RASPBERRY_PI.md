@@ -37,7 +37,7 @@ chmod +x scripts/configure-tailscale-rpi.sh
 ./scripts/configure-tailscale-rpi.sh
 ```
 
-Skrypt sprawdza lokalny healthcheck, ustawia trwały prywatny reverse proxy HTTPS, odczytuje nazwę MagicDNS i sprawdza healthcheck przez TLS. Nie uruchamia Funnel. Dodaj zwrócony adres HTTPS do `CORS_ALLOWED_ORIGINS` obok `https://localhost` i ustaw go jako `VITE_SYNC_API_URL` dla Androida. Dla PWA używaj tego samego adresu HTTPS.
+Skrypt sprawdza lokalny healthcheck, ustawia trwały prywatny reverse proxy HTTPS, odczytuje nazwę MagicDNS i sprawdza healthcheck przez TLS. Nie uruchamia Funnel. Dodaj zwrócony adres HTTPS do `CORS_ALLOWED_ORIGINS` obok `https://localhost` i ustaw go jako `VITE_SYNC_API_URL` dla Androida. Dla Web/PWA otwieraj ten sam adres HTTPS: przy pustym endpoincie klient automatycznie używa własnego originu, bez konfiguracji buildu. Same-origin nie omija kontroli sesji ani CSRF; origin produkcyjny nadal musi być wpisany w konfiguracji CORS. Nie czyść danych strony ani IndexedDB.
 
 ## Start, healthcheck i logi
 
@@ -65,6 +65,17 @@ Repozytorium robocze pozostaje na lokalnym `main`, ale aktualizator pobiera wył
 Kanał zatwierdza workflow **Publikuj Ogarniacza** opisany w `ANDROID_RELEASE.md`.
 Nie konfiguruj Pi do aktualizowania się po każdym commicie main. Przy pierwszej
 migracji lokalny HEAD musi być przodkiem zatwierdzonego rpi-stable.
+
+Poprawkę rozpoznawania API Web/PWA wdrażaj dopiero po osobnym zatwierdzeniu jej
+commita i udostępnieniu go w istniejącym kanale `rpi-stable`. Na Pi użyj
+`scripts/aktualizuj-rpi.sh check`, następnie `scripts/aktualizuj-rpi.sh update`.
+Aktualizator buduje `build:production` z archiwum dokładnego SHA, które nie zawiera
+ignorowanych lokalnych plików `.env.production*`; Web/PWA nie potrzebuje tam
+`VITE_SYNC_API_URL`. Zachowaj dotychczasowy prywatny HTTPS, CORS i env serwera.
+Po wdrożeniu zaakceptuj zwykłą aktualizację PWA na tym samym originie, sprawdź
+diagnostykę endpointu, logowanie, odtworzenie sesji po odświeżeniu, pull/push
+oraz zachowanie istniejących lokalnych rekordów. Nie czyść danych witryny.
+Ta poprawka nie wymaga publikacji nowego APK.
 
 Jedna ścieżka: `scripts/aktualizuj-rpi.sh check|update|rollback|auto`, z `flock`,
 czystym tracked working tree, kontrolą istniejącego targetu i fast-forward only.
