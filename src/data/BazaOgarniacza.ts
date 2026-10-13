@@ -129,9 +129,9 @@ const schematPelny = {
   ustawienia: 'id, updatedAt, usunietoAt',
 }
 
-class BazaOgarniacza extends Dexie {
-  constructor() {
-    super('ogarniacz-v1')
+export class BazaOgarniacza extends Dexie {
+  constructor(nazwa = 'ogarniacz-v1') {
+    super(nazwa, { autoOpen: false })
 
     this.version(1).stores({
       zadania: 'id, status, termin, priorytet, updatedAt',
@@ -225,7 +225,13 @@ class BazaOgarniacza extends Dexie {
   }
 }
 
-export const baza = new BazaOgarniacza()
+export let baza = new BazaOgarniacza()
+
+/** Wyłącznie podczas startu aplikacji, przed uruchomieniem repozytoriów i UI. */
+export function ustawBazePrzedUruchomieniem(nowaBaza: BazaOgarniacza): void {
+  baza.close()
+  baza = nowaBaza
+}
 
 export async function inicjalizujBaze(): Promise<void> {
   await baza.open()

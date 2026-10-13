@@ -34,3 +34,15 @@ administrator już istnieje albo konto nie istnieje lub jest nieaktywne.
 Operacja jest atomowa i unieważnia sesje wskazanego konta. Nie zmienia UUID,
 hashy, członkostw, grantów ani rekordów synchronizacji.
 Nie wybiera konta automatycznie i nie udostępnia endpointu bootstrapu awansu.
+
+## Etap 4 — rejestr i bazy
+
+Rejestr IndexedDB `ogarniacz-profile` przechowuje tożsamość serwera,
+użytkownika i Właściciela. Każdy profil ma osobną bazę
+`ogarniacz-profil-UUID` z pełnym dotychczasowym schematem, także kolejką,
+konfliktami, kursorami, ustawieniami, Echo i prywatnymi tabelami.
+Nie używa installationId jako tożsamości. Wybór w localStorage nie otwiera bazy.
+Zamknięcie kontekstu anuluje jego sygnał i blokuje automatyczne ponowne otwarcie.
+Zmiana singletonu jest dozwolona wyłącznie podczas startu przed UI.
+Etap 4 udostępnia mechanizm dla migracji; nie przełącza istniejącej instalacji
+ani nie modyfikuje starej bazy.
