@@ -1,0 +1,25 @@
+<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><div id="root"></div><script type="module">
+import { CapacitorHttp } from '@capacitor/core';
+import { pobierzKonfiguracjeRuntime } from '/src/services/RuntimeConfigService.ts';
+pobierzKonfiguracjeRuntime().syncApiUrl = 'https://fixture.invalid';
+const konta = [
+ {id:'fikcyjny-a',email:'a@example.test',login:'konto-a',nazwa:'Konto testowe A',rolaSystemowa:'administrator',statusKonta:'aktywne'},
+ {id:'fikcyjny-b',email:'b@example.test',login:'konto-b',nazwa:'Konto testowe B',rolaSystemowa:'uzytkownik',statusKonta:'aktywne'}
+];
+let biezace = konta.find(k => k.id === sessionStorage.getItem('fixture-konto')) || konta[0];
+const konto = () => ({...biezace,zalogowany:true,uzytkownikId:biezace.id,wlascicielId:biezace.id,rola:'wlasciciel',csrf:'fikcyjny-csrf',wymaganaZmianaHasla:false,granty:[],edytorzy:[]});
+const odpowiedz = (data,status=200) => ({data,status,headers:{},url:''});
+const obsluz = async ({url,method='GET',data={}}) => {
+ const sciezka = new URL(url).pathname;
+ if (sciezka.startsWith('/api/rpi-update/')) return odpowiedz({error:'Makieta bez Raspberry Pi.'},404);
+ if (sciezka === '/api/auth/session' || sciezka === '/api/account') return odpowiedz(konto());
+ if (sciezka === '/api/auth/login') { const nowe = konta.find(k=>k.login===data.email || k.email===data.email); if(!nowe)return odpowiedz({error:'Fikcyjne konto nie istnieje.'},401); biezace=nowe; sessionStorage.setItem('fixture-konto',biezace.id);return odpowiedz(konto()); }
+ if (sciezka === '/api/account/users' && method === 'GET') return odpowiedz({uzytkownicy:konta});
+ if (sciezka === '/api/account/users') { if(data.id)Object.assign(konta.find(k=>k.id===data.id),data); else konta.push({...data,id:'fikcyjny-'+konta.length});return odpowiedz({id:'fikcyjny'}); }
+ if (sciezka === '/api/account/sessions') return odpowiedz({sesje:[{id:'fikcyjna-sesja',biezaca:true,utworzonoAt:'2026-10-13T10:00:00Z',ostatniaAktywnoscAt:'2026-10-13T10:30:00Z'}]});
+ if (sciezka.startsWith('/api/sync/')) return odpowiedz({zmiany:[],zapisano:0,synchronizowanoDo:new Date().toISOString()});
+ return odpowiedz({zmieniono:true});
+};
+CapacitorHttp.request=obsluz;CapacitorHttp.get=(opcje)=>obsluz({...opcje,method:'GET'});CapacitorHttp.post=(opcje)=>obsluz({...opcje,method:'POST'});
+await import('/src/main.tsx');
+</script></html>

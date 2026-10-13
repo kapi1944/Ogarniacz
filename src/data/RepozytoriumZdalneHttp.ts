@@ -124,7 +124,10 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   private async odczytajOdpowiedz(odpowiedz: HttpResponse): Promise<unknown> {
     const dane = odpowiedz.data && typeof odpowiedz.data === 'object' ? odpowiedz.data as { error?: string } : {}
     if (odpowiedz.status === 409) throw new BladKonfliktuSynchronizacji(dane.error)
-    if (odpowiedz.status === 401) throw new BladSynchronizacjiHttp('sesja_wygasla', 'Sesja wygasła. Zaloguj się ponownie.')
+    if (odpowiedz.status === 401) {
+      if (czyProfileUruchomione() && this.profil) window.dispatchEvent(new Event('ogarniacz:sesja-wygasla'))
+      throw new BladSynchronizacjiHttp('sesja_wygasla', 'Sesja wygasła. Zaloguj się ponownie.')
+    }
     if (this.czyBladCsrf(odpowiedz)) throw new BladSynchronizacjiHttp('csrf', 'Sesja wymaga odświeżenia przed zapisem.')
     if (odpowiedz.status < 200 || odpowiedz.status >= 300) {
       throw new BladSynchronizacjiHttp('blad_synchronizacji', dane.error || `Serwer synchronizacji zwrócił ${odpowiedz.status}.`)

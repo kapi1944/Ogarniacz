@@ -30,10 +30,19 @@ import {
 interface WartoscKontekstuKonta {
   konto?: KontoUzytkownika
   offline: boolean
+  odswiez?: () => Promise<void>
+  wyczysc?: () => void
 }
 
 const KontekstKonta = createContext<WartoscKontekstuKonta>({ offline: false })
-const MODULY_GRANTOW = ['zadania', 'projekty', 'skrzynka', 'planer', 'grafik', 'nawyki', 'leki', 'wizyty', 'zdrowie', 'skierowania', 'przypomnienia', 'zakupy', 'rachunki', 'miasto', 'miejsca', 'cele', 'notatki', 'pomysly', 'na_pozniej', 'kontakty', 'dokumenty', 'finanse', 'samochod', 'terminy']
+const ETYKIETY_MODULOW: Record<string, string> = {
+  zadania: 'Zadania', projekty: 'Projekty', skrzynka: 'Poczekalnia', planer: 'Planer', grafik: 'Grafik',
+  nawyki: 'Nawyki', leki: 'Leki', wizyty: 'Wizyty', zdrowie: 'Zdrowie', skierowania: 'Skierowania',
+  przypomnienia: 'Przypomnienia', zakupy: 'Zakupy', rachunki: 'Rachunki', miasto: 'Sprawy na mieście',
+  miejsca: 'Miejsca', cele: 'Cele', notatki: 'Notatki', pomysly: 'Pomysły', na_pozniej: 'Na później',
+  kontakty: 'Kontakty', dokumenty: 'Dokumenty', finanse: 'Finanse', samochod: 'Samochód', terminy: 'Terminy',
+}
+const MODULY_GRANTOW = Object.keys(ETYKIETY_MODULOW)
 
 function powiadomOSesji(): void {
   window.dispatchEvent(new Event('ogarniacz:konto'))
@@ -104,7 +113,7 @@ function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { 
   const [haslo, ustawHaslo] = useState('')
   const [token, ustawToken] = useState(tokenZaproszenia)
   const [kod, ustawKod] = useState('')
-  const [blad, ustawBlad] = useState('')
+  const [blad, ustawBlad] = useState(() => sessionStorage.getItem('ogarniacz-blad-zmiany-konta') ?? '')
   const [zajety, ustawZajety] = useState(false)
 
   const wykonaj = async (zdarzenie: FormEvent) => {
@@ -154,7 +163,7 @@ function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { 
   </section></main>
 }
 
-function PanelKonta({ konto, zamknij, odswiez, wyczysc }: { konto: KontoUzytkownika; zamknij: () => void; odswiez: () => Promise<void>; wyczysc: () => void }) {
+function ZawartoscKonta({ konto, odswiez, wyczysc }: { konto: KontoUzytkownika; odswiez: () => Promise<void>; wyczysc: () => void }) {
   const [email, ustawEmail] = useState('')
   const [link, ustawLink] = useState('')
   const [editorId, ustawEditorId] = useState(konto.edytorzy[0]?.id ?? '')
@@ -173,17 +182,57 @@ function PanelKonta({ konto, zamknij, odswiez, wyczysc }: { konto: KontoUzytkown
     } catch (przyczyna) { ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się utworzyć zaproszenia.') }
   }
 
-  return <Modal tytul="Konto i współdzielenie" opis={`${konto.email} · ${konto.rola === 'wlasciciel' ? 'Właściciel' : 'Edytor'}`} zamknij={zamknij} szeroki>
+  return <div className="konta-uzytkownicy">
+    <section><h3>Moje konto</h3><dl className="lista-kompaktowa">
+      <div><dt>Nazwa</dt><dd>{konto.nazwa || 'Nie ustawiono'}</dd></div>
+      <div><dt>Login</dt><dd>{konto.login || 'Logowanie e-mailem'}</dd></div>
+      <div><dt>E-mail</dt><dd>{konto.email}</dd></div>
+      <div><dt>Rola systemowa</dt><dd>{konto.rolaSystemowa === 'administrator' ? 'Administrator systemu' : 'Użytkownik'}</dd></div>
+      <div><dt>Dostęp do zbioru danych</dt><dd>{konto.rola === 'wlasciciel' ? 'Właściciel' : 'Edytor'}</dd></div>
+    </dl></section>
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
     {konto.rola === 'wlasciciel' && <>
       <section><h3>Zaproszenie Edytora</h3><form className="szybki-wpis" onSubmit={zapros}><input type="email" required value={email} onChange={(e) => ustawEmail(e.target.value)} placeholder="edytor@example.com" /><button className="przycisk przycisk--glowny" type="submit"><UserPlus aria-hidden="true" />Zaproś</button></form>{link && <label className="pole"><span>Link ważny 7 dni — przekaż go bezpiecznym kanałem</span><input readOnly value={link} onFocus={(e) => e.currentTarget.select()} /></label>}</section>
-      <section><h3>Edytorzy</h3>{konto.edytorzy.length === 0 ? <p className="tekst-pomocniczy">Brak przyjętych zaproszeń.</p> : konto.edytorzy.map((edytor) => <div className="wiersz-konta" key={edytor.id}><span>{edytor.email} · {edytor.status}</span><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijEdytora(edytor.id).then(odswiez)}>Cofnij dostęp</button></div>)}</section>
-      {konto.edytorzy.length > 0 && <section><h3>Grant modułu</h3><form className="formularz" onSubmit={(e) => { e.preventDefault(); void zapiszGrant(editorId, modul, odczyt, edycja, modul === 'zdrowie' ? sekcja || undefined : undefined).then(odswiez).catch((przyczyna) => ustawBlad(String(przyczyna))) }}><label className="pole"><span>Edytor</span><select value={editorId} onChange={(e) => ustawEditorId(e.target.value)}>{konto.edytorzy.filter((x) => x.status === 'aktywne').map((x) => <option key={x.id} value={x.id}>{x.email}</option>)}</select></label><label className="pole"><span>Moduł</span><select value={modul} onChange={(e) => ustawModul(e.target.value)}>{MODULY_GRANTOW.map((x) => <option key={x} value={x}>{x}</option>)}</select></label>{modul === 'zdrowie' && <label className="pole"><span>Kategoria danych</span><select value={sekcja} onChange={(e) => ustawSekcje(e.target.value)}><option value="">Ogólne dane zdrowotne</option>{Object.entries(PRYWATNE_SEKCJE_ZDROWIA).filter(([klucz]) => klucz !== 'nagrania').map(([klucz, etykieta]) => <option key={klucz} value={klucz}>{etykieta}</option>)}</select></label>}<label className="pole pole-checkbox"><input type="checkbox" checked={odczyt} onChange={(e) => ustawOdczyt(e.target.checked)} /><span>Odczyt</span></label><label className="pole pole-checkbox"><input type="checkbox" checked={edycja} onChange={(e) => ustawEdycja(e.target.checked)} /><span>Edycja</span></label><button className="przycisk przycisk--glowny" type="submit">Zapisz grant</button></form></section>}
-      <section><h3>Aktywne granty</h3>{konto.granty.filter((x) => x.status === 'aktywne').map((grant) => <div className="wiersz-konta" key={grant.id}><span>{grant.modul}{grant.sekcja && ` · ${PRYWATNE_SEKCJE_ZDROWIA[grant.sekcja as keyof typeof PRYWATNE_SEKCJE_ZDROWIA] ?? 'Wybrana sekcja'}`}: {grant.odczyt ? 'odczyt' : ''}{grant.edycja ? ' + edycja' : ''}</span><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijGrant(grant.id).then(odswiez)}>Cofnij</button></div>)}</section>
+      <section><h3>Edytorzy</h3>{konto.edytorzy.length === 0 ? <p className="tekst-pomocniczy">Brak przyjętych zaproszeń.</p> : konto.edytorzy.map((edytor) => <div className="wiersz-konta" key={edytor.id}><span>{edytor.email} · {edytor.status === 'aktywne' ? 'Aktywny' : 'Dostęp cofnięty'}</span><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijEdytora(edytor.id).then(odswiez)}>Cofnij dostęp</button></div>)}</section>
+      {konto.edytorzy.length > 0 && <section><h3>Grant modułu</h3><form className="formularz" onSubmit={(e) => { e.preventDefault(); void zapiszGrant(editorId, modul, odczyt, edycja, modul === 'zdrowie' ? sekcja || undefined : undefined).then(odswiez).catch((przyczyna) => ustawBlad(String(przyczyna))) }}><label className="pole"><span>Edytor</span><select value={editorId} onChange={(e) => ustawEditorId(e.target.value)}>{konto.edytorzy.filter((x) => x.status === 'aktywne').map((x) => <option key={x.id} value={x.id}>{x.email}</option>)}</select></label><label className="pole"><span>Moduł</span><select value={modul} onChange={(e) => ustawModul(e.target.value)}>{MODULY_GRANTOW.map((x) => <option key={x} value={x}>{ETYKIETY_MODULOW[x]}</option>)}</select></label>{modul === 'zdrowie' && <label className="pole"><span>Kategoria danych</span><select value={sekcja} onChange={(e) => ustawSekcje(e.target.value)}><option value="">Ogólne dane zdrowotne</option>{Object.entries(PRYWATNE_SEKCJE_ZDROWIA).filter(([klucz]) => klucz !== 'nagrania').map(([klucz, etykieta]) => <option key={klucz} value={klucz}>{etykieta}</option>)}</select></label>}<label className="pole pole-checkbox"><input type="checkbox" checked={odczyt} onChange={(e) => ustawOdczyt(e.target.checked)} /><span>Odczyt</span></label><label className="pole pole-checkbox"><input type="checkbox" checked={edycja} onChange={(e) => ustawEdycja(e.target.checked)} /><span>Edycja</span></label><button className="przycisk przycisk--glowny" type="submit">Zapisz grant</button></form></section>}
+      <section><h3>Aktywne granty</h3>{konto.granty.filter((x) => x.status === 'aktywne').map((grant) => <div className="wiersz-konta" key={grant.id}><span>{ETYKIETY_MODULOW[grant.modul] ?? 'Moduł'}{grant.sekcja && ` · ${PRYWATNE_SEKCJE_ZDROWIA[grant.sekcja as keyof typeof PRYWATNE_SEKCJE_ZDROWIA] ?? 'Wybrana sekcja'}`}: {grant.odczyt ? 'odczyt' : ''}{grant.edycja ? ' + edycja' : ''}</span><button type="button" className="przycisk przycisk--tekstowy" onClick={() => void cofnijGrant(grant.id).then(odswiez)}>Cofnij</button></div>)}</section>
     </>}
     <PanelHaslaISesji odswiez={odswiez} wyczysc={wyczysc} />
     {konto.rolaSystemowa === 'administrator' && <PanelAdministracjiKont />}
-  </Modal>
+    <PrzelaczKonto />
+  </div>
+}
+
+function PanelKonta({ zamknij, ...wlasciwosci }: { konto: KontoUzytkownika; zamknij: () => void; odswiez: () => Promise<void>; wyczysc: () => void }) {
+  return <Modal tytul="Konta i użytkownicy" zamknij={zamknij} szeroki><ZawartoscKonta {...wlasciwosci} /></Modal>
+}
+
+function PrzelaczKonto() {
+  const [login, ustawLogin] = useState('')
+  const [haslo, ustawHaslo] = useState('')
+  const [blad, ustawBlad] = useState('')
+  const [zajety, ustawZajety] = useState(false)
+  return <section><h3>Przełącz konto</h3><p>Zapisane dane pozostaną w oddzielnym profilu. Zmiana wymaga połączenia z serwerem.</p>
+    {blad && <Komunikat typ="blad">{blad}</Komunikat>}
+    <form className="formularz" onSubmit={(zdarzenie) => {
+      zdarzenie.preventDefault()
+      if (zajety) return
+      ustawZajety(true); ustawBlad('')
+      const hasloLogowania = haslo
+      ustawHaslo('')
+      void zaloguj(login, hasloLogowania).catch((przyczyna) => ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Zmiana konta nie powiodła się.')).finally(() => ustawZajety(false))
+    }}>
+      <label className="pole"><span>E-mail lub login nowego konta</span><input autoComplete="username" required value={login} onChange={(zdarzenie) => ustawLogin(zdarzenie.target.value)} /></label>
+      <label className="pole"><span>Hasło nowego konta</span><input type="password" autoComplete="current-password" required maxLength={200} value={haslo} onChange={(zdarzenie) => ustawHaslo(zdarzenie.target.value)} /></label>
+      <button type="submit" className="przycisk" disabled={zajety}>Zaloguj na inne konto</button>
+    </form>
+  </section>
+}
+
+export function KontaIUzytkownicy() {
+  const { konto, odswiez, wyczysc } = useKonto()
+  if (!konto || !odswiez || !wyczysc) return <section className="karta"><h2>Konta i użytkownicy</h2><p>Pracujesz lokalnie. Połącz konto przez przycisk Tryb lokalny.</p></section>
+  return <section className="karta"><h2>Konta i użytkownicy</h2><ZawartoscKonta konto={konto} odswiez={odswiez} wyczysc={wyczysc} /></section>
 }
 
 export function DostawcaKonta({ children }: { children: ReactNode }) {
@@ -193,6 +242,8 @@ export function DostawcaKonta({ children }: { children: ReactNode }) {
   const [offline, ustawOffline] = useState(false)
   const [bootstrapDostepny, ustawBootstrapDostepny] = useState(false)
   const [panel, ustawPanel] = useState(false)
+  const [bladZmiany] = useState(() => sessionStorage.getItem('ogarniacz-blad-zmiany-konta') ?? '')
+  useEffect(() => { sessionStorage.removeItem('ogarniacz-blad-zmiany-konta') }, [])
 
   const odswiez = async () => { ustawKonto(await pobierzSesjeKonta()) }
   useEffect(() => {
@@ -220,7 +271,8 @@ export function DostawcaKonta({ children }: { children: ReactNode }) {
     <button type="button" className="przycisk-konta" onClick={() => ustawOffline(false)} title="Połącz konto i synchronizację"><ShieldCheck aria-hidden="true" /><span>Tryb lokalny</span></button>
   </KontekstKonta.Provider>
   if (konto.wymaganaZmianaHasla) return <main className="ekran-konta"><section className="karta"><h1>Wymagana zmiana hasła</h1><PanelHaslaISesji odswiez={odswiez} wyczysc={() => ustawKonto(undefined)} /></section></main>
-  return <KontekstKonta.Provider value={{ konto, offline }}>
+  return <KontekstKonta.Provider value={{ konto, offline, odswiez, wyczysc: () => { ustawPanel(false); ustawKonto(undefined) } }}>
+    {bladZmiany && <Komunikat typ="blad">{bladZmiany}</Komunikat>}
     {children}
     <button type="button" className="przycisk-konta" onClick={() => ustawPanel(true)} title="Konto i współdzielenie"><ShieldCheck aria-hidden="true" /><span>{offline ? 'Konto offline' : konto.rola === 'wlasciciel' ? 'Właściciel' : 'Edytor'}</span></button>
     {panel && <PanelKonta konto={konto} zamknij={() => ustawPanel(false)} odswiez={odswiez} wyczysc={() => { ustawPanel(false); ustawKonto(undefined) }} />}

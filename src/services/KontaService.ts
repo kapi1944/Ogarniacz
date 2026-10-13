@@ -122,6 +122,7 @@ async function wykonaj<T>(metoda: 'GET' | 'POST' | 'PUT', sciezka: string, dane?
     webFetchExtra: { credentials: 'include' },
   })
   if (odpowiedz.status < 200 || odpowiedz.status >= 300) {
+    if (odpowiedz.status === 401 && czyProfileUruchomione() && pobierzAktywnyProfil() && !['/api/auth/login', '/api/auth/recover', '/api/auth/invitations/accept'].includes(sciezka)) window.dispatchEvent(new Event('ogarniacz:sesja-wygasla'))
     const blad = odpowiedz.data && typeof odpowiedz.data === 'object' ? odpowiedz.data as OdpowiedzBledu : {}
     throw new BladKonta(odpowiedz.status, blad.error ?? 'Serwer kont odrzucił żądanie.')
   }

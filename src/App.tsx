@@ -7,7 +7,7 @@ import { StraznikModulu, UkladAplikacji } from './app/UkladAplikacji'
 import { WidokPulpitu } from './modules/pulpit/WidokPulpitu'
 import { NawigacjaPlatformy } from './platform/NawigacjaPlatformy'
 import type { NazwaModulu } from './domain/typy'
-import { DostawcaKonta } from './app/DostawcaKonta'
+import { DostawcaKonta, KontaIUzytkownicy } from './app/DostawcaKonta'
 
 const WidokPoczekalni = lazy(() => import('./modules/praca/WidokiPracy').then((modul) => ({ default: modul.WidokPoczekalni })))
 const WidokZadan = lazy(() => import('./modules/praca/WidokiPracy').then((modul) => ({ default: modul.WidokZadan })))
@@ -94,6 +94,7 @@ export default function App() {
     <Route path="/dzisiaj" element={<WidokDzisiaj />} />
     <Route path="/echo" element={chron('echo', <WidokEcho />)} />
     <Route path="/ustawienia" element={chron('ustawienia', <WidokUstawien />)} />
+    <Route path="/ustawienia/konta" element={<KontaIUzytkownicy />} />
     <Route path="/ustawienia/personalizacja" element={chron('ustawienia', <EdytorPersonalizacji />)} />
     <Route path="*" element={<NieZnaleziono />} />
   </Routes></Suspense></GranicaBleduTrasy></UkladAplikacji></DostawcaSesjiEcho></DostawcaAplikacji></DostawcaKonta></BrowserRouter>

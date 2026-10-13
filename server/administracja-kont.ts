@@ -45,6 +45,7 @@ export function wykonajAdministracjeKont(
   if (login && !/^[a-z0-9._-]{1,254}$/.test(login)) throw new Error('Niepoprawny login.')
   if (nazwa && nazwa.length > 200) throw new Error('Nazwa jest za długa.')
   if (!['administrator', 'uzytkownik'].includes(rola) || !['aktywne', 'nieaktywne', 'zarchiwizowane'].includes(status)) throw new Error('Niepoprawna rola lub status.')
+  if (baza.prepare('SELECT 1 FROM uzytkownicy WHERE id <> ? AND (email = ? OR (? IS NOT NULL AND login = ? COLLATE NOCASE))').get(metoda === 'POST' ? '' : id, email, login, login)) throw new Error('E-mail lub login jest już zajęty.')
   const nowyId = metoda === 'POST' ? randomUUID() : id
   const hasloHash = metoda === 'POST' ? hashujHaslo(typeof dane.haslo === 'string' ? dane.haslo : '') : undefined
   baza.exec('BEGIN IMMEDIATE')

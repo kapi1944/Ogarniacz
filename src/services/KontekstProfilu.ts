@@ -17,16 +17,27 @@ export function zamknijProfilNatychmiast(): void {
 
 export async function zmienSesjeIPrzeladuj<T>(operacja: () => Promise<T>): Promise<T> {
   if (!navigator.onLine) throw new Error('Zmiana konta wymaga połączenia z serwerem. Bieżący profil pozostaje dostępny offline.')
-  zamknijProfilNatychmiast()
-  localStorage.setItem(KLUCZ_ZMIANY, 'start:' + crypto.randomUUID())
-  await rejestrProfili.stan.put({ id: 'przelaczanie' })
-  await rejestrProfili.stan.put({ id: 'aktywny' })
-  await zatrzymajSynchronizacjeAplikacji()
-  await platforma.powiadomienia.synchronizuj([], false)
-  await platforma.migawkiWidgetow.zapisz({ data: '', najblizszeElementyDnia: [], pilneIZalegleZadania: [], updatedAt: new Date().toISOString() })
+  if (navigator.locks) return navigator.locks.request('ogarniacz-zmiana-sesji', () => wykonajZmianeSesji(operacja))
+  return wykonajZmianeSesji(operacja)
+}
+
+async function wykonajZmianeSesji<T>(operacja: () => Promise<T>): Promise<T> {
+  await rejestrProfili.transaction('rw', rejestrProfili.stan, async () => {
+    if (await rejestrProfili.stan.get('przelaczanie')) throw new Error('Zmiana konta trwa w innej karcie.')
+    await rejestrProfili.stan.put({ id: 'przelaczanie' })
+  })
   try {
+    zamknijProfilNatychmiast()
+    localStorage.setItem(KLUCZ_ZMIANY, 'start:' + crypto.randomUUID())
+    await rejestrProfili.stan.put({ id: 'aktywny' })
+    await zatrzymajSynchronizacjeAplikacji()
+    await platforma.powiadomienia.synchronizuj([], false)
+    await platforma.migawkiWidgetow.zapisz({ data: '', najblizszeElementyDnia: [], pilneIZalegleZadania: [], updatedAt: new Date().toISOString() })
     const wynik = await operacja()
     return wynik
+  } catch (blad) {
+    sessionStorage.setItem('ogarniacz-blad-zmiany-konta', blad instanceof Error ? blad.message : 'Zmiana konta nie powiodła się.')
+    throw blad
   } finally {
     await rejestrProfili.stan.delete('przelaczanie')
     localStorage.setItem(KLUCZ_ZMIANY, 'koniec:' + crypto.randomUUID())
@@ -44,14 +55,25 @@ export function nasluchujZmianyProfilu(): () => void {
     zamknijProfilNatychmiast()
     window.location.reload()
   }
+  const wygaslaSesja = () => {
+    zamknijProfilNatychmiast()
+    wyczyscKontoLokalne()
+    void rejestrProfili.stan.put({ id: 'aktywny' }).then(() => window.location.reload())
+  }
   window.addEventListener('storage', odbierz)
   window.addEventListener('ogarniacz:inna-sesja', innaSesja)
-  return () => { window.removeEventListener('storage', odbierz); window.removeEventListener('ogarniacz:inna-sesja', innaSesja) }
+  window.addEventListener('ogarniacz:sesja-wygasla', wygaslaSesja)
+  return () => { window.removeEventListener('storage', odbierz); window.removeEventListener('ogarniacz:inna-sesja', innaSesja); window.removeEventListener('ogarniacz:sesja-wygasla', wygaslaSesja) }
 }
 
 export async function przygotujProfilStartowy(): Promise<{ migracja?: ProfilLokalny; zmianaHasla?: boolean }> {
   oznaczUruchomienieProfili()
-  if (await rejestrProfili.stan.get('przelaczanie')) throw new Error('Zmiana konta trwa w innej karcie. Odśwież po jej zakończeniu.')
+  if (await rejestrProfili.stan.get('przelaczanie')) {
+    // Blokada przeglądarki zwalnia się także po awarii karty; po jej uzyskaniu
+    // można bezpiecznie usunąć pozostawiony znacznik i ponownie sprawdzić serwer.
+    if (navigator.locks) await navigator.locks.request('ogarniacz-zmiana-sesji', () => rejestrProfili.stan.delete('przelaczanie'))
+    else throw new Error('Zmiana konta trwa w innej karcie. Odśwież po jej zakończeniu.')
+  }
   const { adresApi } = pobierzKonfiguracjeSynchronizacji()
   if (!adresApi) {
     const maProfile = await rejestrProfili.profile.count() > 0

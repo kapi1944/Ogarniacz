@@ -8,6 +8,7 @@ import {
   pobierzListeSesji,
   zmienHaslo,
   wyloguj,
+  zaloguj,
   type KontoUzytkownika,
 } from '../services/KontaService'
 import { DostawcaKonta } from './DostawcaKonta'
@@ -26,6 +27,7 @@ vi.mock('../services/KontaService', async (importujOryginal) => {
     pobierzListeSesji: vi.fn(),
     zmienHaslo: vi.fn(),
     wyloguj: vi.fn(),
+    zaloguj: vi.fn(),
   }
 })
 
@@ -53,6 +55,20 @@ poKazdym(() => {
 })
 
 describe('onboarding konta', () => {
+  it('pokazuje metadane i błąd zmiany konta bez panelu administracyjnego dla zwykłego użytkownika', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue({ ...konto, nazwa: 'Właściciel testowy', login: 'wlasciciel', rolaSystemowa: 'uzytkownik' })
+    vi.mocked(zaloguj).mockRejectedValue(new Error('Zmiana konta wymaga połączenia.'))
+    render(<DostawcaKonta><div>Aplikacja działa</div></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Właściciel' }))
+    expect(screen.getByText('Właściciel testowy')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Zarządzanie użytkownikami' })).not.toBeInTheDocument()
+    zdarzenie.change(screen.getByLabelText('E-mail lub login nowego konta'), { target: { value: 'inne' } })
+    zdarzenie.change(screen.getByLabelText('Hasło nowego konta'), { target: { value: 'Haslo-testowe' } })
+    zdarzenie.click(screen.getByRole('button', { name: 'Zaloguj na inne konto' }))
+    expect(await screen.findByText('Zmiana konta wymaga połączenia.')).toBeInTheDocument()
+    expect(zaloguj).toHaveBeenCalledWith('inne', 'Haslo-testowe')
+    expect(screen.getByLabelText('Hasło nowego konta')).toHaveValue('')
+  })
   it('wymuszona zmiana hasła blokuje widok danych i nie otwiera klawiatury', async () => {
     vi.mocked(pobierzSesjeKonta).mockResolvedValue({ ...konto, wymaganaZmianaHasla: true })
     render(<DostawcaKonta><div>Prywatne dane</div></DostawcaKonta>)

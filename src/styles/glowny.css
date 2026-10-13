@@ -523,6 +523,15 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .bezpieczenstwo-backupu dt { font-weight: 700; }
 .bezpieczenstwo-backupu dd { margin: 0 0 8px; color: var(--tekst-2); }
 .formularz-hasla-backupu { display: grid; gap: 14px; }
+.konta-uzytkownicy { display: grid; gap: 24px; min-width: 0; }
+.konta-uzytkownicy section { min-width: 0; }
+.konta-uzytkownicy .wiersz-konta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.konta-uzytkownicy .wiersz-konta span, .konta-uzytkownicy dd { overflow-wrap: anywhere; }
+.konta-uzytkownicy button { min-height: 44px; white-space: normal; }
+@media (max-width: 600px) {
+  .konta-uzytkownicy .formularz { grid-template-columns: minmax(0, 1fr); }
+  .konta-uzytkownicy .formularz > button { width: 100%; }
+}
 .pokaz-haslo-backupu { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
 .pokaz-haslo-backupu input { width: 20px; height: 20px; accent-color: var(--akcent); }
 .formularz-hasla-backupu .akcje-formularza { flex-wrap: wrap; }

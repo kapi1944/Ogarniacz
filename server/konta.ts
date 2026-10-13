@@ -649,7 +649,7 @@ export async function obsluzKonta(
     odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu konta.' })
     return true
   } catch (blad) {
-    const komunikat = blad instanceof Error && blad.message === 'Hasło musi mieć od 8 do 200 znaków.'
+    const komunikat = blad instanceof Error && ['Hasło musi mieć od 8 do 200 znaków.', 'Niepoprawny e-mail.', 'Niepoprawny login.', 'Nazwa jest za długa.', 'Niepoprawna rola lub status.', 'Nie znaleziono konta.', 'Nie można odebrać dostępu ostatniemu administratorowi.', 'E-mail lub login jest już zajęty.'].includes(blad.message)
       ? blad.message
       : 'Nie udało się wykonać operacji konta.'
     odpowiedzJson(odpowiedz, 400, { error: komunikat })
