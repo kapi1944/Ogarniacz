@@ -9,8 +9,8 @@ import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, sprawdzCsrf } 
 import { utworzAktualizacjeRpi, type AktualizacjeRpi } from './aktualizacje-rpi.ts'
 import { odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
 
-const METODY_SYNCHRONIZACJI = 'GET, POST, OPTIONS'
-const NAGLOWKI_SYNCHRONIZACJI = 'Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF'
+const METODY_SYNCHRONIZACJI = 'GET, POST, PUT, OPTIONS'
+const NAGLOWKI_SYNCHRONIZACJI = 'Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF, X-Ogarniacz-User-Id, X-Ogarniacz-Owner-Id'
 
 function ustawNaglowkiBezpieczenstwa(odpowiedz: ServerResponse): void {
   odpowiedz.setHeader('strict-transport-security', 'max-age=31536000')
@@ -188,6 +188,11 @@ export function utworzSerwer(
         }
         if (zadanie.method === 'POST' && zadanie.url === '/api/sync/changes') {
           const paczka = await odczytajPaczkeSynchronizacji(zadanie)
+          const aktualny = pobierzKontekstDostepu(zadanie, baza)
+          if (!aktualny || aktualny.uzytkownikId !== kontekst.uzytkownikId || aktualny.wlascicielId !== kontekst.wlascicielId || !sprawdzCsrf(zadanie, aktualny)) {
+            odpowiedzJson(odpowiedz, 401, { error: 'Sesja zmieniła się podczas odbierania danych.' })
+            return
+          }
           if (paczka.installationId !== installationId) throw new Error('Niezgodny installationId.')
           const pominiete = paczka.zmiany.filter((zmiana) => zmiana.tabela === 'wpisyTerapii')
             .map((zmiana) => ({ tabela: zmiana.tabela, rekordId: zmiana.rekord.id, zmianaId: zmiana.zmianaId, powod: 'tabela_lokalna' }))

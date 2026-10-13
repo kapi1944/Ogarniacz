@@ -1,5 +1,6 @@
 import { CapacitorHttp } from '@capacitor/core'
 import { pobierzKonfiguracjeSynchronizacji } from './KonfiguracjaSynchronizacji'
+import { pobierzAktywnyProfil, pobierzSygnalProfilu, czyProfileUruchomione } from '../data/ProfileLokalne'
 
 const KLUCZ_CSRF = 'ogarniacz-csrf'
 const KLUCZ_KONTA_OFFLINE = 'ogarniacz-konto-offline'
@@ -86,6 +87,14 @@ function zapiszKonto(konto: KontoUzytkownika): KontoUzytkownika {
 
 /** Wylogowanie nie przenosi istniejącej bazy pod kolejne konto. */
 export function czyKontoZgodneZDanymiLokalnymi(): boolean {
+  const profil = pobierzAktywnyProfil()
+  if (profil) {
+    const konto = pobierzKontoOffline()
+    return !pobierzSygnalProfilu().aborted && konto?.uzytkownikId === profil.uzytkownikId
+      && konto.wlascicielId === profil.wlascicielId
+      && pobierzKonfiguracjeSynchronizacji().adresApi === profil.serwer
+  }
+  if (pobierzSygnalProfilu().aborted) return false
   const konto = pobierzKontoOffline()
   if (!konto) return true
   // Zachowaj istniejącą sesję offline podczas pierwszego uruchomienia po aktualizacji.
@@ -124,6 +133,9 @@ export function pobierzCsrfKonta(): string | undefined {
 }
 
 export function pobierzKontoOffline(): KontoUzytkownika | undefined {
+  const profil = pobierzAktywnyProfil()
+  if (profil) return profil.konto
+  if (czyProfileUruchomione()) return undefined
   if (typeof localStorage === 'undefined') return undefined
   try {
     const dane = JSON.parse(localStorage.getItem(KLUCZ_KONTA_OFFLINE) ?? 'null') as KontoUzytkownika | null
@@ -135,7 +147,15 @@ export function pobierzKontoOffline(): KontoUzytkownika | undefined {
 
 export async function pobierzSesjeKonta(): Promise<KontoUzytkownika> {
   odswiezanieSesji ??= wykonaj<KontoUzytkownika>('GET', '/api/auth/session')
-    .then(zapiszKonto)
+    .then((konto) => {
+      const profil = pobierzAktywnyProfil()
+      if (profil && (konto.uzytkownikId !== profil.uzytkownikId || konto.wlascicielId !== profil.wlascicielId)) {
+        window.dispatchEvent(new Event('ogarniacz:inna-sesja'))
+        throw new BladKonta(401, 'Sesja należy do innego profilu. Uruchom aplikację ponownie.')
+      }
+      if (profil) profil.konto = { ...konto, csrf: undefined, kodyOdzyskiwania: undefined }
+      return zapiszKonto(konto)
+    })
     .finally(() => { odswiezanieSesji = undefined })
   return odswiezanieSesji
 }
@@ -146,7 +166,13 @@ export async function czyBootstrapDostepny(): Promise<boolean> {
 }
 
 export async function zaloguj(email: string, haslo: string): Promise<KontoUzytkownika> {
-  return zapiszKonto(await wykonaj<KontoUzytkownika>('POST', '/api/auth/login', { email, haslo }))
+  return zmienSesje(() => wykonaj<KontoUzytkownika>('POST', '/api/auth/login', { email, haslo }).then(zapiszKonto))
+}
+
+async function zmienSesje<T>(operacja: () => Promise<T>): Promise<T> {
+  if (!czyProfileUruchomione()) return operacja()
+  const { zmienSesjeIPrzeladuj } = await import('./KontekstProfilu')
+  return zmienSesjeIPrzeladuj(operacja)
 }
 
 export interface KontoAdministracyjne {
@@ -171,11 +197,11 @@ export async function resetujHasloUzytkownika(id: string, haslo: string): Promis
 }
 
 export async function utworzKontoWlasciciela(email: string, haslo: string, token: string): Promise<KontoUzytkownika> {
-  return zapiszKonto(await wykonaj<KontoUzytkownika>('POST', '/api/auth/bootstrap', { email, haslo, token }))
+  return zmienSesje(() => wykonaj<KontoUzytkownika>('POST', '/api/auth/bootstrap', { email, haslo, token }).then(zapiszKonto))
 }
 
 export async function przyjmijZaproszenie(token: string, haslo: string): Promise<KontoUzytkownika> {
-  return zapiszKonto(await wykonaj<KontoUzytkownika>('POST', '/api/auth/invitations/accept', { token, haslo }))
+  return zmienSesje(() => wykonaj<KontoUzytkownika>('POST', '/api/auth/invitations/accept', { token, haslo }).then(zapiszKonto))
 }
 
 export async function odzyskajDostep(email: string, kod: string, noweHaslo: string): Promise<void> {
@@ -183,12 +209,12 @@ export async function odzyskajDostep(email: string, kod: string, noweHaslo: stri
 }
 
 export async function wyloguj(): Promise<void> {
-  await wykonaj('POST', '/api/auth/logout', {}, true)
-  wyczyscKontoLokalne()
+  await zmienSesje(async () => { await wykonaj('POST', '/api/auth/logout', {}, true); wyczyscKontoLokalne() })
 }
 
 export async function zmienHaslo(aktualneHaslo: string, noweHaslo: string): Promise<void> {
   await wykonaj('POST', '/api/account/password', { aktualneHaslo, noweHaslo }, true)
+  if (czyProfileUruchomione()) window.location.reload()
 }
 
 export async function pobierzListeSesji(): Promise<SesjaKonta[]> {
@@ -203,8 +229,7 @@ export async function wylogujSesje(id: string): Promise<boolean> {
 }
 
 export async function wylogujWszystkieSesje(): Promise<void> {
-  await wykonaj('POST', '/api/account/sessions/revoke-all', {}, true)
-  wyczyscKontoLokalne()
+  await zmienSesje(async () => { await wykonaj('POST', '/api/account/sessions/revoke-all', {}, true); wyczyscKontoLokalne() })
 }
 
 export async function zaprosEdytora(email: string): Promise<{ token: string; wygasaAt: string }> {

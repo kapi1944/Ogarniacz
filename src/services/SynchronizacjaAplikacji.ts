@@ -17,6 +17,12 @@ const powiadomioneOperacje = new WeakSet<Promise<WynikSynchronizacji>>()
 let ponowPoBrakuPolaczenia = false
 let repozytoriumZdalne: RepozytoriumZdalne | undefined
 let inicjalizacja: Promise<() => void> | undefined
+let zatrzymana = false
+
+export async function zatrzymajSynchronizacjeAplikacji(): Promise<void> {
+  zatrzymana = true
+  if (inicjalizacja) (await inicjalizacja)()
+}
 
 function utworzRepozytoriumZdalne(): RepozytoriumZdalne | undefined {
   const { adresApi } = pobierzKonfiguracjeSynchronizacji()
@@ -24,6 +30,7 @@ function utworzRepozytoriumZdalne(): RepozytoriumZdalne | undefined {
 }
 
 export function synchronizujTeraz() {
+  if (zatrzymana) throw new Error('Synchronizacja została zatrzymana na czas zmiany profilu.')
   repozytoriumZdalne ??= utworzRepozytoriumZdalne()
   if (!repozytoriumZdalne) throw new Error(pobierzDiagnostykeRuntime() || 'Synchronizacja zdalna nie jest skonfigurowana na tym urządzeniu.')
   const operacja = syncEngine.synchronizuj(repozytoriumZdalne)

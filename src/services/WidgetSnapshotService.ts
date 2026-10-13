@@ -1,4 +1,5 @@
 import { format } from 'date-fns'
+import { pobierzSygnalProfilu } from '../data/ProfileLokalne'
 import { nasluchujZmianDanych } from '../data/ZdarzeniaDanych'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import type { ElementOgarniacza } from '../domain/elementyOgarniacza'
@@ -138,7 +139,9 @@ export class WidgetSnapshotService {
   }
 
   async aktualizuj(): Promise<TodayWidgetSnapshot> {
+    const sygnal = pobierzSygnalProfilu()
     const snapshot = await this.utworzSnapshot()
+    if (sygnal.aborted) return snapshot
     await this.zapiszSnapshot(snapshot)
     return snapshot
   }
@@ -154,11 +157,11 @@ export function inicjalizujWidgetSnapshotService(): void {
     if (oczekujaceOdswiezenie !== undefined) window.clearTimeout(oczekujaceOdswiezenie)
     oczekujaceOdswiezenie = window.setTimeout(() => {
       oczekujaceOdswiezenie = undefined
-      void usluga.aktualizuj()
+      if (!pobierzSygnalProfilu().aborted) void usluga.aktualizuj().catch(() => undefined)
     }, 100)
   }
   zakonczNasluchiwanie = nasluchujZmianDanych((tabela) => {
     if (tabeleSnapshotu.has(tabela)) zaplanuj()
   })
-  void usluga.aktualizuj()
+  void usluga.aktualizuj().catch(() => undefined)
 }

@@ -63,3 +63,25 @@ Pełna techniczna kopia przed migracją używa dotychczasowej koperty AES-GCM
 z zaszyfrowaną zawartością `ogarniacz-migracja-profili`, także z kolejkami
 i konfliktami. Jest kopią do odzyskania źródła, a nie zwykłym eksportem sekcji.
 Zachowane `ogarniacz-v1` pozostaje pierwszym źródłem odzyskania danych.
+
+## Etap 6 — uruchomienie i zmiana konta
+
+Przed inicjalizacją bazy aplikacja sprawdza sesję serwera i dobiera profil.
+Offline odtwarza wyłącznie ostatni profil tego serwera z rejestru IndexedDB.
+Nie przełącza kont offline. Tryb anonimowy ma osobną bazę `ogarniacz-lokalny`
+i nie może synchronizować kolejki do konta. W samodzielnej instalacji bez
+serwera i bez profili dotychczasowy tryb lokalny zachowuje starą bazę.
+
+Pierwsze przypisanie źródła wymaga potwierdzenia oraz zapisania szyfrowanej
+kopii. Można zamiast tego rozpocząć z pustym profilem. Jawne przypisanie
+rezerwuje źródło w rejestrze, także podczas wznawiania po przerwaniu.
+Wymuszona zmiana hasła odbywa się przed otwarciem i inicjalizacją bazy danych.
+
+Zmiana sesji najpierw zamyka widok i bazę, anuluje sygnał kontekstu, zatrzymuje
+cykl synchronizacji oraz usuwa powiadomienia i migawkę widgetu. Następuje pełne
+przeładowanie. Sygnał storage zawiadamia inne karty; nie jest dowodem tożsamości.
+Trwające żądanie natywnego CapacitorHttp może fizycznie dokończyć transport,
+ale jego odpowiedź zostaje odrzucona po zamknięciu kontekstu.
+Nowy klient wiąże sync z użytkownikiem i Właścicielem przez nagłówki sprawdzane
+z cookie na serwerze. Starsze klienty zachowują istniejący kontrakt.
+Backend ponownie sprawdza sesję i CSRF po odebraniu ciała push.

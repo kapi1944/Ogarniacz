@@ -3,11 +3,12 @@ import { Directory, Encoding, Filesystem } from '@capacitor/filesystem'
 const SCIEZKA_SNAPSHOTU_DZISIAJ = 'widget/today.json'
 
 export function utworzMostMigawekWidgetow(czyAndroid: boolean) {
+  let kolejka = Promise.resolve(false)
   return {
     dostepne: () => czyAndroid,
     async zapisz(dane: unknown): Promise<boolean> {
       if (!czyAndroid) return false
-      try {
+      kolejka = kolejka.then(async () => { try {
         await Filesystem.writeFile({
           path: SCIEZKA_SNAPSHOTU_DZISIAJ,
           data: JSON.stringify(dane),
@@ -18,7 +19,8 @@ export function utworzMostMigawekWidgetow(czyAndroid: boolean) {
         return true
       } catch {
         return false
-      }
+      } })
+      return kolejka
     },
   }
 }

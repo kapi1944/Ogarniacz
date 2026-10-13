@@ -24,6 +24,10 @@ export class RejestrProfili extends Dexie {
 export const rejestrProfili = new RejestrProfili()
 let aktywnyProfil: ProfilLokalny | undefined
 let sygnalProfilu = new AbortController()
+let profileUruchomione = false
+
+export function oznaczUruchomienieProfili(): void { profileUruchomione = true }
+export function czyProfileUruchomione(): boolean { return profileUruchomione }
 
 export function pobierzAktywnyProfil(): ProfilLokalny | undefined { return aktywnyProfil }
 export function pobierzSygnalProfilu(): AbortSignal { return sygnalProfilu.signal }

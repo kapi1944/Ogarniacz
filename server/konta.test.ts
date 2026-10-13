@@ -27,6 +27,18 @@ test('pierwszy administrator wymaga jawnego aktywnego konta i nie zmienia danych
   } finally { baza.close() }
 })
 
+test('cookie innego konta nie uwierzytelnia starego profilu synchronizacji', async () => {
+  await zSerwerem(async (adres, baza) => {
+    dodajUzytkownika(baza, 'a', 'a@example.test')
+    dodajUzytkownika(baza, 'b', 'b@example.test')
+    dodajSesje(baza, 'token-b', 'csrf-b', 'b')
+    const naglowkiProfilu = { ...naglowki('token-b', 'csrf-b'), 'x-ogarniacz-user-id': 'a', 'x-ogarniacz-owner-id': 'a' }
+    assert.equal((await fetch(adres + '/api/sync/changes?od=1970-01-01T00:00:00.000Z', { headers: naglowkiProfilu })).status, 401)
+    assert.equal((await fetch(adres + '/api/sync/changes', { method: 'POST', headers: naglowkiProfilu, body: JSON.stringify({ od: TERAZ, installationId: 'instalacja-testowa', zmiany: [] }) })).status, 401)
+    assert.equal(baza.prepare('SELECT COUNT(*) AS liczba FROM rekordy_synchronizacji').get()?.liczba, 0)
+  })
+})
+
 test('administracja kont: uprawnienia, CSRF, izolacja, login, reset, archiwizacja i ostatni administrator', async () => {
   await zSerwerem(async (adres, baza) => {
     dodajUzytkownika(baza, 'admin', 'admin@example.test')

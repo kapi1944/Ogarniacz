@@ -45,6 +45,14 @@ export async function migrujDaneDoProfilu(
   const rejestr = opcje.rejestr ?? rejestrProfili
   const zapisany = await rejestr.profile.get(profil.id)
   if (!zapisany || zapisany.wlascicielId !== profil.wlascicielId) throw new Error('Brak zarejestrowanego profilu.')
+  const przypisany = await rejestr.stan.get('zrodlo-legacy')
+  if (przypisany?.profilId && przypisany.profilId !== profil.id) throw new Error('Dotychczasowe dane zostały już przypisane do innego profilu.')
+  await rejestr.transaction('rw', rejestr.stan, async () => {
+    const przypisany = await rejestr.stan.get('zrodlo-legacy')
+    if (przypisany?.profilId && przypisany.profilId !== profil.id) throw new Error('Dane zostały przypisane w innej karcie.')
+    // Jawne wskazanie Właściciela rezerwuje źródło także na czas bezpiecznego wznowienia.
+    await rejestr.stan.put({ id: 'zrodlo-legacy', profilId: profil.id })
+  })
   const zrodlo = await otworzZrodloMigracji(opcje.nazwaZrodla)
   if (!zrodlo) throw new Error('Nie znaleziono źródła migracji.')
   const cel = await otworzBazeProfilu(profil)
@@ -77,7 +85,12 @@ export async function migrujDaneDoProfilu(
     if (await checksumDanych(await odczytajMigawke(zrodlo)) !== checksum) throw new Error('Źródło zmieniło się podczas migracji. Profil nie został aktywowany.')
     // Znacznik dopiero po commicie danych. Przerwanie między bazami jest wznawialne.
     const ukonczony = { ...zapisany, migracja: { checksum, zakonczonoAt: new Date().toISOString() } }
-    await rejestr.profile.put(ukonczony)
+    await rejestr.transaction('rw', rejestr.profile, rejestr.stan, async () => {
+      const przypisany = await rejestr.stan.get('zrodlo-legacy')
+      if (przypisany?.profilId && przypisany.profilId !== profil.id) throw new Error('Dane zostały przypisane w innej karcie.')
+      await rejestr.profile.put(ukonczony)
+      await rejestr.stan.put({ id: 'zrodlo-legacy', profilId: profil.id })
+    })
     await aktywujProfil(ukonczony, rejestr)
   } finally { cel.close(); zrodlo.close() }
 }

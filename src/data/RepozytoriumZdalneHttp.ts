@@ -3,6 +3,7 @@ import { BladKonfliktuSynchronizacji, type RepozytoriumZdalne, type ZmianaSynchr
 import { odtworzWartoscZTransportu, przygotujWartoscDoTransportu } from '../services/BackupService'
 import { pobierzInstallationId } from '../services/InstallationService'
 import { BladKonta, pobierzCsrfKonta, pobierzKontoOffline, pobierzSesjeKonta } from '../services/KontaService'
+import { pobierzAktywnyProfil, pobierzSygnalProfilu, czyProfileUruchomione } from './ProfileLokalne'
 
 interface OdpowiedzZmian {
   zmiany: ZmianaSynchronizacji[]
@@ -25,6 +26,13 @@ function polaczAdres(baza: string, sciezka: string): string {
 export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   readonly trwale = true
   private kursor?: string
+  private readonly profil = pobierzAktywnyProfil()
+  private readonly sygnal = pobierzSygnalProfilu()
+
+  private sprawdzProfil(): void {
+    if (czyProfileUruchomione() && !this.profil) throw new BladSynchronizacjiHttp('brak_sesji', 'Tryb lokalny nie synchronizuje danych konta.')
+    if (this.sygnal.aborted || this.profil && (pobierzAktywnyProfil()?.id !== this.profil.id || this.adresApi !== this.profil.serwer)) throw new BladSynchronizacjiHttp('brak_sesji', 'Profil zmienił się. Zatrzymano synchronizację.')
+  }
 
   constructor(
     private readonly adresApi: string,
@@ -69,14 +77,17 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   }
 
   private naglowki(czyZapis: boolean): Record<string, string> {
+    this.sprawdzProfil()
     const csrf = pobierzCsrfKonta()
     return {
       ...(czyZapis && csrf ? { 'x-ogarniacz-csrf': csrf } : {}),
       'x-ogarniacz-installation-id': this.installationId(),
+      ...(this.profil ? { 'x-ogarniacz-user-id': this.profil.uzytkownikId, 'x-ogarniacz-owner-id': this.profil.wlascicielId } : {}),
     }
   }
 
   private async zapewnijSesje(): Promise<void> {
+    this.sprawdzProfil()
     if (pobierzCsrfKonta()) return
     const sesjaBylaZnana = Boolean(pobierzKontoOffline())
     try {
@@ -123,7 +134,10 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
 
   private async wykonajZadanie(zadanie: () => Promise<HttpResponse>): Promise<HttpResponse> {
     try {
-      return await zadanie()
+      this.sprawdzProfil()
+      const wynik = await zadanie()
+      this.sprawdzProfil()
+      return wynik
     } catch (blad) {
       throw this.mapujBladPolaczenia(blad)
     }

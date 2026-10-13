@@ -208,6 +208,10 @@ export function pobierzKontekstDostepu(zadanie: IncomingMessage, baza: DatabaseS
       AND u.status_konta = 'aktywne' AND w.status_konta = 'aktywne'
   `).get(hashSekretu(token), teraz)
   if (!wiersz) return undefined
+  const wskazanyUzytkownik = zadanie.headers['x-ogarniacz-user-id']
+  const wskazanyWlasciciel = zadanie.headers['x-ogarniacz-owner-id']
+  if ((wskazanyUzytkownik !== undefined || wskazanyWlasciciel !== undefined)
+    && (wskazanyUzytkownik !== wiersz.uzytkownik_id || wskazanyWlasciciel !== wiersz.aktywny_wlasciciel_id)) return undefined
   if (Number(wiersz.wymagana_zmiana_hasla) === 1 && !dopuscZmianeHasla) return undefined
   baza.prepare('UPDATE sesje SET ostatnia_aktywnosc_at = ? WHERE token_hash = ?').run(teraz, hashSekretu(token))
   return {
@@ -487,7 +491,7 @@ export async function obsluzKonta(
     }
 
     // Odczyt ciała może czekać na sieć; autoryzację sprawdzamy dopiero po nim.
-    const daneBezpieczenstwa = (zadanie.method === 'POST' && ['/api/account/password', '/api/account/sessions/revoke'].includes(sciezka)) || (['POST', 'PUT'].includes(zadanie.method ?? '') && sciezka.startsWith('/api/account/users'))
+    const daneBezpieczenstwa = ['POST', 'PUT'].includes(zadanie.method ?? '')
       ? await odczytajJson(zadanie) : undefined
     const kontekst = pobierzKontekstDostepu(zadanie, baza, true)
     if (!kontekst) {
@@ -584,7 +588,7 @@ export async function obsluzKonta(
       return true
     }
     if (zadanie.method === 'POST' && sciezka === '/api/account/invitations') {
-      const dane = await odczytajJson(zadanie)
+      const dane = daneBezpieczenstwa!
       const email = normalizujEmail(dane.email)
       const token = randomBytes(32).toString('base64url')
       const id = randomUUID()
@@ -597,7 +601,7 @@ export async function obsluzKonta(
       return true
     }
     if (zadanie.method === 'PUT' && sciezka === '/api/account/grants') {
-      const dane = await odczytajJson(zadanie)
+      const dane = daneBezpieczenstwa!
       const editorId = tekst(dane.editorId)
       const modul = tekst(dane.modul)
       const sekcja = tekst(dane.sekcja).trim()
@@ -617,14 +621,14 @@ export async function obsluzKonta(
       return true
     }
     if (zadanie.method === 'POST' && sciezka === '/api/account/grants/revoke') {
-      const dane = await odczytajJson(zadanie)
+      const dane = daneBezpieczenstwa!
       baza.prepare("UPDATE granty_dostepu SET status = 'cofniete', zaktualizowano_at = ? WHERE id = ? AND wlasciciel_id = ?")
         .run(new Date().toISOString(), tekst(dane.id), kontekst.wlascicielId)
       odpowiedzJson(odpowiedz, 200, { cofnieto: true })
       return true
     }
     if (zadanie.method === 'POST' && sciezka === '/api/account/editors/revoke') {
-      const dane = await odczytajJson(zadanie)
+      const dane = daneBezpieczenstwa!
       const editorId = tekst(dane.editorId)
       const teraz = new Date().toISOString()
       baza.exec('BEGIN')
