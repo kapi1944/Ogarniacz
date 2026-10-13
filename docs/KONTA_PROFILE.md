@@ -46,3 +46,20 @@ Zamknięcie kontekstu anuluje jego sygnał i blokuje automatyczne ponowne otwarc
 Zmiana singletonu jest dozwolona wyłącznie podczas startu przed UI.
 Etap 4 udostępnia mechanizm dla migracji; nie przełącza istniejącej instalacji
 ani nie modyfikuje starej bazy.
+
+## Etap 5 — bezstratna migracja
+
+Źródło jest otwierane z jego istniejącym schematem, bez upgrade i bez zapisu.
+Migracja wymaga jawnego potwierdzenia Właściciela zalogowanego na własne konto.
+Kopiuje wszystkie tabele, UUID, relacje, daty i rzeczywiste Bloby w jednej
+transakcji docelowej; weryfikuje checksum pełnej treści i ponownie sprawdza źródło.
+Odmowa nadpisania niezgodnego niepustego celu chroni wcześniejsze dane.
+Przerwanie transakcji wycofuje całą kopię. Przerwanie przed zapisem znacznika
+można wznowić przez rozpoznanie kompletnej identycznej kopii.
+Po znaczniku ukończenia ponowienie nie nadpisuje nowych danych profilu.
+Aktywacja następuje dopiero po weryfikacji. SQLite pozostaje bez zmian.
+
+Pełna techniczna kopia przed migracją używa dotychczasowej koperty AES-GCM
+z zaszyfrowaną zawartością `ogarniacz-migracja-profili`, także z kolejkami
+i konfliktami. Jest kopią do odzyskania źródła, a nie zwykłym eksportem sekcji.
+Zachowane `ogarniacz-v1` pozostaje pierwszym źródłem odzyskania danych.

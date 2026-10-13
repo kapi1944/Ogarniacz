@@ -432,7 +432,7 @@ function czyBlob(wartosc: unknown): wartosc is Blob {
   return wartosc instanceof Blob || Object.prototype.toString.call(wartosc) === '[object Blob]'
 }
 
-export async function przygotujWartoscDoTransportu(wartosc: unknown): Promise<unknown> {
+export async function przygotujWartoscDoTransportu(wartosc: unknown, pominSekrety = true): Promise<unknown> {
   if (czyBlob(wartosc)) {
     return {
       __ogarniaczBlob: true,
@@ -440,12 +440,12 @@ export async function przygotujWartoscDoTransportu(wartosc: unknown): Promise<un
       base64: bajtyNaBase64(await odczytajBajty(wartosc)),
     }
   }
-  if (Array.isArray(wartosc)) return Promise.all(wartosc.map(przygotujWartoscDoTransportu))
+  if (Array.isArray(wartosc)) return Promise.all(wartosc.map((element) => przygotujWartoscDoTransportu(element, pominSekrety)))
   if (wartosc && typeof wartosc === 'object') {
     return Object.fromEntries(
       await Promise.all(Object.entries(wartosc)
-        .filter(([klucz]) => !niedozwoloneKlucze.test(klucz))
-        .map(async ([klucz, element]) => [klucz, await przygotujWartoscDoTransportu(element)] as const)),
+        .filter(([klucz]) => !pominSekrety || !niedozwoloneKlucze.test(klucz))
+        .map(async ([klucz, element]) => [klucz, await przygotujWartoscDoTransportu(element, pominSekrety)] as const)),
     )
   }
   return wartosc
@@ -799,8 +799,13 @@ async function wyprowadzKlucz(kryptografia: Crypto, haslo: string, sol: Uint8Arr
 }
 
 export async function szyfrujBackup(backup: OgarniaczBackup, haslo: string): Promise<ZaszyfrowanyBackup> {
-  const kryptografia = pobierzKryptografie()
   await przygotujBackupDoPrzywracania(JSON.stringify(backup))
+  return szyfrujZawartoscKopii(backup, haslo)
+}
+
+/** Wspólne szyfrowanie także pełnej kopii technicznej przed migracją profili. */
+export async function szyfrujZawartoscKopii(zawartosc: unknown, haslo: string): Promise<ZaszyfrowanyBackup> {
+  const kryptografia = pobierzKryptografie()
   const sol = new Uint8Array(16)
   const iv = new Uint8Array(12)
   try {
@@ -815,7 +820,7 @@ export async function szyfrujBackup(backup: OgarniaczBackup, haslo: string): Pro
     iv: bajtyNaBase64(iv),
   }
   const klucz = await wyprowadzKlucz(kryptografia, haslo, sol, 'encrypt')
-  const bajty = new TextEncoder().encode(JSON.stringify(backup))
+  const bajty = new TextEncoder().encode(JSON.stringify(zawartosc))
   try {
     const szyfrogram = await kryptografia.subtle.encrypt(
       { name: 'AES-GCM', iv, tagLength: 128, additionalData: new TextEncoder().encode(kanonizuj(naglowek)) }, klucz, bajty,
