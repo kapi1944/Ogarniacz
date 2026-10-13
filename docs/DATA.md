@@ -1,5 +1,13 @@
 ﻿# Model danych i migracje
 
+## Konta — uzupełnienie etapów 1–3
+
+Migracja SQLite 6 → 7 dodaje wyłącznie nullable `kody_odzyskiwania.wygasa_at`.
+Istniejące kody zachowują hashe, daty i wcześniejszą ważność (`NULL`).
+Nowy jednorazowy reset administracyjny zapisuje termin ważności na godzinę.
+Migracje 1–6 pozostają bez zmian. Nie zmieniono UUID, relacji, grantów,
+rekordów synchronizacji ani schematu IndexedDB.
+
 ## Konta użytkowników — etap 2
 
 Migracja SQLite 5 → 6 rozszerza tylko sesje o niezależne, losowe publiczne `id` (16 bajtów, indeks unikalny). Zachowuje tokeny, hashe, terminy i powiązania aktywnych sesji; starsze sesje otrzymują ID w transakcji. Trigger nadaje ID także zapisom używającym dawnych kolumn. Ponowienie migracji nie zmienia ID.

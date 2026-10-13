@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CapacitorHttp } from '@capacitor/core'
 import { pobierzCsrfKonta, pobierzKontoOffline, pobierzListeSesji, pobierzSesjeKonta, uruchomAktualizacjeRaspberry, wylogujSesje, wylogujWszystkieSesje, zaloguj, zmienHaslo } from './KontaService'
+import { resetujHasloUzytkownika, wylogujPozostaleSesje } from './KontaService'
 
 // Setup uprawnień ładuje usługę kont; usuń ten cache przed zastosowaniem mocków.
 vi.hoisted(() => vi.resetModules())
@@ -32,6 +33,24 @@ beforeEach(() => {
 })
 
 describe('KontaService', () => {
+  it('odwołuje pozostałe sesje z CSRF i nie czyści bieżącego konta', async () => {
+    sessionStorage.setItem('ogarniacz-csrf', 'csrf-testowy')
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: konto, headers: {}, url: '' })
+    await zaloguj('owner@example.test', 'Fikcyjne-haslo')
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: { wylogowano: true }, headers: {}, url: '' })
+    await wylogujPozostaleSesje()
+    expect(CapacitorHttp.request).toHaveBeenLastCalledWith(expect.objectContaining({ url: 'https://raspberrypi.tailnet.ts.net/api/account/sessions/revoke-others', headers: { 'content-type': 'application/json', 'x-ogarniacz-csrf': 'csrf-testowy' } }))
+    expect(pobierzKontoOffline()).toBeDefined()
+    expect(pobierzCsrfKonta()).toBe('csrf-testowy')
+  })
+  it('reset administracyjny przekazuje tylko ID i nie zapisuje jednorazowego kodu', async () => {
+    sessionStorage.setItem('ogarniacz-csrf', 'csrf-testowy')
+    const reset = { kodOdzyskiwania: 'fikcyjny-kod-testowy', wygasaAt: '2099-01-01T00:00:00Z' }
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: reset, headers: {}, url: '' })
+    expect(await resetujHasloUzytkownika('konto')).toEqual(reset)
+    expect(CapacitorHttp.request).toHaveBeenCalledWith(expect.objectContaining({ data: { id: 'konto' }, headers: { 'content-type': 'application/json', 'x-ogarniacz-csrf': 'csrf-testowy' } }))
+    expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toContain(reset.kodOdzyskiwania)
+  })
   it('nie utrwala hasła ani listy sesji i wysyła CSRF przy zmianie hasła', async () => {
     sessionStorage.setItem('ogarniacz-csrf', 'csrf-testowy')
     vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: { zmieniono: true }, headers: {}, url: '' })

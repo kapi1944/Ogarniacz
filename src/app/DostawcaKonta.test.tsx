@@ -8,6 +8,7 @@ import {
   pobierzListeSesji,
   zmienHaslo,
   wyloguj,
+  wylogujPozostaleSesje,
   zaloguj,
   type KontoUzytkownika,
 } from '../services/KontaService'
@@ -27,6 +28,7 @@ vi.mock('../services/KontaService', async (importujOryginal) => {
     pobierzListeSesji: vi.fn(),
     zmienHaslo: vi.fn(),
     wyloguj: vi.fn(),
+    wylogujPozostaleSesje: vi.fn(),
     zaloguj: vi.fn(),
   }
 })
@@ -55,6 +57,19 @@ poKazdym(() => {
 })
 
 describe('onboarding konta', () => {
+  it('pokazuje termin wygaśnięcia i wylogowuje pozostałe sesje bez wylogowania bieżącej', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
+    vi.mocked(pobierzListeSesji).mockResolvedValue([{ id: 'sesja', biezaca: true, utworzonoAt: '2026-10-14T10:00:00Z', ostatniaAktywnoscAt: '2026-10-14T11:00:00Z', wygasaAt: '2099-01-01T00:00:00Z' }])
+    vi.mocked(wylogujPozostaleSesje).mockResolvedValue(undefined)
+    render(<DostawcaKonta><div>Aplikacja działa</div></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Właściciel' }))
+    zdarzenie.click(screen.getByRole('button', { name: 'Pokaż aktywne sesje' }))
+    expect(await screen.findByText(/Wygasa:/)).toHaveTextContent('2099')
+    zdarzenie.click(screen.getByRole('button', { name: 'Wyloguj pozostałe sesje' }))
+    expect(await screen.findByText('Pozostałe sesje zostały wylogowane. Bieżąca sesja pozostaje aktywna.')).toBeInTheDocument()
+    expect(wylogujPozostaleSesje).toHaveBeenCalledOnce()
+    expect(wyloguj).not.toHaveBeenCalled()
+  })
   it('pokazuje metadane i błąd zmiany konta bez panelu administracyjnego dla zwykłego użytkownika', async () => {
     vi.mocked(pobierzSesjeKonta).mockResolvedValue({ ...konto, nazwa: 'Właściciel testowy', login: 'wlasciciel', rolaSystemowa: 'uzytkownik' })
     vi.mocked(zaloguj).mockRejectedValue(new Error('Zmiana konta wymaga połączenia.'))

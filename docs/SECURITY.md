@@ -5,9 +5,11 @@
 API dostępne dla każdej aktywnej tożsamości, również Edytora:
 
 - `POST /api/account/password`: `aktualneHaslo`, `noweHaslo` (8–200 znaków); sukces unieważnia pozostałe sesje, zachowuje bieżącą.
-- `GET /api/account/sessions`: wyłącznie własne niewygasłe sesje: `id`, `utworzonoAt`, `ostatniaAktywnoscAt`, `biezaca`. ID jest losowe i niezależne od sekretu; odpowiedź nie zawiera tokenów ani hashy. Nie zbieramy User-Agent, IP ani identyfikatorów urządzeń do listy sesji.
+- `GET /api/account/sessions`: wyłącznie własne niewygasłe sesje: `id`, `utworzonoAt`, `ostatniaAktywnoscAt`, `wygasaAt`, `biezaca`. ID jest losowe i niezależne od sekretu; odpowiedź nie zawiera tokenów ani hashy. Nie zbieramy User-Agent, IP ani identyfikatorów urządzeń do listy sesji.
 - `POST /api/account/sessions/revoke`: `id`, ograniczone do użytkownika sesji uwierzytelniającej. Cudze/nieistniejące ID daje ten sam 404.
 - `POST /api/account/sessions/revoke-all`: wszystkie sesje własnej tożsamości, niezależnie od aktywnego członkostwa, również bieżąca.
+- `POST /api/account/sessions/revoke-others`: pozostałe własne sesje, z zachowaniem bieżącej i cudzych sesji; wymagany CSRF.
+- `POST /api/account/users/password`: administrator podaje tylko UUID konta. W transakcji serwer zastępuje hash nieujawnionym losowym hasłem, ustawia wymuszenie zmiany, unieważnia sesje i stare kody oraz tworzy jeden kod odzyskiwania ważny godzinę. Odpowiedź pokazuje kod jeden raz; baza zawiera tylko hash. Użytkownik przez istniejące `POST /api/auth/recover` podaje kod i własne nowe hasło. Atomowe zużycie kodu uniemożliwia ponowne użycie; błędne nowe hasło wycofuje zużycie. Nie odzyskujemy dawnego hasła i nie tworzymy alternatywnego uwierzytelniania.
 - Dotychczasowe `POST /api/auth/logout` wylogowuje bieżącą sesję. Usunięcie bieżącej sesji wygasza cookie z dotychczasowymi HttpOnly, Secure, SameSite=None.
 
 Operacje zapisu wymagają istniejącego CSRF; listowanie nie rotuje CSRF. Odpowiedzi mają `Cache-Control: no-store`; istniejąca polityka CORS pozostaje zachowana. Panel nie zapisuje haseł ani listy sesji do storage i nie ustawia autofocus.

@@ -7,6 +7,10 @@ metadane kont, ale nie otrzymuje prawa odczytu cudzych rekordów.
 Tworzenie konta zakłada własne członkostwo Właściciela, bez cudzych grantów.
 Hasło początkowe i reset administracyjny wymagają zmiany hasła.
 Do tego czasu backend blokuje dane, synchronizację i operacje administracyjne.
+Reset wydaje jeden kod odzyskiwania ważny godzinę i zastępuje hash losowym,
+nieujawnionym hasłem. Użytkownik ustawia własne hasło przez istniejące
+„Odzyskaj dostęp”; poprawny zapis atomowo zużywa kod i zdejmuje wymuszenie.
+Kod nie jest utrwalany w przeglądarce i nie można go ponownie pobrać.
 Reset unieważnia sesje oraz stare kody odzyskiwania. Blokada i archiwizacja
 zachowują dane; reaktywacja wymaga ponownego logowania.
 
@@ -14,7 +18,9 @@ API pod istniejącą ochroną sesji i CSRF:
 - GET /api/account/users — metadane kont;
 - POST /api/account/users — konto z hasłem tymczasowym;
 - PUT /api/account/users — metadane, rola, aktywacja, blokada lub archiwizacja;
-- POST /api/account/users/password — reset hasła.
+- POST /api/account/users/password — jednorazowy reset (UUID konta);
+- GET /api/account/users/UUID — szczegóły metadanych konta;
+- POST /api/account/sessions/revoke-others — odwołanie pozostałych sesji.
 
 Nie można odebrać roli ani aktywności ostatniemu aktywnemu administratorowi.
 Logowanie przyjmuje e-mail lub unikalny login. Stare logowanie e-mailem pozostaje.
@@ -98,3 +104,66 @@ asynchronicznych, po zapisie before-restore i wewnątrz transakcji zapisu.
 Kopia ochronna musi mieć ten sam profil. Konta, role systemowe, sesje i granty
 serwerowe nie są źródłami backupu i nie są modyfikowane przez import.
 Zgodność zwykłego ID i checksum nie jest kryptograficznym dowodem autorstwa.
+
+## Stan etapów i walidacja — 14 października 2026
+
+Pełne specyfikacje etapów 3–8 odzyskano z historii zadania „Prompt systemu kont”.
+Nie odtwarzano istniejących etapów 1–2. Początek pierwotnego zadania:
+`084bd32`; początek późniejszego uzupełnienia etapów 1–3: `23b5d7a`.
+
+| Etap | Stan | Commit |
+| --- | --- | --- |
+| 1 — metadane kont i rola systemowa | Ukończony wcześniej, zachowany | e7d360f |
+| 2 — hasła i własne sesje | Ukończony, następnie uzupełniony | 084bd32; b066449 |
+| 3 — administracja kontami i pierwszy administrator | Ukończony | e38d865 |
+| 4 — rejestr i odrębne bazy | Ukończony | 7e3e6ba |
+| 5 — bezstratna migracja | Ukończony | ab956d9 |
+| 6 — kontekst, przełączanie i synchronizacja | Ukończony | 96a3c9d |
+| 7 — kopie w kontekście konta | Ukończony | 3abdef7 |
+| 8 — interfejs kont w Ustawieniach | Ukończony | 23b5d7a |
+
+Etap 8 korzysta ze wspólnego widoku `/ustawienia/konta` i panelu konta:
+metadane własnego konta, administracja wyłącznie dla administratora, własne
+sesje, udostępnianie istniejącymi grantami oraz przełączanie przez pełny restart.
+Reset administracyjny wymaga potwierdzenia. Pola nie używają autofocus.
+Potwierdzona utrata sesji zamyka profil; nie przełącza go do trybu anonimowego.
+
+Uzupełnienie `b066449`: termin wygaśnięcia sesji, wylogowanie pozostałych
+sesji, szczegóły konta oraz jednorazowy reset z godziną ważności i migracją v7.
+Commit zawierający tę aktualizację dokumentacji dodaje testy klienta i UI;
+jego SHA jest podany w końcowym raporcie zadania.
+
+Walidacja bieżącego uzupełnienia:
+- 47 testów backendu: konta, migracje/tożsamości i serwer; bez pomijania testów;
+- 18 testów klienta API oraz obu komponentów zarządzania kontami;
+- TypeScript, build Web/PWA i kompilacja backendu.
+
+Wcześniejsza walidacja etapów 3–8 w tym zadaniu obejmowała: 63 testy całego
+backendu, 67 testów regresji izolacji/repozytoriów/UI, 78 testów usług kopii
+i migracji oraz 15 testów panelu kopii. Zbiory nakładają się, nie należy
+sumować tych liczb. Lint przeszedł z wcześniejszymi ostrzeżeniami poza zmianami.
+
+W przeglądarce sprawdzono lokalną makietę z fikcyjnymi kontami: nawigację
+Ustawienia → Konta, listę kont i sesji, A → B → A oraz brak panelu administratora
+na zwykłym koncie. Przy viewport 390 × 844 nie było poziomego przepełnienia
+i fokus pozostawał na BODY. To jest dowód UI z testowym adapterem, nie
+potwierdzenie produkcyjnego połączenia z serwerem ani test fizycznego telefonu.
+
+### Pierwsze uruchomienie i granice gotowości
+
+Przy osobnym wdrożeniu: zweryfikowana kopia SQLite, normalne migracje backendu,
+jawne wskazanie pierwszego administratora lokalnym poleceniem powyżej,
+ponowne logowanie i świadome przypisanie starej bazy z szyfrowaną kopią.
+Nie wybieramy konta ani Właściciela automatycznie.
+Nowy kod resetu przekazuje się poza aplikacją bezpiecznym kanałem;
+nie zapisuje się go w logach, zgłoszeniach ani nieszyfrowanych kopiach.
+
+Backend i Web/PWA są sprawdzone lokalnie. Wdrożenie na Raspberry Pi, fizyczny
+Android, alarmy/widgety na urządzeniu oraz produkcyjna migracja wymagają
+osobnego odbioru. Nie zbudowano ani nie zainstalowano nowego APK.
+Nie wykonano release ani deploymentu i nie otwierano produkcyjnej bazy.
+Zmiana konta offline jest odrzucana; można korzystać z bieżącego profilu.
+IndexedDB pozostaje nieszyfrowane na urządzeniu. Historyczny typ urządzenia
+sesji jest nieznany; nie dopisujemy domniemanych identyfikatorów urządzeń.
+Znacznik zmiany sesji po awarii jest odzyskiwany przez Web Locks; przeglądarka
+bez tego mechanizmu może wymagać zakończenia zmiany w drugiej karcie.
