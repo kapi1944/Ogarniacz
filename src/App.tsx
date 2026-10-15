@@ -42,6 +42,7 @@ const WidokFinansow = lazy(() => import('./modules/finanse/WidokFinansow').then(
 const WidokSamochodu = lazy(() => import('./modules/samochod/WidokSamochodu').then((modul) => ({ default: modul.WidokSamochodu })))
 const WidokDzisiaj = lazy(() => import('./modules/dzisiaj/WidokDzisiaj').then((modul) => ({ default: modul.WidokDzisiaj })))
 const WidokEcho = lazy(() => import('./modules/echo/WidokEcho').then((modul) => ({ default: modul.WidokEcho })))
+const WidokPanelu = lazy(() => import('./modules/panel/WidokPanelu').then((modul) => ({ default: modul.WidokPanelu })))
 const WidokUstawien = lazy(() => import('./modules/ustawienia/WidokUstawien').then((modul) => ({ default: modul.WidokUstawien })))
 const EdytorPersonalizacji = lazy(() => import('./modules/ustawienia/EdytorPersonalizacji').then((modul) => ({ default: modul.EdytorPersonalizacji })))
 
@@ -58,6 +59,7 @@ function LadowanieWidoku() {
 export default function App() {
   return <BrowserRouter><DostawcaKonta><DostawcaAplikacji><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><GranicaBleduTrasy><Suspense fallback={<LadowanieWidoku />}><Routes>
     <Route path="/" element={<WidokPulpitu />} />
+    <Route path="/panel" element={<WidokPanelu />} />
     <Route path="/poczekalnia" element={chron('skrzynka', <WidokPoczekalni />)} />
     <Route path="/skrzynka" element={<Navigate to="/poczekalnia" replace />} />
     <Route path="/inbox" element={<Navigate to="/poczekalnia" replace />} />

@@ -2235,3 +2235,9 @@ input[type="radio"] {
 .samopoczucie-wpis p { white-space: pre-wrap; }
 .samopoczucie-obserwacje { display: flex; flex-wrap: wrap; gap: 12px; margin-block: 12px; }
 .samopoczucie-obserwacje small { display: block; }
+.panel-domowy { min-height: calc(100dvh - 48px); }
+.panel-domowy .przycisk { min-height: 56px; padding: 14px 20px; font-size: 1rem; white-space: normal; }
+.panel-domowy .siatka-kart-modulow { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+.panel-domowy .karta { padding: 24px; }
+.panel-domowy__godzina { font-size: clamp(3.5rem, 12vw, 7rem); font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.panel-domowy:fullscreen { overflow: auto; padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)); background: var(--tlo); }

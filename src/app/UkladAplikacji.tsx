@@ -22,6 +22,7 @@ interface PozycjaMenu {
 const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
   { etykieta: 'Główne', pozycje: [
     { etykieta: 'Pulpit', adres: '/', ikona: LayoutDashboard },
+    { etykieta: 'Panel domowy', adres: '/panel', ikona: LayoutDashboard },
     { etykieta: 'Dzisiaj', adres: '/dzisiaj', ikona: CalendarDays },
     { etykieta: 'Echo', adres: '/echo', modul: 'echo', ikona: MessageCircle },
   ] },
@@ -156,6 +157,7 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
   useEffect(() => ustawZwiniete(ustawienia.nawigacja.menuDomyslnieZwiniete), [ustawienia.nawigacja.menuDomyslnieZwiniete])
   useEffect(() => {
     const klawisze = (zdarzenie: KeyboardEvent) => {
+      if (pathname === '/panel') return
       if (document.querySelector('[role="dialog"]')) return
       if ((zdarzenie.ctrlKey || zdarzenie.metaKey) && zdarzenie.key.toLowerCase() === 'k') {
         zdarzenie.preventDefault(); otworzWyszukiwanie()
@@ -166,7 +168,9 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
     }
     window.addEventListener('keydown', klawisze)
     return () => window.removeEventListener('keydown', klawisze)
-  }, [otworzSzybkieDodawanie, otworzWyszukiwanie])
+  }, [otworzSzybkieDodawanie, otworzWyszukiwanie, pathname])
+
+  if (pathname === '/panel') return <main className="zawartosc">{children}</main>
 
   const zmienZwiniecie = () => {
     const nowe = !zwiniete
