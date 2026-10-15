@@ -1359,11 +1359,14 @@ export function utworzDomyslnyRejestrNarzedziEcho(
     opis: "Pobiera projekty.",
     schematArgumentow: z.object({
       status: z.enum(["aktywne", "wstrzymane", "zakonczone"]).optional(),
+      fraza: z.string().trim().min(1).max(160).optional(),
     }),
     ryzyko: "niskie",
-    wykonaj: async ({ status }) =>
+    wykonaj: async ({ status, fraza }) =>
       (await pobierzRepozytorium("projekty").lista())
         .filter((x) => !status || x.status === status)
+        .filter((projekt) => !fraza || uproscDoWyszukiwania(fraza).every((slowo) =>
+          uproscDoWyszukiwania(projekt.nazwa).some((wartosc) => pasujaOdmiany(wartosc, slowo))))
         .map((x) => ({
           id: x.id,
           tytul: x.nazwa,

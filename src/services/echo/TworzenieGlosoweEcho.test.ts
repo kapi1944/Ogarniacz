@@ -6,6 +6,8 @@ import { LokalnyModelProviderEcho } from './LokalnyModelProviderEcho'
 import { LokalnySemantycznyProviderEcho } from './LokalnySemantycznyProviderEcho'
 import { utworzDomyslnyRejestrNarzedziEcho, WykonawcaNarzedziEcho } from './NarzedziaEcho'
 import type { KontekstPlanowaniaEcho, ProviderModeluEcho } from './typyEcho'
+import { utworzMetadane } from '../../domain/fabryki'
+import { adresWyniku, elementyWyniku } from '../../modules/echo/WidokEcho'
 
 const dzisiaj = '2026-09-30'
 const grafik: KontekstPlanowaniaEcho = {
@@ -25,11 +27,40 @@ function utworzAgenta(kontekst: KontekstPlanowaniaEcho = grafik, provider: Provi
 }
 
 beforeEach(async () => {
-  await Promise.all((['zadania', 'przypomnienia', 'rachunki', 'kolejkaSynchronizacji', 'historiaZmian'] as const).map((tabela) => baza.tabela(tabela).clear()))
+  await Promise.all((['zadania', 'projekty', 'przypomnienia', 'rachunki', 'kolejkaSynchronizacji', 'historiaZmian'] as const).map((tabela) => baza.tabela(tabela).clear()))
 })
 afterEach(() => vi.restoreAllMocks())
 
 describe('głosowe tworzenie przez istniejące repozytoria Echo', () => {
+  it.each(['tekst', 'stt'] as const)('wyszukuje projekt przez %s i przekazuje rekord do UI', async (zrodlo) => {
+    const projekt = { ...utworzMetadane(), nazwa: 'Remont kuchni', opis: '', status: 'aktywne' as const, blokady: '' }
+    await repozytoria.pobierzRepozytorium('projekty').zapisz(projekt)
+    await repozytoria.pobierzRepozytorium('projekty').zapisz({ ...utworzMetadane(), nazwa: 'Wakacje', opis: '', status: 'aktywne', blokady: '' })
+    const wynik = await utworzAgenta().obsluz('Znajdź projekt Remont kuchni', zrodlo)
+    expect(wynik.tekst).toContain('Remont kuchni')
+    const elementy = wynik.wyniki!.flatMap(elementyWyniku)
+    expect(elementy).toHaveLength(1)
+    expect(adresWyniku(elementy[0])).toBe(`/projekty?element=${projekt.id}`)
+    expect(await repozytoria.pobierzRepozytorium('zadania').lista()).toHaveLength(0)
+  })
+
+  it('zgłasza brak projektu zamiast szukać zadania', async () => {
+    const wynik = await utworzAgenta().obsluz('Znajdź projekt Nieistniejący', 'tekst')
+    expect(wynik.tekst).toContain('Nie znalazłem projektu')
+  })
+
+  it('nie odczytuje projektu po odmowie dostępu do modułu', async () => {
+    const rejestr = utworzDomyslnyRejestrNarzedziEcho()
+    const odczyt = vi.spyOn(repozytoria, 'pobierzRepozytorium')
+    const agent = new AgentEcho({ provider: new LokalnySemantycznyProviderEcho(), rejestr,
+      wykonawca: new WykonawcaNarzedziEcho(rejestr, undefined, async () => undefined, () => 'Brak dostępu do projektów.'),
+      pobierzKontekstPlanowania: async () => ({ zajetePrzedzialy: [] }),
+    })
+    const wynik = await agent.obsluz('Znajdź projekt Remont', 'tekst')
+    expect(wynik.tekst).toBe('Brak dostępu do projektów.')
+    expect(odczyt.mock.calls.some(([nazwa]) => nazwa === 'projekty')).toBe(false)
+  })
+
   it('tworzy zadanie bez zbędnego pytania o termin, zachowując treść i kolejkę sync', async () => {
     const wynik = await utworzAgenta().obsluz('Dodaj zadanie: kupić olej', 'stt')
     const zadania = await repozytoria.pobierzRepozytorium('zadania').lista()
@@ -37,6 +68,7 @@ describe('głosowe tworzenie przez istniejące repozytoria Echo', () => {
     expect(zadania[0]).toMatchObject({ tytul: 'Kupić olej', status: 'otwarte' })
     expect(zadania[0].termin).toBeUndefined()
     expect(wynik.tekst).toContain('Dodałem zadanie')
+    expect(adresWyniku(wynik.wyniki!.flatMap(elementyWyniku)[0])).toBe(`/zadania?element=${zadania[0].id}`)
     expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toContainEqual(expect.objectContaining({ tabela: 'zadania', rekordId: zadania[0].id, operacja: 'utworzenie' }))
   })
 
@@ -52,6 +84,9 @@ describe('głosowe tworzenie przez istniejące repozytoria Echo', () => {
     const [rok, miesiac, dzien] = data.split('-').map(Number)
     expect(zapisane[0].czas).toBe(new Date(rok, miesiac - 1, dzien, godziny, minuty, sekundy).toISOString())
     expect(wynik.tekst).toContain('dodałem')
+    const [element] = wynik.wyniki!.flatMap(elementyWyniku)
+    expect(adresWyniku(element)).toBe(`/przypomnienia?element=${zapisane[0].id}`)
+    expect(element.termin).toBe(zapisane[0].czas)
     expect(wynik.oczekujeDoprecyzowania).not.toBe(true)
     expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toContainEqual(expect.objectContaining({ tabela: 'przypomnienia', rekordId: zapisane[0].id }))
   })

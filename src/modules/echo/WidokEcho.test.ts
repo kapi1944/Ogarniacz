@@ -1,8 +1,31 @@
 import { describe, expect, it, vi } from 'vitest'
-import { adresWyniku, czyPokazacSugestieEcho, elementyWyniku, uruchomAutomatycznyOdczytEcho } from './WidokEcho'
+import { adresWyniku, czyPokazacSugestieEcho, elementyWyniku, uruchomAutomatycznyOdczytEcho, WidokEcho } from './WidokEcho'
 import { modulNarzedziaEcho } from '../../services/echo/NarzedziaEcho'
+import { createElement as utworzElement } from 'react'
+import { renderToStaticMarkup as renderujZnaczniki } from 'react-dom/server'
+import { MemoryRouter as RouterPamieci } from 'react-router-dom'
+import { useSesjaEcho } from '../../app/DostawcaSesjiEcho'
+
+vi.mock('../../app/DostawcaSesjiEcho', () => ({ useSesjaEcho: vi.fn() }))
+vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ ustawienia: { glosEcho: false } }) }))
+vi.mock('../../hooks/useRepozytorium', () => ({ useRepozytorium: () => ({ dane: [] }) }))
 
 describe('ustawienia i wyniki Widoku Echo', () => {
+  it.each([
+    ['wykonane', '✓'], ['blad', 'Błąd'], ['zablokowane', 'Zablokowane'], ['wymaga_potwierdzenia', 'Wymaga potwierdzenia'],
+  ] as const)('renderuje zgodne z wynikiem oznaczenie %s', (status, etykieta) => {
+    vi.mocked(useSesjaEcho).mockReturnValue({
+      stan: 'bezczynny', wiadomosci: [{ id: '1', autor: 'echo', tresc: 'Wynik', wyniki: [{ wywolanieId: '1', nazwa: 'create_task', status, komunikat: 'Nie wykonano', dane: { id: 'z-1', tytul: 'Raport' } }] }],
+    } as ReturnType<typeof useSesjaEcho>)
+    const widok = renderujZnaczniki(utworzElement(RouterPamieci, null, utworzElement(WidokEcho)))
+    expect(widok).toContain(etykieta)
+    if (status !== 'wykonane') {
+      expect(widok).not.toContain('✓')
+      expect(widok).not.toContain('Otwórz')
+      expect(widok).not.toContain('>Popraw</button>')
+    }
+  })
+
   it('nie uruchamia auto-TTS, gdy głos Echo jest wyłączony', () => {
     const odczytaj = vi.fn()
     uruchomAutomatycznyOdczytEcho(
@@ -74,5 +97,18 @@ describe('ustawienia i wyniki Widoku Echo', () => {
       dane: { id: 'zadanie-1', tytul: 'Raport' },
     })
     expect(adresWyniku(element)).toBe('/zadania?element=zadanie-1')
+  })
+
+  it.each(['create_reminder', 'reschedule_reminder'])('pokazuje czas i link przypomnienia z %s', (nazwa) => {
+    const [element] = elementyWyniku({ wywolanieId: '1', nazwa, status: 'wykonane', dane: { id: 'p-1', tytul: 'Telefon', czas: '2026-10-16T16:00:00Z' } })
+    expect(element.termin).toBe('2026-10-16T16:00:00Z')
+    expect(adresWyniku(element)).toBe('/przypomnienia?element=p-1')
+  })
+
+  it.each(['blad', 'zablokowane', 'wymaga_potwierdzenia'] as const)('zachowuje status %s bez linku do niewykonanego działania', (status) => {
+    const [element] = elementyWyniku({ wywolanieId: '1', nazwa: 'create_task', status, komunikat: 'Nie wykonano', dane: { id: '1' } })
+    expect(element.status).toBe(status)
+    expect(element.tytul).toBe('Nie wykonano')
+    expect(adresWyniku(element)).toBeUndefined()
   })
 })

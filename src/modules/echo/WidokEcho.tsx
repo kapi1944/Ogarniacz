@@ -26,6 +26,7 @@ import type { StanSesjiGlosowejEcho } from "../../services/echo/KontrolerSesjiGl
 
 function typWynikuNarzedzia(nazwa: string): string | undefined {
   if (nazwa.includes("task")) return "zadanie";
+  if (nazwa.includes("reminder")) return "przypomnienie";
   if (nazwa.includes("project")) return "projekt";
   if (nazwa.includes("shopping")) return "zakupy";
   if (nazwa.includes("bill")) return "rachunek";
@@ -44,9 +45,10 @@ export function elementyWyniku(
   typ?: string;
   termin?: string;
   kwota?: number;
+  status: WynikNarzedziaEcho["status"];
 }[] {
   if (wynik.status !== "wykonane")
-    return [{ tytul: wynik.komunikat ?? "Działanie nie zostało wykonane" }];
+    return [{ tytul: wynik.komunikat ?? "Działanie nie zostało wykonane", status: wynik.status }];
   const dane = Array.isArray(wynik.dane)
     ? wynik.dane
     : wynik.dane &&
@@ -60,6 +62,7 @@ export function elementyWyniku(
     )
     .slice(0, 8)
     .map((x) => ({
+      status: wynik.status,
       id: typeof x.id === "string" ? x.id : undefined,
       tytul: String(x.tytul ?? x.nazwa ?? wynik.nazwa),
       typ:
@@ -69,7 +72,9 @@ export function elementyWyniku(
           ? x.termin
           : typeof x.data === "string"
             ? x.data
-            : undefined,
+            : typeof x.czas === "string"
+              ? x.czas
+              : undefined,
       kwota: typeof x.kwota === "number" ? x.kwota : undefined,
     }));
 }
@@ -264,7 +269,9 @@ export function WidokEcho() {
                           className="wartosc-domyslna"
                           key={`${element.id ?? element.tytul}-${indeks}`}
                         >
-                          <Znacznik wariant="sukces">✓</Znacznik>
+                          <Znacznik wariant={element.status === "wykonane" ? "sukces" : element.status === "blad" ? "blad" : "ostrzezenie"}>
+                            {element.status === "wykonane" ? "✓" : element.status === "wymaga_potwierdzenia" ? "Wymaga potwierdzenia" : element.status === "zablokowane" ? "Zablokowane" : "Błąd"}
+                          </Znacznik>
                           <strong>{element.tytul}</strong>
                           {element.typ && <span> · {element.typ}</span>}
                           {element.termin && <span> · {element.termin}</span>}
@@ -279,7 +286,7 @@ export function WidokEcho() {
                               Otwórz
                             </Link>
                           )}
-                          <button
+                          {element.status === "wykonane" && <button
                             type="button"
                             className="przycisk przycisk--tekstowy"
                             onClick={() =>
@@ -287,7 +294,7 @@ export function WidokEcho() {
                             }
                           >
                             Popraw
-                          </button>
+                          </button>}
                         </div>
                       );
                     })}

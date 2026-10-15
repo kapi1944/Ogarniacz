@@ -77,6 +77,7 @@ type ZamiarZdrowiaEcho =
     };
 
 type ZamiarPrzekrojowyEcho =
+  | { typ: "wyszukaj_projekty"; fraza: string }
   | {
       typ: "zakupy_z_przypomnieniem";
       etap: "lista" | "gotowe";
@@ -660,6 +661,12 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
       return this.kontynuujDoprecyzowanie(zadanie, doprecyzowanie);
 
     const tekst = ostatniaWypowiedz(zadanie.kontekstRozmowy);
+    const szukanyProjekt = tekst.match(/^(?:znajdź|znajdz|wyszukaj|poszukaj)\s+(?:mi\s+)?projekt(?:u)?(?:\s+(.+))?$/i);
+    if (szukanyProjekt) {
+      const fraza = (szukanyProjekt[1] ?? '').trim().replace(/[.!?]+$/, '');
+      if (!fraza) return { typ: 'pytanie', tresc: 'Podaj nazwę projektu, którego mam poszukać.' };
+      return this.wywolajPrzekrojowo({ typ: 'wyszukaj_projekty', fraza }, 'list_projects', { fraza });
+    }
     if (this.czyObslugujeTworzenie(zadanie)) return this.tworzenieZPolecenia(zadanie, tekst);
     const lista = slowa(tekst);
     const czas = rozpoznajCzas(lista, zadanie.kontekstCzasu.dataLokalna);
@@ -1770,6 +1777,16 @@ export class LokalnySemantycznyProviderEcho implements ProviderModeluEcho {
           ? wynik.komunikat : "Nie udało mi się zapisać tej zmiany.",
         aktualizacjaKontekstu,
       };
+    if (zamiar.typ === 'wyszukaj_projekty') {
+      const projekty = Array.isArray(wynik.dane) ? wynik.dane as { tytul: string }[] : [];
+      return {
+        typ: 'odpowiedz',
+        tresc: projekty.length
+          ? `Znalazłem projekty: ${projekty.map((projekt) => projekt.tytul).join(', ')}.`
+          : `Nie znalazłem projektu o „${zamiar.fraza}”.`,
+        aktualizacjaKontekstu,
+      };
+    }
     if (zamiar.typ === "zakupy_z_przypomnieniem" && zamiar.etap === "lista") {
       const listy = Array.isArray(wynik.dane)
         ? wynik.dane.filter(
