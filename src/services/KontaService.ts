@@ -134,6 +134,20 @@ export function pobierzCsrfKonta(): string | undefined {
   return typeof sessionStorage === 'undefined' ? undefined : sessionStorage.getItem(KLUCZ_CSRF) ?? undefined
 }
 
+export interface StanDomu {
+  skonfigurowany: boolean
+  dostepny: boolean
+  encje: { id: string; nazwa: string; stan: string; dostepna: boolean; jednostka?: string; akcje: ('wlacz' | 'wylacz')[] }[]
+}
+
+export function pobierzStanDomu(): Promise<StanDomu> {
+  return wykonaj('GET', '/api/dom')
+}
+
+export async function sterujDomem(id: string, akcja: 'wlacz' | 'wylacz'): Promise<void> {
+  await wykonaj('POST', `/api/dom/${encodeURIComponent(id)}/${akcja}`, undefined, true)
+}
+
 export function pobierzKontoOffline(): KontoUzytkownika | undefined {
   const profil = pobierzAktywnyProfil()
   if (profil) return profil.konto

@@ -7,6 +7,7 @@ import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } fr
 import { BladModeluEcho, odczytajZadanieModeluEcho, utworzObslugeModeluEcho, type ObslugaModeluEcho } from './model-echo.ts'
 import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, sprawdzCsrf } from './konta.ts'
 import { utworzAktualizacjeRpi, type AktualizacjeRpi } from './aktualizacje-rpi.ts'
+import { utworzDostawceSmartHome, type DostawcaSmartHome } from './smart-home.ts'
 import { odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
 
 const METODY_SYNCHRONIZACJI = 'GET, POST, PUT, OPTIONS'
@@ -90,12 +91,69 @@ export function utworzSerwer(
   obslugaEcho: ObslugaEchoApi = niedostepnaObslugaEcho,
   aktualizacje?: AktualizacjeRpi,
   obslugaModeluEcho: ObslugaModeluEcho = utworzObslugeModeluEcho(konfiguracja),
+  dom: DostawcaSmartHome = utworzDostawceSmartHome({ adres: konfiguracja.adresHomeAssistant, token: konfiguracja.tokenHomeAssistant, limitCzasuMs: konfiguracja.limitCzasuHomeAssistantMs }),
 ) {
   const aktualizacjeRpi = aktualizacje ?? (konfiguracja.aktualizacjeRpi ? utworzAktualizacjeRpi() : undefined)
   return createServer(async (zadanie: IncomingMessage, odpowiedz: ServerResponse) => {
     ustawNaglowkiBezpieczenstwa(odpowiedz)
     if (zadanie.method === 'GET' && (zadanie.url === '/health' || zadanie.url === '/api/health')) {
       odpowiedzJson(odpowiedz, 200, { status: 'ok', service: 'ogarniacz-api', database: 'connected' })
+      return
+    }
+    if (zadanie.url === '/api/dom' || zadanie.url?.startsWith('/api/dom/')) {
+      const pochodzenie = zadanie.headers.origin
+      const dozwoloneCors = ustawCorsSynchronizacji(zadanie, odpowiedz, konfiguracja)
+      const wlasnePochodzenie = pochodzenie === `https://${zadanie.headers.host}` || pochodzenie === `http://${zadanie.headers.host}`
+      if (pochodzenie && !dozwoloneCors && !wlasnePochodzenie) {
+        odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone pochodzenie żądania.' })
+        return
+      }
+      if (zadanie.method === 'OPTIONS') {
+        odpowiedz.writeHead(dozwoloneCors ? 204 : 403)
+        odpowiedz.end()
+        return
+      }
+      const kontekst = pobierzKontekstDostepu(zadanie, baza)
+      if (!kontekst) {
+        odpowiedzJson(odpowiedz, 401, { error: 'Wymagana aktywna sesja Ogarniacza.' })
+        return
+      }
+      if (kontekst.rola !== 'wlasciciel' || (konfiguracja.wlascicielHomeAssistant && kontekst.wlascicielId !== konfiguracja.wlascicielHomeAssistant)) {
+        odpowiedzJson(odpowiedz, 403, { error: 'Brak uprawnień do tej instalacji Home Assistant.' })
+        return
+      }
+      const skonfigurowany = Boolean(konfiguracja.adresHomeAssistant && konfiguracja.tokenHomeAssistant && konfiguracja.wlascicielHomeAssistant)
+      const kontroler = new AbortController()
+      zadanie.on('aborted', () => kontroler.abort())
+      odpowiedz.on('close', () => { if (!odpowiedz.writableEnded) kontroler.abort() })
+      try {
+        if (zadanie.method === 'GET' && zadanie.url === '/api/dom') {
+          const { dostepny } = skonfigurowany ? await dom.sprawdzDostepnosc(kontroler.signal) : { dostepny: false }
+          const encje = dostepny ? await Promise.all((konfiguracja.encjeHomeAssistant ?? []).map(async (id) => {
+            const encja = await dom.pobierzStan(id, kontroler.signal)
+            return { ...(encja ?? { id, nazwa: id, stan: 'Brak encji', dostepna: false }), akcje: encja?.dostepna && /^(light|switch)\./.test(id) && konfiguracja.sterowaneEncjeHomeAssistant?.includes(id) ? ['wlacz', 'wylacz'] : [] }
+          })) : []
+          odpowiedzJson(odpowiedz, 200, { skonfigurowany, dostepny, encje })
+          return
+        }
+        const akcja = /^\/api\/dom\/([a-z0-9_]+\.[a-z0-9_]+)\/(wlacz|wylacz)$/.exec(zadanie.url ?? '')
+        if (zadanie.method === 'POST' && akcja) {
+          if (!sprawdzCsrf(zadanie, kontekst)) {
+            odpowiedzJson(odpowiedz, 403, { error: 'Sesja wymaga odświeżenia.' })
+            return
+          }
+          const id = akcja[1]
+          if (!skonfigurowany || !/^(light|switch)\./.test(id) || !konfiguracja.encjeHomeAssistant?.includes(id) || !konfiguracja.sterowaneEncjeHomeAssistant?.includes(id)) {
+            odpowiedzJson(odpowiedz, 403, { error: 'Sterowanie tą encją jest wyłączone.' })
+            return
+          }
+          odpowiedzJson(odpowiedz, 200, await (akcja[2] === 'wlacz' ? dom.wlacz(id, kontroler.signal) : dom.wylacz(id, kontroler.signal)))
+          return
+        }
+        odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono akcji Domu.' })
+      } catch {
+        if (!odpowiedz.destroyed) odpowiedzJson(odpowiedz, 503, { error: 'Nie udało się uzyskać odpowiedzi Home Assistant. Sprawdź stan urządzenia przed ponowieniem akcji.' })
+      }
       return
     }
     if (zadanie.url?.startsWith('/api/rpi-update')) {

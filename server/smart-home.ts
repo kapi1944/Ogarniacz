@@ -148,7 +148,9 @@ export class AdapterHomeAssistant implements DostawcaSmartHome {
     if (odpowiedz.status === 404) return undefined
     if (!odpowiedz.ok) throw new BladSmartHome('api', 'Home Assistant odrzucił pobranie stanu encji.')
     try {
-      return projekcjaEncji(await odpowiedz.json())
+      const encja = projekcjaEncji(await odpowiedz.json())
+      if (encja.id !== encjaId) throw new Error('Niezgodna encja.')
+      return encja
     } catch {
       throw new BladSmartHome('niepoprawna_odpowiedz', 'Home Assistant zwrócił niepoprawny stan encji.')
     }
@@ -164,8 +166,9 @@ export class AdapterHomeAssistant implements DostawcaSmartHome {
 
   private async zmienStan(akcja: 'wlacz' | 'wylacz', encjaId: string, sygnal?: AbortSignal): Promise<WynikAkcjiSmartHome> {
     sprawdzIdEncji(encjaId)
+    if (!/^(light|switch)\./.test(encjaId)) throw new BladSmartHome('niepoprawna_encja', 'Sterowanie dopuszcza tylko światła i przełączniki.')
     const usluga = akcja === 'wlacz' ? 'turn_on' : 'turn_off'
-    const odpowiedz = await this.wyslij(`/api/services/homeassistant/${usluga}`, {
+    const odpowiedz = await this.wyslij(`/api/services/${encjaId.split('.')[0]}/${usluga}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ entity_id: encjaId }),
@@ -185,14 +188,17 @@ export class AdapterHomeAssistant implements DostawcaSmartHome {
       kontroler.abort()
     }, this.limitCzasuMs)
     try {
-      return await this.pobierz(`${this.adres}${sciezka}`, {
+      const odpowiedz = await this.pobierz(`${this.adres}${sciezka}`, {
         ...inicjalizacja,
+        redirect: 'error',
         signal: kontroler.signal,
         headers: {
           authorization: `Bearer ${this.token}`,
           ...inicjalizacja.headers,
         },
       })
+      const tresc = await odpowiedz.text()
+      return new Response([204, 205, 304].includes(odpowiedz.status) ? null : tresc, { status: odpowiedz.status, headers: odpowiedz.headers })
     } catch {
       throw new BladSmartHome(przekroczonoLimit ? 'timeout' : 'niedostepny', przekroczonoLimit
         ? 'Przekroczono czas odpowiedzi Smart Home.'

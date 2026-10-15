@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarDays, CheckSquare, Home, Maximize, MessageCircle, Minimize, X } from 'lucide-react'
-import { Karta, Komunikat, NaglowekWidoku, Znacznik } from '../../components/Interfejs'
+import { Karta, Komunikat, NaglowekWidoku } from '../../components/Interfejs'
+import { SekcjaDom } from './SekcjaDom'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { dzisiajIso } from '../../domain/fabryki'
@@ -88,7 +89,7 @@ export function WidokPanelu() {
       <Karta><h2>Zadania</h2>{gotowyDostep && moze('zadania') ? <SkrotZadan data={data} /> : <p>Zadania wymagają uprawnienia do odczytu.</p>}</Karta>
       <Karta><h2>Echo</h2><p>Przejdź do istniejącej rozmowy z Echo.</p>{gotowyDostep && moze('echo') ? <Link className="przycisk przycisk--glowny" to="/echo"><MessageCircle aria-hidden="true" />Otwórz Echo</Link> : <p>Echo jest niedostępne dla tego użytkownika.</p>}</Karta>
       <Karta><h2>Połączenie</h2><StanPolaczenia /></Karta>
-      <Karta><h2><Home aria-hidden="true" /> Dom</h2><Znacznik>W przyszłości</Znacznik><p>Miejsce na sekcję Dom. Brak podłączonych urządzeń.</p></Karta>
+      <Karta><h2><Home aria-hidden="true" /> Dom</h2>{gotowyDostep && <SekcjaDom />}</Karta>
     </div>
   </div>
 }

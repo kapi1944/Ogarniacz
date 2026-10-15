@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CapacitorHttp } from '@capacitor/core'
 import { pobierzCsrfKonta, pobierzKontoOffline, pobierzListeSesji, pobierzSesjeKonta, uruchomAktualizacjeRaspberry, wylogujSesje, wylogujWszystkieSesje, zaloguj, zmienHaslo } from './KontaService'
 import { resetujHasloUzytkownika, wylogujPozostaleSesje } from './KontaService'
+import { pobierzStanDomu, sterujDomem } from './KontaService'
 
 // Setup uprawnień ładuje usługę kont; usuń ten cache przed zastosowaniem mocków.
 vi.hoisted(() => vi.resetModules())
@@ -33,6 +34,17 @@ beforeEach(() => {
 })
 
 describe('KontaService', () => {
+  it('Dom korzysta z istniejącego transportu sesji i CSRF bez utrwalania stanów', async () => {
+    sessionStorage.setItem('ogarniacz-csrf', 'csrf-testowy')
+    const stan = { skonfigurowany: true, dostepny: true, encje: [] }
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: stan, headers: {}, url: '' })
+    expect(await pobierzStanDomu()).toEqual(stan)
+    expect(CapacitorHttp.request).toHaveBeenLastCalledWith(expect.objectContaining({ method: 'GET', url: 'https://raspberrypi.tailnet.ts.net/api/dom', webFetchExtra: { credentials: 'include' } }))
+    await sterujDomem('light.salon', 'wlacz')
+    expect(CapacitorHttp.request).toHaveBeenLastCalledWith(expect.objectContaining({ method: 'POST', url: 'https://raspberrypi.tailnet.ts.net/api/dom/light.salon/wlacz', headers: { 'x-ogarniacz-csrf': 'csrf-testowy' }, data: undefined, webFetchExtra: { credentials: 'include' } }))
+    expect(localStorage.length).toBe(0)
+    expect(sessionStorage.length).toBe(1)
+  })
   it('odwołuje pozostałe sesje z CSRF i nie czyści bieżącego konta', async () => {
     sessionStorage.setItem('ogarniacz-csrf', 'csrf-testowy')
     vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: konto, headers: {}, url: '' })

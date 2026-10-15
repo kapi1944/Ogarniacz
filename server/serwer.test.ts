@@ -9,9 +9,91 @@ import { otworzBaze } from './baza.ts'
 import { utworzKonfiguracjeSerwera } from './config.ts'
 import { uruchomMigracje } from './migracje.ts'
 import { utworzSerwer } from './serwer.ts'
+import { AdapterHomeAssistant } from './smart-home.ts'
 
 const TERAZ = '2026-09-09T12:00:00.000Z'
 const WYGASA = '2099-01-01T00:00:00.000Z'
+
+test('Dom: sesje, izolacja właściciela, listy encji, CSRF i błędy na syntetycznym HA', async () => {
+  const baza = new DatabaseSync(':memory:')
+  uruchomMigracje(baza)
+  dodajSesjeWlasciciela(baza)
+  const konfiguracja = utworzKonfiguracjeSerwera({
+    HOME_ASSISTANT_URL: 'http://homeassistant.local:8123', HOME_ASSISTANT_TOKEN: 'syntetyczny-sekret',
+    HOME_ASSISTANT_OWNER_ID: 'wlasciciel', HOME_ASSISTANT_ENTITIES: 'light.salon,sensor.temperatura,switch.brak',
+    HOME_ASSISTANT_CONTROL_ENTITIES: 'light.salon',
+  })
+  const wywolania: string[] = []
+  let awaria = false
+  const dom = new AdapterHomeAssistant(konfiguracja.adresHomeAssistant!, konfiguracja.tokenHomeAssistant!, 100, async (adres, opcje) => {
+    const sciezka = new URL(String(adres)).pathname
+    wywolania.push(`${opcje?.method} ${sciezka}`)
+    if (awaria) throw new Error('syntetyczny-sekret http://homeassistant.local:8123')
+    if (sciezka === '/api/') return new Response('{}')
+    if (sciezka.includes('/services/')) {
+      assert.deepEqual(JSON.parse(String(opcje?.body)), { entity_id: 'light.salon' })
+      return new Response('[]')
+    }
+    if (sciezka.endsWith('switch.brak')) return new Response('{}', { status: 404 })
+    return new Response(JSON.stringify({ entity_id: sciezka.split('/').at(-1), state: 'on', attributes: { friendly_name: 'Salon', sekret: 'syntetyczny-sekret' } }))
+  })
+  const serwer = utworzSerwer(konfiguracja, baza, undefined, undefined, undefined, dom)
+  await new Promise<void>((rozwiaz) => serwer.listen(0, '127.0.0.1', rozwiaz))
+  const adres = serwer.address()
+  assert.ok(adres && typeof adres === 'object')
+  const adresDomu = `http://127.0.0.1:${adres.port}/api/dom`
+  const naglowki = naglowkiEcho()
+  try {
+    assert.equal((await fetch(adresDomu)).status, 401)
+    konfiguracja.wlascicielHomeAssistant = 'inny'
+    assert.equal((await fetch(adresDomu, { headers: naglowki })).status, 403)
+    konfiguracja.wlascicielHomeAssistant = 'wlasciciel'
+    baza.prepare("UPDATE czlonkostwa SET rola = 'edytor'").run()
+    assert.equal((await fetch(adresDomu, { headers: naglowki })).status, 403)
+    baza.prepare("UPDATE czlonkostwa SET rola = 'wlasciciel'").run()
+    assert.equal(wywolania.length, 0)
+    const odczyt = await fetch(adresDomu, { headers: naglowki })
+    assert.equal(odczyt.headers.get('cache-control'), 'no-store')
+    const dane = await odczyt.json()
+    assert.equal(dane.dostepny, true)
+    assert.deepEqual(dane.encje.map((encja: { id: string }) => encja.id), konfiguracja.encjeHomeAssistant)
+    assert.deepEqual(dane.encje[0].akcje, ['wlacz', 'wylacz'])
+    assert.deepEqual(dane.encje[1].akcje, [])
+    assert.equal(dane.encje[2].dostepna, false)
+    assert.doesNotMatch(JSON.stringify(dane), /syntetyczny-sekret|homeassistant.local/)
+    assert.equal(wywolania.includes('GET /api/states'), false)
+    wywolania.length = 0
+    for (const [sciezka, naglowkiAkcji, status] of [
+      ['/light.salon/wlacz', naglowkiEcho('bledny'), 403],
+      ['/light.salon/wlacz', { ...naglowki, origin: 'https://obcy.test' }, 403],
+      ['/light.obca/wlacz', naglowki, 403],
+      ['/sensor.temperatura/wylacz', naglowki, 403],
+      ['/light.salon/toggle', naglowki, 404],
+      ['/light.salon/wlacz?usluga=toggle', naglowki, 404],
+    ] as const) assert.equal((await fetch(adresDomu + sciezka, { method: 'POST', headers: naglowkiAkcji })).status, status)
+    assert.equal(wywolania.length, 0)
+    for (const akcja of ['wlacz', 'wylacz']) assert.equal((await fetch(`${adresDomu}/light.salon/${akcja}`, { method: 'POST', headers: naglowki })).status, 200)
+    assert.deepEqual(wywolania, ['POST /api/services/light/turn_on', 'POST /api/services/light/turn_off'])
+    konfiguracja.sterowaneEncjeHomeAssistant = []
+    assert.equal((await fetch(`${adresDomu}/light.salon/wlacz`, { method: 'POST', headers: naglowki })).status, 403)
+    konfiguracja.sterowaneEncjeHomeAssistant = ['light.salon']
+    awaria = true
+    const blad = await fetch(`${adresDomu}/light.salon/wlacz`, { method: 'POST', headers: naglowki })
+    assert.equal(blad.status, 503)
+    assert.doesNotMatch(await blad.text(), /syntetyczny-sekret|homeassistant.local/)
+    assert.equal((await (await fetch(adresDomu, { headers: naglowki })).json()).dostepny, false)
+    wywolania.length = 0
+    konfiguracja.adresHomeAssistant = undefined
+    const pusty = await (await fetch(adresDomu, { headers: naglowki })).json()
+    assert.deepEqual(pusty, { skonfigurowany: false, dostepny: false, encje: [] })
+    assert.equal(wywolania.length, 0)
+    baza.prepare('DELETE FROM sesje').run()
+    assert.equal((await fetch(`${adresDomu}/light.salon/wlacz`, { method: 'POST', headers: naglowki })).status, 401)
+  } finally {
+    await new Promise<void>((rozwiaz) => serwer.close(() => rozwiaz()))
+    baza.close()
+  }
+})
 
 test('manifest PWA jest dostępny z właściwym MIME i bez trwałego cache', async () => {
   const katalog = await mkdtemp(join(tmpdir(), 'ogarniacz-manifest-'))

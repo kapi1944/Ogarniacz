@@ -75,7 +75,7 @@ test('brak encji zwraca undefined zamiast fikcyjnego stanu', async () => {
 test('włączenie encji używa stałej usługi i jawnego umiarkowanego ryzyka', async () => {
   let dane: unknown
   const dostawca = adapter(async (adres, inicjalizacja) => {
-    assert.equal(String(adres), `${ADRES}/api/services/homeassistant/turn_on`)
+    assert.equal(String(adres), `${ADRES}/api/services/light/turn_on`)
     dane = JSON.parse(String(inicjalizacja?.body)) as unknown
     return new Response('[]')
   })
@@ -88,7 +88,7 @@ test('włączenie encji używa stałej usługi i jawnego umiarkowanego ryzyka', 
 
 test('wyłączenie encji używa stałej usługi i jawnego umiarkowanego ryzyka', async () => {
   const dostawca = adapter(async (adres, inicjalizacja) => {
-    assert.equal(String(adres), `${ADRES}/api/services/homeassistant/turn_off`)
+    assert.equal(String(adres), `${ADRES}/api/services/switch/turn_off`)
     assert.deepEqual(JSON.parse(String(inicjalizacja?.body)), { entity_id: 'switch.czajnik' })
     return new Response('[]')
   })
@@ -142,4 +142,49 @@ test('konfiguracja Home Assistant wymaga pary URL i tokenu oraz chroni token prz
   assert.equal(konfiguracja.tokenHomeAssistant, TOKEN_TESTOWY)
   assert.throws(() => utworzKonfiguracjeSerwera({ HOME_ASSISTANT_URL: ADRES }), /ustawione razem/)
   assert.throws(() => utworzKonfiguracjeSerwera({ HOME_ASSISTANT_URL: 'http://public.example.com', HOME_ASSISTANT_TOKEN: TOKEN_TESTOWY }), /prywatny host/)
+})
+
+test('sterowanie jest domyślnie wyłączone, wymaga podzbioru encji i bezpiecznej domeny', () => {
+  assert.deepEqual(utworzKonfiguracjeSerwera({}).sterowaneEncjeHomeAssistant, [])
+  for (const encja of ['lock.drzwi', 'script.wszystko', 'switch.obcy']) {
+    assert.throws(() => utworzKonfiguracjeSerwera({ HOME_ASSISTANT_ENTITIES: 'light.salon,lock.drzwi,script.wszystko', HOME_ASSISTANT_CONTROL_ENTITIES: encja }))
+  }
+  assert.throws(() => utworzKonfiguracjeSerwera({ HOME_ASSISTANT_ENTITIES: '../api' }))
+  assert.throws(() => utworzKonfiguracjeSerwera({ HOME_ASSISTANT_ENTITIES: Array.from({ length: 31 }, (_, numer) => `sensor.s${numer}`).join(',') }))
+  for (const adres of ['http://10.obcy.test', 'http://127.obcy.test', 'http://[2001:db8::1]']) {
+    assert.throws(() => utworzKonfiguracjeSerwera({ HOME_ASSISTANT_URL: adres, HOME_ASSISTANT_TOKEN: TOKEN_TESTOWY }), /prywatny host/)
+  }
+})
+
+test('limit czasu obejmuje również oczekiwanie na treść odpowiedzi HA', async () => {
+  const dostawca = adapter(async (_adres, opcje) => new Response(new ReadableStream({
+    start(kontroler) {
+      opcje?.signal?.addEventListener('abort', () => kontroler.error(new Error('Anulowano treść')), { once: true })
+    },
+  })), 10)
+  await assert.rejects(dostawca.pobierzStan('light.salon'), (blad: unknown) => blad instanceof BladSmartHome && blad.kod === 'timeout')
+})
+
+test('niepoprawny JSON i odpowiedź API nie ujawniają surowej treści', async () => {
+  for (const tresc of [TOKEN_TESTOWY, JSON.stringify({ entity_id: 'light.salon', state: 42 })]) {
+    await assert.rejects(adapter(async () => new Response(tresc)).pobierzStan('light.salon'), (blad: unknown) => {
+      assert.ok(blad instanceof BladSmartHome)
+      assert.equal(blad.kod, 'niepoprawna_odpowiedz')
+      assert.doesNotMatch(blad.message, new RegExp(TOKEN_TESTOWY))
+      return true
+    })
+  }
+})
+
+test('adapter blokuje przekierowania, obce ID w odpowiedzi i niebezpieczne domeny sterowania', async () => {
+  let wywolania = 0
+  const dostawca = adapter(async (_adres, opcje) => {
+    wywolania++
+    assert.equal(opcje?.redirect, 'error')
+    return new Response(JSON.stringify(stan('light.obcy')))
+  })
+  await assert.rejects(dostawca.pobierzStan('light.salon'), BladSmartHome)
+  await assert.rejects(dostawca.wlacz('lock.drzwi'), BladSmartHome)
+  await assert.rejects(dostawca.wlacz('../api'), BladSmartHome)
+  assert.equal(wywolania, 1)
 })

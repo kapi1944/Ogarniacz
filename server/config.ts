@@ -1,3 +1,5 @@
+import { isIP as wersjaAdresuIp } from 'node:net'
+
 export interface KonfiguracjaSerwera {
   port: number
   host: string
@@ -13,6 +15,9 @@ export interface KonfiguracjaSerwera {
   adresHomeAssistant?: string
   tokenHomeAssistant?: string
   limitCzasuHomeAssistantMs: number
+  wlascicielHomeAssistant?: string
+  encjeHomeAssistant?: string[]
+  sterowaneEncjeHomeAssistant?: string[]
 }
 
 function odczytajPort(wartosc: string | undefined): number {
@@ -66,13 +71,16 @@ function odczytajKonfiguracjeModeluEcho(env: NodeJS.ProcessEnv): Pick<Konfigurac
 }
 
 function czyPrywatnyHost(host: string): boolean {
-  if (host === 'localhost' || host === '[::1]' || !host.includes('.') || host.endsWith('.local')) return true
+  if (host === 'localhost' || host === '[::1]' || host.endsWith('.local')) return true
+  if (host.startsWith('[')) return /^\[(?:f[cd][0-9a-f]{2}:|fe[89ab][0-9a-f]:)/i.test(host)
+  if (!host.includes('.')) return true
+  if (wersjaAdresuIp(host) !== 4) return false
   if (/^127\./.test(host) || /^10\./.test(host) || /^192\.168\./.test(host)) return true
   const dopasowanie = /^172\.(\d{1,2})\./.exec(host)
   return Boolean(dopasowanie && Number(dopasowanie[1]) >= 16 && Number(dopasowanie[1]) <= 31)
 }
 
-function odczytajKonfiguracjeHomeAssistant(env: NodeJS.ProcessEnv): Pick<KonfiguracjaSerwera, 'adresHomeAssistant' | 'tokenHomeAssistant' | 'limitCzasuHomeAssistantMs'> {
+function odczytajKonfiguracjeHomeAssistant(env: NodeJS.ProcessEnv): Pick<KonfiguracjaSerwera, 'adresHomeAssistant' | 'tokenHomeAssistant' | 'limitCzasuHomeAssistantMs' | 'wlascicielHomeAssistant' | 'encjeHomeAssistant' | 'sterowaneEncjeHomeAssistant'> {
   const adresHomeAssistant = env.HOME_ASSISTANT_URL?.trim() || undefined
   const tokenHomeAssistant = env.HOME_ASSISTANT_TOKEN?.trim() || undefined
   if (Boolean(adresHomeAssistant) !== Boolean(tokenHomeAssistant)) {
@@ -97,7 +105,20 @@ function odczytajKonfiguracjeHomeAssistant(env: NodeJS.ProcessEnv): Pick<Konfigu
   if (!Number.isInteger(limitCzasuHomeAssistantMs) || limitCzasuHomeAssistantMs < 1_000 || limitCzasuHomeAssistantMs > 30_000) {
     throw new Error('HOME_ASSISTANT_TIMEOUT_MS musi być liczbą całkowitą od 1000 do 30000.')
   }
-  return { adresHomeAssistant, tokenHomeAssistant, limitCzasuHomeAssistantMs }
+  const wlascicielHomeAssistant = env.HOME_ASSISTANT_OWNER_ID?.trim() || undefined
+  const odczytajEncje = (wartosc: string | undefined): string[] => {
+    const encje = [...new Set((wartosc ?? '').split(',').map((encja) => encja.trim()).filter(Boolean))]
+    if (encje.length > 30 || encje.some((encja) => encja.length > 200 || !/^[a-z0-9_]+\.[a-z0-9_]+$/.test(encja))) {
+      throw new Error('Lista encji Home Assistant musi zawierać do 30 poprawnych identyfikatorów.')
+    }
+    return encje
+  }
+  const encjeHomeAssistant = odczytajEncje(env.HOME_ASSISTANT_ENTITIES)
+  const sterowaneEncjeHomeAssistant = odczytajEncje(env.HOME_ASSISTANT_CONTROL_ENTITIES)
+  if (sterowaneEncjeHomeAssistant.some((encja) => !encjeHomeAssistant.includes(encja) || !/^(light|switch)\./.test(encja))) {
+    throw new Error('Sterowanie dopuszcza tylko wybrane do odczytu encje light i switch.')
+  }
+  return { adresHomeAssistant, tokenHomeAssistant, limitCzasuHomeAssistantMs, wlascicielHomeAssistant, encjeHomeAssistant, sterowaneEncjeHomeAssistant }
 }
 
 export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env): KonfiguracjaSerwera {

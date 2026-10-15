@@ -91,7 +91,7 @@ opisz('panel domowy', () => {
     oczekuj(ekran.getByText(/zadań na dziś/)).toHaveTextContent('1 zadań na dziś')
     oczekuj(ekran.getByText(/bloków pracy/)).toHaveTextContent('1 bloków pracy')
     oczekuj(kontener).not.toHaveTextContent(/Prywatny tytuł|Terapia|Sekret wizyty|Praca prywatna/)
-    oczekuj(kontener).toHaveTextContent('Brak podłączonych urządzeń')
+    oczekuj(kontener).toHaveTextContent('Zaloguj się online jako właściciel, aby sprawdzić Home Assistant.')
   })
 
   sprawdz.each([
