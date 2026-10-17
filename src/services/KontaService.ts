@@ -123,7 +123,7 @@ async function wykonaj<T>(metoda: 'GET' | 'POST' | 'PUT', sciezka: string, dane?
     webFetchExtra: { credentials: 'include' },
   })
   if (odpowiedz.status < 200 || odpowiedz.status >= 300) {
-    if (odpowiedz.status === 401 && czyProfileUruchomione() && pobierzAktywnyProfil() && !['/api/auth/login', '/api/auth/recover', '/api/auth/invitations/accept'].includes(sciezka)) window.dispatchEvent(new Event('ogarniacz:sesja-wygasla'))
+    if (odpowiedz.status === 401 && czyProfileUruchomione() && pobierzAktywnyProfil() && !['/api/auth/login', '/api/auth/recover', '/api/auth/password/reset', '/api/auth/invitations/accept'].includes(sciezka)) window.dispatchEvent(new Event('ogarniacz:sesja-wygasla'))
     const blad = odpowiedz.data && typeof odpowiedz.data === 'object' ? odpowiedz.data as OdpowiedzBledu : {}
     throw new BladKonta(odpowiedz.status, blad.error ?? 'Serwer kont odrzucił żądanie.')
   }
@@ -222,6 +222,15 @@ export async function przyjmijZaproszenie(token: string, haslo: string): Promise
 
 export async function odzyskajDostep(email: string, kod: string, noweHaslo: string): Promise<void> {
   await wykonaj('POST', '/api/auth/recover', { email, kod, noweHaslo })
+}
+
+export async function poprosOLinkResetowaniaHasla(email: string): Promise<string> {
+  const odpowiedz = await wykonaj<{ komunikat: string }>('POST', '/api/auth/password/request', { email })
+  return odpowiedz.komunikat
+}
+
+export async function ustawHasloPrzezLink(token: string, noweHaslo: string): Promise<void> {
+  await wykonaj('POST', '/api/auth/password/reset', { token, noweHaslo })
 }
 
 export async function wyloguj(): Promise<void> {

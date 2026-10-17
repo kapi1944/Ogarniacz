@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { DatabaseSync } from 'node:sqlite'
 import type { KonfiguracjaSerwera } from './config.ts'
 import { wykonajAdministracjeKont } from './administracja-kont.ts'
+import type { Poczta } from './poczta.ts'
 
 const NAZWA_COOKIE = 'ogarniacz_sesja'
 const MAKSYMALNY_ROZMIAR_JSON = 1024 * 1024
@@ -11,6 +12,24 @@ const LIMIT_PROB_LOGOWANIA = 10
 const probyLogowania = new WeakMap<DatabaseSync, Map<string, { liczba: number; od: number }>>()
 const LIMIT_ADRESU = 50
 const LIMIT_KLUCZY = 10_000
+const probyWysylki = new WeakMap<DatabaseSync, Map<string, { liczba: number; od: number }>>()
+
+function dopuscProsbeOLink(zadanie: IncomingMessage, baza: DatabaseSync, email: string): boolean {
+  let proby = probyWysylki.get(baza)
+  if (!proby) { proby = new Map(); probyWysylki.set(baza, proby) }
+  const teraz = Date.now()
+  for (const [klucz, proba] of proby) if (teraz - proba.od >= OKNO_PROB_LOGOWANIA_MS) proby.delete(klucz)
+  if (proby.size >= LIMIT_KLUCZY) return false
+  const klucze = kluczeLimitu(zadanie, email)
+  const dopuszczono = klucze.every((klucz) => (proby.get(klucz)?.liczba ?? 0) < (klucz.startsWith('adres:') ? 20 : 3))
+  // Każda próba obciąża adres, także po przekroczeniu limitu pojedynczego konta.
+  for (const klucz of klucze) {
+    const poprzednia = proby.get(klucz)
+    if (poprzednia) poprzednia.liczba += 1
+    else if (proby.size < LIMIT_KLUCZY) proby.set(klucz, { liczba: 1, od: teraz })
+  }
+  return dopuszczono
+}
 const MODULY = new Set([
   'zadania', 'projekty', 'skrzynka', 'planer', 'grafik', 'nawyki', 'leki', 'wizyty', 'zdrowie',
   'skierowania', 'przypomnienia', 'zakupy', 'rachunki', 'miasto', 'miejsca', 'cele', 'notatki',
@@ -307,10 +326,74 @@ export async function obsluzKonta(
   odpowiedz: ServerResponse,
   baza: DatabaseSync,
   konfiguracja: KonfiguracjaSerwera,
+  poczta?: Poczta,
 ): Promise<boolean> {
   const sciezka = new URL(zadanie.url ?? '/', 'http://localhost').pathname
   if (!sciezka.startsWith('/api/auth/') && !sciezka.startsWith('/api/account')) return false
   try {
+    if (zadanie.method === 'POST' && ['/api/auth/password/request', '/api/auth/password/reset'].includes(sciezka)) {
+      const pochodzenie = zadanie.headers.origin
+      if (!zadanie.headers['content-type']?.toLowerCase().startsWith('application/json') || (pochodzenie && pochodzenie !== konfiguracja.poczta?.adresAplikacji && !konfiguracja.dozwolonePochodzeniaCors.includes(pochodzenie))) {
+        odpowiedzJson(odpowiedz, 403, { error: 'Niedozwolone żądanie.' })
+        return true
+      }
+      if (sciezka === '/api/auth/password/request') {
+        const dane = await odczytajJson(zadanie)
+        const email = tekst(dane.email).trim().toLowerCase()
+        const dopuszczono = dopuscProsbeOLink(zadanie, baza, email)
+        // Odpowiedź i czas oczekiwania nie zależą od dostawcy ani stanu konta.
+        odpowiedzJson(odpowiedz, 202, { komunikat: 'Jeśli konto jest aktywne i poczta jest skonfigurowana, otrzymasz link do ustawienia hasła. Sprawdź także spam. Kolejną próbę wykonaj za 15 minut.' })
+        if (dopuszczono && poczta && konfiguracja.poczta) {
+          const adresAplikacji = konfiguracja.poczta.adresAplikacji
+          setImmediate(() => {
+            void (async () => {
+              if (!baza.isOpen) return
+              const konto = baza.prepare("SELECT id, email FROM uzytkownicy WHERE email = ? AND status_konta = 'aktywne'").get(email)
+              if (!konto) return
+              const token = randomBytes(32).toString('base64url')
+              const tokenHash = hashSekretu(token)
+              const teraz = new Date().toISOString()
+              baza.prepare('DELETE FROM tokeny_resetowania_hasla WHERE wygasa_at <= ?').run(teraz)
+              baza.prepare('INSERT INTO tokeny_resetowania_hasla (token_hash, uzytkownik_id, wygasa_at) VALUES (?, ?, ?)').run(tokenHash, tekst(konto.id), new Date(Date.now() + 15 * 60 * 1000).toISOString())
+              const link = `${adresAplikacji}/#reset-hasla=${token}`
+              try { await poczta.wyslijLink(tekst(konto.email), link) }
+              catch {
+                if (baza.isOpen) baza.prepare('DELETE FROM tokeny_resetowania_hasla WHERE token_hash = ?').run(tokenHash)
+                throw new Error('Wysyłka nie powiodła się.')
+              }
+            })().catch(() => {
+              // Nigdy nie logujemy błędu dostawcy: może zawierać adres, token lub sekret SMTP.
+              console.error('Nie udało się wysłać wiadomości resetowania hasła. Sprawdź konfigurację poczty.')
+            })
+          })
+        }
+        return true
+      }
+      if (czyZablokowaneLogowanie(zadanie, baza)) { odpowiedzLimitu(odpowiedz); return true }
+      // Zliczamy także poprawne próby, aby ograniczyć koszt scrypt i masowe zgadywanie tokenów.
+      zarejestrujNieudaneLogowanie(zadanie, baza)
+      const dane = await odczytajJson(zadanie)
+      const token = tekst(dane.token)
+      const tokenHash = hashSekretu(token)
+      const teraz = new Date().toISOString()
+      const konto = /^[A-Za-z0-9_-]{43}$/.test(token) && baza.prepare(`SELECT u.id FROM tokeny_resetowania_hasla t
+        JOIN uzytkownicy u ON u.id = t.uzytkownik_id
+        WHERE t.token_hash = ? AND t.wygasa_at > ? AND u.status_konta = 'aktywne'`).get(tokenHash, teraz)
+      if (!konto) { odpowiedzJson(odpowiedz, 401, { error: 'Link wygasł lub jest nieprawidłowy. Poproś o nowy link.' }); return true }
+      const hasloHash = hashujHaslo(tekst(dane.noweHaslo))
+      baza.exec('BEGIN IMMEDIATE')
+      try {
+        const czasZmiany = new Date().toISOString()
+        const zuzycie = baza.prepare('DELETE FROM tokeny_resetowania_hasla WHERE token_hash = ? AND wygasa_at > ?').run(tokenHash, czasZmiany)
+        if (!zuzycie.changes) throw new Error('Link wygasł lub jest nieprawidłowy.')
+        baza.prepare('UPDATE uzytkownicy SET haslo_hash = ?, wymagana_zmiana_hasla = 0, zaktualizowano_at = ? WHERE id = ?').run(hasloHash, czasZmiany, tekst(konto.id))
+        baza.prepare('DELETE FROM sesje WHERE uzytkownik_id = ?').run(tekst(konto.id))
+        baza.exec('COMMIT')
+      } catch (blad) { baza.exec('ROLLBACK'); throw blad }
+      odpowiedzJson(odpowiedz, 200, { zmienionoHaslo: true }, wygasCookie())
+      return true
+    }
+
     if (zadanie.method === 'GET' && sciezka === '/api/auth/session') {
       const kontekst = pobierzKontekstDostepu(zadanie, baza, true)
       if (!kontekst) odpowiedzJson(odpowiedz, 401, { zalogowany: false })

@@ -57,6 +57,15 @@ poKazdym(() => {
 })
 
 describe('onboarding konta', () => {
+  it('udostępnia formularz e-mail i zachowuje odzyskiwanie starym kodem', async () => {
+    vi.mocked(pobierzSesjeKonta).mockRejectedValue(new BladKonta(401, 'Brak sesji.'))
+    render(<DostawcaKonta><div>Aplikacja działa</div></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Nie pamiętasz hasła?' }))
+    expect(screen.getByRole('heading', { name: 'Nie pamiętasz hasła?' })).toBeInTheDocument()
+    zdarzenie.click(screen.getByRole('button', { name: 'Wróć do logowania i kodów odzyskiwania' }))
+    zdarzenie.click(screen.getByRole('button', { name: 'Odzyskaj dostęp' }))
+    expect(screen.getByLabelText('Kod odzyskiwania')).toBeInTheDocument()
+  })
   it('pokazuje termin wygaśnięcia i wylogowuje pozostałe sesje bez wylogowania bieżącej', async () => {
     vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
     vi.mocked(pobierzListeSesji).mockResolvedValue([{ id: 'sesja', biezaca: true, utworzonoAt: '2026-10-14T10:00:00Z', ostatniaAktywnoscAt: '2026-10-14T11:00:00Z', wygasaAt: '2099-01-01T00:00:00Z' }])

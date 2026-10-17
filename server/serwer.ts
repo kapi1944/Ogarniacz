@@ -3,6 +3,7 @@ import { readFile, stat } from 'node:fs/promises'
 import { extname, resolve, sep } from 'node:path'
 import type { DatabaseSync } from 'node:sqlite'
 import type { KonfiguracjaSerwera } from './config.ts'
+import { utworzPoczte, type Poczta } from './poczta.ts'
 import { niedostepnaObslugaEcho, odczytajWiadomoscEcho, type ObslugaEchoApi } from './echo.ts'
 import { BladModeluEcho, odczytajZadanieModeluEcho, utworzObslugeModeluEcho, type ObslugaModeluEcho } from './model-echo.ts'
 import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, sprawdzCsrf } from './konta.ts'
@@ -92,6 +93,7 @@ export function utworzSerwer(
   aktualizacje?: AktualizacjeRpi,
   obslugaModeluEcho: ObslugaModeluEcho = utworzObslugeModeluEcho(konfiguracja),
   dom: DostawcaSmartHome = utworzDostawceSmartHome({ adres: konfiguracja.adresHomeAssistant, token: konfiguracja.tokenHomeAssistant, limitCzasuMs: konfiguracja.limitCzasuHomeAssistantMs }),
+  poczta: Poczta | undefined = utworzPoczte(konfiguracja.poczta),
 ) {
   const aktualizacjeRpi = aktualizacje ?? (konfiguracja.aktualizacjeRpi ? utworzAktualizacjeRpi() : undefined)
   return createServer(async (zadanie: IncomingMessage, odpowiedz: ServerResponse) => {
@@ -207,7 +209,7 @@ export function utworzSerwer(
         }
         return
       }
-      if (await obsluzKonta(zadanie, odpowiedz, baza, konfiguracja)) return
+      if (await obsluzKonta(zadanie, odpowiedz, baza, konfiguracja, poczta)) return
     }
     if (zadanie.url?.startsWith('/api/sync/')) {
       const czyDozwolonePochodzenie = ustawCorsSynchronizacji(zadanie, odpowiedz, konfiguracja)

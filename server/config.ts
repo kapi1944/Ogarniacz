@@ -1,6 +1,8 @@
 import { isIP as wersjaAdresuIp } from 'node:net'
+import { odczytajKonfiguracjePoczty, type KonfiguracjaPoczty } from './poczta.ts'
 
 export interface KonfiguracjaSerwera {
+  poczta?: KonfiguracjaPoczty
   port: number
   host: string
   sciezkaBazy: string
@@ -125,6 +127,7 @@ export function utworzKonfiguracjeSerwera(env: NodeJS.ProcessEnv = process.env):
   const sciezkaBazy = env.DATABASE_PATH?.trim() || './data/ogarniacz.sqlite'
   const dozwolonePochodzeniaCors = odczytajDozwolonePochodzeniaCors(env.CORS_ALLOWED_ORIGINS)
   return {
+    poczta: odczytajKonfiguracjePoczty(env),
     port: odczytajPort(env.PORT),
     host: env.HOST?.trim() || '127.0.0.1',
     sciezkaBazy,

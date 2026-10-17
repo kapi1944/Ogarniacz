@@ -178,16 +178,16 @@ test('CORS odrzuca HTTP LAN i wildcardy, zachowując origin Capacitor oraz HTTPS
 
 test('migracje tworzą schemat centralnej bazy idempotentnie', () => {
   const baza = new DatabaseSync(':memory:')
-  assert.equal(uruchomMigracje(baza), 7)
-  assert.equal(uruchomMigracje(baza), 7)
+  assert.equal(uruchomMigracje(baza), 8)
+  assert.equal(uruchomMigracje(baza), 8)
   assert.equal(baza.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'rekordy_synchronizacji'").get()?.name, 'rekordy_synchronizacji')
   baza.close()
 })
 
 test('otwarcie bazy uruchamia migracje', () => {
   const otwartaBaza = otworzBaze(utworzKonfiguracjeSerwera({ DATABASE_PATH: ':memory:' }))
-  assert.equal(otwartaBaza.liczbaMigracji, 7)
-  assert.equal(otwartaBaza.baza.prepare('SELECT COUNT(*) AS liczba FROM migracje').get()?.liczba, 7)
+  assert.equal(otwartaBaza.liczbaMigracji, 8)
+  assert.equal(otwartaBaza.baza.prepare('SELECT COUNT(*) AS liczba FROM migracje').get()?.liczba, 8)
   otwartaBaza.baza.close()
 })
 

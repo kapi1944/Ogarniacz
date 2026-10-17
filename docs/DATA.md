@@ -1,5 +1,11 @@
 ﻿# Model danych i migracje
 
+## Reset hasła przez e-mail
+
+SQLite 7 → 8 dodaje tabelę hashy tokenów, indeks konta i trigger unieważniania
+linków przy zmianie hasła, e-maila lub statusu. Zachowuje UUID i dotychczasowe
+dane. [Szczegóły i konfiguracja](ODZYSKIWANIE_HASLA_EMAIL.md).
+
 ## Konta — uzupełnienie etapów 1–3
 
 Migracja SQLite 6 → 7 dodaje wyłącznie nullable `kody_odzyskiwania.wygasa_at`.

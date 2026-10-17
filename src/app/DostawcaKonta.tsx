@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState, type FormEvent, type Re
 import { KeyRound, LogOut, ShieldCheck, UserPlus } from 'lucide-react'
 import { Komunikat, Modal } from '../components/Interfejs'
 import { PanelAdministracjiKont } from './PanelAdministracjiKont'
+import { FormularzLinkuResetowania } from './OdzyskiwanieHasla'
 import { pobierzKonfiguracjeSynchronizacji } from '../services/KonfiguracjaSynchronizacji'
 import {
   BladKonta,
@@ -110,6 +111,7 @@ function PanelHaslaISesji({ odswiez, wyczysc }: { odswiez: () => Promise<void>; 
 }
 
 function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { bootstrapDostepny: boolean; poZalogowaniu: (konto: KontoUzytkownika) => void; pracujLokalnie: () => void }) {
+  const [wysylkaLinku, ustawWysylkeLinku] = useState(false)
   const tokenZaproszenia = new URLSearchParams(window.location.search).get('invite') ?? ''
   const [tryb, ustawTryb] = useState<'logowanie' | 'bootstrap' | 'odzyskiwanie' | 'zaproszenie'>(tokenZaproszenia ? 'zaproszenie' : bootstrapDostepny ? 'bootstrap' : 'logowanie')
   const [email, ustawEmail] = useState('')
@@ -145,6 +147,7 @@ function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { 
     }
   }
 
+  if (wysylkaLinku) return <main className="ekran-konta"><section className="karta ekran-konta__panel"><FormularzLinkuResetowania powrot={() => ustawWysylkeLinku(false)} /></section></main>
   return <main className="ekran-konta"><section className="karta ekran-konta__panel">
     <div className="tytul-karty"><KeyRound aria-hidden="true" /><span>Konto Ogarniacza</span></div>
     <h1>{tryb === 'bootstrap' ? 'Pierwsze konto Właściciela' : tryb === 'odzyskiwanie' ? 'Odzyskaj dostęp' : tryb === 'zaproszenie' ? 'Przyjmij zaproszenie' : 'Zaloguj się'}</h1>
@@ -158,6 +161,7 @@ function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { 
       <button className="przycisk przycisk--glowny pole--pelne" disabled={zajety} type="submit">{zajety ? 'Proszę czekać…' : tryb === 'odzyskiwanie' ? 'Ustaw nowe hasło' : tryb === 'zaproszenie' ? 'Przyjmij zaproszenie' : tryb === 'bootstrap' ? 'Utwórz konto' : 'Zaloguj'}</button>
     </form>
     <div className="akcje-formularza ekran-konta__tryby">
+      <button type="button" className="przycisk przycisk--tekstowy" disabled={zajety} onClick={() => { ustawHaslo(''); ustawWysylkeLinku(true) }}>Nie pamiętasz hasła?</button>
       {tryb !== 'logowanie' && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawTryb('logowanie')}>Logowanie</button>}
       {tryb !== 'odzyskiwanie' && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawTryb('odzyskiwanie')}>Odzyskaj dostęp</button>}
       {bootstrapDostepny && tryb !== 'bootstrap' && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawTryb('bootstrap')}>Pierwsze uruchomienie</button>}

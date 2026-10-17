@@ -16,12 +16,17 @@ import { GranicaBledu, KomunikatBleduAsynchronicznego } from './components/Grani
 import { przygotujProfilStartowy, nasluchujZmianyProfilu, ZDARZENIE_ZAMKNIECIA_PROFILU } from './services/KontekstProfilu'
 import { EkranMigracjiProfilu } from './app/EkranMigracjiProfilu'
 import { DostawcaKonta } from './app/DostawcaKonta'
+import { EkranResetowaniaHasla, pobierzTokenResetuZAdresu } from './app/OdzyskiwanieHasla'
 
 const korzen = createRoot(document.getElementById('root')!)
+const tokenResetowaniaHasla = pobierzTokenResetuZAdresu()
 window.addEventListener(ZDARZENIE_ZAMKNIECIA_PROFILU, () => korzen.render(<main className="ekran-konta"><p role="status">Zmiana konta. Widok danych został zamknięty.</p></main>))
 nasluchujZmianyProfilu()
 try {
   await inicjalizujRuntimeConfig()
+  if (tokenResetowaniaHasla !== undefined) {
+    korzen.render(<EkranResetowaniaHasla token={tokenResetowaniaHasla} />)
+  } else {
   const kontekst = await przygotujProfilStartowy()
   if (kontekst.migracja) {
     korzen.render(<EkranMigracjiProfilu profil={kontekst.migracja} />)
@@ -42,6 +47,7 @@ try {
   )
   void inicjalizujSynchronizacjeAplikacji()
   void inicjalizujKontroleAktualizacjiAplikacji()
+  }
   }
 } catch {
   korzen.render(<section className="karta" role="alert"><h1>Nie udało się uruchomić aplikacji</h1><p>Nie czyść danych aplikacji. Spróbuj ją odświeżyć.</p><button className="przycisk" onClick={() => window.location.reload()}>Spróbuj ponownie</button></section>)

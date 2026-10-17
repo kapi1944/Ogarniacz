@@ -1,5 +1,11 @@
 ﻿# Bezpieczeństwo i dane użytkownika
 
+## Reset hasła przez e-mail
+
+Opcjonalne SMTP/API, token 256 bitów ważny 15 minut, w bazie tylko SHA-256.
+Atomowy reset unieważnia wszystkie sesje i linki konta, zachowując UUID i stare
+kody odzyskiwania. [Zabezpieczenia i konfiguracja operatora](ODZYSKIWANIE_HASLA_EMAIL.md).
+
 ## Hasła i sesje — etap 2
 
 API dostępne dla każdej aktywnej tożsamości, również Edytora:

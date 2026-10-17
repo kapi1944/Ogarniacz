@@ -3,6 +3,7 @@ import { CapacitorHttp } from '@capacitor/core'
 import { pobierzCsrfKonta, pobierzKontoOffline, pobierzListeSesji, pobierzSesjeKonta, uruchomAktualizacjeRaspberry, wylogujSesje, wylogujWszystkieSesje, zaloguj, zmienHaslo } from './KontaService'
 import { resetujHasloUzytkownika, wylogujPozostaleSesje } from './KontaService'
 import { pobierzStanDomu, sterujDomem } from './KontaService'
+import { poprosOLinkResetowaniaHasla, ustawHasloPrzezLink } from './KontaService'
 
 // Setup uprawnień ładuje usługę kont; usuń ten cache przed zastosowaniem mocków.
 vi.hoisted(() => vi.resetModules())
@@ -34,6 +35,15 @@ beforeEach(() => {
 })
 
 describe('KontaService', () => {
+  it('wysyła prośbę i reset przez obecny transport kont bez utrwalania sekretów', async () => {
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 202, data: { komunikat: 'Neutralny komunikat' }, headers: {}, url: '' })
+    expect(await poprosOLinkResetowaniaHasla('konto@example.test')).toBe('Neutralny komunikat')
+    expect(CapacitorHttp.request).toHaveBeenLastCalledWith(expect.objectContaining({ url: 'https://raspberrypi.tailnet.ts.net/api/auth/password/request', data: { email: 'konto@example.test' } }))
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: {}, headers: {}, url: '' })
+    await ustawHasloPrzezLink('syntetyczny-token', 'Nowe-haslo')
+    expect(CapacitorHttp.request).toHaveBeenLastCalledWith(expect.objectContaining({ url: 'https://raspberrypi.tailnet.ts.net/api/auth/password/reset', data: { token: 'syntetyczny-token', noweHaslo: 'Nowe-haslo' }, webFetchExtra: { credentials: 'include' } }))
+    expect(localStorage.length + sessionStorage.length).toBe(0)
+  })
   it('Dom korzysta z istniejącego transportu sesji i CSRF bez utrwalania stanów', async () => {
     sessionStorage.setItem('ogarniacz-csrf', 'csrf-testowy')
     const stan = { skonfigurowany: true, dostepny: true, encje: [] }

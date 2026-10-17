@@ -153,6 +153,22 @@ const migracje: Migracja[] = [
       ALTER TABLE kody_odzyskiwania ADD COLUMN wygasa_at TEXT;
     `,
   },
+  {
+    wersja: 8,
+    sql: `
+      CREATE TABLE tokeny_resetowania_hasla (
+        token_hash TEXT PRIMARY KEY NOT NULL,
+        uzytkownik_id TEXT NOT NULL REFERENCES uzytkownicy(id),
+        wygasa_at TEXT NOT NULL
+      );
+      CREATE INDEX idx_tokeny_resetowania_konto ON tokeny_resetowania_hasla (uzytkownik_id);
+      CREATE TRIGGER uniewaznij_linki_resetowania AFTER UPDATE OF haslo_hash, email, status_konta ON uzytkownicy
+      WHEN NEW.haslo_hash <> OLD.haslo_hash OR NEW.email <> OLD.email OR NEW.status_konta <> OLD.status_konta
+      BEGIN
+        DELETE FROM tokeny_resetowania_hasla WHERE uzytkownik_id = NEW.id;
+      END;
+    `,
+  },
 ]
 
 export function uruchomMigracje(baza: DatabaseSync): number {
