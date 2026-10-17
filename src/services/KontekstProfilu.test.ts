@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, it, expect, vi } from 'vitest'
+import Dexie from 'dexie'
 import { CapacitorHttp } from '@capacitor/core'
 import { baza } from '../data/BazaOgarniacza'
 import { rejestrProfili, pobierzAktywnyProfil, pobierzSygnalProfilu } from '../data/ProfileLokalne'
@@ -14,6 +15,8 @@ vi.mock('@capacitor/core', async (oryginal) => ({ ...await oryginal<typeof impor
 
 const konto = (id: string): KontoUzytkownika => ({ zalogowany: true, uzytkownikId: id, wlascicielId: id, email: id + '@example.test', rola: 'wlasciciel', granty: [], edytorzy: [] })
 beforeEach(async () => {
+  // Ten zestaw sprawdza gotowe profile, bez bazy legacy otwieranej przez setup.
+  await Dexie.delete('ogarniacz-v1')
   await rejestrProfili.profile.clear(); await rejestrProfili.stan.clear()
   sessionStorage.setItem('ogarniacz-csrf', 'csrf')
   vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto('a'))

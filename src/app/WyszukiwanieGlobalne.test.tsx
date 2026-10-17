@@ -24,7 +24,7 @@ describe('globalne wyszukiwanie', () => {
 
     const pole = screen.getByRole('combobox')
     fireEvent.change(pole, { target: { value: 'wynik' } })
-    await screen.findByRole('option', { name: /Pierwszy wynik/ })
+    await screen.findByRole('option', { name: /Pierwszy wynik/, selected: true })
     fireEvent.keyDown(pole, { key: 'ArrowDown' })
     fireEvent.keyDown(pole, { key: 'Enter' })
 
