@@ -41,3 +41,9 @@ artifacts/
 .env
 .env.*
 !.env.example
+
+# Prywatne eksporty danych i kopie ochronne (także w podkatalogach)
+ogarniacz-backup*
+ogarniacz-before-restore*
+ogarniacz-przed-*.sqlite*
+ogarniacz-windows*.7z
