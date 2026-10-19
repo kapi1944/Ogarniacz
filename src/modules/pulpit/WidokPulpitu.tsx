@@ -45,7 +45,6 @@ import {
   sortujKafelki,
 } from './logikaKafelkow'
 import { FormularzHarmonogramuDnia } from './FormularzHarmonogramuDnia'
-import { NawigatorDnia } from './NawigatorDnia'
 import { OsCzasu } from './OsCzasu'
 import { kandydaciSugestiiEchoPulpitu, widoczneSugestieEchoPulpitu } from './SugestieEchoPulpitu'
 
@@ -245,9 +244,7 @@ export function WidokPulpitu() {
 
   return <div className="widok widok-pulpitu">
     <div className="pulpit-sekcja--naglowek"><NaglowekWidoku tytul="Pulpit" opis="Najważniejsze sprawy wymagające Twojej uwagi." akcje={<><Link className="przycisk przycisk--drugorzedny" to="/dzisiaj">Przejdź do Dzisiaj</Link><button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj</button></>} /></div>
-    {ustawienia.pulpit.pokazOsCzasu
-      ? <OsCzasu data={data} zmienDate={zmienDatePulpitu} harmonogram={harmonogram} zakresSnu={{ od: ustawienia.harmonogram.poczatekSnu, do: ustawienia.harmonogram.koniecSnu, skala: ustawienia.harmonogram.skalaSnuNaOsi }} elementy={elementyOsi} zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu} edytujHarmonogram={() => ustawEdycjeHarmonogramu(true)} przelaczDostepnosc={przelaczDostepnosc} usunWyjatek={usunWyjatek} otworzElement={(element) => { if (element.referencjaZrodla) nawiguj(adresReferencjiZrodla(element.referencjaZrodla)) }} />
-      : <section className="karta pulpit-sekcja--os-czasu pulpit-sekcja--wybor-dnia"><NawigatorDnia data={data} zmienDate={zmienDatePulpitu} /></section>}
+    <OsCzasu data={data} zmienDate={zmienDatePulpitu} harmonogram={harmonogram} zakresSnu={{ od: ustawienia.harmonogram.poczatekSnu, do: ustawienia.harmonogram.koniecSnu, skala: ustawienia.harmonogram.skalaSnuNaOsi }} elementy={elementyOsi} zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu} edytujHarmonogram={() => ustawEdycjeHarmonogramu(true)} przelaczDostepnosc={przelaczDostepnosc} usunWyjatek={usunWyjatek} otworzElement={(element) => { if (element.referencjaZrodla) nawiguj(adresReferencjiZrodla(element.referencjaZrodla)) }} />
     {(komunikat || bladModuluDnia) && <div className="pulpit-sekcja--komunikaty">
       {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}
       {bladModuluDnia && <Komunikat typ="blad">Nie udało się pobrać części danych modułowych. Pozostałe elementy Pulpitu nadal działają.</Komunikat>}
