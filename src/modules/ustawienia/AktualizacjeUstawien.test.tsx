@@ -9,10 +9,9 @@ import { utworzMetadane } from '../../domain/fabryki'
 
 vi.mock('./PanelAktualizacjiRaspberry', () => ({ PanelAktualizacjiRaspberry: () => <div>Raspberry / serwer</div> }))
 
-const { nasluchujKontroli, pobierzApk, pobierzStan, pobierzStanKontroli, sprawdzAktualizacjeApk, uruchomInstalator } = vi.hoisted(() => ({
+const { nasluchujKontroli, pobierzApk, pobierzStanKontroli, sprawdzAktualizacjeApk, uruchomInstalator } = vi.hoisted(() => ({
   nasluchujKontroli: vi.fn(() => () => undefined),
   pobierzApk: vi.fn(),
-  pobierzStan: vi.fn(),
   pobierzStanKontroli: vi.fn(),
   sprawdzAktualizacjeApk: vi.fn(),
   uruchomInstalator: vi.fn(),
@@ -30,14 +29,6 @@ vi.mock('../../platform/platforma', () => ({
   platforma: {
     natywna: true,
     aktualizacje: { skonfigurowane: () => true, sprawdz: vi.fn(), pobierz: pobierzApk, uruchomInstalator, pobierzInformacje: vi.fn().mockResolvedValue({ wersja: '1.0.11', kod: 1_000_011 }), pobierzStanInstalacji: vi.fn().mockResolvedValue({}), nasluchujStanuInstalacji: vi.fn().mockResolvedValue(() => undefined) },
-    aktualizacjeWeb: {
-      skonfigurowane: () => true,
-      pobierzStan,
-      sprawdz: vi.fn(),
-      pobierzIAktywuj: vi.fn(),
-      przywrocPoprzednia: vi.fn(),
-      przywrocWbudowana: vi.fn(),
-    },
   },
 }))
 
@@ -45,14 +36,12 @@ vi.mock('../../services/KontrolaAktualizacjiAplikacji', () => ({
   nasluchujKontroliAktualizacji: nasluchujKontroli,
   pobierzStanKontroliAktualizacji: pobierzStanKontroli,
   sprawdzAktualizacjeApk,
-  sprawdzAktualizacjeWeb: vi.fn(),
 }))
 
 beforeEach(() => {
   platforma.natywna = true
   stanKontroli = { sprawdzono: true, wynikApk: dostepnaAktualizacja }
   pobierzStanKontroli.mockImplementation(() => stanKontroli)
-  pobierzStan.mockResolvedValue(stanWeb)
   sprawdzAktualizacjeApk.mockResolvedValue(dostepnaAktualizacja)
   pobierzApk.mockReset()
   uruchomInstalator.mockReset()
@@ -110,12 +99,6 @@ it('po sukcesie 1.0.14 i sprzątnięciu starego APK pozwala pobrać następną w
   ))
   expect(pobierzApk).toHaveBeenCalledTimes(1)
 })
-
-const stanWeb = {
-  aktualny: { bundleVersion: '1.0.9', commitSha: 'a'.repeat(40), installedAt: '2026-09-14T10:00:00.000Z', source: 'web-ota' as const },
-  odrzucone: [],
-  pending: false,
-}
 
 describe('końcowa sekcja synchronizacji i aktualizacji', () => {
   it('wyjaśnia brakującą przestrzeń na podstawie danych błędu natywnego', () => {
@@ -175,7 +158,6 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
   })
 
   it('układa Synchronizację przed jedynym kanałem Android APK', () => {
-    pobierzStan.mockResolvedValue(stanWeb)
     const { container } = render(<SekcjaPolaczeniaIAktualizacji synchronizacjaSkonfigurowana dzieci={<h2>Synchronizacja</h2>} />)
     const tekst = container.textContent ?? ''
     expect(tekst.indexOf('Synchronizacja')).toBeLessThan(tekst.indexOf('Android APK'))

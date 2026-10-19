@@ -3,7 +3,6 @@ import { Capacitor, registerPlugin } from '@capacitor/core'
 export interface KonfiguracjaRuntime {
   syncApiUrl?: string
   androidUpdateManifestUrl?: string
-  androidWebUpdateManifestUrl?: string
   diagnostyka: string[]
 }
 
@@ -28,13 +27,11 @@ function utworzKonfiguracje(zrodlo: Partial<KonfiguracjaRuntime>, czyAndroid: bo
   const konfiguracja = {
     syncApiUrl: oczyscAdres(zrodlo.syncApiUrl),
     androidUpdateManifestUrl: oczyscAdres(zrodlo.androidUpdateManifestUrl),
-    androidWebUpdateManifestUrl: oczyscAdres(zrodlo.androidWebUpdateManifestUrl),
   }
   const diagnostyka = czyAndroid
     ? [
       !konfiguracja.syncApiUrl && 'Brak syncApiUrl w natywnej konfiguracji APK.',
       !konfiguracja.androidUpdateManifestUrl && 'Brak androidUpdateManifestUrl w natywnej konfiguracji APK.',
-      !konfiguracja.androidWebUpdateManifestUrl && 'Brak androidWebUpdateManifestUrl w natywnej konfiguracji APK.',
     ].filter((komunikat): komunikat is string => Boolean(komunikat))
     : []
   return { ...konfiguracja, diagnostyka }
@@ -45,7 +42,6 @@ function pobierzKonfiguracjeWeb(): Partial<KonfiguracjaRuntime> {
   return {
     syncApiUrl: zSerwera?.syncApiUrl ?? import.meta.env.VITE_SYNC_API_URL,
     androidUpdateManifestUrl: zSerwera?.androidUpdateManifestUrl ?? import.meta.env.VITE_ANDROID_UPDATE_MANIFEST_URL,
-    androidWebUpdateManifestUrl: zSerwera?.androidWebUpdateManifestUrl ?? import.meta.env.VITE_ANDROID_WEB_UPDATE_MANIFEST_URL,
   }
 }
 

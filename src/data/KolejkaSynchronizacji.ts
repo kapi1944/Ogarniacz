@@ -69,11 +69,10 @@ export async function dodajDoKolejkiSynchronizacji(
   rekord: EncjaBazowa,
   poprzedni?: EncjaBazowa,
 ): Promise<void> {
-  if (!czyTabelaSynchronizowana(tabela)) return
+  if (!czyTabelaSynchronizowana(tabela) || czyPrywatnaPsychoterapia(tabela, rekord)) return
   const kolejka = tabelaKolejki()
   const poprzedniaZmiana = await kolejka.where('[tabela+rekordId]').equals([tabela, rekord.id]).first()
   if (poprzedniaZmiana) await kolejka.delete(poprzedniaZmiana.id)
-  if (czyPrywatnaPsychoterapia(tabela, rekord)) return
   const teraz = new Date().toISOString()
   await kolejka.add({
     id: noweId(),
@@ -90,6 +89,15 @@ export async function dodajDoKolejkiSynchronizacji(
 
 export async function pobierzKolejkeSynchronizacji(): Promise<ZmianaKolejkiSynchronizacji[]> {
   await uzgodnijPrywatnoscDokumentow()
+  return pobierzDozwoloneZmianyKolejki()
+}
+
+/** Licznik stosuje filtry wysyłki, ale nie migruje rekordów ani nie zmienia kolejki. */
+export async function policzZmianyDoSynchronizacji(): Promise<number> {
+  return (await pobierzDozwoloneZmianyKolejki()).length
+}
+
+async function pobierzDozwoloneZmianyKolejki(): Promise<ZmianaKolejkiSynchronizacji[]> {
   const zmiany = await tabelaKolejki().orderBy('createdAt').toArray()
   const bezpieczne: ZmianaKolejkiSynchronizacji[] = []
   for (const zmiana of zmiany) {

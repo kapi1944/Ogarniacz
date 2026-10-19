@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   web:
-    name: Web (lint / typecheck / test / server / ota / build)
+    name: Web (lint / typecheck / test / server / migracja / build)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -44,14 +44,14 @@ jobs:
       - name: Server tests
         run: npm run server:test
 
-      - name: Web OTA tests
+      - name: Regresja wycofania Web OTA i konfiguracji runtime
         run: npm run web-ota:test
 
       - name: Android release tests
         run: npm run android:release:test
 
       - name: Klasyfikacja publikacji i bezpieczny updater Raspberry
-        run: node --test scripts/publikacja-klasyfikacja.test.mjs scripts/rpi-bezpieczenstwo.test.mjs scripts/aktualizuj-rpi.test.mjs
+        run: node --test scripts/publikacja-klasyfikacja.test.mjs scripts/rpi-bezpieczenstwo.test.mjs scripts/aktualizuj-rpi.test.mjs scripts/deploy-rpi.test.mjs scripts/android.test.mjs
 
       - name: Build
         run: npm run build
@@ -80,7 +80,7 @@ jobs:
 
       - name: Testy natywnego updatera i eksportu pliku
         working-directory: android
-        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.AktualizacjeWebPluginTest' --tests 'pl.ogarniacz.app.EksportPlikuPluginTest' --no-daemon
+        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.MigracjaPozostalosciWebOtaTest' --tests 'pl.ogarniacz.app.RuntimeConfigPluginTest' --tests 'pl.ogarniacz.app.EksportPlikuPluginTest' --no-daemon
 
       - name: Gradle assembleDebug
         working-directory: android

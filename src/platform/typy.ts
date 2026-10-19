@@ -105,38 +105,6 @@ export interface StanInstalacjiAktualizacji extends WynikUruchomieniaInstalatora
   czasRozpoczecia?: number
 }
 
-export interface ManifestAktualizacjiWeb {
-  bundleVersion: string
-  commitSha: string
-  url: string
-  sha256: string
-  signature: string
-  minNativeVersionCode: number
-  publishedAt: string
-}
-
-export interface MetadaneBundleWeb {
-  bundleVersion: string
-  commitSha: string
-  installedAt: string
-  source: 'builtin' | 'web-ota'
-}
-
-export interface StanAktualizacjiWeb {
-  aktualny: MetadaneBundleWeb
-  poprzedni?: MetadaneBundleWeb
-  odrzucone: Array<Pick<MetadaneBundleWeb, 'bundleVersion' | 'commitSha'>>
-  pending: boolean
-}
-
-export interface WynikSprawdzeniaAktualizacjiWeb {
-  manifest: ManifestAktualizacjiWeb
-  stan: StanAktualizacjiWeb
-  czyDostepna: boolean
-  czyOdrzucona: boolean
-  wymagaNowszegoApk: boolean
-}
-
 export interface OdebraneDaneUdostepniania {
   tekst: string
   tytul?: string

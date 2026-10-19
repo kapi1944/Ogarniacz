@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -13,6 +14,8 @@ import {
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
+  sprawdzCzyMoznaZastapicDebug,
+  wymagajOficjalnejPublikacji,
 } from './android-wspolne.mjs'
 import { pobierzProdukcyjnaKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
 
@@ -136,7 +139,45 @@ test('zgłasza status unauthorized i offline bez wyboru starego APK', () => {
 // Regresja kolejności inicjalizacji: stary frontend nie może załadować się przed migracją.
 test('Android resetuje Web OTA i wybiera public przed inicjalizacją WebView', () => {
   const aktywnosc = readFileSync(new URL('../android/app/src/main/java/pl/ogarniacz/app/MainActivity.java', import.meta.url), 'utf8')
-  assert.ok(aktywnosc.indexOf('MagazynAktualizacjiWeb.przygotujStart(this)') < aktywnosc.indexOf('super.onCreate('))
+  assert.ok(aktywnosc.includes('MigracjaPozostalosciWebOta.wykonaj(this)'))
+  assert.ok(aktywnosc.indexOf('MigracjaPozostalosciWebOta.wykonaj(this)') < aktywnosc.indexOf('super.onCreate('))
   assert.ok(aktywnosc.indexOf('new ServerPath(ServerPath.PathType.ASSET_PATH, "public")') < aktywnosc.indexOf('super.onCreate('))
   assert.doesNotMatch(aktywnosc, /registerPlugin\(AktualizacjeWebPlugin|zastosujPoStarcie|setServerBasePath/)
+})
+
+test('debug dopuszcza pusty telefon i debug, a blokuje release i niejednoznaczny odczyt', () => {
+  const sciezka = { status: 0, stdout: 'package:pl.ogarniacz.app\n', stderr: '' }
+  assert.doesNotThrow(() => sprawdzCzyMoznaZastapicDebug({ status: 0, stdout: '', stderr: '' }))
+  assert.doesNotThrow(() => sprawdzCzyMoznaZastapicDebug(sciezka, { status: 0, stdout: 'flags=[ DEBUGGABLE HAS_CODE ]' }))
+  for (const wynik of [{ status: 0, stdout: 'flags=[ HAS_CODE ]' }, { status: 1, stdout: 'flags=[ DEBUGGABLE ]' }, undefined]) {
+    assert.throws(() => sprawdzCzyMoznaZastapicDebug(sciezka, wynik), /APK produkcyjny lub nieznany/)
+  }
+  assert.throws(() => sprawdzCzyMoznaZastapicDebug({ status: 1, stdout: '' }), /Instalacja zatrzymana/)
+  assert.throws(() => sprawdzCzyMoznaZastapicDebug({ status: 0, stdout: '', stderr: 'błąd' }), /Instalacja zatrzymana/)
+  assert.throws(() => sprawdzCzyMoznaZastapicDebug({ status: 0, stdout: 'Error: brak usługi' }), /APK produkcyjny lub nieznany/)
+  const skrypt = readFileSync(new URL('./android.mjs', import.meta.url), 'utf8')
+  const deploy = skrypt.slice(skrypt.indexOf('function wykonajDeploy('), skrypt.indexOf('function utworzKeystore('))
+  assert.ok(deploy.indexOf('sprawdzCzyMoznaZastapicDebug(') < deploy.indexOf('zbudujFrontend('))
+  assert.doesNotMatch(deploy, /'uninstall'|'clear'|'-d'/)
+})
+
+test('publikacja wymaga dokładnego oficjalnego workflow na main', () => {
+  const srodowisko = {
+    GITHUB_ACTIONS: 'true', GITHUB_EVENT_NAME: 'workflow_dispatch', GITHUB_REF: 'refs/heads/main',
+    GITHUB_REPOSITORY: 'test/Ogarniacz', GITHUB_WORKFLOW_REF: 'test/Ogarniacz/.github/workflows/android-release.yml@refs/heads/main',
+  }
+  assert.doesNotThrow(() => wymagajOficjalnejPublikacji(srodowisko))
+  for (const zmiana of [{ GITHUB_ACTIONS: '' }, { GITHUB_EVENT_NAME: 'push' }, { GITHUB_REF: 'refs/heads/test' }, { GITHUB_WORKFLOW_REF: 'test/Ogarniacz/.github/workflows/inny.yml@refs/heads/main' }]) {
+    assert.throws(() => wymagajOficjalnejPublikacji({ ...srodowisko, ...zmiana }), /zatwierdzony workflow/)
+  }
+  assert.doesNotThrow(() => wymagajOficjalnejPublikacji({ ...srodowisko, GITHUB_WORKFLOW_REF: 'test/Ogarniacz/.github/workflows/android-release-resume.yml@refs/heads/main' }, 'android-release-resume.yml'))
+})
+
+test('ręczna publikacja i wznowienie kończą się przed signingiem, buildem, tagiem i siecią', () => {
+  for (const argumenty of [['scripts/android.mjs', 'release', '--publish'], ['scripts/android.mjs', 'release', '--publish-existing'], ['scripts/android-release-publikacja.mjs', '1.0.16']]) {
+    const wynik = spawnSync(process.execPath, argumenty, { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: 'false' } })
+    assert.equal(wynik.status, 1)
+    assert.match(wynik.stderr, /zatwierdzony workflow/)
+    assert.equal(wynik.stdout, '')
+  }
 })

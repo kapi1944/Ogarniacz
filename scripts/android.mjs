@@ -20,6 +20,8 @@ import {
   utworzManifestAktualizacji,
   walidujManifestAktualizacji,
   wybierzUrzadzenieAdb,
+  wymagajOficjalnejPublikacji,
+  sprawdzCzyMoznaZastapicDebug,
 } from './android-wspolne.mjs'
 import { zapewnijRelease, sprawdzPublikacje } from './android-release-publikacja.mjs'
 import { pobierzKonfiguracjeSynchronizacji, pobierzProdukcyjnaKonfiguracjeSynchronizacji, sprawdzAdresSynchronizacji, sprawdzProdukcyjnyAdresSynchronizacji, utworzKonfiguracjeBezpieczenstwaSieci } from './synchronizacja-wspolne.mjs'
@@ -463,19 +465,14 @@ function pobierzRepozytoriumGitHub() {
 }
 
 function pobierzTokenGitHub() {
+  wymagajOficjalnejPublikacji()
   const tokenZeSrodowiska = process.env.GITHUB_TOKEN?.trim()
   if (tokenZeSrodowiska) return tokenZeSrodowiska
-  const wynik = wykonajPrzechwytywanie('git', ['credential', 'fill'], { wejscie: 'protocol=https\nhost=github.com\n\n' })
-  if (wynik.status !== 0) throw new Error('Nie udało się odczytać poświadczeń GitHub z git credential helper.')
-  const pola = Object.fromEntries((wynik.stdout ?? '').split(/\r?\n/).filter((linia) => linia.includes('=')).map((linia) => {
-    const indeks = linia.indexOf('=')
-    return [linia.slice(0, indeks), linia.slice(indeks + 1)]
-  }))
-  if (!pola.password) throw new Error('Brak tokenu GitHub w git credential helper.')
-  return pola.password
+  throw new Error('Brak GITHUB_TOKEN oficjalnego workflow.')
 }
 
 async function opublikujReleaseGitHub({ manifest, sciezkaApk, sciezkaSkrotu, sciezkaManifestu, adresManifestu }) {
+  wymagajOficjalnejPublikacji()
   const repozytorium = pobierzRepozytoriumGitHub()
   const tag = `v${manifest.versionName}`
   const istniejeTag = wykonajPrzechwytywanie('git', ['ls-remote', '--exit-code', '--tags', 'origin', `refs/tags/${tag}`, `refs/tags/${tag}^{}`])
@@ -537,6 +534,8 @@ async function sprawdzMonotonicznoscWydania(adresManifestu, wznowienie = false) 
 }
 
 async function wykonajRelease(opcje) {
+  const czyPublikacja = opcje.publish !== undefined || opcje['publish-existing'] !== undefined
+  if (czyPublikacja) wymagajOficjalnejPublikacji()
   const podpisWstepny = sprawdzKonfiguracjePodpisu()
   const adresManifestu = wymagajAdresuHttps('VITE_ANDROID_UPDATE_MANIFEST_URL', odczytajZmiennaBudowania('VITE_ANDROID_UPDATE_MANIFEST_URL'))
   const konfiguracjaSynchronizacji = pobierzProdukcyjnaKonfiguracjeSynchronizacji()
@@ -544,7 +543,7 @@ async function wykonajRelease(opcje) {
     throw new Error('Release wymaga jawnej zmiennej procesu VITE_SYNC_API_URL, aby nie użyć nieaktualnego pliku .env.')
   }
   sprawdzProdukcyjnyAdresSynchronizacji(konfiguracjaSynchronizacji.adresApi)
-  const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu, opcje['publish-existing'] === true)
+  const obecnyManifest = await sprawdzMonotonicznoscWydania(adresManifestu, !czyPublikacja || opcje['publish-existing'] === true)
   console.log(`\nVERSION: OK — ${pakiet.version} (${obliczKodWersji(pakiet.version)}); publiczna ${obecnyManifest.versionName} (${obecnyManifest.versionCode})`)
   const { diagnostyka, srodowisko } = wymagajSrodowiska()
   const publikujIstniejace = opcje['publish-existing'] === true
@@ -613,15 +612,20 @@ async function wykonajRelease(opcje) {
 function wykonajDeploy(opcje) {
   const wskazanySerial = typeof opcje.device === 'string' ? opcje.device : undefined
   const { diagnostyka, srodowisko } = wymagajSrodowiska({ urzadzenie: true, wskazanySerial })
+  const urzadzenie = diagnostyka.urzadzenie
+  const argumentyAdb = ['-s', urzadzenie.serial]
+  const wynikListy = wykonajPrzechwytywanie(diagnostyka.adb, [...argumentyAdb, 'shell', 'pm', 'list', 'packages', '--user', 'current', 'pl.ogarniacz.app'], { srodowisko })
+  const wynikPakietu = wynikListy.stdout?.trim()
+    ? wykonajPrzechwytywanie(diagnostyka.adb, [...argumentyAdb, 'shell', 'dumpsys', 'package', 'pl.ogarniacz.app'], { srodowisko })
+    : undefined
+  sprawdzCzyMoznaZastapicDebug(wynikListy, wynikPakietu)
   zbudujFrontend(srodowisko)
   synchronizujCapacitor(srodowisko)
   zbudujGradle('Debug', srodowisko)
   const sciezkaApk = znajdzNajnowszyApk('Debug')
-  const urzadzenie = diagnostyka.urzadzenie
-  const argumentyAdb = ['-s', urzadzenie.serial]
 
   console.log('\n→ Instalacja APK z zachowaniem danych')
-  const instalacja = wykonajPrzechwytywanie(diagnostyka.adb, [...argumentyAdb, 'install', '-r', '-d', sciezkaApk], { srodowisko })
+  const instalacja = wykonajPrzechwytywanie(diagnostyka.adb, [...argumentyAdb, 'install', '-r', sciezkaApk], { srodowisko })
   const tekstInstalacji = `${instalacja.stdout}\n${instalacja.stderr}`.trim()
   if (tekstInstalacji) console.log(tekstInstalacji)
   if (instalacja.status !== 0 || !/Success/i.test(tekstInstalacji)) {

@@ -10,6 +10,7 @@ import { utworzZadanie } from './ZadaniaService'
 import { nazwyTabelSynchronizowanych, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
 import { BladSynchronizacjiHttp } from '../data/RepozytoriumZdalneHttp'
 import { utworzDiagnostykeSynchronizacji } from './DiagnostykaSynchronizacji'
+import { dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji } from '../data/KolejkaSynchronizacji'
 
 const CZAS_SYNCHRONIZACJI = '2026-09-01T12:00:00.000Z'
 
@@ -63,6 +64,73 @@ describe.sequential('SyncEngine', () => {
     expect(nazwyTabelSynchronizowanych).not.toContain('konfliktySynchronizacji')
     expect(nazwyTabelSynchronizowanych).not.toContain('pamiecEcho')
     expect(nazwyTabelSynchronizowanych).not.toContain('dziennikEcho')
+  })
+
+  it('liczy tylko wysyłalne zmiany i pozostawia pominięte wpisy kolejki bez zmian', async () => {
+    const zwykle = zadanie('zwykle', 'Zadanie', CZAS_SYNCHRONIZACJI)
+    const prywatne = { ...zadanie('prywatne', 'Ćwiczenie', CZAS_SYNCHRONIZACJI), sesjaTerapiiId: 'sesja' }
+    await baza.tabela('zadania').bulkPut([zwykle, prywatne])
+    await dodajDoKolejkiSynchronizacji('zadania', zwykle)
+    const pomijane = [
+      { ...utworzMetadane('lokalna-tabela'), tabela: 'wpisyTerapii', rekordId: 'sesja', rekord: prywatne, operacja: 'utworzenie' as const, liczbaProb: 0 },
+      { ...utworzMetadane('prywatny-payload'), tabela: 'zadania', rekordId: prywatne.id, rekord: prywatne, operacja: 'utworzenie' as const, liczbaProb: 0 },
+      { ...utworzMetadane('prywatny-rekord'), tabela: 'zadania', rekordId: prywatne.id, rekord: { ...zwykle, id: prywatne.id }, operacja: 'utworzenie' as const, liczbaProb: 0 },
+    ]
+    await baza.tabela('kolejkaSynchronizacji').bulkPut(pomijane)
+    const przed = await baza.tabela('kolejkaSynchronizacji').toArray()
+    expect((await pobierzStanSynchronizacji()).liczbaOczekujacych).toBe(1)
+    expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toEqual(przed)
+    expect((await pobierzKolejkeSynchronizacji()).map((zmiana) => zmiana.rekordId)).toEqual([zwykle.id])
+    await dodajDoKolejkiSynchronizacji('zadania', prywatne)
+    expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toEqual(przed)
+
+    const wyslijZmiany = vi.fn(async () => undefined)
+    await expect(utworzSilnik().synchronizuj({ pobierzZmiany: async () => [], wyslijZmiany })).resolves.toMatchObject({ stan: 'zsynchronizowano', wyslane: 1 })
+    expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toEqual(pomijane)
+    expect((await pobierzStanSynchronizacji()).liczbaOczekujacych).toBe(0)
+    expect(await odtworzOczekujacaSynchronizacje()).toBe(false)
+    expect(wyslijZmiany).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([true, false])('utrwala jednorazową migrację po przerwanym starcie, istniejący stan: %s', async (istniejacyStan) => {
+    const rekord = zadanie('historyczny', 'Historyczny', CZAS_SYNCHRONIZACJI)
+    await baza.tabela('zadania').put(rekord)
+    if (istniejacyStan) await baza.tabela('stanSynchronizacji').update('glowny', { stan: 'synchronizacja' })
+    else await baza.tabela('stanSynchronizacji').delete('glowny')
+    await odtworzOczekujacaSynchronizacje()
+    expect((await baza.tabela('stanSynchronizacji').get('glowny'))?.kolejkaZmigrowana).toBe(true)
+    const zmiany = await baza.tabela('kolejkaSynchronizacji').toArray()
+    await odtworzOczekujacaSynchronizacje()
+    expect(await baza.tabela('kolejkaSynchronizacji').toArray()).toEqual(zmiany)
+    const zdalne = { pobierzZmiany: async () => [], wyslijZmiany: vi.fn(async () => undefined), pobierzKursor: () => '2026-08-01T00:00:00.000Z' }
+    await utworzSilnik().synchronizuj(zdalne)
+    baza.close()
+    await baza.open()
+    expect(await odtworzOczekujacaSynchronizacje()).toBe(false)
+    await utworzSilnik().synchronizuj(zdalne)
+    expect(zdalne.wyslijZmiany).toHaveBeenCalledTimes(1)
+    expect(await baza.tabela('kolejkaSynchronizacji').count()).toBe(0)
+    expect(await baza.tabela('zadania').get(rekord.id)).toEqual(rekord)
+  })
+
+  it('błąd migracji wycofuje nowe wpisy i znacznik, zachowując wcześniejszą kolejkę', async () => {
+    await baza.tabela('zadania').bulkPut([zadanie('pierwszy', 'Pierwszy', CZAS_SYNCHRONIZACJI), zadanie('drugi', 'Drugi', CZAS_SYNCHRONIZACJI)])
+    const poprzedniaZmiana = { ...utworzMetadane('zachowana'), tabela: 'wpisyTerapii', rekordId: 'sesja', rekord: zadanie('sesja', 'Lokalne', CZAS_SYNCHRONIZACJI), operacja: 'utworzenie' as const, liczbaProb: 0 }
+    const kolejka = baza.tabela('kolejkaSynchronizacji')
+    await kolejka.put(poprzedniaZmiana)
+    let liczbaNowych = 0
+    const przerwij = () => { if (++liczbaNowych === 2) throw new Error('Przerwana migracja') }
+    kolejka.hook('creating', przerwij)
+    try {
+      await expect(odtworzOczekujacaSynchronizacje()).rejects.toThrow('Przerwana migracja')
+    } finally {
+      kolejka.hook('creating').unsubscribe(przerwij)
+    }
+    expect(await kolejka.toArray()).toEqual([poprzedniaZmiana])
+    expect((await baza.tabela('stanSynchronizacji').get('glowny'))?.kolejkaZmigrowana).toBe(false)
+    await Promise.all([odtworzOczekujacaSynchronizacje(), odtworzOczekujacaSynchronizacje()])
+    expect(await kolejka.count()).toBe(3)
+    expect((await baza.tabela('stanSynchronizacji').get('glowny'))?.kolejkaZmigrowana).toBe(true)
   })
 
   it('zapamiętuje czasy udanego pull i push niezależnie od kursora serwera, także po ponownym otwarciu bazy', async () => {

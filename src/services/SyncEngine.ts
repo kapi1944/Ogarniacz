@@ -10,7 +10,7 @@ import type {
 } from '../data/DostawcaSynchronizacji'
 import { BladKonfliktuSynchronizacji } from '../data/DostawcaSynchronizacji'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
-import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki, zachowajLokalneSamopoczucie } from '../data/KolejkaSynchronizacji'
+import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji, policzZmianyDoSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki, zachowajLokalneSamopoczucie } from '../data/KolejkaSynchronizacji'
 import { utworzMetadane } from '../domain/fabryki'
 import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 import type { EncjaBazowa, KonfliktSynchronizacji, StanSynchronizacji } from '../domain/typy'
@@ -89,17 +89,23 @@ async function pobierzLokalneZmiany(installationId: string): Promise<ZmianaSynch
 }
 
 async function uzupelnijKolejkePoMigracji(): Promise<void> {
-  const stan = await baza.tabela('stanSynchronizacji').get('glowny')
-  if (stan?.kolejkaZmigrowana) return
-  const od = stan?.ostatniSync ?? POCZATEK_SYNCHRONIZACJI
-  for (const tabela of nazwyTabelSynchronizowanych) {
-    const rekordy = await tabelaLokalna(tabela).where('updatedAt').above(od).toArray()
-    for (const rekord of rekordy) {
-      const istnieje = await tabelaKolejki().where('[tabela+rekordId]').equals([tabela, rekord.id]).count()
-      if (!istnieje) await dodajDoKolejkiSynchronizacji(tabela, rekord)
+  if ((await baza.tabela('stanSynchronizacji').get('glowny'))?.kolejkaZmigrowana) return
+  await baza.transaction('rw', [...nazwyTabelSynchronizowanych.map(tabelaLokalna), tabelaKolejki(), baza.tabela('stanSynchronizacji')], async () => {
+    const stan = await baza.tabela('stanSynchronizacji').get('glowny')
+    if (stan?.kolejkaZmigrowana) return
+    const od = stan?.ostatniSync ?? POCZATEK_SYNCHRONIZACJI
+    for (const tabela of nazwyTabelSynchronizowanych) {
+      const rekordy = await tabelaLokalna(tabela).where('updatedAt').above(od).toArray()
+      for (const rekord of rekordy) {
+        const istnieje = await tabelaKolejki().where('[tabela+rekordId]').equals([tabela, rekord.id]).count()
+        if (!istnieje) await dodajDoKolejkiSynchronizacji(tabela, rekord)
+      }
     }
-  }
-  if (stan) await baza.tabela('stanSynchronizacji').update('glowny', { kolejkaZmigrowana: true })
+    await baza.tabela('stanSynchronizacji').put({
+      ...utworzMetadane('glowny'), stan: 'zsynchronizowano', liczbaKonfliktow: 0, liczbaOczekujacych: 0,
+      ...stan, kolejkaZmigrowana: true,
+    })
+  })
 }
 
 export async function pobierzStanSynchronizacji(): Promise<StanSynchronizacji> {
@@ -110,7 +116,7 @@ export async function pobierzStanSynchronizacji(): Promise<StanSynchronizacji> {
     liczbaOczekujacych: 0,
     kolejkaZmigrowana: false,
   }
-  return { ...stan, liczbaOczekujacych: await tabelaKolejki().count(), liczbaKonfliktow: await baza.tabela('konfliktySynchronizacji').count() }
+  return { ...stan, liczbaOczekujacych: await policzZmianyDoSynchronizacji(), liczbaKonfliktow: await baza.tabela('konfliktySynchronizacji').count() }
 }
 
 export async function pobierzKonfliktySynchronizacji(): Promise<KonfliktSynchronizacji[]> {
@@ -141,11 +147,11 @@ export async function oznaczSynchronizacjeOffline(): Promise<void> {
 }
 
 export async function odtworzOczekujacaSynchronizacje(online = typeof navigator === 'undefined' || navigator.onLine): Promise<boolean> {
+  if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto nie jest powiązane z lokalną bazą.')
+  await uzupelnijKolejkePoMigracji()
   const obecny = await pobierzStanSynchronizacji()
   if (obecny.stan === 'konflikt') return false
-  if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto nie jest powiązane z lokalną bazą.')
-      await uzupelnijKolejkePoMigracji()
-  const liczbaOczekujacych = await tabelaKolejki().count()
+  const liczbaOczekujacych = obecny.liczbaOczekujacych
 
   if (obecny.stan === 'synchronizacja') {
     await baza.tabela('stanSynchronizacji').put({
@@ -353,7 +359,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       await this.zapiszStan({
         stan: 'blad',
         ostatniBlad: komunikat,
-        liczbaOczekujacych: await tabelaKolejki().count(),
+        liczbaOczekujacych: await policzZmianyDoSynchronizacji(),
       })
       throw blad
     }
@@ -406,10 +412,10 @@ export class SyncEngine implements DostawcaSynchronizacji {
     const tabelaKonfliktow = baza.tabela('konfliktySynchronizacji')
     const kolejka = tabelaKolejki()
     const tabelaStanu = baza.tabela('stanSynchronizacji')
-    return baza.transaction('rw', [tabelaKonfliktow, kolejka, tabelaStanu], async () => {
+    return baza.transaction('rw', [tabelaKonfliktow, kolejka, tabelaStanu, ...nazwyTabelSynchronizowanych.map(tabelaLokalna)], async () => {
       const [liczbaKonfliktow, liczbaOczekujacych, zapisanyStan] = await Promise.all([
         tabelaKonfliktow.count(),
-        kolejka.count(),
+        policzZmianyDoSynchronizacji(),
         tabelaStanu.get('glowny'),
       ])
       const obecny = zapisanyStan ?? {
@@ -443,7 +449,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       ...obecny,
       ...zmiany,
       id: 'glowny',
-      liczbaOczekujacych: await tabelaKolejki().count(),
+      liczbaOczekujacych: obecny.liczbaOczekujacych,
       updatedAt: this.teraz(),
     })
   }

@@ -3,7 +3,7 @@ import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { czyToSamArtefaktAktualizacji, pobierzPublicznyManifestPoPublikacji, utworzManifestAktualizacji, walidujManifestAktualizacji } from './android-wspolne.mjs'
+import { czyToSamArtefaktAktualizacji, pobierzPublicznyManifestPoPublikacji, utworzManifestAktualizacji, walidujManifestAktualizacji, wymagajOficjalnejPublikacji } from './android-wspolne.mjs'
 
 const skrot = (dane) => createHash('sha256').update(dane).digest('hex')
 
@@ -76,6 +76,7 @@ export function ustalPunktWznowienia(wersja, git) {
 }
 
 export async function wznowWydanie(wersja, katalog = 'android/app/build/outputs/apk/release') {
+  wymagajOficjalnejPublikacji(process.env, 'android-release-resume.yml')
   const git = (...argumenty) => execFileSync('git', argumenty, { encoding: 'utf8' }).trim()
   const repozytorium = process.env.GITHUB_REPOSITORY
   const token = process.env.GITHUB_TOKEN

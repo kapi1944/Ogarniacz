@@ -41,13 +41,12 @@ describe('RuntimeConfigService', () => {
     expect(serwis.pobierz().syncApiUrl).toBe('https://sync.example.test')
   })
 
-  it('na Androidzie zachowuje konfigurację APK mimo pustego środowiska Web OTA', async () => {
+  it('na Androidzie zachowuje konfigurację APK bez konfiguracji Web OTA', async () => {
     const serwis = utworzRuntimeConfigService({
       czyAndroid: true,
       pobierzKonfiguracjeNatywna: async () => ({
         syncApiUrl: 'https://sync.example.test',
         androidUpdateManifestUrl: 'https://updates.example.test/latest.json',
-        androidWebUpdateManifestUrl: 'https://updates.example.test/web-ota.json',
       }),
       konfiguracjaWeb: {},
       pochodzenieWeb: 'https://localhost',
@@ -58,7 +57,6 @@ describe('RuntimeConfigService', () => {
     expect(serwis.pobierz()).toMatchObject({
       syncApiUrl: 'https://sync.example.test',
       androidUpdateManifestUrl: 'https://updates.example.test/latest.json',
-      androidWebUpdateManifestUrl: 'https://updates.example.test/web-ota.json',
       diagnostyka: [],
     })
   })
@@ -76,7 +74,6 @@ describe('RuntimeConfigService', () => {
     expect(serwis.pobierz().diagnostyka).toEqual([
       'Brak syncApiUrl w natywnej konfiguracji APK.',
       'Brak androidUpdateManifestUrl w natywnej konfiguracji APK.',
-      'Brak androidWebUpdateManifestUrl w natywnej konfiguracji APK.',
     ])
     expect(serwis.pobierz().syncApiUrl).toBeUndefined()
   })

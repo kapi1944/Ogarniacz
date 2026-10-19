@@ -6,7 +6,6 @@ import { obliczKodWersji, rozlozWersje } from './android-wspolne.mjs'
 
 const SCIEZKA_PAKIETU = 'package.json'
 const SCIEZKA_LOCK = 'package-lock.json'
-const SCIEZKA_ZGODNOSCI = 'config/web-ota-compatibility.json'
 
 function porownajWersje(lewa, prawa) {
   const lewaCzesci = rozlozWersje(lewa)

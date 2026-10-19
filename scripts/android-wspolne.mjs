@@ -2,6 +2,28 @@ import { createHash } from 'node:crypto'
 import { createReadStream, statSync } from 'node:fs'
 import { basename } from 'node:path'
 
+export function wymagajOficjalnejPublikacji(srodowisko = process.env, plikWorkflow = 'android-release.yml') {
+  if (srodowisko.GITHUB_ACTIONS !== 'true'
+    || srodowisko.GITHUB_EVENT_NAME !== 'workflow_dispatch'
+    || srodowisko.GITHUB_REF !== 'refs/heads/main'
+    || !srodowisko.GITHUB_REPOSITORY
+    || srodowisko.GITHUB_WORKFLOW_REF !== `${srodowisko.GITHUB_REPOSITORY}/.github/workflows/${plikWorkflow}@refs/heads/main`) {
+    throw new Error('Publikacja APK jest dostępna wyłącznie przez zatwierdzony workflow GitHub Actions „Publikuj Ogarniacza” lub jego wznowienie.')
+  }
+}
+
+export function sprawdzCzyMoznaZastapicDebug(wynikListy, wynikPakietu) {
+  if (wynikListy.status !== 0 || wynikListy.stderr?.trim()) throw new Error('Nie udało się sprawdzić istniejącego pakietu Android. Instalacja zatrzymana.')
+  const pakiety = wynikListy.stdout.trim()
+  if (!pakiety) return
+  if (pakiety !== 'package:pl.ogarniacz.app'
+    || wynikPakietu?.status !== 0
+    || wynikPakietu.stderr?.trim()
+    || !/\bflags=\[[^\]\r\n]*\bDEBUGGABLE\b/.test(wynikPakietu.stdout)) {
+    throw new Error('android:deploy instaluje tylko debug na urządzeniu developerskim. Istniejący APK produkcyjny lub nieznany pakiet wymaga oficjalnej aktualizacji; nie odinstalowuj go ani nie czyść danych.')
+  }
+}
+
 export function rozlozWersje(wersja) {
   const dopasowanie = /^(\d+)\.(\d+)\.(\d+)$/.exec(wersja)
   if (!dopasowanie) throw new Error('Wersja musi mieć format X.Y.Z.')

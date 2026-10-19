@@ -3,6 +3,12 @@
 Dwa kanały produkcyjne: podpisany Android APK oraz Raspberry (frontend i backend
 razem). Web OTA jest wycofany; PWA/service worker pozostają dla przeglądarki.
 
+Lokalne `npm run android:release` służy testom i nie publikuje. Ręczne
+`--publish`, `--publish-existing` oraz uruchomienie skryptu wznowienia poza
+właściwym workflow na `main` są blokowane przed budowaniem, tagowaniem i zapisem
+release. Nie ma fallbacku do poświadczeń Git. Zachowany workflow wznowienia
+obsługuje wyłącznie oryginalne artefakty częściowego wydania.
+
 ## Jeden workflow normalnego wydania
 
 **Actions → Publikuj Ogarniacza → Run workflow**, gałąź `main`.

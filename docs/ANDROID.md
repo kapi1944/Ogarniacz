@@ -17,7 +17,12 @@ Doctor sam wyszukuje wymagane przez obecny toolchain JDK 21 (w tym Android Studi
 npm run android:deploy -- --device SERIAL
 ```
 
-Deploy buduje frontend, wykonuje Capacitor sync i debug APK, instaluje przez `adb install -r -d`, potwierdza wersję pakietu i uruchamia aplikację. Nie odinstalowuje Ogarniacza, więc zachowuje jego dane. Debug nie wymaga release keystore.
+Deploy przed buildem odczytuje pakiet na wskazanym urządzeniu. Dopuszcza nową
+instalację lub istniejący pakiet z flagą `DEBUGGABLE`; produkcyjny APK i niepewny
+odczyt blokują operację. Następnie buduje frontend, wykonuje Capacitor sync i debug
+APK, instaluje przez `adb install -r`, potwierdza wersję i uruchamia aplikację.
+Nie odinstalowuje Ogarniacza, nie czyści danych i nie wymusza downgrade.
+Debug nie wymaga release keystore. Telefon produkcyjny aktualizuj oficjalnym APK.
 
 ## B. Tworzenie release
 
@@ -99,13 +104,9 @@ npm run android:keystore:create -- --automatycznie
 
 Skrypt generuje kryptograficznie losowe hasło, przekazuje je do `keytool` przez zmienną środowiskową i zapisuje wyłącznie w ignorowanym `android/keystore.properties`. Keystore pozostaje w `~/.ogarniacz/keys/ogarniacz-release.jks`. Skrypt nie nadpisze istniejącego klucza ani konfiguracji. Koniecznie wykonaj zaszyfrowaną kopię obu plików; utrata któregokolwiek uniemożliwi kolejne wydania. Hasło nie pojawia się w logach.
 
-Wersja pochodzi wyłącznie z `package.json`; Gradle wylicza `versionCode` jako `major * 1000000 + minor * 1000 + patch`. Przed kolejnym wydaniem podbij ją jednym z poleceń:
-
-```bash
-npm run version:patch
-npm run version:minor
-npm run version:major
-```
+Wersja pochodzi wyłącznie z `package.json`; Gradle wylicza `versionCode` jako
+`major * 1000000 + minor * 1000 + patch`. Wersję publikowaną przygotowuje workflow
+**Publikuj Ogarniacza**. Nie podbijaj jej ręcznie dla lokalnego testu.
 
 ### Signed release i manifest
 
@@ -143,7 +144,13 @@ Skrypt odnajduje wynik Gradle dynamicznie i wypisuje jego pełną ścieżkę. St
 - `Ogarniacz-X.Y.Z-release.apk.sha256` — suma SHA-256;
 - `latest.json` — `versionName`, `versionCode`, `apkUrl`, SHA-256, rozmiar, opcjonalne informacje o wydaniu i czas publikacji.
 
-W GitHub Release dodaj wszystkie trzy pliki jako assets. Względny `apkUrl` z manifestu zostanie rozwiązany względem `releases/latest/download/`, więc nie trzeba wpisywać domeny GitHuba do manifestu. Repozytorium i release muszą być publiczne, ponieważ aplikacja nie przechowuje tokenu GitHub. Nie oznaczaj wydania jako draft ani prerelease, bo endpoint `/releases/latest/` ich nie wybiera. Klient nie jest związany z GitHubem ani konkretną domeną.
+`android:release` bez opcji publikacji tworzy wyłącznie lokalne artefakty testowe;
+dopuszcza ponowne zbudowanie aktualnie opublikowanej wersji, zachowując kontrolę
+podpisu i blokadę starszego versionCode. Publikuje tylko **Publikuj Ogarniacza**.
+Opcje `--publish` i `--publish-existing` wymagają dokładnego kontekstu tego workflow
+na `main`; lokalny token ani zapisane poświadczenia Git nie odblokowują publikacji.
+Wznowienie oryginalnych artefaktów jest dostępne tylko przez osobny zatwierdzony
+workflow opisany w `ANDROID_RELEASE.md`. Nie przesyłaj lokalnych plików ręcznie.
 
 ## C. OTA bez kabla
 

@@ -8,6 +8,5 @@ public class RuntimeConfigPluginTest {
     public void pluginUdostepniaWartosciZBuildConfig() {
         assertEquals(BuildConfig.SYNC_API_URL, RuntimeConfigPlugin.pobierzSyncApiUrl());
         assertEquals(BuildConfig.ANDROID_UPDATE_MANIFEST_URL, RuntimeConfigPlugin.pobierzAdresManifestuApk());
-        assertEquals(BuildConfig.ANDROID_WEB_UPDATE_MANIFEST_URL, RuntimeConfigPlugin.pobierzAdresManifestuWeb());
     }
 }

@@ -159,7 +159,7 @@ jobs:
       - name: Sprawdź natywny updater przed zapisaniem wersji
         if: steps.kanaly.outputs.android == 'true'
         working-directory: android
-        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.MagazynAktualizacjiWebTest' --no-daemon
+        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.MigracjaPozostalosciWebOtaTest' --no-daemon
 
       - name: Zachowaj zweryfikowane artefakty przed commitem i tagiem
         if: steps.kanaly.outputs.android == 'true'

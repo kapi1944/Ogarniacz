@@ -12,10 +12,18 @@ Własną domenę można później dodać przez osobny reverse proxy z prawidłow
 
 ## Jednorazowa instalacja
 
+Wyłącznie dla świeżej instalacji bez bazy, danych ani istniejącej jednostki usługi.
+`deploy-rpi.sh` jest całkowicie wycofany: zawsze kończy się błędem przed jakąkolwiek
+operacją. Istniejącą instancję aktualizuje tylko `scripts/aktualizuj-rpi.sh`
+z `origin/rpi-stable`, niezależnie od `RPI_UPDATE_ENABLED`.
+
 Wymagany jest Node.js 24 lub nowszy, Git i Tailscale. Zaloguj się jako `kacper`, umieść repozytorium w `/home/kacper/apps/Ogarniacz`, a następnie:
 
 ```bash
 cd ~/apps/Ogarniacz
+test ! -e data && test ! -e dist && test ! -e dist-server && test ! -e /etc/systemd/system/ogarniacz.service || { echo 'Istniejąca instalacja: użyj aktualizatora rpi-stable'; exit 1; }
+git fetch origin rpi-stable:refs/remotes/origin/rpi-stable
+git switch --detach origin/rpi-stable
 node --version
 npm ci
 npm run build:production
@@ -60,7 +68,7 @@ Po restarcie Raspberry Pi sprawdź `systemctl is-active ogarniacz tailscaled`, `
 
 ## Aktualizacja instancji — rpi-stable
 
-Repozytorium robocze pozostaje na lokalnym `main`, ale aktualizator pobiera wyłącznie
+Repozytorium robocze może pozostać na lokalnym `main`, ale aktualizator pobiera wyłącznie
 `origin/rpi-stable`. Brak tej gałęzi daje czytelny błąd; nie ma fallbacku do main.
 Kanał zatwierdza workflow **Publikuj Ogarniacza** opisany w `ANDROID_RELEASE.md`.
 Nie konfiguruj Pi do aktualizowania się po każdym commicie main. Przy pierwszej
@@ -146,8 +154,8 @@ Timer sprawdza co 30 minut tylko rpi-stable, uruchamia ten sam updater i korzyst
 z tej samej blokady flock. Brak flagi lub 0 daje brak działania automatycznego.
 Ręczne aktualizacje nadal działają. Wyłączenie: RPI_AUTO_UPDATE=0 lub
 `sudo systemctl disable --now ogarniacz-update-auto.timer`.
-Wyłącz stare timery i update.sh; deploy-rpi.sh pozostaje drogą pierwszego bootstrapu,
-a nie równoległym aktualizatorem produkcyjnym.
+Wyłącz stare timery i update.sh. `deploy-rpi.sh` jest zablokowany również dla
+bootstrapu; pierwszą instalację opisuje osobna sekcja powyżej.
 
 Weryfikacja live jest osobnym krokiem: systemd, tailscaled, Serve, prawdziwy env,
 uprawnienia sudoers, flock, snapshot/rollback i oba healthchecki na Pi. Lokalne

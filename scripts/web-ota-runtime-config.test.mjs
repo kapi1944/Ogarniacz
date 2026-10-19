@@ -2,11 +2,18 @@ import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import test from 'node:test'
+import { existsSync } from 'node:fs'
+
+test('wycofany kanał nie zawiera workflow publikacji, pluginu aktywacji ani generatora manifestu', () => {
+  for (const plik of ['.github/workflows/web-ota.yml', 'android/app/src/main/java/pl/ogarniacz/app/AktualizacjeWebPlugin.java',
+    'android/app/src/main/java/pl/ogarniacz/app/MagazynAktualizacjiWeb.java', 'src/platform/AktualizacjeWebService.ts', 'scripts/web-ota-manifest.mjs']) {
+    assert.equal(existsSync(plik), false, plik)
+  }
+})
 
 const ZMIENNE_KRYTYCZNE = [
   'VITE_SYNC_API_URL',
   'VITE_ANDROID_UPDATE_MANIFEST_URL',
-  'VITE_ANDROID_WEB_UPDATE_MANIFEST_URL',
 ]
 
 async function plikiZrodlowe(katalog) {
