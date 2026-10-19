@@ -23,6 +23,7 @@ vi.mock('@capacitor/core', async (oryginal) => ({
 }))
 
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
   vi.clearAllMocks()
@@ -31,6 +32,8 @@ afterEach(() => {
 })
 
 it('Web/PWA bez konfiguracji rozpoznaje API, loguje, odtwarza sesję i synchronizuje bez utraty lokalnego rekordu', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date('2026-10-19T10:00:00.000Z'))
   ustawBiezacyDostep(() => true)
   await inicjalizujBaze()
   const zadanie = utworzZadanie({ tytul: 'Istniejące lokalne zadanie', opis: '', priorytet: 'normalny' })
