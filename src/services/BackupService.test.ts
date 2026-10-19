@@ -507,7 +507,7 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     expect(backup.manifest).toMatchObject({
       formatVersion: WERSJA_FORMATU_BACKUPU,
       createdAt: STALA_DATA,
-      appVersion: '1.0.0',
+      appVersion: __WERSJA_APLIKACJI__,
       dexieSchemaVersion: WERSJA_SCHEMATU_BAZY,
       backupType: 'export',
       sections: ['ustawienia', 'zadania'],

@@ -15,7 +15,6 @@ import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 
 export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
-const WERSJA_APLIKACJI = '1.0.0'
 const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, 17, 18, WERSJA_SCHEMATU_BAZY]
 
 export const SEKCJE_BACKUPU = [
@@ -628,7 +627,7 @@ export async function utworzBackup(
   const manifestBezChecksum: Omit<ManifestBackupu, 'checksum'> = {
     formatVersion: WERSJA_FORMATU_BACKUPU,
     createdAt: teraz(),
-    appVersion: WERSJA_APLIKACJI,
+    appVersion: __WERSJA_APLIKACJI__,
     dexieSchemaVersion: WERSJA_SCHEMATU_BAZY,
     installationId: pobierzInstallationId(),
     backupType: typBackupu,
