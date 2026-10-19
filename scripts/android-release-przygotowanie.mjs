@@ -27,7 +27,12 @@ export function wyznaczNastepnaWersje(wersja, rodzaj) {
 export function przygotujWydanie({ pakiet, lock, rodzajWersji, wersjaOpublikowana, wersjaMaTag = false }) {
   if (!pakiet?.version || !lock) throw new Error('Brak plików wymaganych do przygotowania wydania.')
   if (wersjaOpublikowana && porownajWersje(pakiet.version, wersjaOpublikowana) > 0) {
-    throw new Error('Repozytorium zawiera nieopublikowaną wersję. Użyj jawnego wznowienia zamiast kolejnego wydania.')
+    const oczekiwanaWersja = wyznaczNastepnaWersje(wersjaOpublikowana, rodzajWersji)
+    const lockZgodny = lock.version === pakiet.version && lock.packages?.['']?.version === pakiet.version
+    if (pakiet.version !== oczekiwanaWersja || !lockZgodny || wersjaMaTag) {
+      throw new Error('Repozytorium zawiera nieopublikowaną wersję. Użyj jawnego wznowienia zamiast kolejnego wydania.')
+    }
+    return { wersja: pakiet.version, kodWersji: obliczKodWersji(pakiet.version), pakiet, lock, tryb: 'przygotowane' }
   }
   if (wersjaMaTag && !wersjaOpublikowana) throw new Error('Istniejący tag wymaga potwierdzenia opublikowanej wersji.')
   const wersjaBazowa = wersjaOpublikowana && porownajWersje(wersjaOpublikowana, pakiet.version) > 0

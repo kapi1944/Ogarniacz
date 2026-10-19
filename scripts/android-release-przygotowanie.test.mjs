@@ -22,8 +22,15 @@ test('bazuje na nowszej wersji opublikowanej', () => {
   const wynik = przygotujWydanie({ pakiet: { version: '1.0.9' }, lock: {}, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.10' })
   assert.equal(wynik.wersja, '1.0.11')
 })
-test('nieopublikowana wersja wymaga jawnego wznowienia bez kolejnego bumpa', () => {
-  assert.throws(() => przygotujWydanie({ pakiet: { version: '1.0.10' }, lock: {}, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9' }), /jawnego wznowienia/)
+test('przyjmuje tylko dokładnie przygotowaną następną wersję bez istniejącego tagu', () => {
+  const pakiet = { name: 'ogarniacz-v1', version: '1.0.10' }
+  const lock = { version: '1.0.10', packages: { '': { version: '1.0.10' } } }
+  const wynik = przygotujWydanie({ pakiet, lock, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9' })
+  assert.equal(wynik.wersja, '1.0.10')
+  assert.equal(wynik.kodWersji, 1_000_010)
+  assert.equal(wynik.tryb, 'przygotowane')
+  assert.throws(() => przygotujWydanie({ pakiet: { version: '1.0.11' }, lock, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9' }), /jawnego wznowienia/)
+  assert.throws(() => przygotujWydanie({ pakiet, lock, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.9', wersjaMaTag: true }), /jawnego wznowienia/)
 })
 test('opublikowana wersja otrzymuje następny versionCode', () => {
   const wynik = przygotujWydanie({ pakiet: { version: '1.0.10' }, lock: {}, rodzajWersji: 'patch', wersjaOpublikowana: '1.0.10', wersjaMaTag: true })
