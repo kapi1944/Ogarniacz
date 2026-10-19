@@ -2,6 +2,20 @@
 
 Stan: **WYMAGA DZIAŁANIA**. Ten dokument nie zatwierdza publikacji ani wdrożenia.
 
+## Aktualizacja kontroli — 19 października 2026
+
+Poniższe ustalenia aktualizują historyczny stan opisany dalej. **BLOKADA publikacji pozostaje po stronie Samsunga; brak dostępu do Google Drive został usunięty.**
+
+- `main` lokalnie i na origin: `27b923836de4bd06d40d5c75e46432f55762f480`; CI tego SHA zakończone sukcesem.
+- Folder Google Drive `__OGARNIACZ` (`1Gp__hh00lfZ0ND3fp2_6y36J2boBFzFG`) ma dostęp ograniczony. Oba zaszyfrowane JSON-y są obecne i nieudostępnione publicznie. Ponowne pobranie obu plików dało identyczne SHA-256 jak lokalne kopie poza repo. Rozmiary: 10869 i 11761 bajtów; koperta AES-256-GCM / PBKDF2 SHA-256, 600000 iteracji.
+- Nie odszyfrowano rzeczywistych JSON-ów ani nie potwierdzono ich wewnętrznej checksum/kompletności. Zgodność kopii transportowej i poprawny nagłówek nie potwierdzają przywracalności. Potwierdzenia obok plików wskazują Windows: adres Tailscale oraz deklarowany localhost, którego przypisania do Ogarniacza nie zweryfikowano. Żaden z tych plików nie jest potwierdzonym eksportem Samsunga.
+- Archiwum `C:\Users\Kacper\.ogarniacz\backups\przed-1.0.17\windows-20261018-162223\ogarniacz-windows.7z` istnieje: 711087797 bajtów. Bieżący SHA-256 zgadza się z `wynik.json`: `EB52537C90305416F01A9240019FF9D7AD646C99361425C029F0FB68FF311032`. Raport ma `ZWERYFIKOWANO`, po 7709 plików źródłowych i archiwalnych; zapisane kody testu błędnego hasła i odszyfrowania to odpowiednio 2 i 0. W tej kontroli sprawdzono zachowany raport i hash, nie powtarzano testu z hasłem. Jest to kopia wybranych magazynów Chrome, nie pełnego profilu; brak testu uruchomienia aplikacji po odtworzeniu. Archiwum nie zostało wysłane na Drive.
+- Testy lokalne: `BackupService.test.ts`, `BackupProfili.test.ts`, `BackupUstawien.test.tsx` — **91/91 PASS**. To regresja kodu backupu, nie test odszyfrowania prywatnych plików ani dowód bezpieczeństwa telefonu.
+- `adb devices` nadal nie wykrywa urządzenia. Aktualnego stanu kolejki/konfliktów Samsunga i zabezpieczenia jego danych nie potwierdzono. Dawny stan 3 oczekujących zmian nie jest potwierdzeniem bieżącego stanu. Sam eksport aplikacji nie zawiera kolejki synchronizacji.
+- JSON-y pozostają lokalnie i poza repo; Git ich nie śledzi, reguły ignorowania działają. Nie wykonano nowych commitów/push, przepisywania historii, release, deployu, migracji, restartów, synchronizacji ani zmian kont.
+
+Następny etap: odczytać na Samsungu wersję aplikacji i liczniki kolejki/konfliktów, potwierdzić pochodzenie oraz zakres kopii z telefonu, a następnie uzgodnić zabezpieczenie ewentualnych oczekujących zmian. Nie włączać synchronizacji tylko po to, aby wyzerować liczniki. Wdrożenie i rzeczywisty test SMTP nadal wymagają osobnego zatwierdzenia; bezpośrednio przed wdrożeniem potrzebny jest świeży snapshot SQLite istniejącą procedurą.
+
 ## Potwierdzone podczas przygotowania
 
 - Lokalny `main` i zdalny `main`: `ef4394c83b38afd33d26db92e597236b608b61fb`.
