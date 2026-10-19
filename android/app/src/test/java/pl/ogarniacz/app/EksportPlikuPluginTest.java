@@ -7,6 +7,7 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ProviderInfo;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
@@ -45,6 +46,14 @@ public class EksportPlikuPluginTest {
         dostawca.attachInfo(wtyczka.getContext(), informacje);
         dostawca.plik = File.createTempFile("eksport", ".json", wtyczka.getContext().getCacheDir());
         ShadowContentResolver.registerProviderInternal("dokumenty-test", dostawca);
+        // Robolectric zmienia katalog aplikacji między testami, a AndroidX zachowuje statyczny cache ścieżek.
+        // Nowa instancja providera czyta prawdziwy manifest i odświeża ścieżki dla bieżącego katalogu.
+        String nazwaDostawcy = wtyczka.getContext().getPackageName() + ".fileprovider";
+        ProviderInfo konfiguracja = wtyczka.getContext().getPackageManager().resolveContentProvider(nazwaDostawcy, PackageManager.GET_META_DATA);
+        assertNotNull(konfiguracja);
+        androidx.core.content.FileProvider dostawcaPlikow = new androidx.core.content.FileProvider();
+        dostawcaPlikow.attachInfo(wtyczka.getContext(), konfiguracja);
+        ShadowContentResolver.registerProviderInternal(nazwaDostawcy, dostawcaPlikow);
     }
 
     @Test public void otwieraSystemowyWyborJsonBezTekstuIZwracaAnulowanie() throws Exception {
