@@ -21,6 +21,68 @@ Deploy buduje frontend, wykonuje Capacitor sync i debug APK, instaluje przez `ad
 
 ## B. Tworzenie release
 
+### Eksport kopii po 1.0.16
+
+„Zapisz plik JSON” korzysta z systemowego `ACTION_CREATE_DOCUMENT` (Storage Access
+Framework), z nazwą kopii i MIME `application/json`. Nie zapisuje już po cichu
+w `Documents/Ogarniacz`. Użytkownik wybiera lokalizację, także Google Drive,
+jeśli zainstalowany i zalogowany dostawca dokumentów udostępnia go w tym oknie.
+Nie wymaga to osobnej integracji z API Drive ani uprawnienia do całej pamięci.
+
+`ZAPISANO` oznacza zamknięcie strumienia zapisu oraz zgodność SHA-256 pełnego
+odczytu dokumentu z wysłanymi bajtami UTF-8. `ANULOWANO` odpowiada anulowaniu
+wyboru; brak URI, odmowa dostępu, błąd zapisu/odczytu lub niezgodna zawartość dają
+`BŁĄD`. Przy błędzie dostawcy może pozostać częściowy dokument; nie usuwamy go
+automatycznie. Potwierdzenie dotyczy dostawcy dokumentów, a nie zakończenia jego
+ewentualnego przesyłania do chmury. Kopia ochronna przed restore korzysta z tej
+samej ścieżki; anulowanie lub błąd zatrzymuje przywracanie przed zapisem danych.
+
+„Udostępnij backup” wysyła sam plik, bez opisu, URL ani tematu. Istniejący
+Capacitor Share nadaje MIME JSON, zamienia `file://` na `content://` oraz dodaje
+`EXTRA_STREAM`, `ClipData` i `FLAG_GRANT_READ_URI_PERMISSION`. Manifest rejestruje
+wymagany `FileProvider` z dostępem tylko do `cache/eksport/`. Przed wysłaniem
+sprawdzamy rzeczywisty plik, dozwolony katalog, MIME i pełny odczyt przez provider.
+Każde udostępnienie ma własny katalog, aby nie nadpisać załącznika czytanego przez
+odbiorcę. Nie usuwamy go zaraz po zamknięciu okna; nadal podlega czyszczeniu cache
+przez Androida. Wybór aplikacji nie potwierdza zapisania pliku w Drive. Capacitor
+nie zawsze rozróżnia zamknięcie okna od wyboru celu; wtedy UI pokazuje brak
+potwierdzenia, nigdy `ZAPISANO`.
+
+Zmiana obejmuje bridge natywny i jego rejestrację w `MainActivity`, dlatego wymaga
+nowego oficjalnego APK. Klasyfikator publikacji rozpoznaje `android/` i pliki
+platformy jako zmiany wymagające APK; istniejący workflow z `main` wykona sync
+i dołączy je do następnego zatwierdzonego wydania. Ta naprawa nie podbija wersji
+i nie uruchamia wydania ani aktualizacji Raspberry. AES-GCM, koperta v1, formaty
+wewnętrzne v1–v3 i istniejące dane pozostają bez zmian.
+
+Testy automatyczne: `FileService.test.ts`, `ShareService.test.ts`,
+`BackupUstawien.test.tsx`, regresja `BackupService.test.ts` i `BackupProfili.test.ts`.
+`EksportPlikuPluginTest` używa Robolectric (tylko zależność testowa), testowego
+dostawcy dokumentów oraz faktycznego FileProvider i Capacitor Share. CI Android
+uruchamia całą klasę na Linuksie. Dwa testy FileProvider wymagają ścieżek uniksowych:
+AndroidX 1.17.0 porównuje katalog z separatorem `/`, co uniemożliwia ich wykonanie
+w Robolectric na Windows; pozostałe testy dostawcy dokumentów działają także tam.
+Nie zastępuje to testu prawdziwego odbiorcy działającego z innym UID.
+
+Próba na fizycznym Samsungu z APK zawierającym poprawkę (bez odinstalowywania
+aplikacji i bez czyszczenia danych):
+
+1. Utwórz zaszyfrowaną kopię; zapisz do wybranego folderu lokalnego. Sprawdź
+   `ZAPISANO`, obecność i rozmiar JSON. Wczytaj plik, odszyfruj i sprawdź manifest;
+   nie uruchamiaj przywracania danych.
+2. Powtórz przez systemowy wybór Drive, jeśli jest dostępny. Sprawdź plik również
+   w Drive, pobierz go i sprawdź odszyfrowanie oraz manifest.
+3. Udostępnij do Drive i drugiej aplikacji obsługującej pliki. Potwierdź odbiór
+   rzeczywistego JSON, bez tekstu zastępującego plik, oraz poprawne odszyfrowanie.
+   Sam wybór aplikacji lub powrót z okna nie jest dowodem zapisu.
+4. Anuluj okno zapisu i udostępniania. Sprawdź `ANULOWANO` albo uczciwy brak
+   potwierdzenia dla niejednoznacznego wyniku share. Nie może pojawić się sukces.
+5. Na danych testowych sprawdź niedostępnego dostawcę, brak miejsca, odmowę
+   dostępu i utratę sieci Drive. Błąd nie może być przedstawiony jako zapis.
+
+Dokumentacja platformy: [SAF](https://developer.android.com/training/data-storage/shared/documents-files)
+i [Capacitor Share](https://capacitorjs.com/docs/apis/share).
+
 Jeden release keystore oraz alias `ogarniacz` muszą być zachowane do wszystkich kolejnych wydań. Ich utrata uniemożliwi aktualizowanie już zainstalowanej aplikacji. Jednorazowe utworzenie klucza poza repozytorium:
 
 ```bash

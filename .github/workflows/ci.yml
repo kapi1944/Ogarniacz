@@ -78,9 +78,9 @@ jobs:
       - name: Przygotuj projekt Capacitor
         run: npm run build && npx cap sync android
 
-      - name: Testy natywnego updatera
+      - name: Testy natywnego updatera i eksportu pliku
         working-directory: android
-        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.AktualizacjeWebPluginTest' --no-daemon
+        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.AktualizacjeWebPluginTest' --tests 'pl.ogarniacz.app.EksportPlikuPluginTest' --no-daemon
 
       - name: Gradle assembleDebug
         working-directory: android

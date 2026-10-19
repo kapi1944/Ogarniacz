@@ -15,6 +15,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(EchoGlosPlugin.class);
         registerPlugin(WakeWordEchoPlugin.class);
         registerPlugin(OdbiorUdostepnianiaPlugin.class);
+        registerPlugin(EksportPlikuPlugin.class);
         super.onCreate(zapisanyStan);
 
     }

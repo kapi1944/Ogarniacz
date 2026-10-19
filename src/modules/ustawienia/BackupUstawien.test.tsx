@@ -5,7 +5,7 @@ import { DOMYSLNE_USTAWIENIA } from '../../domain/ustawienia'
 import { WidokUstawien } from './WidokUstawien'
 import { platforma } from '../../platform/platforma'
 
-const { szyfruj, przygotuj, przywroc, zapiszPlik, zapisWBazie, zapiszUstawienia } = vi.hoisted(() => ({ szyfruj: vi.fn(), przygotuj: vi.fn(), przywroc: vi.fn(), zapiszPlik: vi.fn(), zapisWBazie: vi.fn(), zapiszUstawienia: vi.fn() }))
+const { szyfruj, przygotuj, przywroc, zapiszPlik, zapiszZWynikiem, plikTymczasowy, udostepnijPlik, zapisWBazie, zapiszUstawienia } = vi.hoisted(() => ({ szyfruj: vi.fn(), przygotuj: vi.fn(), przywroc: vi.fn(), zapiszPlik: vi.fn(), zapiszZWynikiem: vi.fn(), plikTymczasowy: vi.fn(), udostepnijPlik: vi.fn(), zapisWBazie: vi.fn(), zapiszUstawienia: vi.fn() }))
 
 vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ ustawienia: DOMYSLNE_USTAWIENIA, zapiszUstawienia }) }))
 vi.mock('../../app/DostawcaKonta', () => ({ useKonto: () => ({ konto: undefined }) }))
@@ -14,7 +14,7 @@ vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (_zapytanie: unknown, _zalez
 vi.mock('./PanelUstawienAplikacji', () => ({ PanelUstawienAplikacji: () => null }))
 vi.mock('./SekcjaPolaczeniaIAktualizacji', () => ({ SekcjaPolaczeniaIAktualizacji: () => null }))
 vi.mock('../../services/DaneDemonstracyjneService', () => ({ czyMoznaWczytacDemo: () => false }))
-vi.mock('../../platform/platforma', () => ({ platforma: { rodzaj: 'web', natywna: false, haptyka: { ostrzezenie: async () => undefined }, powiadomienia: { sprawdzStan: async () => ({}) }, udostepnianie: { dostepne: () => false }, pliki: { zapisz: zapiszPlik } } }))
+vi.mock('../../platform/platforma', () => ({ platforma: { rodzaj: 'web', natywna: false, haptyka: { ostrzezenie: async () => undefined }, powiadomienia: { sprawdzStan: async () => ({}) }, udostepnianie: { dostepne: () => true, udostepnijPlikJson: udostepnijPlik }, pliki: { zapisz: zapiszPlik, zapiszZWynikiem, zapiszTymczasowo: plikTymczasowy } } }))
 vi.mock('../../services/BackupService', async (importujOryginal) => {
   const oryginal = await importujOryginal<typeof import('../../services/BackupService')>()
   return { ...oryginal, utworzBackup: vi.fn(async () => kopiaTestowa), szyfrujBackup: szyfruj, przygotujBackupDoPrzywracania: przygotuj, przywrocBackup: przywroc }
@@ -33,6 +33,12 @@ beforeEach(() => {
   szyfruj.mockResolvedValue(kopertaTestowa)
   przygotuj.mockResolvedValue(kopiaTestowa)
   zapiszPlik.mockResolvedValue(true)
+  zapiszZWynikiem.mockImplementation(async (...argumenty) => {
+    const zapisano = await zapiszPlik(...argumenty)
+    return { status: zapisano ? (platforma.natywna ? 'zapisano' : 'pobieranie') : 'blad', uri: 'content://test/kopia.json' }
+  })
+  plikTymczasowy.mockResolvedValue('file:///cache/eksport/test/kopia.json')
+  udostepnijPlik.mockResolvedValue('niepotwierdzone')
   przywroc.mockImplementation(async (_backup, _sekcje, opcje) => {
     await opcje.poUtworzeniuKopii(kopiaOchronna)
     zapisWBazie()
@@ -41,6 +47,51 @@ beforeEach(() => {
   renderuj(<RouterPamieci><WidokUstawien /></RouterPamieci>)
 })
 afterEach(wyczysc)
+
+async function utworzZaszyfrowanaKopie() {
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Utwórz zaszyfrowany backup' }))
+  wpiszHaslo()
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: /^Zaszyfruj$/ }))
+  await czekajNa(() => expect(ekran.queryByRole('dialog')).not.toBeInTheDocument())
+}
+
+it.each([
+  ['zapisano', 'ZAPISANO:'],
+  ['anulowano', 'ANULOWANO:'],
+  ['blad', 'BŁĄD:'],
+])('pokazuje rzeczywisty wynik zapisu Android: %s', async (status, komunikat) => {
+  platforma.natywna = true
+  await utworzZaszyfrowanaKopie()
+  zapiszZWynikiem.mockResolvedValue({ status, uri: 'content://test/kopia.json' })
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Zapisz plik JSON' }))
+  await ekran.findByText(new RegExp(`^${komunikat}`))
+  expect(zapisWBazie).not.toHaveBeenCalled()
+})
+
+it.each([
+  ['niepotwierdzone', 'Brak potwierdzenia udostępnienia.'],
+  ['przekazano', 'Wybrano aplikację dla pliku JSON. Zapis nie jest potwierdzony'],
+  ['anulowano', 'ANULOWANO:'],
+  ['blad', 'BŁĄD:'],
+])('nie ogłasza zapisu backupu przez samo udostępnienie: %s', async (wynik, komunikat) => {
+  platforma.natywna = true
+  await utworzZaszyfrowanaKopie()
+  udostepnijPlik.mockResolvedValue(wynik)
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Udostępnij backup' }))
+  await ekran.findByText(new RegExp(`^${komunikat}`))
+  expect(ekran.queryByText(/^ZAPISANO:/)).not.toBeInTheDocument()
+  expect(udostepnijPlik).toHaveBeenCalledWith('file:///cache/eksport/test/kopia.json')
+  expect(zapisWBazie).not.toHaveBeenCalled()
+})
+
+it('po błędzie przygotowania pliku nie uruchamia udostępniania', async () => {
+  platforma.natywna = true
+  await utworzZaszyfrowanaKopie()
+  plikTymczasowy.mockResolvedValue(undefined)
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Udostępnij backup' }))
+  await ekran.findByText(/^BŁĄD: Nie udało się przygotować/)
+  expect(udostepnijPlik).not.toHaveBeenCalled()
+})
 
 function wpiszHaslo(haslo = 'Wyłącznie testowe hasło') {
   wywolajZdarzenie.change(ekran.getByLabelText('Hasło kopii zapasowej'), { target: { value: haslo } })
@@ -163,7 +214,7 @@ it.each(['szyfrowanie', 'zapis'])('blokuje modyfikacje bazy po błędzie kopii o
   if (etap === 'szyfrowanie') szyfruj.mockRejectedValue(new Error('Błąd szyfrowania kopii ochronnej'))
   if (etap === 'zapis') zapiszPlik.mockResolvedValue(false)
   await rozpocznijPrzywracanie()
-  await czekajNa(() => expect(ekran.getAllByText(etap === 'szyfrowanie' ? 'Błąd szyfrowania kopii ochronnej' : 'Nie udało się zapisać szyfrowanej kopii ochronnej. Przywracanie nie zostało rozpoczęte.').length).toBeGreaterThan(0))
+  await czekajNa(() => expect(ekran.getAllByText(etap === 'szyfrowanie' ? 'Błąd szyfrowania kopii ochronnej' : 'BŁĄD: Nie udało się zapisać szyfrowanej kopii ochronnej. Przywracanie nie zostało rozpoczęte.').length).toBeGreaterThan(0))
   expect(zapisWBazie).not.toHaveBeenCalled()
   if (etap === 'szyfrowanie') expect(zapiszPlik).not.toHaveBeenCalled()
 })
@@ -194,6 +245,14 @@ it('na Androidzie czeka na wynik zapisu pliku przed restore', async () => {
   zakonczZapis(true)
   await czekajNa(() => expect(zapisWBazie).toHaveBeenCalledOnce())
   expect(ekran.queryByRole('button', { name: 'Mam zapisaną kopię — przywróć' })).not.toBeInTheDocument()
+})
+
+it('anulowanie systemowego zapisu kopii ochronnej blokuje restore na Androidzie', async () => {
+  platforma.natywna = true
+  zapiszZWynikiem.mockResolvedValue({ status: 'anulowano' })
+  await rozpocznijPrzywracanie()
+  await czekajNa(() => expect(ekran.getAllByText('ANULOWANO: Zapis kopii ochronnej anulowany. Przywracanie nie zostało rozpoczęte.').length).toBeGreaterThan(0))
+  expect(zapisWBazie).not.toHaveBeenCalled()
 })
 
 it('przekazuje tylko zaznaczone sekcje i blokuje pusty wybór', async () => {

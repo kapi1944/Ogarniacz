@@ -1,6 +1,7 @@
 import { Share } from '@capacitor/share'
 import { registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 import type { DaneUdostepniania, OdebraneDaneUdostepniania } from './typy'
+import { eksportPlikuAndroid, type WynikUdostepnieniaPliku } from './EksportPlikuAndroid'
 
 interface WtyczkaOdbioruUdostepniania {
   addListener(nazwa: 'odebranoUdostepnienie', obsluga: (dane: unknown) => void): Promise<PluginListenerHandle>
@@ -19,6 +20,20 @@ export function normalizujOdebraneUdostepnienie(dane: unknown): OdebraneDaneUdos
 
 export function utworzUslugeUdostepniania(czyAndroid: boolean) {
   return {
+    async udostepnijPlikJson(uri: string): Promise<WynikUdostepnieniaPliku> {
+      if (!czyAndroid) return 'blad'
+      try {
+        if (!(await Share.canShare()).value) return 'blad'
+        const zalacznik = await eksportPlikuAndroid.sprawdzZalacznik({ uri })
+        if (!zalacznik.uri.startsWith('content://') || zalacznik.typ !== 'application/json') return 'blad'
+        // Capacitor sam zamienia zweryfikowane file:// na content:// i nadaje prawo odczytu.
+        const wynik = await Share.share({ files: [uri], dialogTitle: 'Udostępnij backup Ogarniacza' })
+        return wynik.activityType ? 'przekazano' : 'niepotwierdzone'
+      } catch (przyczyna) {
+        const komunikat = przyczyna instanceof Error ? przyczyna.message : ''
+        return komunikat === 'Share canceled' ? 'anulowano' : 'blad'
+      }
+    },
     dostepne: () => czyAndroid || typeof navigator.share === 'function',
     async udostepnij(dane: DaneUdostepniania) {
       try {

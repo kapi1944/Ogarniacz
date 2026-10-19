@@ -89,12 +89,12 @@ Panel rozróżnia integralność kopii, szyfrowanie eksportowanego pliku, lokaln
 
 Przed przywracaniem użytkownik podaje nowe hasło dla pełnej kopii ochronnej bieżącego stanu. Istniejący `przywrocBackup` tworzy i waliduje `before-restore`, a następnie **czeka** na asynchroniczny callback `poUtworzeniuKopii`: szyfrowanie całej kopii oraz zapis wyłącznie zaszyfrowanego pliku przez istniejącą usługę plików. Błąd lub odrzucenie callbacku zatrzymuje operację przed transakcją zapisu. Nazwa pliku zawiera pełny czas, aby kolejne kopie w tym samym dniu nie nadpisywały wcześniejszych.
 
-Android czeka na wynik `Filesystem.writeFile`. PWA/desktopowa przeglądarka potwierdza tylko rozpoczęcie pobierania, więc dodatkowe potwierdzenie „Mam zapisaną kopię — przywróć” wymaga sprawdzenia pobranego pliku przez użytkownika. Anulowanie lub zamknięcie panelu przed zakończeniem zabezpieczenia kopii blokuje przywracanie. Ponowne pobranie dostępnej kopii ochronnej przekazuje już zaszyfrowany plik; nie eksportuje jawnych danych.
+Android czeka na zapis przez SAF oraz zgodny pełny odczyt dokumentu; anulowanie lub błąd blokuje restore. PWA/desktopowa przeglądarka potwierdza tylko rozpoczęcie pobierania, więc dodatkowe potwierdzenie „Mam zapisaną kopię — przywróć” wymaga sprawdzenia pobranego pliku przez użytkownika. Anulowanie lub zamknięcie panelu przed zakończeniem zabezpieczenia kopii blokuje przywracanie. Ponowne pobranie dostępnej kopii ochronnej przekazuje już zaszyfrowany plik; nie eksportuje jawnych danych.
 
 ### Próba na Samsungu (na wersji zawierającej etap 5.2)
 
 1. W Ustawieniach otwórz Dane / Backup. Sprawdź, że klawiatura nie otwiera się sama, także po wybraniu tworzenia kopii.
-2. Na danych testowych wybierz sekcje, utwórz zaszyfrowany backup, wpisz i potwierdź hasło. Sprawdź „Pokaż hasło”, następnie zapisz plik. W aplikacji Android szukaj go w Dokumenty/Ogarniacz; w PWA w pobranych plikach przeglądarki.
+2. Na danych testowych wybierz sekcje, utwórz zaszyfrowany backup, wpisz i potwierdź hasło. Sprawdź „Pokaż hasło”, następnie zapisz plik. W aplikacji Android wybierz miejsce w systemowym oknie SAF i sprawdź tam plik; w PWA w pobranych plikach przeglądarki. Szczegóły i ograniczenia udostępniania opisuje `ANDROID.md`.
 3. Wybierz zapisany plik do przywracania. Anuluj pierwszą próbę, potem sprawdź błędne hasło. Podgląd sekcji nie powinien się pojawić. Przy poprawnym haśle sprawdź dane i wybór sekcji.
 4. Na danych testowych rozpocznij przywracanie, ustaw hasło kopii ochronnej i sprawdź zapis pliku `ogarniacz-before-restore-…json` przed zmianą danych. W PWA najpierw sprawdź pobrany plik i dopiero wtedy potwierdź przywrócenie. Anulowanie tego potwierdzenia nie zmienia bazy.
 5. Sprawdź import starszej jawnej kopii: bez pytania o hasło, z informacją o braku zabezpieczenia. Jej przywracanie nadal wymaga szyfrowanej kopii ochronnej.

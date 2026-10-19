@@ -1,6 +1,7 @@
 import type { Przypomnienie, PowiazanieEncji } from '../domain/typy'
 import type { UslugaGlosuEcho } from './GlosEchoService'
 import type { NatywnaUslugaWakeWordEcho } from '../services/echo/SilnikWakeWordEcho'
+import type { WynikZapisuPliku, WynikUdostepnieniaPliku } from './EksportPlikuAndroid'
 
 export type RodzajPlatformy = 'web' | 'android'
 export type StanCykluZycia = 'aktywny' | 'nieaktywny'
@@ -160,10 +161,12 @@ export interface PlatformaOgarniacza {
     nasluchujAkcji: (obsluga: (akcja: AkcjaPowiadomienia) => void) => () => void
   }
   pliki: {
+    zapiszZWynikiem: (nazwa: string, dane: Blob) => Promise<WynikZapisuPliku>
     zapisz: (nazwa: string, dane: Blob) => Promise<boolean>
     zapiszTymczasowo: (nazwa: string, dane: Blob) => Promise<string | undefined>
   }
   udostepnianie: {
+    udostepnijPlikJson: (uri: string) => Promise<WynikUdostepnieniaPliku>
     dostepne: () => boolean
     udostepnij: (dane: DaneUdostepniania) => Promise<boolean>
     nasluchujOdebrania: (obsluga: (dane: OdebraneDaneUdostepniania) => void) => Promise<() => void>

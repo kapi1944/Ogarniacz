@@ -132,21 +132,22 @@ export function WidokUstawien() {
   const utworzPlikJson = (dane: unknown) => new Blob([JSON.stringify(dane, null, 2)], { type: 'application/json' })
 
   const pobierzJson = async (dane: unknown, nazwa: string) => {
+    ustawBlad('')
+    ustawKomunikat('')
     const plik = utworzPlikJson(dane)
-    const zapisano = await platforma.pliki.zapisz(nazwa, plik)
-    if (!zapisano) ustawBlad('Nie udało się zapisać pliku.')
-    else ustawKomunikat(platforma.natywna ? 'Plik zapisano w katalogu Dokumenty/Ogarniacz.' : 'Rozpoczęto pobieranie pliku.')
+    const wynik = await platforma.pliki.zapiszZWynikiem(nazwa, plik)
+    if (wynik.status === 'blad') ustawBlad('BŁĄD: Nie udało się zapisać i zweryfikować pliku. Spróbuj ponownie lub wybierz inne miejsce.')
+    else ustawKomunikat(wynik.status === 'zapisano' ? 'ZAPISANO: Plik zapisano w wybranym miejscu i sprawdzono jego odczyt.' : wynik.status === 'anulowano' ? 'ANULOWANO: Zapis pliku został anulowany.' : 'Rozpoczęto pobieranie pliku. Sprawdź pobrane pliki w przeglądarce.')
   }
 
   const udostepnijJson = async (dane: unknown, nazwa: string) => {
+    ustawBlad('')
+    ustawKomunikat('')
     const adresPliku = await platforma.pliki.zapiszTymczasowo(nazwa, utworzPlikJson(dane))
-    if (!adresPliku) return ustawBlad('Nie udało się przygotować pliku do udostępnienia.')
-    const udostepniono = await platforma.udostepnianie.udostepnij({
-      tytul: 'Backup Ogarniacza',
-      tekst: 'Ręczny transfer danych Ogarniacza między urządzeniami.',
-      pliki: [adresPliku],
-    })
-    if (udostepniono) ustawKomunikat('Plik backupu przekazano do wybranej aplikacji.')
+    if (!adresPliku) return ustawBlad('BŁĄD: Nie udało się przygotować pliku do udostępnienia.')
+    const wynik = await platforma.udostepnianie.udostepnijPlikJson(adresPliku)
+    if (wynik === 'blad') ustawBlad('BŁĄD: Nie udało się odczytać lub udostępnić pliku backupu.')
+    else ustawKomunikat(wynik === 'anulowano' ? 'ANULOWANO: Udostępnianie zostało anulowane.' : wynik === 'przekazano' ? 'Wybrano aplikację dla pliku JSON. Zapis nie jest potwierdzony — sprawdź plik w aplikacji docelowej.' : 'Brak potwierdzenia udostępnienia. Sprawdź plik w aplikacji docelowej lub użyj „Zapisz plik JSON”.')
   }
 
   const zmienSekcjeBackupu = (nazwa: NazwaSekcjiBackupu, zaznaczona: boolean) => {
@@ -215,8 +216,9 @@ export function WidokUstawien() {
         trybStarszejKopii: przypiszStarszaKopie ? 'przypisz-do-aktywnego-profilu' : undefined,
         poUtworzeniuKopii: async (kopia) => {
           const plik = await szyfrujBackup(kopia, haslo)
-          const zapisano = await platforma.pliki.zapisz(`ogarniacz-before-restore-${kopia.manifest.createdAt.replace(/[:.]/g, '-')}.json`, utworzPlikJson(plik))
-          if (!zapisano) throw new Error('Nie udało się zapisać szyfrowanej kopii ochronnej. Przywracanie nie zostało rozpoczęte.')
+          const wynikZapisu = await platforma.pliki.zapiszZWynikiem(`ogarniacz-before-restore-${kopia.manifest.createdAt.replace(/[:.]/g, '-')}.json`, utworzPlikJson(plik))
+          if (wynikZapisu.status === 'anulowano') throw new Error('ANULOWANO: Zapis kopii ochronnej anulowany. Przywracanie nie zostało rozpoczęte.')
+          if (wynikZapisu.status !== 'zapisano' && wynikZapisu.status !== 'pobieranie') throw new Error('BŁĄD: Nie udało się zapisać szyfrowanej kopii ochronnej. Przywracanie nie zostało rozpoczęte.')
           if (!widokAktywny.current) throw new Error('Przywracanie anulowano po zamknięciu panelu.')
           ustawBackupPrzedPrzywracaniem({ manifest: kopia.manifest, plik })
           if (!platforma.natywna) {
