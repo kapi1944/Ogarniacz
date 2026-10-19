@@ -43,3 +43,34 @@ it('pokazuje ten sam wyjątek grafiku w planie dnia i horyzoncie bez zmiany sąs
   expect(result.current.horyzont.dni[0].zakresPracy).toBeUndefined()
   expect(result.current.horyzont.dni[1].charakterDnia).toBe('roboczy')
 })
+
+it('po zmianie daty odświeża wydarzenia osi, harmonogram i dojazdy', async () => {
+  const dataZWyjatkiem = '2026-11-02'
+  const dataNastepna = '2026-11-03'
+  const zadanie = await repozytoriumElementowZadan.utworz({
+    typ: 'zadanie', tytul: 'Zadanie kolejnego dnia', data: dataNastepna, godzina: '14:30',
+    status: 'otwarty', priorytet: 'normalny', trybTerminu: 'o_godzinie',
+  })
+  const { result, rerender } = renderHook(({ data }) => usePlanDniaPulpitu(data), { initialProps: { data: dataZWyjatkiem } })
+
+  await waitFor(() => expect(result.current.daneDnia?.data).toBe(dataZWyjatkiem))
+  await act(async () => {
+    await result.current.zapiszZmianeHarmonogramu({
+      pracuje: false, odPracy: '08:00', doPracy: '16:00', dojazdDoPracyMinuty: 0,
+      powrotZPracyMinuty: 0, dostepnoscDojazdu: 'czesciowa',
+    }, 'tylko_ten_dzien')
+  })
+  await waitFor(() => expect(result.current.harmonogram.pracuje).toBe(false))
+  expect(result.current.harmonogram.dojazdDoPracyMinuty).toBe(0)
+
+  rerender({ data: dataNastepna })
+  await waitFor(() => expect(result.current.elementyOsi.map((element) => element.id)).toContain(zadanie.id))
+  expect(result.current.daneDnia?.data).toBe(dataNastepna)
+  expect(result.current.harmonogram.pracuje).toBe(true)
+  expect(result.current.harmonogram.dojazdDoPracyMinuty).toBe(40)
+  expect(result.current.harmonogram.powrotZPracyMinuty).toBe(40)
+
+  const wyjatek = (await pobierzRepozytorium('wyjatkiGrafiku').lista()).find((element) => element.data === dataZWyjatkiem)
+  if (wyjatek) await pobierzRepozytorium('wyjatkiGrafiku').usun(wyjatek.id)
+  await pobierzRepozytorium('zadania').usun(zadanie.id)
+})

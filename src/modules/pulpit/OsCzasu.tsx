@@ -7,6 +7,7 @@ import type {
   PrzedzialHarmonogramuDnia,
   ZakresSnuDnia,
 } from './logikaOsiCzasu'
+import { NawigatorDnia } from './NawigatorDnia'
 import {
   minutyDnia,
   pozycjaGodzinyNaOsi,
@@ -47,6 +48,7 @@ export function OsCzasu({
   przelaczDostepnosc,
   usunWyjatek,
   otworzElement,
+  zmienDate,
 }: {
   data: string
   harmonogram: HarmonogramDnia
@@ -57,6 +59,7 @@ export function OsCzasu({
   przelaczDostepnosc: () => void
   usunWyjatek: () => void
   otworzElement: (element: ElementOgarniacza) => void
+  zmienDate?: (data: string) => void
 }) {
   const [teraz, ustawTeraz] = useState(new Date())
   const [wybranyElementOsi, ustawWybranyElementOsi] = useState<string | null>(null)
@@ -68,6 +71,7 @@ export function OsCzasu({
 
   const jestDzisiaj = data === dzisiajIso(teraz)
   const godzinaTeraz = `${String(teraz.getHours()).padStart(2, '0')}:${String(teraz.getMinutes()).padStart(2, '0')}`
+  const pozycjaTeraz = pozycjaGodzinyNaOsi(godzinaTeraz, zakresSnu)
 
   const poczatekAktywny = pozycjaGodzinyNaOsi(
     harmonogram.zakresAktywny.od,
@@ -80,10 +84,11 @@ export function OsCzasu({
 
   return (
     <section className="karta karta--os-czasu pulpit-sekcja--os-czasu">
+      {zmienDate && <NawigatorDnia data={data} zmienDate={zmienDate} />}
       <div className="naglowek-karty naglowek-osi-czasu">
         <div>
           <h2><Clock3 aria-hidden="true" /> Oś czasu</h2>
-          <p>Pełna doba 00:00–24:00. Sen {zakresSnu.od}–{zakresSnu.do} jest skompresowany do {Math.round(zakresSnu.skala * 100)}%.</p>
+          <p>Doba 00:00–24:00 · sen {zakresSnu.od}–{zakresSnu.do} × {Math.round(zakresSnu.skala * 100)}%.</p>
         </div>
         <div>
           {harmonogram.jestWyjatkiem && (
@@ -102,7 +107,7 @@ export function OsCzasu({
             onClick={edytujHarmonogram}
           >
             <Settings2 aria-hidden="true" />
-            Zmień dzień
+            Edytuj harmonogram
           </button>
         </div>
       </div>
@@ -128,7 +133,7 @@ export function OsCzasu({
         )}
       </div>
 
-      <div className="os-czasu-przewijana">
+      <div className="os-czasu-przewijana" role="region" aria-label="Oś czasu doby z harmonogramem i wydarzeniami" tabIndex={0}>
         <div className="os-czasu" aria-label={`Oś czasu dla ${data}`}>
           <div
             className="os-czasu__aktywny"
@@ -165,7 +170,7 @@ export function OsCzasu({
                   : godzina === '24:00'
                     ? 'os-czasu__etykieta--koniec'
                     : ''
-              }`}
+              } ${godzina === '03:00' || godzina === '06:00' || godzina === '21:00' ? 'os-czasu__etykieta--pomocnicza' : ''}`}
               style={{
                 left: `${pozycjaGodzinyNaOsi(godzina, zakresSnu)}%`,
               }}
@@ -199,9 +204,9 @@ export function OsCzasu({
 
           {jestDzisiaj && (
             <div
-              className="os-czasu__teraz"
+              className={`os-czasu__teraz ${pozycjaTeraz < 15 ? 'os-czasu__teraz--poczatek' : pozycjaTeraz > 85 ? 'os-czasu__teraz--koniec' : ''}`}
               style={{
-                left: `${pozycjaGodzinyNaOsi(godzinaTeraz, zakresSnu)}%`,
+                left: `${pozycjaTeraz}%`,
               }}
             >
               <span>Teraz {godzinaTeraz}</span>
