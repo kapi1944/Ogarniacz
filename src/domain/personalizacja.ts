@@ -1,3 +1,10 @@
+export type StylInterfejsu = 'klasyczny' | 'premium'
+
+export const STYLE_INTERFEJSU: { id: StylInterfejsu; nazwa: string; opis: string }[] = [
+  { id: 'klasyczny', nazwa: 'Klasyczny', opis: 'Dotychczasowy wygląd Ogarniacza.' },
+  { id: 'premium', nazwa: 'Premium', opis: 'OGARNIACZ PREMIUM / SIGNATURE · satynowa zieleń i szampańskie złoto.' },
+]
+
 export type PresetMotywu =
   | 'bazowy'
   | 'ogarniacz-dark'
@@ -128,6 +135,7 @@ export interface MotywWlasny {
 }
 
 export interface PersonalizacjaUI {
+  styl: StylInterfejsu
   preset: PresetMotywu
   uzyjWlasnejPalety: boolean
   paleta: PaletaPersonalizacji
@@ -214,6 +222,60 @@ const PALETA_LIGHT: PaletaPersonalizacji = {
   przypomnienie: '#a53535',
   timeline: '#aebbb8',
   timelineTeraz: '#4f7a32',
+}
+
+export const PALETY_PREMIUM: Record<'jasny' | 'ciemny', PaletaPersonalizacji> = {
+  ciemny: {
+    ...PALETA_DARK,
+    tlo: '#071d17', panel: '#102b23', panel2: '#15372b',
+    tekst: '#f4f3ea', tekst2: '#a7b8ac',
+    obramowanie: '#695633', obramowanieMocne: '#a68d60',
+    akcent: '#d9ad58', akcentHover: '#f1d28c', akcentJasny: '#3a3524',
+    sukces: '#45c887', sukcesTlo: '#103b29',
+    ostrzezenie: '#f1d28c', ostrzezenieTlo: '#3a3020',
+    blad: '#f5a5a0', bladTlo: '#432622',
+    informacja: '#9ccde0', informacjaTlo: '#183743',
+    sidebar: '#092219', sidebarHover: '#15372b', sidebarActive: '#284332', sidebarTekst: '#f4f3ea',
+    focus: '#f1d28c', zadanie: '#45c887', projekt: '#9ccde0', wizyta: '#c6b0e4',
+    lek: '#45c887', finanse: '#d9ad58', samochod: '#e2b27e', przypomnienie: '#f5a5a0',
+    timeline: '#a68d60', timelineTeraz: '#45c887',
+  },
+  jasny: {
+    ...PALETA_LIGHT,
+    tlo: '#f5f3eb', panel: '#fffdf7', panel2: '#edece1',
+    tekst: '#102b23', tekst2: '#4e6458',
+    obramowanie: '#c7b996', obramowanieMocne: '#887344',
+    akcent: '#795618', akcentHover: '#664610', akcentJasny: '#f1e5c9',
+    sukces: '#176540', sukcesTlo: '#e2f0e6',
+    ostrzezenie: '#795618', ostrzezenieTlo: '#f5e9cf',
+    blad: '#9d3832', bladTlo: '#fae6e1',
+    informacja: '#285e73', informacjaTlo: '#e3eef2',
+    sidebar: '#092219', sidebarHover: '#15372b', sidebarActive: '#284332', sidebarTekst: '#f4f3ea',
+    focus: '#795618', zadanie: '#176540', projekt: '#285e73', wizyta: '#72538f',
+    lek: '#176540', finanse: '#795618', samochod: '#8d531d', przypomnienie: '#9d3832',
+    timeline: '#887344', timelineTeraz: '#176540',
+  },
+}
+
+export function rozwiazPaletePersonalizacji(
+  personalizacja: PersonalizacjaUI,
+  motyw: 'jasny' | 'ciemny',
+): PaletaPersonalizacji {
+  if (personalizacja.uzyjWlasnejPalety) return personalizacja.paleta
+  if (personalizacja.styl === 'premium') return PALETY_PREMIUM[motyw]
+  return motyw === 'jasny' ? PALETA_LIGHT : PALETA_DARK
+}
+
+export function rozwiazAnimacjePersonalizacji(personalizacja: PersonalizacjaUI): AnimacjePersonalizacji {
+  const animacje = personalizacja.animacje
+  if (personalizacja.styl !== 'premium' || animacje.profil !== 'standardowe') return animacje
+  const domyslne = DOMYSLNA_PERSONALIZACJA.animacje
+  return {
+    ...animacje,
+    hoverMs: animacje.hoverMs === domyslne.hoverMs ? 150 : animacje.hoverMs,
+    activeMs: animacje.activeMs === domyslne.activeMs ? 100 : animacje.activeMs,
+    modalMs: animacje.modalMs === domyslne.modalMs ? 200 : animacje.modalMs,
+  }
 }
 
 const PALETA_MIDNIGHT: PaletaPersonalizacji = {
@@ -314,6 +376,7 @@ export const PRESETY_MOTYWOW: DefinicjaPresetu[] = [
 ]
 
 export const DOMYSLNA_PERSONALIZACJA: PersonalizacjaUI = {
+  styl: 'klasyczny',
   preset: 'bazowy',
   uzyjWlasnejPalety: false,
   paleta: PALETA_DARK,
@@ -559,6 +622,7 @@ export function normalizujPersonalizacje(value: unknown): PersonalizacjaUI {
     ? source.aktywnyMotywId
     : undefined
   return {
+    styl: enumValue(source.styl, STYLE_INTERFEJSU.map((styl) => styl.id), d.styl),
     preset: enumValue(source.preset, ['bazowy', 'ogarniacz-dark', 'ogarniacz-light', 'midnight', 'oled', 'soft', 'wlasny'], d.preset),
     uzyjWlasnejPalety: bool(source.uzyjWlasnejPalety, d.uzyjWlasnejPalety),
     paleta: normalizujPalete(source.paleta),
@@ -781,36 +845,40 @@ export function zastosujPersonalizacje(
   value: PersonalizacjaUI,
   root: HTMLElement,
   ograniczRuch: boolean,
+  motyw: 'jasny' | 'ciemny' = root.dataset.motyw === 'jasny' ? 'jasny' : 'ciemny',
 ): void {
   const p = normalizujPersonalizacje(value)
+  const paleta = rozwiazPaletePersonalizacji(p, motyw)
+  const animacje = rozwiazAnimacjePersonalizacji(p)
   const style = root.style
   const interakcje = rozwiazInterakcje(p.interakcje)
 
+  root.dataset.styl = p.styl
   root.dataset.uiHover = p.interakcje.hoverPoziom
   root.dataset.uiActive = p.interakcje.activePoziom
   root.dataset.uiSelected = p.interakcje.selectedPoziom
   root.dataset.uiFocus = p.interakcje.focusPoziom
 
-  if (p.uzyjWlasnejPalety) {
+  if (p.uzyjWlasnejPalety || p.styl === 'premium') {
     for (const [key, css] of Object.entries(KOLORY_CSS) as [keyof typeof KOLORY_CSS, string][]) {
-      style.setProperty(css, p.paleta[key])
+      style.setProperty(css, paleta[key])
     }
-    style.setProperty('--ui-sidebar-bg', p.paleta.sidebar)
+    style.setProperty('--ui-sidebar-bg', paleta.sidebar)
     style.setProperty('--akcent-hover', p.interakcje.autoStany
-      ? `color-mix(in srgb, ${p.paleta.akcent} 82%, white)`
-      : p.paleta.akcentHover)
+      ? `color-mix(in srgb, ${paleta.akcent} 82%, ${p.styl === 'premium' && motyw === 'jasny' ? 'black' : 'white'})`
+      : paleta.akcentHover)
     style.setProperty('--ui-sidebar-hover', p.interakcje.autoStany
-      ? `color-mix(in srgb, ${p.paleta.sidebar} 82%, white)`
-      : p.paleta.sidebarHover)
+      ? `color-mix(in srgb, ${paleta.sidebar} 82%, white)`
+      : paleta.sidebarHover)
     style.setProperty('--ui-sidebar-active', p.interakcje.autoStany
-      ? `color-mix(in srgb, ${p.paleta.sidebar} 62%, ${p.paleta.akcent})`
-      : p.paleta.sidebarActive)
-    style.setProperty('--ui-sidebar-tekst', p.paleta.sidebarTekst)
-    style.setProperty('--ui-focus', p.paleta.focus)
-    style.setProperty('--ui-text-on-accent', wybierzCzytelnyTekst(p.paleta.akcent))
-    style.setProperty('--ui-text-on-danger', wybierzCzytelnyTekst(p.paleta.blad))
-    style.setProperty('--ui-text-on-success', wybierzCzytelnyTekst(p.paleta.sukces))
-    style.setProperty('--ui-text-on-warning', wybierzCzytelnyTekst(p.paleta.ostrzezenie))
+      ? `color-mix(in srgb, ${paleta.sidebar} 62%, ${paleta.akcent})`
+      : paleta.sidebarActive)
+    style.setProperty('--ui-sidebar-tekst', paleta.sidebarTekst)
+    style.setProperty('--ui-focus', paleta.focus)
+    style.setProperty('--ui-text-on-accent', wybierzCzytelnyTekst(paleta.akcent))
+    style.setProperty('--ui-text-on-danger', wybierzCzytelnyTekst(paleta.blad))
+    style.setProperty('--ui-text-on-success', wybierzCzytelnyTekst(paleta.sukces))
+    style.setProperty('--ui-text-on-warning', wybierzCzytelnyTekst(paleta.ostrzezenie))
   } else {
     for (const css of Object.values(KOLORY_CSS)) style.removeProperty(css)
     for (const css of [
@@ -821,15 +889,18 @@ export function zastosujPersonalizacje(
     }
   }
 
-  style.setProperty('--modul-zadanie', p.paleta.zadanie)
-  style.setProperty('--modul-projekt', p.paleta.projekt)
-  style.setProperty('--modul-wizyta', p.paleta.wizyta)
-  style.setProperty('--modul-lek', p.paleta.lek)
-  style.setProperty('--modul-finanse', p.paleta.finanse)
-  style.setProperty('--modul-samochod', p.paleta.samochod)
-  style.setProperty('--modul-przypomnienie', p.paleta.przypomnienie)
-  style.setProperty('--timeline-linia', p.paleta.timeline)
-  style.setProperty('--timeline-teraz', p.paleta.timelineTeraz)
+  const paletaModulow = p.styl === 'premium' ? paleta : p.paleta
+  style.setProperty('--modul-zadanie', paletaModulow.zadanie)
+  style.setProperty('--modul-projekt', paletaModulow.projekt)
+  style.setProperty('--modul-wizyta', paletaModulow.wizyta)
+  style.setProperty('--modul-lek', paletaModulow.lek)
+  style.setProperty('--modul-finanse', paletaModulow.finanse)
+  style.setProperty('--modul-samochod', paletaModulow.samochod)
+  style.setProperty('--modul-przypomnienie', paletaModulow.przypomnienie)
+  style.setProperty('--timeline-linia', paletaModulow.timeline)
+  style.setProperty('--timeline-teraz', paletaModulow.timelineTeraz)
+  style.setProperty('--tekst-na-zadaniu', wybierzCzytelnyTekst(paletaModulow.zadanie))
+  style.setProperty('--tekst-na-wizycie', wybierzCzytelnyTekst(paletaModulow.wizyta))
 
   style.setProperty('--ui-hover-brightness', String(interakcje.hoverJasnosc))
   style.setProperty('--ui-hover-opacity', String(interakcje.hoverKrycie))
@@ -855,22 +926,22 @@ export function zastosujPersonalizacje(
     : 'var(--ui-sidebar-active)')
   style.setProperty('--ui-accent-hover-effective', p.interakcje.hoverPoziom === 'wylaczony' ? 'var(--akcent)' : 'var(--akcent-hover)')
 
-  const ruch0 = ograniczRuch || p.animacje.profil === 'wylaczone'
-  root.dataset.uiRuch = ruch0 ? 'wylaczony' : p.animacje.profil
+  const ruch0 = ograniczRuch || animacje.profil === 'wylaczone'
+  root.dataset.uiRuch = ruch0 ? 'wylaczony' : animacje.profil
   const duration = (ms: number, wlaczone = true) => `${ruch0 || !wlaczone ? 0 : ms}ms`
-  style.setProperty('--ui-hover-ms', duration(p.animacje.hoverMs, p.animacje.animujHover))
-  style.setProperty('--ui-button-ms', duration(p.animacje.hoverMs, p.animacje.animujHover && p.animacje.animujPrzyciski))
-  style.setProperty('--ui-active-ms', duration(p.animacje.activeMs, p.animacje.animujPrzyciski))
-  style.setProperty('--ui-modal-ms', duration(p.animacje.modalMs, p.animacje.animujModale))
-  style.setProperty('--ui-dropdown-ms', duration(p.animacje.dropdownMs, p.animacje.animujDropdowny))
-  style.setProperty('--ui-tooltip-ms', duration(p.animacje.tooltipMs, p.animacje.animujHover))
-  style.setProperty('--ui-page-ms', duration(p.animacje.pageMs, p.animacje.animujPanele))
-  style.setProperty('--ui-card-ms', duration(p.animacje.kartaMs, p.animacje.animujKarty))
-  style.setProperty('--ui-tab-ms', duration(p.animacje.hoverMs, p.animacje.animujZakladki))
-  style.setProperty('--ui-appear-ms', duration(p.animacje.pageMs, p.animacje.animujPojawianie))
-  style.setProperty('--ui-drag-ms', duration(p.animacje.dragMs))
-  style.setProperty('--ui-easing', p.animacje.easing)
-  style.setProperty('--czas-animacji', duration(p.animacje.pageMs, p.animacje.animujPanele))
+  style.setProperty('--ui-hover-ms', duration(animacje.hoverMs, animacje.animujHover))
+  style.setProperty('--ui-button-ms', duration(animacje.hoverMs, animacje.animujHover && animacje.animujPrzyciski))
+  style.setProperty('--ui-active-ms', duration(animacje.activeMs, animacje.animujPrzyciski))
+  style.setProperty('--ui-modal-ms', duration(animacje.modalMs, animacje.animujModale))
+  style.setProperty('--ui-dropdown-ms', duration(animacje.dropdownMs, animacje.animujDropdowny))
+  style.setProperty('--ui-tooltip-ms', duration(animacje.tooltipMs, animacje.animujHover))
+  style.setProperty('--ui-page-ms', duration(animacje.pageMs, animacje.animujPanele))
+  style.setProperty('--ui-card-ms', duration(animacje.kartaMs, animacje.animujKarty))
+  style.setProperty('--ui-tab-ms', duration(animacje.hoverMs, animacje.animujZakladki))
+  style.setProperty('--ui-appear-ms', duration(animacje.pageMs, animacje.animujPojawianie))
+  style.setProperty('--ui-drag-ms', duration(animacje.dragMs))
+  style.setProperty('--ui-easing', animacje.easing)
+  style.setProperty('--czas-animacji', duration(animacje.pageMs, animacje.animujPanele))
 
   style.setProperty('--ui-component-border', OBRAMOWANIA[p.komponenty.obramowanie])
   style.setProperty('--ui-depth-shadow', CIENIE_GLEBI[p.komponenty.glebia])

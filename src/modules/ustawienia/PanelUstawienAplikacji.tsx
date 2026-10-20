@@ -6,6 +6,7 @@ import { Karta, Komunikat } from '../../components/Interfejs'
 import { DOMYSLNE_USTAWIENIA, normalizujUstawienia } from '../../domain/ustawienia'
 import type { NazwaModulu, TypSzybkiegoDodawania, Ustawienia } from '../../domain/typy'
 import { useSesjaEcho } from '../../app/DostawcaSesjiEcho'
+import { WyborStyluInterfejsu } from './WyborStyluInterfejsu'
 
 type NazwaSekcji = 'wyglad' | 'nawigacja' | 'pulpit' | 'harmonogram' | 'zadania' | 'szybkieDodawanie' | 'dostepnosc'
 
@@ -133,6 +134,7 @@ export function PanelUstawienAplikacji() {
         <p>Zmiany wizualne są widoczne od razu. Pozostałe wartości zostaną utrwalone dopiero po zapisaniu.</p>
       </div>
       <div className="akcje-formularza">
+        <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawSzkic(normalizujUstawienia(zapisaneUstawienia)); wyczyscPodgladUstawien(); ustawKomunikat('Przywrócono zapisane ustawienia.') }}>Anuluj podgląd</button>
         <button type="button" className="przycisk przycisk--drugorzedny" onClick={resetujWszystko}><Undo2 aria-hidden="true" />Resetuj wszystkie</button>
         <button type="button" className="przycisk przycisk--glowny" onClick={zapisz}><Save aria-hidden="true" />Zapisz ustawienia</button>
       </div>
@@ -141,6 +143,7 @@ export function PanelUstawienAplikacji() {
 
     <div className="siatka-sekcji-ustawien">
       <SekcjaUstawien tytul="Wygląd" resetuj={() => resetujSekcje('wyglad')}>
+        <WyborStyluInterfejsu styl={szkic.wyglad.personalizacja.styl} zmien={(styl) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, personalizacja: { ...szkic.wyglad.personalizacja, styl } } })} />
         <div className="pole pole--pelne personalizacja-zajawka"><div><strong>Motywy i personalizacja</strong><small>Palety kolorów, komponenty, hover/active, animacje i podgląd na żywo.</small></div><Link to="/ustawienia/personalizacja" className="przycisk przycisk--drugorzedny"><Palette aria-hidden="true" />Otwórz edytor motywu</Link></div>
         <label className="pole"><span>Motyw</span><select value={szkic.wyglad.motyw} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, motyw: e.target.value as Ustawienia['wyglad']['motyw'] } })}><option value="systemowy">Systemowy</option><option value="jasny">Jasny</option><option value="ciemny">Ciemny</option></select></label>
         <label className="pole"><span>Gęstość</span><select value={szkic.wyglad.gestosc} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, gestosc: e.target.value as Ustawienia['wyglad']['gestosc'] } })}><option value="komfortowa">Komfortowa</option><option value="zwarta">Zwarta</option></select></label>

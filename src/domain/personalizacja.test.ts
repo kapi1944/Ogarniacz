@@ -1,15 +1,99 @@
 import { describe, expect, it } from 'vitest'
 import {
   DOMYSLNA_PERSONALIZACJA,
+  PALETY_PREMIUM,
+  PRESETY_MOTYWOW,
   WERSJA_SCHEMATU_MOTYWU,
   normalizujImportMotywu,
   normalizujPersonalizacje,
   ocenKontrastPalety,
+  obliczKontrast,
+  rozwiazPaletePersonalizacji,
+  wybierzCzytelnyTekst,
+  zastosujPresetMotywu,
   przywrocBazowaPersonalizacje,
   zastosujPersonalizacje,
 } from './personalizacja'
 
 describe('personalizacja UI', () => {
+  it('starsze i nieznane style pozostawia jako Klasyczny', () => {
+    expect(normalizujPersonalizacje({ preset: 'oled' }).styl).toBe('klasyczny')
+    expect(normalizujPersonalizacje({ styl: 'flat' }).styl).toBe('klasyczny')
+    expect(normalizujPersonalizacje({ styl: 'premium' }).styl).toBe('premium')
+  })
+
+  it('zachowuje styl Premium przy imporcie dotychczasowego formatu motywu', () => {
+    const wynik = normalizujImportMotywu({ format: 'ogarniacz-theme', wersja: WERSJA_SCHEMATU_MOTYWU, motyw: 'jasny', personalizacja: { styl: 'premium' } })
+    expect(wynik.personalizacja.styl).toBe('premium')
+    expect(wynik.motyw).toBe('jasny')
+  })
+
+  it.each(['jasny', 'ciemny'] as const)('zapewnia kontrast AA palety Premium: %s', (motyw) => {
+    const paleta = PALETY_PREMIUM[motyw]
+    for (const tlo of [paleta.tlo, paleta.panel, paleta.panel2]) {
+      for (const kolor of [paleta.tekst, paleta.tekst2, paleta.akcent, paleta.akcentHover]) {
+        expect(obliczKontrast(kolor, tlo)).toBeGreaterThanOrEqual(4.5)
+      }
+      expect(obliczKontrast(paleta.obramowanieMocne, tlo)).toBeGreaterThanOrEqual(3)
+      expect(obliczKontrast(paleta.focus, tlo)).toBeGreaterThanOrEqual(3)
+      for (const kolor of [paleta.zadanie, paleta.projekt, paleta.wizyta, paleta.lek, paleta.finanse, paleta.samochod, paleta.przypomnienie]) {
+        expect(obliczKontrast(kolor, tlo)).toBeGreaterThanOrEqual(3)
+      }
+    }
+    for (const [kolor, tlo] of [[paleta.sukces, paleta.sukcesTlo], [paleta.blad, paleta.bladTlo], [paleta.ostrzezenie, paleta.ostrzezenieTlo], [paleta.informacja, paleta.informacjaTlo], [wybierzCzytelnyTekst(paleta.akcent), paleta.akcent], [wybierzCzytelnyTekst(paleta.zadanie), paleta.zadanie], [wybierzCzytelnyTekst(paleta.wizyta), paleta.wizyta], [paleta.sidebarTekst, paleta.sidebarActive]]) {
+      expect(obliczKontrast(kolor, tlo)).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(ocenKontrastPalety(paleta).every((ocena) => !ocena.niski)).toBe(true)
+  })
+
+  it('przełącza style i tryby bez mutowania własnej palety, presetów i animacji', () => {
+    const korzen = document.createElement('div')
+    const premium = normalizujPersonalizacje({ styl: 'premium' })
+    const przed = structuredClone(premium)
+    for (const motyw of ['jasny', 'ciemny'] as const) {
+      zastosujPersonalizacje(premium, korzen, false, motyw)
+      expect(korzen.dataset.styl).toBe('premium')
+      expect(korzen.style.getPropertyValue('--tlo')).toBe(PALETY_PREMIUM[motyw].tlo)
+    }
+    expect(premium).toEqual(przed)
+    for (const preset of PRESETY_MOTYWOW) {
+      const wynik = zastosujPresetMotywu(premium, preset.id)
+      expect(wynik.personalizacja.styl).toBe('premium')
+      expect(rozwiazPaletePersonalizacji(wynik.personalizacja, wynik.motyw)).toEqual(preset.paleta)
+      zastosujPersonalizacje(wynik.personalizacja, korzen, false, wynik.motyw)
+      expect(korzen.style.getPropertyValue('--tlo')).toBe(preset.paleta.tlo)
+    }
+    zastosujPersonalizacje({ ...premium, styl: 'klasyczny' }, korzen, false)
+    expect(korzen.dataset.styl).toBe('klasyczny')
+    expect(korzen.style.getPropertyValue('--tlo')).toBe('')
+    expect(korzen.style.getPropertyValue('--ui-sidebar-bg')).toBe('')
+  })
+
+  it.each([true, false])('Premium respektuje ograniczenie ruchu: %s', (ograniczRuch) => {
+    const korzen = document.createElement('div')
+    const premium = normalizujPersonalizacje({ styl: 'premium', animacje: { profil: 'wlasne', hoverMs: 150, activeMs: 100, modalMs: 200, animujKarty: false } })
+    zastosujPersonalizacje(premium, korzen, ograniczRuch)
+    expect(korzen.style.getPropertyValue('--ui-hover-ms')).toBe(ograniczRuch ? '0ms' : '150ms')
+    expect(korzen.style.getPropertyValue('--ui-active-ms')).toBe(ograniczRuch ? '0ms' : '100ms')
+    expect(korzen.style.getPropertyValue('--ui-modal-ms')).toBe(ograniczRuch ? '0ms' : '200ms')
+    expect(korzen.style.getPropertyValue('--ui-card-ms')).toBe('0ms')
+    zastosujPersonalizacje({ ...premium, animacje: { ...premium.animacje, profil: 'wylaczone' } }, korzen, false)
+    expect(korzen.style.getPropertyValue('--ui-modal-ms')).toBe('0ms')
+  })
+
+  it('stosuje standardowe czasy Premium bez zmiany zapisanych preferencji Klasycznego', () => {
+    const korzen = document.createElement('div')
+    const premium = normalizujPersonalizacje({ styl: 'premium' })
+    zastosujPersonalizacje(premium, korzen, false)
+    expect(korzen.style.getPropertyValue('--ui-hover-ms')).toBe('150ms')
+    expect(korzen.style.getPropertyValue('--ui-active-ms')).toBe('100ms')
+    expect(korzen.style.getPropertyValue('--ui-modal-ms')).toBe('200ms')
+    expect(premium.animacje).toEqual(DOMYSLNA_PERSONALIZACJA.animacje)
+    zastosujPersonalizacje({ ...premium, styl: 'klasyczny' }, korzen, false)
+    expect(korzen.style.getPropertyValue('--ui-hover-ms')).toBe('160ms')
+    expect(korzen.style.getPropertyValue('--ui-modal-ms')).toBe('180ms')
+  })
+
   it('uzupełnia nowe pola w starszym motywie bez utraty jego wartości', () => {
     const wynik = normalizujPersonalizacje({
       preset: 'wlasny',

@@ -2232,6 +2232,134 @@ input[type="radio"] {
 .strefa-pulpitu--wymaga-uwagi { border-color: color-mix(in srgb, var(--ostrzezenie) 55%, var(--obramowanie)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ostrzezenie) 18%, transparent), var(--cien); }
 .centrum-dowodzenia__podsumowanie { display: block; margin-top: 8px; color: var(--tekst-2); }
 .pulpit-sekcja--horyzont { display: grid; }
+
+/* OGARNIACZ PREMIUM / SIGNATURE — styl niezależny od jasnego i ciemnego motywu. */
+.wybor-stylu { margin-bottom: 14px; }
+.wybor-stylu small { color: var(--tekst-2); line-height: 1.5; }
+
+:root[data-styl="premium"] {
+  --premium-powierzchnia: linear-gradient(145deg, color-mix(in srgb, var(--panel) 97%, var(--tekst)) 0%, var(--panel) 65%, color-mix(in srgb, var(--panel) 97%, var(--akcent)) 100%);
+  --premium-karta: linear-gradient(155deg, color-mix(in srgb, var(--panel-2) 98%, var(--tekst)), var(--panel));
+  --ostrzezenie-tekst: var(--ostrzezenie);
+  color: var(--tekst);
+  background: var(--tlo);
+}
+
+:root[data-styl="premium"] body {
+  background: radial-gradient(ellipse at 90% 0%, color-mix(in srgb, var(--modul-zadanie) 7%, transparent), transparent 48%), var(--tlo);
+}
+
+:root[data-styl="premium"] .sidebar {
+  background: linear-gradient(175deg, color-mix(in srgb, var(--ui-sidebar-bg) 96%, var(--ui-sidebar-tekst)), var(--ui-sidebar-bg) 55%);
+}
+
+:root[data-styl="premium"] .sidebar__marka {
+  border-bottom-color: color-mix(in srgb, var(--akcent) 40%, var(--ui-sidebar-bg));
+}
+
+:root[data-styl="premium"] .grupa-menu a.active {
+  color: var(--ui-sidebar-tekst);
+  font-weight: 750;
+  box-shadow: inset 3px 0 color-mix(in srgb, var(--ui-sidebar-tekst) 60%, var(--akcent));
+}
+
+:root[data-styl="premium"] .pasek-gorny {
+  background: var(--premium-powierzchnia);
+  border-bottom-color: var(--obramowanie);
+  backdrop-filter: none;
+}
+
+:root[data-styl="premium"] :is(.karta, .personalizacja-sekcja, .personalizacja__podglad-sticky, .personalizacja__pasek, .nawigator-dnia, .pasek-filtrow, .sekcja-ustawien) {
+  background: var(--premium-karta);
+}
+
+:root[data-styl="premium"] .motyw-playground--bazowy {
+  --premium-karta: var(--panel);
+  --premium-powierzchnia: var(--panel);
+}
+
+:root[data-styl="premium"] :is(.modal, .okno-modalne, .motyw-playground__modal, .motyw-playground__dropdown, .komunikat-pwa, .toast-synchronizacji) {
+  color: var(--tekst);
+  background: var(--premium-powierzchnia);
+  border-color: var(--obramowanie-mocne);
+}
+
+:root[data-styl="premium"] :is(input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) {
+  color: var(--tekst);
+  background: var(--panel);
+  border-color: var(--obramowanie-mocne);
+}
+
+:root[data-styl="premium"] :is(input, textarea)::placeholder {
+  color: var(--tekst-2);
+  opacity: 1;
+}
+
+:root[data-styl="premium"] :is(button, a, input, select, textarea):focus-visible {
+  outline-color: var(--ui-focus);
+}
+
+:root[data-styl="premium"] .sidebar :is(button, a):focus-visible {
+  outline-color: var(--ui-sidebar-tekst);
+}
+
+:root[data-styl="premium"] :is(.rekord, .lista-kompaktowa > div, .kalendarz-grafiku__dzien, .blok-planu) {
+  border-color: var(--obramowanie);
+}
+
+:root[data-styl="premium"] :is(.segmenty button.aktywny, .zakladki-list button.aktywna, [role="tab"][aria-selected="true"], .motyw-kafelek.active) {
+  border-color: var(--akcent);
+  font-weight: 750;
+}
+
+:root[data-styl="premium"] .wykres-kategorii__tor span {
+  background: var(--modul-zadanie);
+}
+
+:root[data-styl="premium"] .os-czasu__teraz span {
+  color: var(--ui-text-on-success);
+}
+
+:root[data-styl="premium"] .motyw-playground__blok--zadanie {
+  color: var(--tekst-na-zadaniu);
+}
+
+:root[data-styl="premium"] .motyw-playground__blok--wizyta {
+  color: var(--tekst-na-wizycie);
+}
+
+:root[data-styl="premium"] .kalendarz-dzien--pracujacy {
+  background: color-mix(in srgb, var(--modul-zadanie) 12%, var(--panel));
+}
+
+/* Obramowania dekoracyjne pozostają dyskretne; pola i focus zachowują mocny kontrast. */
+:root[data-styl="premium"][data-kontrast="wysoki"] {
+  --obramowanie: #887344 !important;
+  --obramowanie-mocne: #695633 !important;
+}
+
+:root[data-styl="premium"][data-motyw="ciemny"][data-kontrast="wysoki"] {
+  --obramowanie: #c7b996 !important;
+  --obramowanie-mocne: #f1d28c !important;
+}
+
+/* Ustawienie aplikacji obejmuje również dekoracyjny ruch istniejących komponentów. */
+:root[data-styl="premium"][data-ui-ruch="wylaczony"] *,
+:root[data-styl="premium"][data-ui-ruch="wylaczony"] *::before,
+:root[data-styl="premium"][data-ui-ruch="wylaczony"] *::after {
+  animation: none !important;
+  transition-duration: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-styl="premium"] *,
+  :root[data-styl="premium"] *::before,
+  :root[data-styl="premium"] *::after {
+    animation: none !important;
+    transition-duration: 0s !important;
+  }
+}
 /* Lokalny dziennik samopoczucia: wygodne kontrolki również na telefonie. */
 .samopoczucie-szybkie { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
 .samopoczucie-wskaznik { min-width: 0; border: 1px solid var(--obramowanie); border-radius: 12px; padding: 12px; }

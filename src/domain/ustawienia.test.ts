@@ -2,6 +2,9 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
+import { rekordDoSynchronizacji, tabelaKolejki } from '../data/KolejkaSynchronizacji'
+import { zastosujUstawieniaInterfejsu } from './ustawienia'
+import type { Ustawienia } from './typy'
 import { DOMYSLNE_KAFELKI_PULPITU, DOMYSLNE_USTAWIENIA, normalizujUstawienia } from './ustawienia'
 
 describe.sequential('ustawienia aplikacji', () => {
@@ -9,6 +12,31 @@ describe.sequential('ustawienia aplikacji', () => {
     baza.close()
     await Dexie.delete('ogarniacz-v1')
     await inicjalizujBaze()
+  })
+
+  it('zachowuje Premium po otwarciu bazy i w istniejącym rekordzie synchronizacji', async () => {
+    const ustawienia = normalizujUstawienia({ wyglad: { motyw: 'systemowy', personalizacja: { styl: 'premium' } } })
+    await repozytoriumUstawien.zapisz(ustawienia)
+    baza.close()
+    await baza.open()
+    const wczytane = await repozytoriumUstawien.wczytaj()
+    expect(wczytane.wyglad.personalizacja.styl).toBe('premium')
+    expect(wczytane.wyglad.motyw).toBe('systemowy')
+    const oczekujaca = await tabelaKolejki().where('rekordId').equals('glowne').first()
+    expect((oczekujaca?.rekord as Ustawienia | undefined)?.wyglad.personalizacja.styl).toBe('premium')
+    expect(normalizujUstawienia(rekordDoSynchronizacji('ustawienia', wczytane)).wyglad).toEqual(wczytane.wyglad)
+  })
+
+  it('stosuje Premium w trybie systemowym i respektuje oba źródła ograniczenia animacji', () => {
+    const ustawienia = normalizujUstawienia({ wyglad: { motyw: 'systemowy', personalizacja: { styl: 'premium' } } })
+    zastosujUstawieniaInterfejsu(ustawienia, true, true)
+    expect(document.documentElement.dataset.motyw).toBe('ciemny')
+    expect(document.documentElement.dataset.styl).toBe('premium')
+    expect(document.documentElement.style.getPropertyValue('--ui-modal-ms')).toBe('0ms')
+    zastosujUstawieniaInterfejsu({ ...ustawienia, dostepnosc: { ...ustawienia.dostepnosc, ograniczRuch: true } }, false)
+    expect(document.documentElement.dataset.motyw).toBe('jasny')
+    expect(document.documentElement.style.getPropertyValue('--ui-hover-ms')).toBe('0ms')
+    zastosujUstawieniaInterfejsu(DOMYSLNE_USTAWIENIA, false)
   })
 
   it('uzupełnia puste i niepełne ustawienia', () => {

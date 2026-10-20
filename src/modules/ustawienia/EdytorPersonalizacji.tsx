@@ -22,6 +22,8 @@ import {
   normalizujImportMotywu,
   normalizujPersonalizacje,
   ocenKontrastPalety,
+  rozwiazAnimacjePersonalizacji,
+  rozwiazPaletePersonalizacji,
   przywrocBazowaPersonalizacje,
   zastosujPoziomActive,
   zastosujPoziomFocus,
@@ -42,6 +44,7 @@ import {
 } from '../../domain/personalizacja'
 import { DOMYSLNE_USTAWIENIA, normalizujUstawienia } from '../../domain/ustawienia'
 import type { Ustawienia } from '../../domain/typy'
+import { WyborStyluInterfejsu } from './WyborStyluInterfejsu'
 
 type Zakladka = 'motyw' | 'kolory' | 'komponenty' | 'interakcje' | 'animacje' | 'podglad'
 
@@ -120,12 +123,17 @@ export function EdytorPersonalizacji() {
   useEffect(() => () => wyczyscPodgladUstawien(), [wyczyscPodgladUstawien])
 
   const p = szkic.wyglad.personalizacja
+  const animacjePodgladu = rozwiazAnimacjePersonalizacji(p)
   const grupyKolorow = useMemo(() => [...new Set(KOLORY.map((item) => item.grupa))], [])
   const niezapisaneZmiany = useMemo(
     () => JSON.stringify(szkic.wyglad) !== JSON.stringify(normalizujUstawienia(zapisaneUstawienia).wyglad),
     [szkic.wyglad, zapisaneUstawienia],
   )
-  const ocenyKontrastu = useMemo(() => ocenKontrastPalety(p.paleta), [p.paleta])
+  const motywPodgladu = szkic.wyglad.motyw === 'systemowy'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'ciemny' : 'jasny')
+    : szkic.wyglad.motyw
+  const paletaPodgladu = rozwiazPaletePersonalizacji(p, motywPodgladu)
+  const ocenyKontrastu = ocenKontrastPalety(paletaPodgladu)
   const niskieKontrasty = ocenyKontrastu.filter((ocena) => ocena.niski)
 
   const aktualizuj = (nowe: Ustawienia) => {
@@ -152,7 +160,7 @@ export function EdytorPersonalizacji() {
       preset: 'wlasny',
       uzyjWlasnejPalety: true,
       aktywnyMotywId: undefined,
-      paleta: { ...p.paleta, [key]: value },
+      paleta: { ...paletaPodgladu, [key]: value },
     })
   }
 
@@ -164,6 +172,7 @@ export function EdytorPersonalizacji() {
           ...szkic.wyglad,
           personalizacja: {
             ...kopiujPersonalizacje(DOMYSLNA_PERSONALIZACJA),
+            styl: p.styl,
             motywyWlasne: p.motywyWlasne,
           },
         },
@@ -184,14 +193,14 @@ export function EdytorPersonalizacji() {
   const ustawProfil = (profil: ProfilRuchu) => {
     aktualizujPersonalizacje({
       ...p,
-      animacje: zastosujProfilRuchu(p.animacje, profil),
+      animacje: zastosujProfilRuchu(animacjePodgladu, profil),
     })
   }
 
   const ustawAnimacje = <K extends keyof AnimacjePersonalizacji>(key: K, value: AnimacjePersonalizacji[K]) => {
     aktualizujPersonalizacje({
       ...p,
-      animacje: { ...p.animacje, [key]: value, profil: 'wlasne' },
+      animacje: { ...animacjePodgladu, [key]: value, profil: 'wlasne' },
     })
   }
 
@@ -216,6 +225,13 @@ export function EdytorPersonalizacji() {
   const zapisz = async () => {
     await zapiszUstawienia({ wyglad: szkic.wyglad })
     ustawKomunikat('Motyw i personalizacja zostały zapisane.')
+  }
+
+  const anulujPodglad = () => {
+    ustawSzkic(normalizujUstawienia(zapisaneUstawienia))
+    wyczyscPodgladUstawien()
+    ustawKomunikat('Przywrócono zapisany wygląd.')
+    ustawBlad('')
   }
 
   const resetuj = () => {
@@ -243,10 +259,10 @@ export function EdytorPersonalizacji() {
     const motyw: MotywWlasny = {
       id: idMotywu(),
       nazwa,
-      motyw: szkic.wyglad.motyw === 'jasny' ? 'jasny' : 'ciemny',
-      paleta: { ...p.paleta },
+      motyw: motywPodgladu,
+      paleta: { ...paletaPodgladu },
       interakcje: { ...p.interakcje },
-      animacje: { ...p.animacje },
+      animacje: { ...animacjePodgladu },
       komponenty: { ...p.komponenty },
     }
     aktualizujPersonalizacje({
@@ -338,6 +354,7 @@ export function EdytorPersonalizacji() {
       akcje={<>
         <Link className="przycisk przycisk--drugorzedny" to="/ustawienia">← Ustawienia</Link>
         <button className="przycisk przycisk--drugorzedny" type="button" onClick={resetuj}><RotateCcw aria-hidden="true" />Resetuj</button>
+        <button className="przycisk przycisk--drugorzedny" type="button" disabled={!niezapisaneZmiany} onClick={anulujPodglad}>Anuluj podgląd</button>
         <button className="przycisk przycisk--glowny" type="button" disabled={!niezapisaneZmiany} onClick={zapisz}><Save aria-hidden="true" />Zapisz ustawienia</button>
       </>}
     />
@@ -351,7 +368,7 @@ export function EdytorPersonalizacji() {
         <div>
           <strong>{p.preset === 'wlasny' ? 'Motyw własny' : PRESETY_MOTYWOW.find((item) => item.id === p.preset)?.nazwa ?? 'Motyw bazowy'}</strong>
           <span>
-            Podgląd na żywo · {p.uzyjWlasnejPalety ? 'własna paleta' : 'kolory bazowe aplikacji'}
+            Podgląd na żywo · {p.uzyjWlasnejPalety ? 'własna paleta' : p.styl === 'premium' ? 'paleta Premium' : 'kolory bazowe aplikacji'}
             {niezapisaneZmiany && <em className="personalizacja__dirty"> · Niezapisane zmiany</em>}
           </span>
         </div>
@@ -383,6 +400,8 @@ export function EdytorPersonalizacji() {
             <div><h2>Motyw i biblioteka</h2><p>Wybierz bazę, a potem dopracuj ją w kolejnych zakładkach.</p></div>
             <WandSparkles aria-hidden="true" />
           </div>
+
+          <WyborStyluInterfejsu styl={p.styl} zmien={(styl) => aktualizujPersonalizacje({ ...p, styl })} />
 
           <div className="motywy-grid">
             <button
@@ -425,7 +444,7 @@ export function EdytorPersonalizacji() {
                 </select>
               </label>
               <label className="ustawienie-wiersz personalizacja-toggle">
-                <span><strong>Własna paleta</strong><small>Wyłączenie wraca do bazowych kolorów CSS.</small></span>
+                <span><strong>Własna paleta</strong><small>Wyłączenie przywraca paletę wybranego stylu interfejsu.</small></span>
                 <input type="checkbox" checked={p.uzyjWlasnejPalety} onChange={(event) => aktualizujPersonalizacje({ ...p, uzyjWlasnejPalety: event.target.checked })} />
               </label>
             </div>
@@ -468,10 +487,10 @@ export function EdytorPersonalizacji() {
               {KOLORY.filter((item) => item.grupa === grupa).map((item) => <label key={item.key} className="kolor-pole">
                 <span>{item.label}</span>
                 <div>
-                  <input type="color" value={p.paleta[item.key]} onChange={(event) => ustawPalete(item.key, event.target.value)} />
+                  <input type="color" value={paletaPodgladu[item.key]} onChange={(event) => ustawPalete(item.key, event.target.value)} />
                   <input
                     type="text"
-                    value={p.paleta[item.key]}
+                    value={paletaPodgladu[item.key]}
                     onChange={(event) => {
                       if (/^#[0-9a-f]{6}$/i.test(event.target.value)) ustawPalete(item.key, event.target.value)
                     }}
@@ -590,9 +609,9 @@ export function EdytorPersonalizacji() {
             </div>
           </div>
           <div className="personalizacja-form-grid">
-            <Suwak label="Hover" value={p.animacje.hoverMs} min={0} max={1000} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('hoverMs', v)} />
-            <Suwak label="Active" value={p.animacje.activeMs} min={0} max={1000} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('activeMs', v)} />
-            <Suwak label="Modal" value={p.animacje.modalMs} min={0} max={1200} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('modalMs', v)} />
+            <Suwak label="Hover" value={animacjePodgladu.hoverMs} min={0} max={1000} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('hoverMs', v)} />
+            <Suwak label="Active" value={animacjePodgladu.activeMs} min={0} max={1000} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('activeMs', v)} />
+            <Suwak label="Modal" value={animacjePodgladu.modalMs} min={0} max={1200} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('modalMs', v)} />
             <Suwak label="Dropdown" value={p.animacje.dropdownMs} min={0} max={1000} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('dropdownMs', v)} />
             <Suwak label="Tooltip" value={p.animacje.tooltipMs} min={0} max={1000} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('tooltipMs', v)} />
             <Suwak label="Przejście strony" value={p.animacje.pageMs} min={0} max={1200} step={10} suffix=" ms" onChange={(v) => ustawAnimacje('pageMs', v)} />

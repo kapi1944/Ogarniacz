@@ -319,5 +319,6 @@ export function zastosujUstawieniaInterfejsu(
     ustawienia.wyglad.personalizacja,
     korzen,
     ustawienia.dostepnosc.ograniczRuch || ograniczRuchSystemowo,
+    motyw,
   )
 }
