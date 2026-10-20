@@ -13,7 +13,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'ikona-192.png', 'ikona-512.png'],
+      includeAssets: ['favicon.svg', 'favicon.ico', 'favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png', 'ikona-192.png', 'ikona-512.png'],
       manifest: {
         name: 'Ogarniacz',
         short_name: 'Ogarniacz',
@@ -26,12 +26,12 @@ export default defineConfig({
         background_color: '#f4f6f8',
         theme_color: '#4f7a32',
         icons: [
-          { src: '/ikona-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/ikona-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/ikona-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/ikona-192.png?branding=pro-1', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/ikona-512.png?branding=pro-1', sizes: '512x512', type: 'image/png', purpose: 'any' },
         ],
       },
       workbox: {
+        ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^branding$/],
         importScripts: ['/powiadomienia-sw.js'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//, /^\/health\/?$/],
