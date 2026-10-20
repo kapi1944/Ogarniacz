@@ -14,29 +14,40 @@ describe.sequential('ustawienia aplikacji', () => {
     await inicjalizujBaze()
   })
 
-  it('zachowuje Premium po otwarciu bazy i w istniejącym rekordzie synchronizacji', async () => {
-    const ustawienia = normalizujUstawienia({ wyglad: { motyw: 'systemowy', personalizacja: { styl: 'premium' } } })
+  it.each(['klasyczny', 'premium', 'flat'] as const)('zachowuje styl %s po otwarciu bazy i w istniejącym rekordzie synchronizacji', async (styl) => {
+    await repozytoriumUstawien.zapisz(normalizujUstawienia({ wyglad: { personalizacja: { styl: styl === 'flat' ? 'premium' : 'flat' } } }))
+    const ustawienia = normalizujUstawienia({ wyglad: { motyw: 'systemowy', personalizacja: { styl } } })
     await repozytoriumUstawien.zapisz(ustawienia)
     baza.close()
     await baza.open()
     const wczytane = await repozytoriumUstawien.wczytaj()
-    expect(wczytane.wyglad.personalizacja.styl).toBe('premium')
+    expect(wczytane.wyglad.personalizacja.styl).toBe(styl)
     expect(wczytane.wyglad.motyw).toBe('systemowy')
     const oczekujaca = await tabelaKolejki().where('rekordId').equals('glowne').first()
-    expect((oczekujaca?.rekord as Ustawienia | undefined)?.wyglad.personalizacja.styl).toBe('premium')
+    expect((oczekujaca?.rekord as Ustawienia | undefined)?.wyglad.personalizacja.styl).toBe(styl)
     expect(normalizujUstawienia(rekordDoSynchronizacji('ustawienia', wczytane)).wyglad).toEqual(wczytane.wyglad)
   })
 
-  it('stosuje Premium w trybie systemowym i respektuje oba źródła ograniczenia animacji', () => {
-    const ustawienia = normalizujUstawienia({ wyglad: { motyw: 'systemowy', personalizacja: { styl: 'premium' } } })
+  it.each(['premium', 'flat'] as const)('stosuje %s w trybie systemowym i respektuje oba źródła ograniczenia animacji', (styl) => {
+    const ustawienia = normalizujUstawienia({ wyglad: { motyw: 'systemowy', personalizacja: { styl } } })
     zastosujUstawieniaInterfejsu(ustawienia, true, true)
     expect(document.documentElement.dataset.motyw).toBe('ciemny')
-    expect(document.documentElement.dataset.styl).toBe('premium')
+    expect(document.documentElement.dataset.styl).toBe(styl)
     expect(document.documentElement.style.getPropertyValue('--ui-modal-ms')).toBe('0ms')
     zastosujUstawieniaInterfejsu({ ...ustawienia, dostepnosc: { ...ustawienia.dostepnosc, ograniczRuch: true } }, false)
     expect(document.documentElement.dataset.motyw).toBe('jasny')
     expect(document.documentElement.style.getPropertyValue('--ui-hover-ms')).toBe('0ms')
     zastosujUstawieniaInterfejsu(DOMYSLNE_USTAWIENIA, false)
+  })
+
+  it('stosuje domyślny promień kart Flat, zachowując własny promień i powrót do poprzednich stylów', () => {
+    const ustawienia = normalizujUstawienia({ wyglad: { personalizacja: { styl: 'flat' } } })
+    zastosujUstawieniaInterfejsu(ustawienia, false)
+    expect(document.documentElement.style.getPropertyValue('--promien-karty')).toBe('10px')
+    zastosujUstawieniaInterfejsu({ ...ustawienia, wyglad: { ...ustawienia.wyglad, promienKart: 18 } }, false)
+    expect(document.documentElement.style.getPropertyValue('--promien-karty')).toBe('18px')
+    zastosujUstawieniaInterfejsu(DOMYSLNE_USTAWIENIA, false)
+    expect(document.documentElement.style.getPropertyValue('--promien-karty')).toBe('12px')
   })
 
   it('uzupełnia puste i niepełne ustawienia', () => {

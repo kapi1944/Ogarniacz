@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   DOMYSLNA_PERSONALIZACJA,
   PALETY_PREMIUM,
+  PALETY_FLAT,
   PRESETY_MOTYWOW,
   WERSJA_SCHEMATU_MOTYWU,
   normalizujImportMotywu,
@@ -9,6 +10,7 @@ import {
   ocenKontrastPalety,
   obliczKontrast,
   rozwiazPaletePersonalizacji,
+  rozwiazAnimacjePersonalizacji,
   wybierzCzytelnyTekst,
   zastosujPresetMotywu,
   przywrocBazowaPersonalizacje,
@@ -18,23 +20,25 @@ import {
 describe('personalizacja UI', () => {
   it('starsze i nieznane style pozostawia jako Klasyczny', () => {
     expect(normalizujPersonalizacje({ preset: 'oled' }).styl).toBe('klasyczny')
-    expect(normalizujPersonalizacje({ styl: 'flat' }).styl).toBe('klasyczny')
+    expect(normalizujPersonalizacje({ styl: 'nieznany' }).styl).toBe('klasyczny')
     expect(normalizujPersonalizacje({ styl: 'premium' }).styl).toBe('premium')
+    expect(normalizujPersonalizacje({ styl: 'flat' }).styl).toBe('flat')
   })
 
-  it('zachowuje styl Premium przy imporcie dotychczasowego formatu motywu', () => {
-    const wynik = normalizujImportMotywu({ format: 'ogarniacz-theme', wersja: WERSJA_SCHEMATU_MOTYWU, motyw: 'jasny', personalizacja: { styl: 'premium' } })
-    expect(wynik.personalizacja.styl).toBe('premium')
+  it.each(['klasyczny', 'premium', 'flat'] as const)('zachowuje styl %s przy imporcie dotychczasowego formatu motywu', (styl) => {
+    const wynik = normalizujImportMotywu({ format: 'ogarniacz-theme', wersja: WERSJA_SCHEMATU_MOTYWU, motyw: 'jasny', personalizacja: { styl } })
+    expect(wynik.personalizacja.styl).toBe(styl)
     expect(wynik.motyw).toBe('jasny')
   })
 
-  it.each(['jasny', 'ciemny'] as const)('zapewnia kontrast AA palety Premium: %s', (motyw) => {
-    const paleta = PALETY_PREMIUM[motyw]
+  it.each((['premium', 'flat'] as const).flatMap((styl) => (['jasny', 'ciemny'] as const).map((motyw) => ({ styl, motyw }))))('zapewnia kontrast AA palety $styl: $motyw', ({ styl, motyw }) => {
+    const paleta = (styl === 'premium' ? PALETY_PREMIUM : PALETY_FLAT)[motyw]
     for (const tlo of [paleta.tlo, paleta.panel, paleta.panel2]) {
       for (const kolor of [paleta.tekst, paleta.tekst2, paleta.akcent, paleta.akcentHover]) {
         expect(obliczKontrast(kolor, tlo)).toBeGreaterThanOrEqual(4.5)
       }
       expect(obliczKontrast(paleta.obramowanieMocne, tlo)).toBeGreaterThanOrEqual(3)
+      if (styl === 'flat') expect(obliczKontrast(paleta.obramowanie, tlo)).toBeGreaterThanOrEqual(3)
       expect(obliczKontrast(paleta.focus, tlo)).toBeGreaterThanOrEqual(3)
       for (const kolor of [paleta.zadanie, paleta.projekt, paleta.wizyta, paleta.lek, paleta.finanse, paleta.samochod, paleta.przypomnienie]) {
         expect(obliczKontrast(kolor, tlo)).toBeGreaterThanOrEqual(3)
@@ -92,6 +96,17 @@ describe('personalizacja UI', () => {
     zastosujPersonalizacje({ ...premium, styl: 'klasyczny' }, korzen, false)
     expect(korzen.style.getPropertyValue('--ui-hover-ms')).toBe('160ms')
     expect(korzen.style.getPropertyValue('--ui-modal-ms')).toBe('180ms')
+  })
+
+  it('Flat ogranicza dekoracyjny ruch bez nadpisania własnych animacji i palet', () => {
+    const flat = normalizujPersonalizacje({ styl: 'flat' })
+    const przed = structuredClone(flat)
+    expect(rozwiazAnimacjePersonalizacji(flat)).toMatchObject({ hoverMs: 100, modalMs: 0, kartaMs: 0, pageMs: 0 })
+    expect(flat).toEqual(przed)
+    const wlasny = normalizujPersonalizacje({ ...flat, uzyjWlasnejPalety: true, animacje: { profil: 'wlasne', hoverMs: 270 } })
+    expect(rozwiazAnimacjePersonalizacji(wlasny).hoverMs).toBe(270)
+    expect(rozwiazPaletePersonalizacji(wlasny, 'jasny')).toEqual(wlasny.paleta)
+    expect(przywrocBazowaPersonalizacje(wlasny).styl).toBe('klasyczny')
   })
 
   it('uzupełnia nowe pola w starszym motywie bez utraty jego wartości', () => {

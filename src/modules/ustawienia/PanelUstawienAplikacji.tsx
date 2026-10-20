@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { Palette, Save, Undo2 } from 'lucide-react'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { Karta, Komunikat } from '../../components/Interfejs'
-import { DOMYSLNE_USTAWIENIA, normalizujUstawienia } from '../../domain/ustawienia'
+import { DOMYSLNE_USTAWIENIA, normalizujUstawienia, rozwiazPromienKart } from '../../domain/ustawienia'
 import type { NazwaModulu, TypSzybkiegoDodawania, Ustawienia } from '../../domain/typy'
 import { useSesjaEcho } from '../../app/DostawcaSesjiEcho'
 import { WyborStyluInterfejsu } from './WyborStyluInterfejsu'
@@ -147,7 +147,7 @@ export function PanelUstawienAplikacji() {
         <div className="pole pole--pelne personalizacja-zajawka"><div><strong>Motywy i personalizacja</strong><small>Palety kolorów, komponenty, hover/active, animacje i podgląd na żywo.</small></div><Link to="/ustawienia/personalizacja" className="przycisk przycisk--drugorzedny"><Palette aria-hidden="true" />Otwórz edytor motywu</Link></div>
         <label className="pole"><span>Motyw</span><select value={szkic.wyglad.motyw} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, motyw: e.target.value as Ustawienia['wyglad']['motyw'] } })}><option value="systemowy">Systemowy</option><option value="jasny">Jasny</option><option value="ciemny">Ciemny</option></select></label>
         <label className="pole"><span>Gęstość</span><select value={szkic.wyglad.gestosc} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, gestosc: e.target.value as Ustawienia['wyglad']['gestosc'] } })}><option value="komfortowa">Komfortowa</option><option value="zwarta">Zwarta</option></select></label>
-        <label className="pole"><span>Promień kart: {szkic.wyglad.promienKart}px</span><input type="range" min="0" max="24" value={szkic.wyglad.promienKart} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, promienKart: Number(e.target.value) } })} /></label>
+        <label className="pole"><span>Promień kart: {rozwiazPromienKart(szkic.wyglad)}px</span><input type="range" min="0" max="24" value={rozwiazPromienKart(szkic.wyglad)} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, promienKart: Number(e.target.value) } })} /></label>
         <label className="pole"><span>Promień pól: {szkic.wyglad.promienPol}px</span><input type="range" min="0" max="16" value={szkic.wyglad.promienPol} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, promienPol: Number(e.target.value) } })} /></label>
         <label className="pole pole--pelne"><span>Czas animacji: {szkic.wyglad.czasAnimacjiMs} ms</span><input type="range" min="0" max="600" step="20" value={szkic.wyglad.czasAnimacjiMs} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, czasAnimacjiMs: Number(e.target.value) } })} /></label>
       </SekcjaUstawien>

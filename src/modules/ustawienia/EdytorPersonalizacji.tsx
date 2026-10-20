@@ -42,7 +42,7 @@ import {
   type PoziomReakcji,
   type ProfilRuchu,
 } from '../../domain/personalizacja'
-import { DOMYSLNE_USTAWIENIA, normalizujUstawienia } from '../../domain/ustawienia'
+import { DOMYSLNE_USTAWIENIA, normalizujUstawienia, rozwiazPromienKart } from '../../domain/ustawienia'
 import type { Ustawienia } from '../../domain/typy'
 import { WyborStyluInterfejsu } from './WyborStyluInterfejsu'
 
@@ -368,7 +368,7 @@ export function EdytorPersonalizacji() {
         <div>
           <strong>{p.preset === 'wlasny' ? 'Motyw własny' : PRESETY_MOTYWOW.find((item) => item.id === p.preset)?.nazwa ?? 'Motyw bazowy'}</strong>
           <span>
-            Podgląd na żywo · {p.uzyjWlasnejPalety ? 'własna paleta' : p.styl === 'premium' ? 'paleta Premium' : 'kolory bazowe aplikacji'}
+            Podgląd na żywo · {p.uzyjWlasnejPalety ? 'własna paleta' : p.styl === 'premium' ? 'paleta Premium' : p.styl === 'flat' ? 'paleta Flat' : 'kolory bazowe aplikacji'}
             {niezapisaneZmiany && <em className="personalizacja__dirty"> · Niezapisane zmiany</em>}
           </span>
         </div>
@@ -510,7 +510,7 @@ export function EdytorPersonalizacji() {
           <div className="personalizacja-form-grid">
             <label className="pole"><span>Globalne obramowanie</span><select value={p.komponenty.obramowanie} onChange={(e) => ustawKomponent('obramowanie', e.target.value as KomponentyPersonalizacji['obramowanie'])}><option value="brak">Brak</option><option value="subtelne">Subtelne</option><option value="standardowe">Standardowe</option><option value="wyrazne">Wyraźne</option></select></label>
             <label className="pole"><span>Globalna głębia</span><select value={p.komponenty.glebia} onChange={(e) => ustawKomponent('glebia', e.target.value as KomponentyPersonalizacji['glebia'])}><option value="plaska">Płaska</option><option value="lekko-podniesiona">Lekko podniesiona</option><option value="przestrzenna">Przestrzenna</option></select></label>
-            <Suwak label="Globalny promień kart i paneli" value={szkic.wyglad.promienKart} min={0} max={24} step={1} suffix=" px" onChange={(v) => aktualizuj({ ...szkic, wyglad: { ...szkic.wyglad, promienKart: v } })} />
+            <Suwak label="Globalny promień kart i paneli" value={rozwiazPromienKart(szkic.wyglad)} min={0} max={24} step={1} suffix=" px" onChange={(v) => aktualizuj({ ...szkic, wyglad: { ...szkic.wyglad, promienKart: v } })} />
             <Suwak label="Globalny promień kontrolek" value={szkic.wyglad.promienPol} min={0} max={16} step={1} suffix=" px" onChange={(v) => aktualizuj({ ...szkic, wyglad: { ...szkic.wyglad, promienPol: v } })} />
             <label className="pole"><span>Cień kart</span><select value={p.komponenty.kartaCien} onChange={(e) => ustawKomponent('kartaCien', e.target.value as KomponentyPersonalizacji['kartaCien'])}><option value="brak">Brak</option><option value="lekki">Lekki</option><option value="sredni">Średni</option><option value="mocny">Mocny</option></select></label>
             <Suwak label="Obramowanie kart" value={p.komponenty.kartaObramowanie} min={0} max={4} step={1} suffix=" px" onChange={(v) => ustawKomponent('kartaObramowanie', v)} />

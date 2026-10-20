@@ -44,11 +44,11 @@ afterEach(() => {
 })
 
 describe('wybór stylu w personalizacji', () => {
-  it('podgląda Premium i anuluje bez zapisu do bazy', async () => {
+  it.each(['premium', 'flat'] as const)('podgląda styl %s i anuluje bez zapisu do bazy', async (styl) => {
     const przed = await repozytoriumUstawien.wczytaj()
     pokazEdytor()
-    fireEvent.change(screen.getByRole('combobox', { name: /Styl interfejsu/ }), { target: { value: 'premium' } })
-    expect(document.documentElement.dataset.styl).toBe('premium')
+    fireEvent.change(screen.getByRole('combobox', { name: /Styl interfejsu/ }), { target: { value: styl } })
+    expect(document.documentElement.dataset.styl).toBe(styl)
     expect(screen.getByRole('button', { name: 'Zapisz ustawienia' })).toBeEnabled()
     expect(await repozytoriumUstawien.wczytaj()).toEqual(przed)
     fireEvent.click(screen.getByRole('button', { name: 'Anuluj podgląd' }))
@@ -58,9 +58,9 @@ describe('wybór stylu w personalizacji', () => {
     expect(zapisz).not.toHaveBeenCalled()
   })
 
-  it('zapisuje Premium, odtwarza po ponownym otwarciu i pozwala wrócić do Klasycznego', async () => {
+  it.each(['premium', 'flat'] as const)('zapisuje styl %s, odtwarza po ponownym otwarciu i pozwala wrócić do Klasycznego', async (styl) => {
     const widok = pokazEdytor()
-    fireEvent.change(screen.getByRole('combobox', { name: /Styl interfejsu/ }), { target: { value: 'premium' } })
+    fireEvent.change(screen.getByRole('combobox', { name: /Styl interfejsu/ }), { target: { value: styl } })
     fireEvent.click(screen.getByRole('button', { name: 'Zapisz ustawienia' }))
     await waitFor(() => expect(screen.getByText('Motyw i personalizacja zostały zapisane.')).toBeInTheDocument())
     widok.unmount()
@@ -68,7 +68,7 @@ describe('wybór stylu w personalizacji', () => {
     await baza.open()
     zapisane = await repozytoriumUstawien.wczytaj()
     pokazEdytor()
-    expect(screen.getByRole('combobox', { name: /Styl interfejsu/ })).toHaveValue('premium')
+    expect(screen.getByRole('combobox', { name: /Styl interfejsu/ })).toHaveValue(styl)
     fireEvent.change(screen.getByRole('combobox', { name: /Styl interfejsu/ }), { target: { value: 'klasyczny' } })
     fireEvent.click(screen.getByRole('button', { name: 'Zapisz ustawienia' }))
     await waitFor(() => expect(screen.getByText('Motyw i personalizacja zostały zapisane.')).toBeInTheDocument())
@@ -97,5 +97,36 @@ describe('wybór stylu w personalizacji', () => {
     fireEvent.change(screen.getByRole('combobox', { name: /Styl interfejsu/ }), { target: { value: 'klasyczny' } })
     expect(podglad.mock.calls.at(-1)![0].wyglad.personalizacja.paleta).toEqual(wlasna.paleta)
     expect(podglad.mock.calls.at(-1)![0].wyglad.personalizacja.animacje).toEqual(wlasna.animacje)
+  })
+
+  it.each([
+    ['klasyczny', 'flat'], ['premium', 'flat'], ['flat', 'premium'], ['flat', 'klasyczny'],
+  ] as const)('przełącza %s → %s na żywo i zachowuje poprzednie preferencje', (poprzedni, nastepny) => {
+    zapisane = normalizujUstawienia({ wyglad: { personalizacja: { styl: poprzedni, uzyjWlasnejPalety: true, animacje: { profil: 'wlasne', hoverMs: 270 }, komponenty: { kartaCien: 'mocny' } } } })
+    const przed = structuredClone(zapisane)
+    zastosujUstawieniaInterfejsu(zapisane, false)
+    pokazEdytor()
+    for (const nazwa of ['Klasyczny', 'Premium', 'Flat']) expect(screen.getByRole('option', { name: nazwa })).toBeInTheDocument()
+    fireEvent.change(screen.getByRole('combobox', { name: /Styl interfejsu/ }), { target: { value: nastepny } })
+    expect(document.documentElement.dataset.styl).toBe(nastepny)
+    const ostatniPodglad = podglad.mock.calls.at(-1)![0].wyglad.personalizacja
+    expect(ostatniPodglad.paleta).toEqual(przed.wyglad.personalizacja.paleta)
+    expect(ostatniPodglad.animacje).toEqual(przed.wyglad.personalizacja.animacje)
+    expect(ostatniPodglad.komponenty).toEqual(przed.wyglad.personalizacja.komponenty)
+    expect(zapisane).toEqual(przed)
+    fireEvent.click(screen.getByRole('button', { name: 'Anuluj podgląd' }))
+    expect(document.documentElement.dataset.styl).toBe(poprzedni)
+  })
+
+  it('resetuje Flat do domyślnego stylu Klasycznego dopiero po zapisie', async () => {
+    zapisane = normalizujUstawienia({ wyglad: { personalizacja: { styl: 'flat' } } })
+    zastosujUstawieniaInterfejsu(zapisane, false)
+    pokazEdytor()
+    fireEvent.click(screen.getByRole('button', { name: 'Resetuj' }))
+    expect(document.documentElement.dataset.styl).toBe('klasyczny')
+    expect(zapisane.wyglad.personalizacja.styl).toBe('flat')
+    fireEvent.click(screen.getByRole('button', { name: 'Zapisz ustawienia' }))
+    await waitFor(() => expect(screen.getByText('Motyw i personalizacja zostały zapisane.')).toBeInTheDocument())
+    expect((await repozytoriumUstawien.wczytaj()).wyglad.personalizacja.styl).toBe('klasyczny')
   })
 })

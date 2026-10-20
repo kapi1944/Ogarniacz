@@ -297,6 +297,12 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
   }
 }
 
+export function rozwiazPromienKart(wyglad: Ustawienia['wyglad']): number {
+  return wyglad.personalizacja.styl === 'flat'
+    && wyglad.promienKart === DOMYSLNE_USTAWIENIA.wyglad.promienKart
+    ? 10 : wyglad.promienKart
+}
+
 export function zastosujUstawieniaInterfejsu(
   ustawienia: Ustawienia,
   ciemnyMotywSystemowy: boolean,
@@ -309,7 +315,7 @@ export function zastosujUstawieniaInterfejsu(
   korzen.dataset.motyw = motyw
   korzen.dataset.gestosc = ustawienia.wyglad.gestosc
   korzen.dataset.kontrast = ustawienia.dostepnosc.wysokiKontrast ? 'wysoki' : 'standardowy'
-  korzen.style.setProperty('--promien-karty', `${ustawienia.wyglad.promienKart}px`)
+  korzen.style.setProperty('--promien-karty', `${rozwiazPromienKart(ustawienia.wyglad)}px`)
   korzen.style.setProperty('--promien-pola', `${ustawienia.wyglad.promienPol}px`)
   korzen.style.setProperty('--gestosc', ustawienia.wyglad.gestosc === 'zwarta' ? '0.82' : '1')
   korzen.style.setProperty('--czas-animacji', `${ustawienia.dostepnosc.ograniczRuch ? 0 : ustawienia.wyglad.czasAnimacjiMs}ms`)

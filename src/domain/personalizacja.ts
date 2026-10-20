@@ -1,8 +1,9 @@
-export type StylInterfejsu = 'klasyczny' | 'premium'
+export type StylInterfejsu = 'klasyczny' | 'premium' | 'flat'
 
 export const STYLE_INTERFEJSU: { id: StylInterfejsu; nazwa: string; opis: string }[] = [
   { id: 'klasyczny', nazwa: 'Klasyczny', opis: 'Dotychczasowy wygląd Ogarniacza.' },
   { id: 'premium', nazwa: 'Premium', opis: 'OGARNIACZ PREMIUM / SIGNATURE · satynowa zieleń i szampańskie złoto.' },
+  { id: 'flat', nazwa: 'Flat', opis: 'OGARNIACZ FLAT / ESSENTIAL · proste powierzchnie, szmaragd i wyraźne granice.' },
 ]
 
 export type PresetMotywu =
@@ -257,17 +258,52 @@ export const PALETY_PREMIUM: Record<'jasny' | 'ciemny', PaletaPersonalizacji> = 
   },
 }
 
+export const PALETY_FLAT: Record<'jasny' | 'ciemny', PaletaPersonalizacji> = {
+  ciemny: {
+    ...PALETA_DARK,
+    tlo: '#081f17', panel: '#103126', panel2: '#173d2d',
+    tekst: '#ffffff', tekst2: '#bdd4c5',
+    obramowanie: '#718f7e', obramowanieMocne: '#8da997',
+    akcent: '#42db84', akcentHover: '#6ae59e', akcentJasny: '#194832',
+    sukces: '#42db84', sukcesTlo: '#133e2a',
+    ostrzezenie: '#ffbe32', ostrzezenieTlo: '#3b3015',
+    informacja: '#9ccde0', informacjaTlo: '#183743',
+    sidebar: '#0a261b', sidebarHover: '#173d2d', sidebarActive: '#194832', sidebarTekst: '#ffffff',
+    focus: '#ffbe32', zadanie: '#42db84', projekt: '#42db84', wizyta: '#bdd4c5',
+    lek: '#42db84', finanse: '#ffbe32', samochod: '#ffbe32', przypomnienie: '#f19a96',
+    timeline: '#8da997', timelineTeraz: '#42db84',
+  },
+  jasny: {
+    ...PALETA_LIGHT,
+    tlo: '#f0f5f1', panel: '#ffffff', panel2: '#e5efe8',
+    tekst: '#0b2a1c', tekst2: '#405c4b',
+    obramowanie: '#718777', obramowanieMocne: '#526e5c',
+    akcent: '#146c3d', akcentHover: '#0e5931', akcentJasny: '#dcefe2',
+    sukces: '#146c3d', sukcesTlo: '#dcefe2',
+    ostrzezenie: '#855a00', ostrzezenieTlo: '#fff0ca',
+    informacja: '#285e73', informacjaTlo: '#e3eef2',
+    sidebar: '#e5efe8', sidebarHover: '#dcefe2', sidebarActive: '#cce6d4', sidebarTekst: '#0b2a1c',
+    focus: '#855a00', zadanie: '#146c3d', projekt: '#146c3d', wizyta: '#405c4b',
+    lek: '#146c3d', finanse: '#855a00', samochod: '#855a00', przypomnienie: '#a53535',
+    timeline: '#526e5c', timelineTeraz: '#146c3d',
+  },
+}
+
 export function rozwiazPaletePersonalizacji(
   personalizacja: PersonalizacjaUI,
   motyw: 'jasny' | 'ciemny',
 ): PaletaPersonalizacji {
   if (personalizacja.uzyjWlasnejPalety) return personalizacja.paleta
   if (personalizacja.styl === 'premium') return PALETY_PREMIUM[motyw]
+  if (personalizacja.styl === 'flat') return PALETY_FLAT[motyw]
   return motyw === 'jasny' ? PALETA_LIGHT : PALETA_DARK
 }
 
 export function rozwiazAnimacjePersonalizacji(personalizacja: PersonalizacjaUI): AnimacjePersonalizacji {
   const animacje = personalizacja.animacje
+  if (personalizacja.styl === 'flat' && animacje.profil === 'standardowe') {
+    return { ...animacje, hoverMs: 100, activeMs: 70, modalMs: 0, dropdownMs: 0, tooltipMs: 0, pageMs: 0, kartaMs: 0, dragMs: 0 }
+  }
   if (personalizacja.styl !== 'premium' || animacje.profil !== 'standardowe') return animacje
   const domyslne = DOMYSLNA_PERSONALIZACJA.animacje
   return {
@@ -859,13 +895,13 @@ export function zastosujPersonalizacje(
   root.dataset.uiSelected = p.interakcje.selectedPoziom
   root.dataset.uiFocus = p.interakcje.focusPoziom
 
-  if (p.uzyjWlasnejPalety || p.styl === 'premium') {
+  if (p.uzyjWlasnejPalety || p.styl !== 'klasyczny') {
     for (const [key, css] of Object.entries(KOLORY_CSS) as [keyof typeof KOLORY_CSS, string][]) {
       style.setProperty(css, paleta[key])
     }
     style.setProperty('--ui-sidebar-bg', paleta.sidebar)
     style.setProperty('--akcent-hover', p.interakcje.autoStany
-      ? `color-mix(in srgb, ${paleta.akcent} 82%, ${p.styl === 'premium' && motyw === 'jasny' ? 'black' : 'white'})`
+      ? `color-mix(in srgb, ${paleta.akcent} 82%, ${p.styl !== 'klasyczny' && motyw === 'jasny' ? 'black' : 'white'})`
       : paleta.akcentHover)
     style.setProperty('--ui-sidebar-hover', p.interakcje.autoStany
       ? `color-mix(in srgb, ${paleta.sidebar} 82%, white)`
@@ -889,7 +925,7 @@ export function zastosujPersonalizacje(
     }
   }
 
-  const paletaModulow = p.styl === 'premium' ? paleta : p.paleta
+  const paletaModulow = p.styl !== 'klasyczny' ? paleta : p.paleta
   style.setProperty('--modul-zadanie', paletaModulow.zadanie)
   style.setProperty('--modul-projekt', paletaModulow.projekt)
   style.setProperty('--modul-wizyta', paletaModulow.wizyta)

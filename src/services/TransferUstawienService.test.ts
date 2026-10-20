@@ -12,14 +12,14 @@ describe.sequential('import i eksport ustawień', () => {
     await inicjalizujBaze()
   })
 
-  it('przenosi Premium w dotychczasowym formacie ustawień', async () => {
+  it.each(['premium', 'flat'] as const)('przenosi styl %s w dotychczasowym formacie ustawień', async (styl) => {
     const ustawienia = await repozytoriumUstawien.wczytaj()
-    await repozytoriumUstawien.zapisz({ ...ustawienia, wyglad: { ...ustawienia.wyglad, personalizacja: { ...ustawienia.wyglad.personalizacja, styl: 'premium' } } })
+    await repozytoriumUstawien.zapisz({ ...ustawienia, wyglad: { ...ustawienia.wyglad, personalizacja: { ...ustawienia.wyglad.personalizacja, styl } } })
     const eksport = await utworzEksportUstawien()
     expect(eksport.formatVersion).toBe(1)
     await repozytoriumUstawien.zapisz(ustawienia)
     const importowane = await importujUstawienia(JSON.stringify(eksport))
-    expect(importowane.wyglad.personalizacja.styl).toBe('premium')
+    expect(importowane.wyglad.personalizacja.styl).toBe(styl)
     expect(importowane.wyglad.motyw).toBe(ustawienia.wyglad.motyw)
   })
 

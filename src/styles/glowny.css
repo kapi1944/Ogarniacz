@@ -2360,6 +2360,161 @@ input[type="radio"] {
     transition-duration: 0s !important;
   }
 }
+/* OGARNIACZ FLAT / ESSENTIAL — jednolite powierzchnie bez dekoracyjnej głębi. */
+:root[data-styl="flat"],
+:root[data-styl="flat"] body,
+:root[data-styl="flat"] #root { min-width: 0; }
+
+:root[data-styl="flat"] {
+  --gradient-akcentowy: var(--akcent);
+  --gradient-akcentowy-hover: var(--ui-accent-hover-effective);
+  --cien: none;
+  --ostrzezenie-tekst: var(--ostrzezenie);
+  --ui-card-shadow: none !important;
+  --ui-card-hover-shadow: none !important;
+  --ui-depth-shadow: none !important;
+  --ui-hover-shadow: none !important;
+  --ui-active-shadow: none !important;
+  --ui-selected-glow: 0px !important;
+  --ui-hover-scale: 1 !important;
+  --ui-hover-y: 0px !important;
+  --ui-card-hover-y: 0px !important;
+  --ui-active-scale: 1 !important;
+  --ui-active-y: 0px !important;
+  color: var(--tekst);
+  background: var(--tlo);
+}
+
+/* Pozycjonujące transformacje osi czasu, tooltipów i nawigacji pozostają zachowane. */
+:root[data-styl="flat"] *,
+:root[data-styl="flat"] *::before,
+:root[data-styl="flat"] *::after,
+:root[data-styl="flat"] *::backdrop {
+  box-shadow: none !important;
+  text-shadow: none !important;
+  backdrop-filter: none !important;
+  filter: none !important;
+  animation: none !important;
+  transition-property: background-color, border-color, color, opacity, outline-color;
+}
+
+:root[data-styl="flat"] :is(.pasek-gorny, .dolna-nawigacja, .mobilny-drawer, .modal, .okno-modalne, .motyw-playground__modal, .motyw-playground__dropdown, .personalizacja-zajawka, .karta--akcent, .pusty-stan, .strefa-pulpitu--alerty, .centrum-dowodzenia__glowna, .centrum-dowodzenia__alerty, .karta-echo, .plan-dnia__wprowadzenie, .plan-dnia__pusty) {
+  background: var(--panel);
+}
+
+:root[data-styl="flat"] :is(.sidebar, .motyw-playground__sidebar) {
+  background: var(--ui-sidebar-bg);
+  color: var(--ui-sidebar-tekst);
+}
+
+:root[data-styl="flat"] .grupa-menu__etykieta { color: var(--ui-sidebar-tekst); }
+:root[data-styl="flat"] .sidebar__logo { color: var(--ui-text-on-accent); border-radius: var(--promien-pola); }
+
+:root[data-styl="flat"] :is(.grupa-menu a, .sidebar__zwijanie):hover,
+:root[data-styl="flat"] .grupa-menu a.active {
+  color: var(--ui-sidebar-tekst);
+}
+
+:root[data-styl="flat"] :is(.grupa-menu a.active, .motyw-playground__sidebar button.active, .motyw-kafelek.active, .segmenty button.aktywny, .zakladki-list button.aktywna, [role="tab"][aria-selected="true"], .rekord--podswietlony) {
+  border-color: var(--akcent);
+  font-weight: 750;
+}
+
+:root[data-styl="flat"] :is(.kalendarz-grafiku__dzien--dzisiaj, .dolna-nawigacja__element.active, .plan-dnia__element--teraz .plan-dnia__punkt, .plan-dnia__element--najblizszy .plan-dnia__punkt) {
+  outline: 2px solid var(--akcent);
+  outline-offset: -2px;
+}
+
+:root[data-styl="flat"] .kalendarz-grafiku__dzien--swieto.kalendarz-grafiku__dzien--urlop {
+  background: var(--sukces-tlo);
+  border-top: 3px solid var(--blad);
+}
+
+:root[data-styl="flat"] .kalendarz-dzien--pracujacy {
+  background: var(--akcent-jasny);
+}
+
+:root[data-styl="flat"] .kalendarz-grafiku__dzien--poza {
+  opacity: 1;
+  color: var(--tekst-2);
+  background: var(--panel-2);
+}
+
+:root[data-styl="flat"] :is(input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) {
+  color: var(--tekst);
+  background: var(--panel);
+  border-color: var(--obramowanie-mocne);
+}
+
+:root[data-styl="flat"] :is(input, textarea)::placeholder { color: var(--tekst-2); opacity: 1; }
+
+:root[data-styl="flat"] :is(button, a, input, select, textarea):focus-visible,
+:root[data-styl="flat"] .przelacznik input:focus-visible + span {
+  outline: max(2px, var(--ui-focus-width)) solid var(--ui-focus);
+  outline-offset: 2px;
+}
+
+:root[data-styl="flat"] .sidebar :is(button, a):focus-visible { outline-color: var(--ui-sidebar-tekst); }
+
+:root[data-styl="flat"] :is(.przycisk, .przycisk-ikona, .przycisk-szukaj):active {
+  color: var(--tekst);
+  background: var(--ui-selected-surface);
+  border-color: var(--akcent);
+}
+
+:root[data-styl="flat"] :is(.przycisk--glowny, .przycisk-plus):active {
+  color: var(--ui-text-on-accent);
+  background: var(--ui-accent-hover-effective);
+}
+
+:root[data-styl="flat"] .przycisk--niebezpieczny:active {
+  color: var(--ui-text-on-danger);
+  background: var(--blad);
+}
+
+:root[data-styl="flat"] .motyw-kafelek:hover { transform: none; }
+:root[data-styl="flat"] .wykres-kategorii__tor span { background: var(--modul-zadanie); }
+:root[data-styl="flat"] .motyw-playground__blok--zadanie { color: var(--tekst-na-zadaniu); }
+:root[data-styl="flat"] .motyw-playground__blok--wizyta { color: var(--tekst-na-wizycie); }
+:root[data-styl="flat"] .os-czasu__teraz span { color: var(--ui-text-on-success); }
+
+:root[data-styl="flat"][data-kontrast="wysoki"] {
+  --obramowanie: #405c4b !important;
+  --obramowanie-mocne: #0b2a1c !important;
+}
+
+:root[data-styl="flat"][data-motyw="ciemny"][data-kontrast="wysoki"] {
+  --obramowanie: #bdd4c5 !important;
+  --obramowanie-mocne: #ffffff !important;
+}
+
+:root[data-styl="flat"][data-ui-ruch="wylaczony"] *,
+:root[data-styl="flat"][data-ui-ruch="wylaczony"] *::before,
+:root[data-styl="flat"][data-ui-ruch="wylaczony"] *::after,
+:root[data-styl="flat"][data-ui-ruch="wylaczony"] *::backdrop {
+  transition-duration: 0s !important;
+  scroll-behavior: auto !important;
+}
+
+@media (max-width: 760px) {
+  :root[data-styl="flat"] :is(.panel-ustawien-aplikacji, .siatka-sekcji-ustawien) {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-styl="flat"] .panel-ustawien-aplikacji__naglowek {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  :root[data-styl="flat"] .panel-ustawien-aplikacji__naglowek .akcje-formularza {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  :root[data-styl="flat"] .panel-ustawien-aplikacji__naglowek .przycisk { flex: 1 1 140px; }
+}
+
 /* Lokalny dziennik samopoczucia: wygodne kontrolki również na telefonie. */
 .samopoczucie-szybkie { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; }
 .samopoczucie-wskaznik { min-width: 0; border: 1px solid var(--obramowanie); border-radius: 12px; padding: 12px; }
