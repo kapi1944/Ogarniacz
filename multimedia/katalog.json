@@ -1,0 +1,206 @@
+{
+  "format": "ogarniacz-multimedia",
+  "wersja": 1,
+  "materialy": [
+    {
+      "id": "material-bf2f2065444c427e",
+      "nazwa": "Ogarniacz PRO — oficjalny oryginał PNG",
+      "opis": "Oryginalny znak mózg–żarówka w zieleni i złocie. Nadrzędne źródło identyfikacji PRO.",
+      "kategoria": "Ikony",
+      "status": "OFICJALNE",
+      "przeznaczenie": "Źródło generowania oficjalnych ikon aplikacji.",
+      "wykorzystanie": [
+        "scripts/generuj-ikony.py — źródło ikon Web/PWA i Android",
+        "Identyfikacja PRO: assets/branding/README.md"
+      ],
+      "wymagaKlasyfikacji": false,
+      "sciezka": "assets/branding/Ikona mózg–żarówka w zieleni i złocie_PRO.png",
+      "mime": "image/png",
+      "rozdzielczosc": {
+        "szerokosc": 1100,
+        "wysokosc": 1100
+      },
+      "walidacja": {
+        "status": "poprawny",
+        "uwagi": []
+      },
+      "rozmiarBajtow": 1881267,
+      "sha256": "bf2f2065444c427eeb0585a61d6e380b04cab1b15f587e4e63e1a28a9f7cefef",
+      "duplikatyLokalne": [
+        "multimedia/Ikona mózg–żarówka w zieleni i złocie_PRO.png"
+      ],
+      "sciezkaMiniatury": "public/ikona-192.png"
+    },
+    {
+      "id": "material-d381b65977e9c4ff",
+      "nazwa": "Ogarniacz PRO — oficjalna ikona ICO",
+      "opis": "Produkcyjny ICO z klatkami 16, 24, 32, 48, 64, 128 i 256 px.",
+      "kategoria": "Ikony",
+      "status": "OFICJALNE",
+      "przeznaczenie": "Ikona przeglądarki i materiał do skrótów Windows.",
+      "wykorzystanie": [
+        "public/favicon.ico — identyczny zasób przeglądarki",
+        "assets/branding/README.md — ręczne skróty Windows"
+      ],
+      "wymagaKlasyfikacji": false,
+      "sciezka": "assets/branding/ogarniacz-pro.ico",
+      "mime": "image/x-icon",
+      "rozdzielczosc": {
+        "szerokosc": 256,
+        "wysokosc": 256
+      },
+      "walidacja": {
+        "status": "poprawny",
+        "uwagi": []
+      },
+      "rozmiarBajtow": 176822,
+      "sha256": "d381b65977e9c4ff94f988e77289e3d1de98b63b91a27f3ae4f2ad15ee3b72d4",
+      "duplikatyLokalne": [],
+      "sciezkaMiniatury": "public/ikona-192.png"
+    },
+    {
+      "id": "material-e6a5ace4c36fc49a",
+      "nazwa": "Arkusz specyfikacji neonowych ikon mózgu i żarówki_PRO.png",
+      "opis": "Arkusz pokazujący warianty znaków i rozmiary ikon. Nie jest zestawem ikon produkcyjnych.",
+      "kategoria": "Arkusze identyfikacji",
+      "status": "ROBOCZE",
+      "przeznaczenie": "Wymaga klasyfikacji przez opiekuna projektu.",
+      "wykorzystanie": [],
+      "wymagaKlasyfikacji": true,
+      "sciezka": "multimedia/Arkusz specyfikacji neonowych ikon mózgu i żarówki_PRO.png",
+      "mime": "image/png",
+      "rozdzielczosc": {
+        "szerokosc": 1864,
+        "wysokosc": 843
+      },
+      "walidacja": {
+        "status": "poprawny",
+        "uwagi": []
+      },
+      "rozmiarBajtow": 1226750,
+      "sha256": "e6a5ace4c36fc49a563872d8496416d7fb9c7da6ec6b7c3ceebead05d9d8196f",
+      "duplikatyLokalne": []
+    },
+    {
+      "id": "material-d77c3e9268f5c666",
+      "nazwa": "Ikona mózg–żarówka w zieleni i złocie.png",
+      "opis": "Dostarczony wariant znaku Ogarniacza; brak potwierdzonego użycia produkcyjnego.",
+      "kategoria": "Ikony",
+      "status": "ROBOCZE",
+      "przeznaczenie": "Wymaga klasyfikacji przez opiekuna projektu.",
+      "wykorzystanie": [],
+      "wymagaKlasyfikacji": true,
+      "sciezka": "multimedia/Ikona mózg–żarówka w zieleni i złocie.png",
+      "mime": "image/png",
+      "rozdzielczosc": {
+        "szerokosc": 1254,
+        "wysokosc": 1254
+      },
+      "walidacja": {
+        "status": "poprawny",
+        "uwagi": []
+      },
+      "rozmiarBajtow": 1987557,
+      "sha256": "d77c3e9268f5c666ebe1196e76f20b1b0e003d2f5319b9e90882c354fb6cedab",
+      "duplikatyLokalne": []
+    },
+    {
+      "id": "material-62968fc496147e3f",
+      "nazwa": "Ikona mózg–żarówka w zieleni i złocie_PRO.ico",
+      "opis": "Dostarczony ICO z niezgodnymi wymiarami nagłówka i obrazu. Zachowany bez zmian jako materiał archiwalny.",
+      "kategoria": "Ikony",
+      "status": "ARCHIWALNE",
+      "przeznaczenie": "Wymaga klasyfikacji przez opiekuna projektu.",
+      "wykorzystanie": [],
+      "wymagaKlasyfikacji": true,
+      "sciezka": "multimedia/Ikona mózg–żarówka w zieleni i złocie_PRO.ico",
+      "mime": "image/x-icon",
+      "rozdzielczosc": {
+        "szerokosc": 1100,
+        "wysokosc": 1100
+      },
+      "walidacja": {
+        "status": "ostrzezenie",
+        "uwagi": [
+          "Wymiary obrazu nie zgadzają się z nagłówkiem ICO. Plik archiwalny, nie używać jako ikony produkcyjnej."
+        ]
+      },
+      "rozmiarBajtow": 1897261,
+      "sha256": "62968fc496147e3f859727f1f1a9e596a06af94a846280ebde2ad6c52497f6dc",
+      "duplikatyLokalne": [],
+      "sciezkaPodgladu": "assets/branding/Ikona mózg–żarówka w zieleni i złocie_PRO.png"
+    },
+    {
+      "id": "material-b3770e5a1255ade8",
+      "nazwa": "OGARNIACZ_IKONA_KAFEL.ico",
+      "opis": "Dostarczony ICO z niezgodnymi wymiarami nagłówka i obrazu. Zachowany bez zmian jako materiał archiwalny.",
+      "kategoria": "Ikony",
+      "status": "ARCHIWALNE",
+      "przeznaczenie": "Wymaga klasyfikacji przez opiekuna projektu.",
+      "wykorzystanie": [],
+      "wymagaKlasyfikacji": true,
+      "sciezka": "multimedia/OGARNIACZ_IKONA_KAFEL.ico",
+      "mime": "image/x-icon",
+      "rozdzielczosc": {
+        "szerokosc": 1146,
+        "wysokosc": 1044
+      },
+      "walidacja": {
+        "status": "ostrzezenie",
+        "uwagi": [
+          "Wymiary obrazu nie zgadzają się z nagłówkiem ICO. Plik archiwalny, nie używać jako ikony produkcyjnej."
+        ]
+      },
+      "rozmiarBajtow": 1199326,
+      "sha256": "b3770e5a1255ade8dc136c92f3bc5b0d97e1d7159640d0ba77df8c97a612cf97",
+      "duplikatyLokalne": [],
+      "sciezkaPodgladu": "multimedia/OGARNIACZ_IKONA_KAFEL.png"
+    },
+    {
+      "id": "material-9ef8da301ddd8070",
+      "nazwa": "OGARNIACZ_IKONA_KAFEL.png",
+      "opis": "Dostarczony wariant znaku Ogarniacza; brak potwierdzonego użycia produkcyjnego.",
+      "kategoria": "Ikony",
+      "status": "ROBOCZE",
+      "przeznaczenie": "Wymaga klasyfikacji przez opiekuna projektu.",
+      "wykorzystanie": [],
+      "wymagaKlasyfikacji": true,
+      "sciezka": "multimedia/OGARNIACZ_IKONA_KAFEL.png",
+      "mime": "image/png",
+      "rozdzielczosc": {
+        "szerokosc": 1146,
+        "wysokosc": 1044
+      },
+      "walidacja": {
+        "status": "poprawny",
+        "uwagi": []
+      },
+      "rozmiarBajtow": 1141462,
+      "sha256": "9ef8da301ddd80701807418715b8cfed1d48ab8a1b170769ba505de05f4a2b43",
+      "duplikatyLokalne": []
+    },
+    {
+      "id": "material-22d9cfb960e6983d",
+      "nazwa": "fe430fc5-4404-4c36-a922-fc3cc5e60f4b.png",
+      "opis": "Arkusz pokazujący warianty znaków i rozmiary ikon. Nie jest zestawem ikon produkcyjnych.",
+      "kategoria": "Arkusze identyfikacji",
+      "status": "ROBOCZE",
+      "przeznaczenie": "Wymaga klasyfikacji przez opiekuna projektu.",
+      "wykorzystanie": [],
+      "wymagaKlasyfikacji": true,
+      "sciezka": "multimedia/fe430fc5-4404-4c36-a922-fc3cc5e60f4b.png",
+      "mime": "image/png",
+      "rozdzielczosc": {
+        "szerokosc": 1864,
+        "wysokosc": 843
+      },
+      "walidacja": {
+        "status": "poprawny",
+        "uwagi": []
+      },
+      "rozmiarBajtow": 1453169,
+      "sha256": "22d9cfb960e6983d30a1fc00db79163d09be1faba1237f1b22199f0f58fb16b0",
+      "duplikatyLokalne": []
+    }
+  ]
+}
