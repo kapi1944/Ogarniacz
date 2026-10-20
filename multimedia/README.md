@@ -104,3 +104,31 @@ zapis dopiero po ponownym odczycie identycznych bajtów. Anulowanie jest odrębn
 od błędu. Zapis SAF wymaga wersji aplikacji zawierającej rozszerzony most
 binarny; późniejsze zmiany samych materiałów nie wymagają nowego APK.
 Nie wykonano testu SAF na fizycznym urządzeniu.
+
+Pobieranie wewnątrz aplikacji jest ograniczone do 32 MiB na plik; większe
+materiały można pobrać przez „Źródło na GitHub”. Przed zapisem aplikacja
+porównuje rozmiar i SHA-256 oryginału z katalogiem. Niezgodność blokuje zapis
+i wymaga odświeżenia listy. Sam katalog ma limit 2 MiB i 1000 wpisów.
+Odświeżenie katalogu dodaje parametr czasu, a adresy obrazów i pobrań parametr
+SHA-256, aby poprzednie odpowiedzi CDN nie przesłaniały nowych materiałów.
+
+## Weryfikacja implementacji (2026-10-21)
+
+- Publiczny GitHub Raw: katalog i 8 oryginałów HTTP 200, zgodne rozmiary i SHA-256.
+- 28 celowanych testów biblioteki, eksportu plików i nawigacji; dodatkowo 55
+  testów backupu, karty zdrowotnej i personalizacji.
+- Typecheck, lint (istniejące ostrzeżenia poza zmianą), build i PWA smoke.
+- Rzeczywisty Chrome, izolowany profil: Klasyczny/Premium/Flat przy 390 × 844,
+  1024 × 600 i 1440 × 900; brak poziomego przepełnienia; miniatury, podgląd,
+  filtry, schowek, klawiatura, powrót do Pulpitu i brak błędów JavaScript.
+- Pobranie PNG i ICO w Chrome: oryginalne nazwy oraz zgodne bajty i SHA-256.
+  Awaria sieci nie usuwa listy; ponowienie odczytu działa.
+- Natywne testy eksportu w Windows: 11/13 zaliczonych, w tym nowe przypadki
+  binarne. Dwa testy udostępniania przez FileProvider zawodzą na konfiguracji
+  ścieżek Windows również po uruchomieniu oryginalnych źródeł z commita bazowego.
+  Zmiana nie modyfikuje FileProvider ani udostępniania backupów.
+- Android SAF: **NIETESTOWANE NA URZĄDZENIU**. Nie wykonano próby fizycznej
+  Raspberry Pi ani instalacji PWA. Emulacja dotyku nie zastępuje urządzenia.
+
+CI należy oceniać dla konkretnego SHA wdrażanej zmiany. Push kodu nie wykonuje
+release, deploy ani aktualizacji już zainstalowanej aplikacji.

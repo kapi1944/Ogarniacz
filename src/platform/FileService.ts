@@ -6,8 +6,10 @@ function zapiszWPrzegladarce(nazwa: string, dane: Blob) {
   const odnosnik = document.createElement('a')
   odnosnik.href = adres
   odnosnik.download = nazwa
+  document.body.append(odnosnik)
   odnosnik.click()
-  URL.revokeObjectURL(adres)
+  odnosnik.remove()
+  window.setTimeout(() => URL.revokeObjectURL(adres), 30_000)
   return true
 }
 
@@ -18,7 +20,18 @@ export function utworzUslugePlikow(czyAndroid: boolean) {
         zapiszWPrzegladarce(nazwa, dane)
         return { status: 'pobieranie' }
       }
-      return await eksportPlikuAndroid.zapisz({ nazwa, tekst: await dane.text(), typ: dane.type?.split(';')[0] || 'application/json' })
+      const typ = dane.type?.split(';')[0] || 'application/json'
+      if (typ === 'application/json' || typ.startsWith('text/')) {
+        return await eksportPlikuAndroid.zapisz({ nazwa, tekst: await dane.text(), typ })
+      }
+      if (dane.size > 32 * 1024 * 1024) return { status: 'blad' }
+      const base64 = await new Promise<string>((rozwiaz, odrzuc) => {
+        const czytnik = new FileReader()
+        czytnik.onerror = () => odrzuc(new Error('Nie można odczytać pliku.'))
+        czytnik.onload = () => typeof czytnik.result === 'string' ? rozwiaz(czytnik.result.split(',')[1]) : odrzuc(new Error('Nieprawidłowy plik.'))
+        czytnik.readAsDataURL(dane)
+      })
+      return await eksportPlikuAndroid.zapisz({ nazwa, base64, typ })
     } catch {
       return { status: 'blad' }
     }

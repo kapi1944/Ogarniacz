@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.Context;
 import android.net.Uri;
+import android.util.Base64;
 import androidx.activity.result.ActivityResult;
 import androidx.core.content.FileProvider;
 import com.getcapacitor.JSObject;
@@ -25,8 +26,11 @@ public class EksportPlikuPlugin extends Plugin {
     @PluginMethod
     public void zapisz(PluginCall wywolanie) {
         String nazwa = wywolanie.getString("nazwa");
+        String tekst = wywolanie.getString("tekst");
+        String base64 = wywolanie.getString("base64");
         if (trwaZapis || nazwa == null || nazwa.isEmpty() || nazwa.contains("/") || nazwa.contains("\\")
-                || wywolanie.getString("tekst") == null) {
+                || nazwa.indexOf('\0') >= 0 || (tekst == null) == (base64 == null)
+                || (base64 != null && !czyPoprawneBase64(base64))) {
             wywolanie.reject("Nieprawidłowy plik lub zapis już trwa.");
             return;
         }
@@ -61,9 +65,11 @@ public class EksportPlikuPlugin extends Plugin {
         // Dostawca dokumentów może wykonywać operacje sieciowe; nie blokujemy wątku UI.
         getBridge().execute(() -> {
             try {
-                String tekst = wywolanie.getString("tekst");
-                if (tekst == null) throw new IllegalStateException("Brak danych po powrocie z okna zapisu.");
-                zapiszDokument(getContext(), adres, tekst);
+                String tekstDoZapisu = wywolanie.getString("tekst");
+                String daneBinarne = wywolanie.getString("base64");
+                if ((tekstDoZapisu == null) == (daneBinarne == null)) throw new IllegalStateException("Brak jednoznacznych danych po powrocie z okna zapisu.");
+                if (daneBinarne == null) zapiszDokument(getContext(), adres, tekstDoZapisu);
+                else zapiszDokument(getContext(), adres, dekodujBajty(daneBinarne));
                 wywolanie.resolve(new JSObject().put("status", "zapisano").put("uri", adres.toString()));
             } catch (Exception przyczyna) {
                 // Nie usuwamy pliku dostawcy: może zawierać częściowy zapis, który użytkownik sprawdzi.
@@ -75,7 +81,30 @@ public class EksportPlikuPlugin extends Plugin {
     }
 
     static void zapiszDokument(Context kontekst, Uri adres, String tekst) throws Exception {
-        byte[] bajty = tekst.getBytes(StandardCharsets.UTF_8);
+        zapiszDokument(kontekst, adres, tekst.getBytes(StandardCharsets.UTF_8));
+    }
+
+    static byte[] dekodujBajty(String dane) {
+        if (!czyPoprawneBase64(dane)) throw new IllegalArgumentException("Nieprawidłowy zapis Base64.");
+        byte[] bajty = Base64.decode(dane, Base64.NO_WRAP);
+        if (bajty.length > 32 * 1024 * 1024) throw new IllegalArgumentException("Plik przekracza 32 MiB.");
+        return bajty;
+    }
+
+    static boolean czyPoprawneBase64(String dane) {
+        if (dane.isEmpty() || dane.length() > 44739244 || dane.length() % 4 != 0) return false;
+        int koniec = dane.length();
+        if (dane.endsWith("==")) koniec -= 2;
+        else if (dane.endsWith("=")) koniec -= 1;
+        for (int indeks = 0; indeks < koniec; indeks++) {
+            char znak = dane.charAt(indeks);
+            if (!(znak >= 'A' && znak <= 'Z') && !(znak >= 'a' && znak <= 'z')
+                    && !(znak >= '0' && znak <= '9') && znak != '+' && znak != '/') return false;
+        }
+        return true;
+    }
+
+    static void zapiszDokument(Context kontekst, Uri adres, byte[] bajty) throws Exception {
         try (OutputStream strumien = kontekst.getContentResolver().openOutputStream(adres, "wt")) {
             if (strumien == null) throw new IllegalStateException("Brak dostępu do zapisu.");
             strumien.write(bajty);

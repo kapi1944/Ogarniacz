@@ -82,6 +82,38 @@ public class EksportPlikuPluginTest {
         assertTrue(dostawca.odczytano);
     }
 
+    @Test public void binarnyPngZachowujeNazweMimeIOryginalneBajty() throws Exception {
+        byte[] bajty = new byte[] { (byte)137, 80, 78, 71, 0, (byte)255, (byte)128, 10 };
+        String base64 = android.util.Base64.encodeToString(bajty, android.util.Base64.NO_WRAP);
+        WywolanieTestowe wywolanie = new WywolanieTestowe(new JSObject().put("nazwa", "mózg–żarówka.png").put("typ", "image/png").put("base64", base64));
+        wtyczka.zapisz(wywolanie);
+        assertNull(wywolanie.blad);
+        assertEquals("image/png", wtyczka.zamiar.getType());
+        assertEquals("mózg–żarówka.png", wtyczka.zamiar.getStringExtra(Intent.EXTRA_TITLE));
+        EksportPlikuPlugin.zapiszDokument(wtyczka.getContext(), adres, EksportPlikuPlugin.dekodujBajty(base64));
+        assertArrayEquals(bajty, Files.readAllBytes(dostawca.plik.toPath()));
+        assertTrue(dostawca.odczytano);
+        odebrano(wywolanie, Activity.RESULT_CANCELED, null);
+        assertEquals("anulowano", wywolanie.wynik.getString("status"));
+    }
+
+    @Test public void niejednoznaczneLubUszkodzoneDaneNieOtwierajaOknaZapisu() {
+        for (JSObject dane : new JSObject[] {
+                new JSObject().put("nazwa", "ikona.ico").put("tekst", "test").put("base64", "AAABAA=="),
+                new JSObject().put("nazwa", "ikona.ico").put("base64", "nie Base64"),
+                new JSObject().put("nazwa", "../ikona.ico").put("base64", "AAABAA==") }) {
+            WywolanieTestowe wywolanie = new WywolanieTestowe(dane);
+            wtyczka.zapisz(wywolanie);
+            assertNotNull(wywolanie.blad);
+            assertNull(wtyczka.zamiar);
+        }
+    }
+
+    @Test public void binarnyPlikTakzeWymagaZgodnegoOdczytuPoZapisie() {
+        dostawca.uszkodzOdczyt = true;
+        assertThrows(IOException.class, () -> EksportPlikuPlugin.zapiszDokument(wtyczka.getContext(), adres, new byte[] { 0, 0, 1, 0 }));
+    }
+
     @Test public void odmowaZapisuBlokujeSukces() {
         dostawca.odmowaZapisu = true;
         assertThrows(SecurityException.class, () -> EksportPlikuPlugin.zapiszDokument(wtyczka.getContext(), adres, "{}"));

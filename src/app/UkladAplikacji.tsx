@@ -4,7 +4,7 @@ import {
   AlarmClock, Archive, Bell, BookOpen, CalendarClock, CalendarDays, CheckSquare, ChevronLeft,
   ChevronRight, CircleDollarSign, Clock3, ContactRound, FileClock, Files, HeartPulse, Inbox,
   Car, Ellipsis, LayoutDashboard, Lightbulb, ListChecks, MessageCircle, Moon, NotebookPen, PackageCheck,
-  Plus, Search, Settings, ShoppingCart, Sparkles, Sun, Target, WalletCards, X,
+  Images, Plus, Search, Settings, ShoppingCart, Sparkles, Sun, Target, WalletCards, X,
 } from 'lucide-react'
 import type { NazwaModulu } from '../domain/typy'
 import { useObslugaWstecz } from '../platform/obslugaWstecz'
@@ -52,6 +52,7 @@ const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
     { etykieta: 'Na później', adres: '/na-pozniej', modul: 'na_pozniej', ikona: Archive },
     { etykieta: 'Kontakty', adres: '/kontakty', modul: 'kontakty', ikona: ContactRound },
     { etykieta: 'Dokumenty', adres: '/dokumenty', modul: 'dokumenty', ikona: Files },
+    { etykieta: 'Multimedia', adres: '/multimedia', ikona: Images },
     { etykieta: 'Terminy ważności', adres: '/terminy', modul: 'terminy', ikona: FileClock },
   ] },
   { etykieta: 'Finanse', pozycje: [

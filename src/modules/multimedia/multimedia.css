@@ -1,0 +1,32 @@
+.multimedia { min-width: 0; }
+.multimedia__zrodlo { color: var(--tekst-2); overflow-wrap: anywhere; }
+.multimedia__filtry { display: grid; grid-template-columns: minmax(160px, 2fr) repeat(2, minmax(140px, 1fr)); gap: 12px; margin-block: 20px 12px; }
+.multimedia__galeria { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 20px; list-style: none; margin: 0; padding: 0; }
+.multimedia__karta { display: flex; flex-direction: column; min-width: 0; padding: 0; overflow: hidden; }
+.multimedia__obraz { display: grid; place-items: center; min-height: 150px; padding: 16px; background: var(--panel-2); border-radius: var(--promien-karty); }
+.multimedia__obraz img { display: block; max-width: 100%; max-height: 45vh; object-fit: contain; }
+.multimedia__obraz--miniatura { height: 190px; border-radius: 0; border-bottom: 1px solid var(--obramowanie); }
+.multimedia__obraz--miniatura img { max-height: 158px; }
+.multimedia__zaladuj, .multimedia__zastepnik { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--tekst-2); }
+.multimedia__zaladuj { width: 100%; min-height: 140px; background: transparent; border: 1px dashed var(--obramowanie-mocne); border-radius: var(--promien-pola); cursor: pointer; }
+.multimedia__zaladuj svg, .multimedia__zastepnik > svg { width: 32px; height: 32px; color: var(--akcent); }
+.multimedia__opis { display: flex; flex-direction: column; align-items: flex-start; flex: 1; gap: 10px; padding: 18px; overflow-wrap: anywhere; }
+.multimedia__opis h2 { margin: 0; font-size: 1.05rem; }
+.multimedia__opis p { margin: 0; color: var(--tekst-2); }
+.multimedia__opis > small { color: var(--tekst-2); }
+.multimedia__opis > .przycisk { margin-top: auto; }
+.multimedia__akcje { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 10px; }
+.multimedia__akcje .przycisk { min-height: 44px; white-space: normal; text-align: center; }
+.multimedia__techniczne { margin-block: 16px; padding: 16px; background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); }
+.multimedia__techniczne h3 { margin-top: 0; }
+.multimedia__techniczne dl { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(0, 3fr); gap: 10px; }
+.multimedia__techniczne dd { margin: 0; overflow-wrap: anywhere; }
+.multimedia__techniczne dt { color: var(--tekst-2); }
+.multimedia__ostrzezenie { color: var(--ostrzezenie); }
+.multimedia__adres { margin-block: 12px; }
+@media (max-width: 650px) {
+  .multimedia__filtry { grid-template-columns: 1fr; }
+  .multimedia__techniczne dl { grid-template-columns: 1fr; gap: 4px; }
+  .multimedia__techniczne dd { margin-bottom: 8px; }
+  .multimedia__akcje > .przycisk { flex: 1 1 140px; }
+}

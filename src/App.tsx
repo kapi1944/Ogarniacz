@@ -31,6 +31,7 @@ const WidokZakupow = lazy(() => WidokiOrganizacji().then((modul) => ({ default: 
 const WidokRachunkow = lazy(() => WidokiOrganizacji().then((modul) => ({ default: modul.WidokRachunkow })))
 const WidokMiasta = lazy(() => WidokiOrganizacji().then((modul) => ({ default: modul.WidokMiasta })))
 const WidokiWiedzy = () => import('./modules/wiedza/WidokiWiedzy')
+const WidokMultimediow = lazy(() => import('./modules/multimedia/WidokMultimediow').then((modul) => ({ default: modul.WidokMultimediow })))
 const WidokCelow = lazy(() => WidokiWiedzy().then((modul) => ({ default: modul.WidokCelow })))
 const WidokNotatek = lazy(() => WidokiWiedzy().then((modul) => ({ default: modul.WidokNotatek })))
 const WidokPomyslow = lazy(() => WidokiWiedzy().then((modul) => ({ default: modul.WidokPomyslow })))
@@ -90,6 +91,7 @@ export default function App() {
     <Route path="/na-pozniej" element={chron('na_pozniej', <WidokNaPozniej />)} />
     <Route path="/kontakty" element={chron('kontakty', <WidokKontaktow />)} />
     <Route path="/dokumenty" element={chron('dokumenty', <WidokDokumentow />)} />
+    <Route path="/multimedia" element={<WidokMultimediow />} />
     <Route path="/terminy" element={chron('terminy', <WidokTerminow />)} />
     <Route path="/finanse" element={chron('finanse', <WidokFinansow />)} />
     <Route path="/samochod" element={chron('samochod', <WidokSamochodu />)} />
