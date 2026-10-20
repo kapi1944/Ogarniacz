@@ -228,24 +228,24 @@ const PALETA_LIGHT: PaletaPersonalizacji = {
 export const PALETY_PREMIUM: Record<'jasny' | 'ciemny', PaletaPersonalizacji> = {
   ciemny: {
     ...PALETA_DARK,
-    tlo: '#071d17', panel: '#102b23', panel2: '#15372b',
-    tekst: '#f4f3ea', tekst2: '#a7b8ac',
-    obramowanie: '#695633', obramowanieMocne: '#a68d60',
+    tlo: '#061611', panel: '#09251c', panel2: '#123126',
+    tekst: '#f5f3e9', tekst2: '#b6c6b9',
+    obramowanie: '#315441', obramowanieMocne: '#789a7f',
     akcent: '#d9ad58', akcentHover: '#f1d28c', akcentJasny: '#3a3524',
-    sukces: '#45c887', sukcesTlo: '#103b29',
+    sukces: '#25d77f', sukcesTlo: '#103b29',
     ostrzezenie: '#f1d28c', ostrzezenieTlo: '#3a3020',
     blad: '#f5a5a0', bladTlo: '#432622',
     informacja: '#9ccde0', informacjaTlo: '#183743',
-    sidebar: '#092219', sidebarHover: '#15372b', sidebarActive: '#284332', sidebarTekst: '#f4f3ea',
-    focus: '#f1d28c', zadanie: '#45c887', projekt: '#9ccde0', wizyta: '#c6b0e4',
-    lek: '#45c887', finanse: '#d9ad58', samochod: '#e2b27e', przypomnienie: '#f5a5a0',
-    timeline: '#a68d60', timelineTeraz: '#45c887',
+    sidebar: '#061b14', sidebarHover: '#123126', sidebarActive: '#194631', sidebarTekst: '#f5f3e9',
+    focus: '#ffe19a', zadanie: '#25d77f', projekt: '#9ccde0', wizyta: '#c6b0e4',
+    lek: '#25d77f', finanse: '#d9ad58', samochod: '#e2b27e', przypomnienie: '#f5a5a0',
+    timeline: '#789a7f', timelineTeraz: '#25d77f',
   },
   jasny: {
     ...PALETA_LIGHT,
     tlo: '#f5f3eb', panel: '#fffdf7', panel2: '#edece1',
     tekst: '#102b23', tekst2: '#4e6458',
-    obramowanie: '#c7b996', obramowanieMocne: '#887344',
+    obramowanie: '#b8c8bb', obramowanieMocne: '#63836f',
     akcent: '#795618', akcentHover: '#664610', akcentJasny: '#f1e5c9',
     sukces: '#176540', sukcesTlo: '#e2f0e6',
     ostrzezenie: '#795618', ostrzezenieTlo: '#f5e9cf',
@@ -877,6 +877,19 @@ const OBRAMOWANIA: Record<PoziomObramowania, string> = {
   wyrazne: 'var(--obramowanie-mocne)',
 }
 
+/** Refleks nie może pogarszać kontrastu napisu, również we własnej palecie. */
+function odcienMetalu(kolor: string, cel: string, udzial: number, tekst: string): string {
+  for (let krok = udzial; krok > 0; krok -= 0.02) {
+    const odcien = `#${[1, 3, 5].map((indeks) => {
+      const baza = Number.parseInt(kolor.slice(indeks, indeks + 2), 16)
+      const domieszka = Number.parseInt(cel.slice(indeks, indeks + 2), 16)
+      return Math.round(baza * (1 - krok) + domieszka * krok).toString(16).padStart(2, '0')
+    }).join('')}`
+    if (obliczKontrast(tekst, odcien) >= 4.5) return odcien
+  }
+  return kolor
+}
+
 export function zastosujPersonalizacje(
   value: PersonalizacjaUI,
   root: HTMLElement,
@@ -894,6 +907,23 @@ export function zastosujPersonalizacje(
   root.dataset.uiActive = p.interakcje.activePoziom
   root.dataset.uiSelected = p.interakcje.selectedPoziom
   root.dataset.uiFocus = p.interakcje.focusPoziom
+
+  const zloto = p.uzyjWlasnejPalety ? paleta.akcent : '#d9ad58'
+  const wybranyTekst = wybierzCzytelnyTekst(zloto)
+  const tekstMetalu = obliczKontrast(wybranyTekst, zloto) >= 4.5 ? wybranyTekst : '#000000'
+  const tokenyMetalu = {
+    '--premium-zloto': zloto,
+    '--premium-zloto-ciemne': odcienMetalu(zloto, '#08130f', 0.24, tekstMetalu),
+    '--premium-zloto-jasne': odcienMetalu(zloto, p.uzyjWlasnejPalety ? '#ffffff' : '#ffe19a', 0.8, tekstMetalu),
+    '--premium-zloto-tekst': tekstMetalu,
+    '--premium-refleks': p.komponenty.glebia === 'plaska'
+      ? '0 0 transparent'
+      : 'inset 0 1px color-mix(in srgb, var(--tekst) 12%, transparent), inset 0 -1px rgb(0 0 0 / 14%)',
+  }
+  for (const [nazwa, wartosc] of Object.entries(tokenyMetalu)) {
+    if (p.styl === 'premium') style.setProperty(nazwa, wartosc)
+    else style.removeProperty(nazwa)
+  }
 
   if (p.uzyjWlasnejPalety || p.styl !== 'klasyczny') {
     for (const [key, css] of Object.entries(KOLORY_CSS) as [keyof typeof KOLORY_CSS, string][]) {
@@ -981,7 +1011,11 @@ export function zastosujPersonalizacje(
 
   style.setProperty('--ui-component-border', OBRAMOWANIA[p.komponenty.obramowanie])
   style.setProperty('--ui-depth-shadow', CIENIE_GLEBI[p.komponenty.glebia])
-  style.setProperty('--ui-card-shadow', CIENIE[p.komponenty.kartaCien])
+  style.setProperty('--ui-card-shadow', p.styl === 'premium' && p.komponenty.kartaCien !== 'brak'
+    ? `inset 0 1px color-mix(in srgb, var(--tekst) 7%, transparent), ${p.komponenty.kartaCien === 'lekki'
+      ? `0 2px 4px rgb(6 22 17 / ${motyw === 'ciemny' ? '16%' : '8%'}), 0 12px 28px rgb(6 22 17 / ${motyw === 'ciemny' ? '18%' : '7%'})`
+      : CIENIE[p.komponenty.kartaCien]}`
+    : CIENIE[p.komponenty.kartaCien])
   style.setProperty('--ui-card-border', `${p.komponenty.kartaObramowanie}px`)
   style.setProperty('--ui-card-hover-y', `${p.interakcje.hoverPoziom === 'wylaczony' ? 0 : p.komponenty.kartaHoverUniesienie}px`)
   style.setProperty('--ui-button-border', `${p.komponenty.przyciskObramowanie}px`)

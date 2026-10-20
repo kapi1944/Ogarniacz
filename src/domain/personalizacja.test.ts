@@ -85,6 +85,38 @@ describe('personalizacja UI', () => {
     expect(korzen.style.getPropertyValue('--ui-modal-ms')).toBe('0ms')
   })
 
+  it.each(['jasny', 'ciemny'] as const)('zachowuje AA na całym metalicznym przycisku Premium: %s', (motyw) => {
+    const korzen = document.createElement('div')
+    for (const akcent of [undefined, '#000000', '#ffffff', '#777777', '#086248', '#db4284', '#426bdb']) {
+      const premium = normalizujPersonalizacje({
+        styl: 'premium', uzyjWlasnejPalety: akcent !== undefined,
+        paleta: { ...DOMYSLNA_PERSONALIZACJA.paleta, ...(akcent ? { akcent } : {}) },
+      })
+      const przed = structuredClone(premium)
+      zastosujPersonalizacje(premium, korzen, false, motyw)
+      const tekst = korzen.style.getPropertyValue('--premium-zloto-tekst')
+      for (const token of ['--premium-zloto', '--premium-zloto-ciemne', '--premium-zloto-jasne']) {
+        expect(obliczKontrast(tekst, korzen.style.getPropertyValue(token))).toBeGreaterThanOrEqual(4.5)
+      }
+      if (akcent) expect(korzen.style.getPropertyValue('--premium-zloto')).toBe(akcent)
+      expect(premium).toEqual(przed)
+    }
+  })
+
+  it('Premium respektuje wyłączenie cieni i usuwa swoje tokeny przy zmianie stylu', () => {
+    const korzen = document.createElement('div')
+    const premium = normalizujPersonalizacje({ styl: 'premium', komponenty: { kartaCien: 'brak', glebia: 'plaska' }, interakcje: { hoverPoziom: 'wylaczony' } })
+    zastosujPersonalizacje(premium, korzen, false)
+    expect(korzen.style.getPropertyValue('--ui-card-shadow')).toBe('none')
+    expect(korzen.style.getPropertyValue('--ui-depth-shadow')).toBe('none')
+    expect(korzen.style.getPropertyValue('--ui-card-hover-shadow')).toBe('var(--ui-card-shadow)')
+    expect(korzen.style.getPropertyValue('--premium-refleks')).toBe('0 0 transparent')
+    for (const styl of ['flat', 'klasyczny'] as const) {
+      zastosujPersonalizacje({ ...premium, styl }, korzen, false)
+      expect(Array.from(korzen.style).some((token) => token.startsWith('--premium-'))).toBe(false)
+    }
+  })
+
   it('stosuje standardowe czasy Premium bez zmiany zapisanych preferencji Klasycznego', () => {
     const korzen = document.createElement('div')
     const premium = normalizujPersonalizacje({ styl: 'premium' })
