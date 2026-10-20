@@ -34,17 +34,32 @@ dotychczasowa finalizacja i ponowne sprawdzenie SHA-256. Dopiero zweryfikowany
 plik może trafić do istniejącego `PackageInstaller`, który egzekwuje zgodność
 pakietu, wersji i podpisu. Nie zmieniono klucza ani mechanizmu instalacji.
 
-W 1.0.16 i 1.0.18 nagłówek `Accept` dopuszczał wyłącznie MIME APK/octet-stream,
-także dla strony GitHuba obsługującej przekierowanie. Zmieniono go na `*/*`;
-`Accept-Encoding: identity` zachowuje znaczenie rozmiaru i SHA-256 surowego APK.
-Wyłączono cache żądań/przekierowań, aby ponowienie nie korzystało ze starego
-podpisanego adresu CDN. Bez odczytu odpowiedzi GitHuba lub logu telefonu nie
-można potwierdzić, że zgłoszone niepowodzenie było odpowiedzią HTTP 406.
+Odtworzony błąd dotyczy odczytu parametrów Capacitor: `PluginCall.getLong()`
+przyjmuje tylko javowy `Long`, a liczby JSON `versionCodeDocelowy: 1000018`
+i `rozmiar: 55241786` są odczytywane jako `Integer`. Przed poprawką plugin
+zwracał `BLAD_POBIERANIA: Manifest nie zawiera prawidłowej wersji APK.` jeszcze
+przed siecią, a UI maskował go komunikatem o internecie. Lokalny odczyt obsługuje
+teraz `Integer` i `Long`, nadal odrzucając ułamki i tekst. Ten sam odczyt jest
+używany przy uruchamianiu istniejącego instalatora.
+
+Weryfikacja publicznego wydania 1.0.18 (2026-10-20): manifest HTTP 200,
+APK `https://github.com/kapi1944/Ogarniacz/releases/latest/download/Ogarniacz-1.0.18-release.apk`
+przechodzi HTTPS 302 → 302 → 200 do `release-assets.githubusercontent.com`.
+Produkcyjny kod pobierania Java zapisał 55 241 786 bajtów, SHA-256 zgodny
+z manifestem: `edd6ad893213ff4db89e8373f8717a72c188bacdccaaaa5ebb09d7bb64c59e46`.
+`apksigner verify` potwierdził poprawność podpisu; SHA-256 certyfikatu zgadza się
+z `config/android-release.json`. Zarówno poprzedni, jak i obecny `Accept`
+otrzymały HTTP 200: hipoteza o HTTP 406 nie została potwierdzona.
+`Accept: */*`, `Accept-Encoding: identity` i wyłączenie cache pozostają;
+nie przypisujemy im usunięcia odtworzonej przyczyny. Próba na JDK nie potwierdza
+stanu sieci/TLS konkretnego Samsunga; przy innym błędzie potrzebny jest log urządzenia.
 
 Timeout połączenia wynosi 15 s, odczytu 30 s. Zerwanie sieci, DNS lub timeout
-powodują do trzech prób z przerwami 500/1000 ms. Każda zaczyna od pierwotnego
+powodują maksymalnie jedno automatyczne ponowienie po 500 ms (dwie próby łącznie).
+Tak samo obsługiwane są przejściowe HTTP 408/500/502/503/504. Każda próba zaczyna od pierwotnego
 adresu i bajtu zero z nowym SHA-256; nie używa Range ani nie dokleja danych.
-Błąd TLS, HTTP, rozmiaru, zapisu lub SHA nie uruchamia automatycznego retry.
+Błąd TLS/certyfikatu (także zagnieżdżony), trwały HTTP, HTTP 429, rozmiaru,
+braku miejsca, zapisu lub SHA nie uruchamia automatycznego retry.
 Użytkownik może ponowić pobranie po usunięciu przyczyny. Części są usuwane po
 błędzie, a równoległe pobieranie we wtyczce jest blokowane.
 
@@ -58,8 +73,13 @@ pamięci współdzielonej. `REQUEST_INSTALL_PACKAGES` dotyczy późniejszej inst
 
 Regresja: `PobieranieApkTest`, `AktualizacjePluginTest`,
 `AktualizacjeUstawien.test.tsx` i `AktualizacjePrzeplyw.test.ts`.
-Testy transportu używają kontrolowanych połączeń i faktycznych plików;
-nie zastępują próby HTTPS na fizycznym urządzeniu.
+Testy transportu używają kontrolowanych połączeń i faktycznych plików.
+Regresja granicy Capacitor używa Robolectric i rzeczywistego parsowania JSON:
+test odtworzył odrzucenie prawidłowej wersji przed naprawą.
+Te testy nie zastępują próby HTTPS na fizycznym urządzeniu.
+Weryfikacja lokalna poprawki: 39 testów Gradle (18 pluginu, 15 transportu,
+6 regresji wycofanego Web OTA), 40 testów frontendowych, typecheck,
+build Vite oraz `assembleDebug` zakończone poprawnie.
 
 **Istniejąca 1.0.16:** poprawka natywna działa dopiero po zainstalowaniu APK,
 który ją zawiera. Nie naprawia wstecz pobierania działającego w 1.0.16.

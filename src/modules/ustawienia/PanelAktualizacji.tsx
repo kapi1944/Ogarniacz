@@ -41,15 +41,42 @@ function daneBledu(blad: unknown) {
 
 export function komunikatBleduAktualizacji(blad: unknown, domyslny: string) {
   const kod = kodBledu(blad)
-  const { http, rodzaj } = daneBledu(blad)
-  if (kod === 'BLAD_HTTP' && typeof http === 'number' && Number.isInteger(http) && http >= 100 && http <= 599) {
+  const { http: kodHttp, rodzaj } = daneBledu(blad)
+  const wiadomosc = typeof blad === 'object' && blad !== null && 'message' in blad && typeof blad.message === 'string' ? blad.message : ''
+  const starszyKodHttp = kod === 'BLAD_POBIERANIA' ? /^Serwer APK zwrócił HTTP (\d{3})\.$/.exec(wiadomosc)?.[1] : undefined
+  const http = starszyKodHttp ? Number(starszyKodHttp) : kodHttp
+  if (kod === 'BLAD_HTTP') {
+    if (rodzaj === 'BRAK_LOCATION') return 'Serwer APK zwrócił przekierowanie bez adresu docelowego.'
+    if (rodzaj === 'LIMIT') return 'Przekroczono limit przekierowań serwera APK.'
+    if (rodzaj === 'ADRES') return 'Serwer APK zwrócił nieprawidłowy adres przekierowania.'
+  }
+  if ((kod === 'BLAD_HTTP' || kod === 'BLAD_POBIERANIA') && typeof http === 'number' && Number.isInteger(http) && http >= 100 && http <= 599) {
     return `Serwer APK zwrócił HTTP ${http}. Pobieranie nie zostało zakończone. Spróbuj ponownie później.`
+  }
+  if (kod === 'BLAD_POBIERANIA' || kod === 'BRAK_INSTALATORA') {
+    const bezpieczneKomunikaty = [
+      'Adres APK musi używać HTTPS.',
+      'Nieprawidłowy adres APK.',
+      'Adres APK i przekierowania muszą używać HTTPS bez danych logowania.',
+      'Nieprawidłowa nazwa pliku APK.',
+      'Manifest zawiera nieprawidłowy rozmiar APK.',
+      'Manifest nie zawiera prawidłowej wersji APK.',
+      'Pobieranie APK już trwa.',
+      'Brakuje danych zweryfikowanej aktualizacji.',
+      'Brakuje danych zweryfikowanej aktualizacji. Pobierz APK ponownie.',
+      'Zweryfikowany plik APK nie jest już dostępny lub jest uszkodzony. Pobierz go ponownie.',
+      'Android nie udostępnia systemowego instalatora.',
+      'Android nie udostępnia ustawień instalowania nieznanych aplikacji dla Ogarniacza.',
+      'Nie można teraz otworzyć ekranu systemowego. Wróć do aplikacji i spróbuj ponownie.',
+      'Potwierdzenie instalacji nie jest teraz dostępne. Ponów instalację z Ogarniacza.',
+    ]
+    if (bezpieczneKomunikaty.includes(wiadomosc)) return wiadomosc
   }
   if (kod === 'BLAD_SIECI') {
     if (rodzaj === 'TIMEOUT') return 'Przekroczono czas oczekiwania na połączenie lub dane APK. Sprawdź sieć i ponów pobieranie.'
     if (rodzaj === 'DNS') return 'Nie udało się odnaleźć serwera APK. Sprawdź połączenie z internetem i ponów pobieranie.'
     if (rodzaj === 'TLS') return 'Nie udało się nawiązać bezpiecznego połączenia HTTPS z serwerem APK. Sprawdź datę urządzenia i ustawienia sieci.'
-    return 'Połączenie przerwało pobieranie APK mimo automatycznych prób. Sprawdź sieć i ponów pobieranie.'
+    return 'Przerwano połączenie podczas pobierania APK. Sprawdź sieć i ponów pobieranie.'
   }
   if (kod === 'BRAK_MIEJSCA') {
     const { wolneBajty, wymaganeBajty, brakujaceBajty } = daneBledu(blad)
@@ -62,7 +89,7 @@ export function komunikatBleduAktualizacji(blad: unknown, domyslny: string) {
     return 'Za mało wolnego miejsca na aktualizację. Zwolnij trochę miejsca w pamięci wewnętrznej i spróbuj ponownie.'
   }
   const wiadomosci: Record<string, string> = {
-    BLAD_POBIERANIA: 'Nie udało się pobrać APK. Sprawdź połączenie z internetem i spróbuj ponownie.',
+    BLAD_POBIERANIA: 'Nie udało się pobrać APK. Brak bezpiecznych szczegółów błędu. Ponów pobieranie; jeśli błąd wróci, sprawdź diagnostykę aktualizacji.',
     BLAD_HTTP: 'Serwer APK zwrócił nieprawidłową odpowiedź lub przekierowanie. Spróbuj ponownie później.',
     BLAD_ROZMIARU: 'Rozmiar APK nie zgadza się z manifestem lub przekracza limit. Plik został odrzucony. Sprawdź aktualizacje ponownie.',
     BLAD_ZAPISU: 'Nie udało się zapisać APK w prywatnej pamięci aplikacji. Sprawdź wolne miejsce i ponów pobieranie.',

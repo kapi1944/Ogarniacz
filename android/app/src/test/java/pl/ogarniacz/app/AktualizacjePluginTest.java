@@ -13,11 +13,60 @@ import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import android.content.pm.PackageInstaller;
+import com.getcapacitor.JSObject;
+import com.getcapacitor.PluginCall;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
+@RunWith(RobolectricTestRunner.class)
+@Config(sdk = 35)
 public class AktualizacjePluginTest {
     private static final long GIB = 1024L * 1024L * 1024L;
     private static final long MIB = 1024L * 1024L;
+
+    @Test public void liczbyJsonZManifestuNieBlokujaPobieraniaPrzedPolaczeniem() throws Exception {
+        JSObject dane = new JSObject("{\"adres\":\"https://github.com/kapi1944/Ogarniacz/releases/latest/download/Ogarniacz-1.0.18-release.apk\","
+            + "\"sha256\":\"" + "a".repeat(64) + "\",\"nazwaPliku\":\"Ogarniacz-1.0.18-release.apk\","
+            + "\"wersjaDocelowa\":\"1.0.18\",\"versionCodeDocelowy\":1000018,\"rozmiar\":55241786}");
+        WywolanieTestowe wywolanie = new WywolanieTestowe(dane);
+        WtyczkaTestowa wtyczka = new WtyczkaTestowa();
+        wtyczka.pobierzApk(wywolanie);
+        assertEquals(null, wywolanie.blad);
+        assertTrue(wtyczka.zleconoPobieranie);
+        assertEquals(Long.valueOf(1000018), AktualizacjePlugin.odczytajLiczbeCalkowita(wywolanie, "versionCodeDocelowy"));
+        assertEquals(Long.valueOf(55241786), AktualizacjePlugin.odczytajLiczbeCalkowita(wywolanie, "rozmiar"));
+    }
+
+    @Test public void odczytLiczbZachowujeLongIOdrzucaUlamkiOrazTekst() throws Exception {
+        WywolanieTestowe wywolanie = new WywolanieTestowe(new JSObject("{\"duza\":2147483648,\"ulamek\":1.5,\"tekst\":\"1000018\",\"pusta\":null}"));
+        assertEquals(Long.valueOf(2147483648L), AktualizacjePlugin.odczytajLiczbeCalkowita(wywolanie, "duza"));
+        for (String nazwa : new String[] {"ulamek", "tekst", "pusta", "brak"}) {
+            assertEquals(null, AktualizacjePlugin.odczytajLiczbeCalkowita(wywolanie, nazwa));
+        }
+    }
+
+    @Test public void nieprawidlowyRozmiarNieOmijaWalidacjiJakoBrakujacy() throws Exception {
+        JSObject dane = new JSObject().put("adres", "https://github.com/app.apk").put("sha256", "a".repeat(64))
+            .put("nazwaPliku", "app.apk").put("wersjaDocelowa", "1.0.18").put("versionCodeDocelowy", 1000018).put("rozmiar", "55241786");
+        WywolanieTestowe wywolanie = new WywolanieTestowe(dane);
+        WtyczkaTestowa wtyczka = new WtyczkaTestowa();
+        wtyczka.pobierzApk(wywolanie);
+        assertEquals("BLAD_POBIERANIA: Manifest zawiera nieprawidłowy rozmiar APK.", wywolanie.blad);
+        assertFalse(wtyczka.zleconoPobieranie);
+    }
+
+    private static final class WywolanieTestowe extends PluginCall {
+        String blad;
+        WywolanieTestowe(JSObject dane) { super(null, "Aktualizacje", "test", "pobierzApk", dane); }
+        @Override public void reject(String komunikat, String kod) { blad = kod + ": " + komunikat; }
+    }
+
+    private static final class WtyczkaTestowa extends AktualizacjePlugin {
+        boolean zleconoPobieranie;
+        @Override public void execute(Runnable zadanie) { zleconoPobieranie = true; }
+    }
 
     @Test public void sukcesPoprzedniejInstalacjiNieBlokujePobraniaKolejnejWersji() {
         String nazwa = "Ogarniacz-1.0.14-release.apk", sha = "a".repeat(64);

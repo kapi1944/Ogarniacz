@@ -51,12 +51,12 @@ public class AktualizacjePlugin extends Plugin {
 
     @PluginMethod public void pobierzApk(PluginCall wywolanie) {
         String adres = wywolanie.getString("adres"), oczekiwanySkrot = wywolanie.getString("sha256"), nazwaPliku = wywolanie.getString("nazwaPliku");
-        String wersjaDocelowa = wywolanie.getString("wersjaDocelowa"); Long versionCodeDocelowy = wywolanie.getLong("versionCodeDocelowy");
-        Long deklarowanyRozmiar = wywolanie.getLong("rozmiar");
+        String wersjaDocelowa = wywolanie.getString("wersjaDocelowa"); Long versionCodeDocelowy = odczytajLiczbeCalkowita(wywolanie, "versionCodeDocelowy");
+        Long deklarowanyRozmiar = odczytajLiczbeCalkowita(wywolanie, "rozmiar");
         if (!poprawnyAdresHttps(adres)) { wywolanie.reject("Adres APK musi używać HTTPS.", KOD_BLAD_POBIERANIA); return; }
         if (oczekiwanySkrot == null || !oczekiwanySkrot.matches("(?i)^[a-f0-9]{64}$")) { wywolanie.reject("Manifest nie zawiera prawidłowego SHA-256.", KOD_BLEDNY_SHA); return; }
         if (nazwaPliku == null || !nazwaPliku.matches("^[A-Za-z0-9._-]+\\.apk$")) { wywolanie.reject("Nieprawidłowa nazwa pliku APK.", KOD_BLAD_POBIERANIA); return; }
-        if (deklarowanyRozmiar != null && (deklarowanyRozmiar <= 0 || deklarowanyRozmiar > MAKSYMALNY_ROZMIAR_APK)) { wywolanie.reject("Manifest zawiera nieprawidłowy rozmiar APK.", KOD_BLAD_POBIERANIA); return; }
+        if ((wywolanie.getData().has("rozmiar") && deklarowanyRozmiar == null) || (deklarowanyRozmiar != null && (deklarowanyRozmiar <= 0 || deklarowanyRozmiar > MAKSYMALNY_ROZMIAR_APK))) { wywolanie.reject("Manifest zawiera nieprawidłowy rozmiar APK.", KOD_BLAD_POBIERANIA); return; }
         if (wersjaDocelowa == null || versionCodeDocelowy == null || versionCodeDocelowy <= 0) { wywolanie.reject("Manifest nie zawiera prawidłowej wersji APK.", KOD_BLAD_POBIERANIA); return; }
         if (!trwaPobieranie.compareAndSet(false, true)) { wywolanie.reject("Pobieranie APK już trwa.", KOD_BLAD_POBIERANIA); return; }
         execute(() -> {
@@ -107,12 +107,18 @@ public class AktualizacjePlugin extends Plugin {
         });
     }
 
+    static Long odczytajLiczbeCalkowita(PluginCall wywolanie, String nazwa) {
+        // JSON z WebView zapisuje małe liczby jako Integer; getLong Capacitor ich nie odczytuje.
+        Object wartosc = wywolanie.getData().opt(nazwa);
+        return wartosc instanceof Integer || wartosc instanceof Long ? ((Number) wartosc).longValue() : null;
+    }
+
     private static volatile AktualizacjePlugin aktywnaWtyczka;
 
     @PluginMethod public void uruchomInstalator(PluginCall wywolanie) {
         String nazwa = wywolanie.getString("nazwaPliku");
         String wersjaDocelowa = wywolanie.getString("wersjaDocelowa");
-        Long versionCodeDocelowy = wywolanie.getLong("versionCodeDocelowy");
+        Long versionCodeDocelowy = odczytajLiczbeCalkowita(wywolanie, "versionCodeDocelowy");
         if (nazwa == null || !nazwa.matches("^[A-Za-z0-9._-]+\\.apk$")) { wywolanie.reject("Nieprawidłowa nazwa pliku APK.", KOD_BRAK_INSTALATORA); return; }
         if (wersjaDocelowa == null || versionCodeDocelowy == null || versionCodeDocelowy <= 0) { wywolanie.reject("Brakuje danych zweryfikowanej aktualizacji.", KOD_BRAK_INSTALATORA); return; }
         getBridge().executeOnMainThread(() -> uruchomInstalatorNaWatkuGlownym(wywolanie, nazwa, wersjaDocelowa, versionCodeDocelowy));

@@ -65,7 +65,7 @@ public class PobieranieApkTest {
         PobieranieApk.Blad blad = assertThrows(PobieranieApk.Blad.class, () -> PobieranieApk.pobierz(
             "https://github.com/app.apk", cel, null, (rozmiar) -> {}, (procent) -> {},
             (adres) -> { proby[0]++; return new PolaczenieTestowe(200, null, new byte[] {1, 2}, 5); }, (czas) -> {}));
-        assertEquals("BLAD_SIECI", blad.kod); assertEquals(3, blad.proba); assertEquals(3, proby[0]);
+        assertEquals("BLAD_SIECI", blad.kod); assertEquals(2, blad.proba); assertEquals(2, proby[0]);
         assertFalse(cel.exists());
     }
 
@@ -79,14 +79,14 @@ public class PobieranieApkTest {
                 "https://github.com/app.apk?token=TAJNY", cel, null, (rozmiar) -> {}, (procent) -> {},
                 (adres) -> { proby[0]++; return polaczenie; }, (czas) -> {}));
             assertEquals("BLAD_SIECI", blad.kod);
-            assertEquals(przyczyna instanceof javax.net.ssl.SSLException ? 1 : 3, proby[0]);
+            assertEquals(przyczyna instanceof javax.net.ssl.SSLException ? 1 : 2, proby[0]);
             assertFalse(blad.getMessage().contains("TAJNY")); assertEquals(null, blad.getCause());
             assertTrue(polaczenie.rozlaczone); assertFalse(cel.exists());
         }
     }
 
     @Test public void bledyHttpNieSaMylnieZglaszaneJakoSiecAniPonawiane() throws Exception {
-        for (int kod : new int[] {403, 404, 406, 429, 500, 503, 206, 304}) {
+        for (int kod : new int[] {400, 401, 403, 404, 406, 410, 429, 501, 206, 304}) {
             File cel = new File(pliki.getRoot(), "http.part");
             PolaczenieTestowe polaczenie = new PolaczenieTestowe(kod, null, new byte[0], -1);
             PobieranieApk.Blad blad = assertThrows(PobieranieApk.Blad.class, () -> PobieranieApk.pobierz(
@@ -95,6 +95,49 @@ public class PobieranieApkTest {
             assertEquals("BLAD_HTTP", blad.kod); assertEquals(kod, blad.http);
             assertTrue(polaczenie.rozlaczone); assertFalse(cel.exists());
         }
+    }
+
+    @Test public void przejsciowyHttpMaTylkoJednoPonowienie() throws Exception {
+        for (int kod : new int[] {408, 500, 502, 503, 504}) {
+            File cel = new File(pliki.getRoot(), "przejsciowy.part");
+            int[] proby = {0}, przerwy = {0};
+            PobieranieApk.Blad blad = assertThrows(PobieranieApk.Blad.class, () -> PobieranieApk.pobierz(
+                "https://github.com/app.apk", cel, null, (rozmiar) -> {}, (procent) -> {},
+                (adres) -> { proby[0]++; return new PolaczenieTestowe(kod, null, new byte[0], -1); },
+                (czas) -> { assertEquals(500L, czas); przerwy[0]++; }));
+            assertEquals("BLAD_HTTP", blad.kod); assertEquals(kod, blad.http); assertEquals(2, blad.proba);
+            assertEquals(2, proby[0]); assertEquals(1, przerwy[0]); assertFalse(cel.exists());
+        }
+    }
+
+    @Test public void przejsciowyHttpMozeZakonczycSieSukcesemPoJednymPonowieniu() throws Exception {
+        File cel = pliki.newFile("po-http.part"); int[] proby = {0};
+        byte[] dane = new byte[] {1, 2, 3};
+        assertEquals(obliczSha256(dane), PobieranieApk.pobierz("https://github.com/app.apk", cel, 3L,
+            (rozmiar) -> {}, (procent) -> {}, (adres) -> ++proby[0] == 1
+                ? new PolaczenieTestowe(503, null, new byte[0], -1) : new PolaczenieTestowe(200, null, dane, 3), (czas) -> {}));
+        assertEquals(2, proby[0]); assertArrayEquals(dane, Files.readAllBytes(cel.toPath()));
+    }
+
+    @Test public void zagniezdzonyBladCertyfikatuNieJestPonawiany() throws Exception {
+        File cel = pliki.newFile("certyfikat.part");
+        PolaczenieTestowe polaczenie = new PolaczenieTestowe(200, null, new byte[0], -1);
+        polaczenie.bladOdpowiedzi = new IOException("TAJNY", new java.security.cert.CertificateException("TAJNY"));
+        PobieranieApk.Blad blad = assertThrows(PobieranieApk.Blad.class, () -> PobieranieApk.pobierz(
+            "https://github.com/app.apk", cel, null, (rozmiar) -> {}, (procent) -> {}, (adres) -> polaczenie,
+            (czas) -> { throw new AssertionError("Błędu certyfikatu nie ponawiamy."); }));
+        assertEquals("TLS", blad.rodzaj); assertEquals(1, blad.proba);
+        assertTrue(polaczenie.rozlaczone); assertFalse(cel.exists()); assertFalse(blad.getMessage().contains("TAJNY"));
+    }
+
+    @Test public void brakMiejscaPodczasTransmisjiNiePonawiaPobierania() throws Exception {
+        File cel = pliki.newFile("miejsce.part");
+        PolaczenieTestowe polaczenie = new PolaczenieTestowe(200, null, new byte[] {1, 2, 3}, -1);
+        Exception brakMiejsca = new Exception("Za mało wolnego miejsca na aktualizację.");
+        assertEquals(brakMiejsca, assertThrows(Exception.class, () -> PobieranieApk.pobierz(
+            "https://github.com/app.apk", cel, null, (rozmiar) -> { throw brakMiejsca; }, (procent) -> {}, (adres) -> polaczenie,
+            (czas) -> { throw new AssertionError("Braku miejsca nie ponawiamy."); })));
+        assertTrue(polaczenie.rozlaczone && polaczenie.zamknietyOdczyt); assertFalse(cel.exists());
     }
 
     @Test public void przekierowaniaNiePozwalajaNaHttpBrakLocationAniPetle() throws Exception {

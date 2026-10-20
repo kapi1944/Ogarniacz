@@ -3,6 +3,8 @@ import { App } from '@capacitor/app'
 import { CapacitorHttp } from '@capacitor/core'
 import { utworzUslugeAktualizacji } from './AktualizacjeService'
 
+const { pobierzApk, usunNasluchiwanie } = vi.hoisted(() => ({ pobierzApk: vi.fn(), usunNasluchiwanie: vi.fn(async () => undefined) }))
+
 vi.mock('../services/RuntimeConfigService', () => ({
   pobierzKonfiguracjeRuntime: () => ({ androidUpdateManifestUrl: 'https://github.com/kapi1944/Ogarniacz/releases/latest/download/latest.json' }),
   pobierzDiagnostykeRuntime: () => '',
@@ -20,5 +22,27 @@ it('nie udaje dostępności APK po błędzie serwera manifestu', async () => {
   await expect(utworzUslugeAktualizacji(true).sprawdz()).rejects.toThrow('503')
 })
 
-vi.mock('@capacitor/core', async (oryginal) => ({ ...await oryginal<typeof import('@capacitor/core')>(), CapacitorHttp: { get: vi.fn() } }))
+it('przekazuje liczby manifestu do pluginu, zachowuje diagnostykę i sprząta nasłuchiwanie przed ręcznym ponowieniem', async () => {
+  const manifest = { versionName: '1.0.18', versionCode: 1000018, apkUrl: 'Ogarniacz-1.0.18-release.apk', sha256: 'a'.repeat(64), size: 55241786 }
+  const adres = 'https://github.com/kapi1944/Ogarniacz/releases/latest/download/Ogarniacz-1.0.18-release.apk'
+  const blad = { code: 'BLAD_HTTP', data: { http: 403, proba: 1 } }
+  const wynik = { nazwaPliku: manifest.apkUrl, sha256: manifest.sha256 }
+  pobierzApk.mockRejectedValueOnce(blad).mockResolvedValueOnce(wynik)
+  const usluga = utworzUslugeAktualizacji(true)
+  await expect(usluga.pobierz(manifest, adres, vi.fn())).rejects.toBe(blad)
+  expect(pobierzApk).toHaveBeenCalledTimes(1)
+  expect(usunNasluchiwanie).toHaveBeenCalledTimes(1)
+  await expect(usluga.pobierz(manifest, adres, vi.fn())).resolves.toEqual(wynik)
+  expect(pobierzApk).toHaveBeenLastCalledWith({
+    adres, sha256: manifest.sha256, nazwaPliku: manifest.apkUrl, wersjaDocelowa: '1.0.18', versionCodeDocelowy: 1000018, rozmiar: 55241786,
+  })
+  expect(pobierzApk).toHaveBeenCalledTimes(2)
+  expect(usunNasluchiwanie).toHaveBeenCalledTimes(2)
+})
+
+vi.mock('@capacitor/core', async (oryginal) => ({
+  ...await oryginal<typeof import('@capacitor/core')>(),
+  CapacitorHttp: { get: vi.fn() },
+  registerPlugin: () => ({ pobierzApk, addListener: async () => ({ remove: usunNasluchiwanie }) }),
+}))
 vi.mock('@capacitor/app', () => ({ App: { getInfo: vi.fn() } }))

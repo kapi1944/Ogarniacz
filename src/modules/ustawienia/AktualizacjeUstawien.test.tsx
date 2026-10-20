@@ -229,6 +229,8 @@ it.each([
   { code: 'BLAD_HTTP', data: { http: 406 }, etykieta: 'błąd HTTP', opis: 'HTTP 406' },
   { code: 'BLAD_ZAPISU', data: {}, etykieta: 'błąd zapisu APK', opis: 'prywatnej pamięci' },
   { code: 'BLAD_ROZMIARU', data: {}, etykieta: 'niezgodny rozmiar APK', opis: 'Rozmiar APK nie zgadza się' },
+  { code: 'BLAD_HTTP', data: { http: 302, rodzaj: 'BRAK_LOCATION' }, etykieta: 'błąd HTTP', opis: 'bez adresu docelowego' },
+  { code: 'BLAD_HTTP', data: { http: 302, rodzaj: 'LIMIT' }, etykieta: 'błąd HTTP', opis: 'limit przekierowań' },
 ])('rozróżnia $code i pozwala ponowić bez instalowania częściowego pliku', async ({ code, data, etykieta, opis }) => {
   pobierzApk.mockRejectedValueOnce({ code, data, message: 'https://cdn.test/?token=TAJNY' })
     .mockResolvedValueOnce({ nazwaPliku: 'Ogarniacz-1.0.12-release.apk', sha256: 'a'.repeat(64) })
@@ -243,6 +245,27 @@ it.each([
   fireEvent.click(screen.getByRole('button', { name: 'Ponów pobieranie' }))
   await waitFor(() => expect(uruchomInstalator).toHaveBeenCalledTimes(1))
   expect(pobierzApk).toHaveBeenCalledTimes(2)
+})
+
+it.each([
+  { message: 'Serwer APK zwrócił HTTP 403.', opis: 'HTTP 403' },
+  { message: 'Adres APK musi używać HTTPS.', opis: 'Adres APK musi używać HTTPS.' },
+  { message: 'Manifest nie zawiera prawidłowej wersji APK.', opis: 'Manifest nie zawiera prawidłowej wersji APK.' },
+  { message: 'Pobieranie APK już trwa.', opis: 'Pobieranie APK już trwa.' },
+  { message: 'https://cdn.test/?token=TAJNY', opis: 'Brak bezpiecznych szczegółów błędu' },
+  { message: 'Serwer APK zwrócił HTTP 403. https://cdn.test/?token=TAJNY', opis: 'Brak bezpiecznych szczegółów błędu' },
+])('nie maskuje rozpoznanego BLAD_POBIERANIA i nie pokazuje surowych sekretów: $opis', ({ message, opis }) => {
+  const komunikat = komunikatBleduAktualizacji({ code: 'BLAD_POBIERANIA', message }, 'Błąd')
+  expect(komunikat).toContain(opis)
+  expect(komunikat).not.toContain('TAJNY')
+  expect(komunikat).not.toContain('Sprawdź połączenie z internetem')
+})
+
+it('zachowuje bezpieczny szczegół błędu instalatora i odrzuca surowe komunikaty', () => {
+  expect(komunikatBleduAktualizacji({ code: 'BRAK_INSTALATORA', message: 'Brakuje danych zweryfikowanej aktualizacji. Pobierz APK ponownie.' }, 'Błąd'))
+    .toBe('Brakuje danych zweryfikowanej aktualizacji. Pobierz APK ponownie.')
+  expect(komunikatBleduAktualizacji({ code: 'BRAK_INSTALATORA', message: 'https://cdn.test/?token=TAJNY' }, 'Błąd'))
+    .toBe('Nie udało się uruchomić systemowego instalatora Androida. Sprawdź ustawienia urządzenia i spróbuj ponownie.')
 })
 
 it('po ponownym otwarciu panelu i anulowaniu instalacji ponawia zachowany APK bez pobierania', async () => {

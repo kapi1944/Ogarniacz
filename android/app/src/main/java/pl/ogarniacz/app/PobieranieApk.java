@@ -15,7 +15,7 @@ import javax.net.ssl.SSLException;
 final class PobieranieApk {
     static final long MAKSYMALNY_ROZMIAR = 250L * 1024L * 1024L;
     private static final int LIMIT_PRZEKIEROWAN = 5;
-    private static final int LIMIT_PROB = 3;
+    private static final int LIMIT_PROB = 2;
 
     interface OtwieraniePolaczenia { HttpURLConnection otworz(URL adres) throws IOException; }
     interface KontrolaMiejsca { void sprawdz(long rozmiar) throws Exception; }
@@ -49,7 +49,7 @@ final class PobieranieApk {
                     sukces = true;
                     return skrot;
                 } catch (Blad blad) {
-                    if (!"BLAD_SIECI".equals(blad.kod) || "TLS".equals(blad.rodzaj) || proba == LIMIT_PROB) throw blad;
+                    if (!czyMoznaPonowic(blad) || proba == LIMIT_PROB) throw blad;
                     usunCzesc(plik, proba);
                     // Zaczynamy od pierwotnego URL i bajtu zero, bez doklejania do starego APK.
                     przerwa.poczekaj(500L * proba);
@@ -59,6 +59,12 @@ final class PobieranieApk {
         } finally {
             if (!sukces) usunCzesc(plik, LIMIT_PROB);
         }
+    }
+
+    private static boolean czyMoznaPonowic(Blad blad) {
+        if ("BLAD_SIECI".equals(blad.kod)) return !"TLS".equals(blad.rodzaj);
+        return "BLAD_HTTP".equals(blad.kod)
+            && (blad.http == 408 || blad.http == 500 || blad.http == 502 || blad.http == 503 || blad.http == 504);
     }
 
     private static String pobierzProbe(String poczatkowy, File plik, Long rozmiarManifestu, KontrolaMiejsca miejsce,
@@ -104,13 +110,21 @@ final class PobieranieApk {
                     return zapisz(wejscie, plik, rozmiarManifestu != null ? rozmiarManifestu : rozmiar, miejsce, postep, proba);
                 }
             } catch (IOException blad) {
-                String rodzaj = blad instanceof SocketTimeoutException ? "TIMEOUT" : blad instanceof UnknownHostException ? "DNS" : blad instanceof SSLException ? "TLS" : "POLACZENIE";
+                String rodzaj = rozpoznajBladSieci(blad);
                 throw blad("BLAD_SIECI", "Przerwano pobieranie APK (" + rodzaj + ", próba " + proba + "/" + LIMIT_PROB + "). Sprawdź połączenie i ponów pobieranie.", etap, rodzaj, 0, proba);
             } finally {
                 if (polaczenie != null) polaczenie.disconnect();
             }
         }
         throw new IllegalStateException("Przekroczono limit przekierowań APK.");
+    }
+
+    private static String rozpoznajBladSieci(IOException blad) {
+        Throwable przyczyna = blad;
+        for (int poziom = 0; przyczyna != null && poziom < 8; poziom++, przyczyna = przyczyna.getCause()) {
+            if (przyczyna instanceof SSLException || przyczyna instanceof java.security.cert.CertificateException) return "TLS";
+        }
+        return blad instanceof SocketTimeoutException ? "TIMEOUT" : blad instanceof UnknownHostException ? "DNS" : "POLACZENIE";
     }
 
     private static String zapisz(InputStream wejscie, File plik, long rozmiar, KontrolaMiejsca miejsce, Postep postep, int proba) throws Exception {
