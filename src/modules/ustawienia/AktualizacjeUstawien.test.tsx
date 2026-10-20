@@ -222,6 +222,29 @@ it('błędny SHA blokuje instalator i pozwala ponowić pobranie', async () => {
   expect(uruchomInstalator).not.toHaveBeenCalled()
 })
 
+it.each([
+  { code: 'BLAD_SIECI', data: { rodzaj: 'TIMEOUT' }, etykieta: 'błąd sieci', opis: 'Przekroczono czas oczekiwania' },
+  { code: 'BLAD_SIECI', data: { rodzaj: 'DNS' }, etykieta: 'błąd sieci', opis: 'Nie udało się odnaleźć serwera' },
+  { code: 'BLAD_SIECI', data: { rodzaj: 'TLS' }, etykieta: 'błąd sieci', opis: 'bezpiecznego połączenia HTTPS' },
+  { code: 'BLAD_HTTP', data: { http: 406 }, etykieta: 'błąd HTTP', opis: 'HTTP 406' },
+  { code: 'BLAD_ZAPISU', data: {}, etykieta: 'błąd zapisu APK', opis: 'prywatnej pamięci' },
+  { code: 'BLAD_ROZMIARU', data: {}, etykieta: 'niezgodny rozmiar APK', opis: 'Rozmiar APK nie zgadza się' },
+])('rozróżnia $code i pozwala ponowić bez instalowania częściowego pliku', async ({ code, data, etykieta, opis }) => {
+  pobierzApk.mockRejectedValueOnce({ code, data, message: 'https://cdn.test/?token=TAJNY' })
+    .mockResolvedValueOnce({ nazwaPliku: 'Ogarniacz-1.0.12-release.apk', sha256: 'a'.repeat(64) })
+  uruchomInstalator.mockResolvedValue({ status: 'INSTALOWANIE', wymagaZgody: false })
+  render(<PanelAktualizacji />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Pobierz i zainstaluj' }))
+  await screen.findByRole('button', { name: 'Ponów pobieranie' })
+  expect(screen.getByText(etykieta)).toBeInTheDocument()
+  expect(screen.getByRole('alert')).toHaveTextContent(opis)
+  expect(screen.getByRole('alert')).not.toHaveTextContent('TAJNY')
+  expect(uruchomInstalator).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Ponów pobieranie' }))
+  await waitFor(() => expect(uruchomInstalator).toHaveBeenCalledTimes(1))
+  expect(pobierzApk).toHaveBeenCalledTimes(2)
+})
+
 it('po ponownym otwarciu panelu i anulowaniu instalacji ponawia zachowany APK bez pobierania', async () => {
   vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockResolvedValueOnce({
     status: 'ANULOWANO', wymagaZgody: false, maZweryfikowanyApk: true, moznaPonowicInstalacje: true,

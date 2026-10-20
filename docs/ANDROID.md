@@ -24,6 +24,65 @@ APK, instaluje przez `adb install -r`, potwierdza wersję i uruchamia aplikację
 Nie odinstalowuje Ogarniacza, nie czyści danych i nie wymusza downgrade.
 Debug nie wymaga release keystore. Telefon produkcyjny aktualizuj oficjalnym APK.
 
+### Pobieranie APK po 1.0.18
+
+Ścieżka aktualizacji: `AktualizacjeService` pobiera `latest.json` przez natywny
+`CapacitorHttp`, waliduje manifest i rozwiązuje `apkUrl`. `AktualizacjePlugin`
+przekazuje transfer do `PobieranieApk`: HTTPS → maksymalnie pięć przekierowań →
+strumieniowy zapis `cache/aktualizacje/<nazwa>.apk.part` → fsync → SHA-256 →
+dotychczasowa finalizacja i ponowne sprawdzenie SHA-256. Dopiero zweryfikowany
+plik może trafić do istniejącego `PackageInstaller`, który egzekwuje zgodność
+pakietu, wersji i podpisu. Nie zmieniono klucza ani mechanizmu instalacji.
+
+W 1.0.16 i 1.0.18 nagłówek `Accept` dopuszczał wyłącznie MIME APK/octet-stream,
+także dla strony GitHuba obsługującej przekierowanie. Zmieniono go na `*/*`;
+`Accept-Encoding: identity` zachowuje znaczenie rozmiaru i SHA-256 surowego APK.
+Wyłączono cache żądań/przekierowań, aby ponowienie nie korzystało ze starego
+podpisanego adresu CDN. Bez odczytu odpowiedzi GitHuba lub logu telefonu nie
+można potwierdzić, że zgłoszone niepowodzenie było odpowiedzią HTTP 406.
+
+Timeout połączenia wynosi 15 s, odczytu 30 s. Zerwanie sieci, DNS lub timeout
+powodują do trzech prób z przerwami 500/1000 ms. Każda zaczyna od pierwotnego
+adresu i bajtu zero z nowym SHA-256; nie używa Range ani nie dokleja danych.
+Błąd TLS, HTTP, rozmiaru, zapisu lub SHA nie uruchamia automatycznego retry.
+Użytkownik może ponowić pobranie po usunięciu przyczyny. Części są usuwane po
+błędzie, a równoległe pobieranie we wtyczce jest blokowane.
+
+Diagnostyka rozróżnia `BLAD_SIECI` (DNS/TLS/TIMEOUT/POLACZENIE), `BLAD_HTTP`
+(kod HTTP), `BLAD_ROZMIARU`, `BLAD_ZAPISU`, `BRAK_MIEJSCA`, `BLEDNY_SHA`,
+`BLAD_FINALIZACJI` oraz dotychczasowe błędy instalatora. Log `AktualizacjeApk`
+zawiera wyłącznie kod, etap, rodzaj, HTTP i numer próby; nie zapisuje URL,
+Location, query, treści odpowiedzi ani surowego wyjątku sieciowego.
+`INTERNET` wystarcza do transferu; prywatny cache nie wymaga uprawnień do
+pamięci współdzielonej. `REQUEST_INSTALL_PACKAGES` dotyczy późniejszej instalacji.
+
+Regresja: `PobieranieApkTest`, `AktualizacjePluginTest`,
+`AktualizacjeUstawien.test.tsx` i `AktualizacjePrzeplyw.test.ts`.
+Testy transportu używają kontrolowanych połączeń i faktycznych plików;
+nie zastępują próby HTTPS na fizycznym urządzeniu.
+
+**Istniejąca 1.0.16:** poprawka natywna działa dopiero po zainstalowaniu APK,
+który ją zawiera. Nie naprawia wstecz pobierania działającego w 1.0.16.
+Jeśli stary downloader blokuje aktualizację, pobierz przyszły oficjalny APK
+przeglądarką i zainstaluj go nad obecną aplikacją, z tym samym podpisem i wyższym
+versionCode. Nie odinstalowuj aplikacji ani nie czyść danych. Ten patch nie
+podnosi wersji i nie publikuje wydania.
+
+Próba na Samsungu podczas kolejnej aktualizacji:
+
+1. Zainstaluj oficjalny APK zawierający poprawkę; zanotuj wersję i versionCode.
+   Dopiero aktualizacja **z tej wersji do następnej wyższej** sprawdza naprawiony
+   downloader (np. 1.0.19 → 1.0.20, jeśli te wydania zostaną opublikowane).
+2. Uruchom pobieranie w aplikacji. Po części transferu wyłącz sieć na ponad
+   30 s. Przywróć połączenie podczas retry albo po komunikacie błędu naciśnij
+   „Ponów pobieranie”. Postęp może wrócić do zera; częściowy plik nie może
+   uruchomić instalatora.
+3. Po pełnym transferze sprawdź etap SHA-256, systemową zgodę/potwierdzenie,
+   instalację i nową wersję po ponownym uruchomieniu. Sprawdź zachowanie danych.
+4. Przy niepowodzeniu zanotuj kategorię i HTTP w UI oraz pobierz wyłącznie
+   diagnostykę updatera: `adb logcat -d -s AktualizacjeApk:W '*:S'`.
+   Nie udostępniaj pełnego logcat ani podpisanych adresów CDN.
+
 ## B. Tworzenie release
 
 ### Eksport kopii po 1.0.16

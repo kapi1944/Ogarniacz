@@ -6,7 +6,7 @@ import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
 import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeApk } from '../../services/KontrolaAktualizacjiAplikacji'
 import type { PobranaAktualizacja, StanInstalacjiAktualizacji, StatusInstalacjiAktualizacji, WynikSprawdzeniaAktualizacji, WynikUruchomieniaInstalatora } from '../../platform/typy'
 
-type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'blad_instalatora' | 'blad_pobierania' | 'bledny_sha' | 'blad_finalizacji' | 'blad'
+type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'blad_instalatora' | 'blad_pobierania' | 'blad_sieci' | 'blad_http' | 'blad_rozmiaru' | 'bledny_sha' | 'blad_finalizacji' | 'blad'
 
 const etykietyEtapu: Record<EtapAktualizacji, string> = {
   gotowy: 'gotowe',
@@ -21,6 +21,9 @@ const etykietyEtapu: Record<EtapAktualizacji, string> = {
   uruchamianie: 'uruchamianie instalatora',
   blad_instalatora: 'błąd instalatora',
   blad_pobierania: 'błąd pobierania',
+  blad_sieci: 'błąd sieci',
+  blad_http: 'błąd HTTP',
+  blad_rozmiaru: 'niezgodny rozmiar APK',
   bledny_sha: 'błędny SHA-256',
   blad_finalizacji: 'błąd zapisu APK',
   blad: 'błąd',
@@ -33,11 +36,21 @@ function kodBledu(blad: unknown) {
 function daneBledu(blad: unknown) {
   if (typeof blad !== 'object' || blad === null) return {}
   const dane = 'data' in blad && typeof blad.data === 'object' && blad.data !== null ? blad.data : blad
-  return dane as { wolneBajty?: number, wymaganeBajty?: number, brakujaceBajty?: number }
+  return dane as { wolneBajty?: number, wymaganeBajty?: number, brakujaceBajty?: number, http?: number, rodzaj?: string }
 }
 
 export function komunikatBleduAktualizacji(blad: unknown, domyslny: string) {
   const kod = kodBledu(blad)
+  const { http, rodzaj } = daneBledu(blad)
+  if (kod === 'BLAD_HTTP' && typeof http === 'number' && Number.isInteger(http) && http >= 100 && http <= 599) {
+    return `Serwer APK zwrócił HTTP ${http}. Pobieranie nie zostało zakończone. Spróbuj ponownie później.`
+  }
+  if (kod === 'BLAD_SIECI') {
+    if (rodzaj === 'TIMEOUT') return 'Przekroczono czas oczekiwania na połączenie lub dane APK. Sprawdź sieć i ponów pobieranie.'
+    if (rodzaj === 'DNS') return 'Nie udało się odnaleźć serwera APK. Sprawdź połączenie z internetem i ponów pobieranie.'
+    if (rodzaj === 'TLS') return 'Nie udało się nawiązać bezpiecznego połączenia HTTPS z serwerem APK. Sprawdź datę urządzenia i ustawienia sieci.'
+    return 'Połączenie przerwało pobieranie APK mimo automatycznych prób. Sprawdź sieć i ponów pobieranie.'
+  }
   if (kod === 'BRAK_MIEJSCA') {
     const { wolneBajty, wymaganeBajty, brakujaceBajty } = daneBledu(blad)
     const format = (bajty: number) => bajty >= 1024 ** 3
@@ -50,6 +63,9 @@ export function komunikatBleduAktualizacji(blad: unknown, domyslny: string) {
   }
   const wiadomosci: Record<string, string> = {
     BLAD_POBIERANIA: 'Nie udało się pobrać APK. Sprawdź połączenie z internetem i spróbuj ponownie.',
+    BLAD_HTTP: 'Serwer APK zwrócił nieprawidłową odpowiedź lub przekierowanie. Spróbuj ponownie później.',
+    BLAD_ROZMIARU: 'Rozmiar APK nie zgadza się z manifestem lub przekracza limit. Plik został odrzucony. Sprawdź aktualizacje ponownie.',
+    BLAD_ZAPISU: 'Nie udało się zapisać APK w prywatnej pamięci aplikacji. Sprawdź wolne miejsce i ponów pobieranie.',
     BLEDNY_SHA: 'Pobrany APK nie przeszedł weryfikacji SHA-256 i został usunięty. Spróbuj ponownie później.',
     BLAD_FINALIZACJI: 'APK został pobrany, ale nie udało się bezpiecznie zapisać zweryfikowanego pliku. Spróbuj ponownie.',
     BRAK_INSTALATORA: 'Nie udało się uruchomić systemowego instalatora Androida. Sprawdź ustawienia urządzenia i spróbuj ponownie.',
@@ -61,7 +77,10 @@ function etapBleduPobierania(blad: unknown): EtapAktualizacji {
   const kod = kodBledu(blad)
   if (kod === 'BRAK_MIEJSCA') return 'brak_miejsca'
   if (kod === 'BLEDNY_SHA') return 'bledny_sha'
-  if (kod === 'BLAD_FINALIZACJI') return 'blad_finalizacji'
+  if (kod === 'BLAD_FINALIZACJI' || kod === 'BLAD_ZAPISU') return 'blad_finalizacji'
+  if (kod === 'BLAD_SIECI') return 'blad_sieci'
+  if (kod === 'BLAD_HTTP') return 'blad_http'
+  if (kod === 'BLAD_ROZMIARU') return 'blad_rozmiaru'
   return kod === 'BLAD_POBIERANIA' ? 'blad_pobierania' : 'blad'
 }
 
@@ -236,7 +255,7 @@ export function PanelAktualizacji() {
   }
 
   const zajete = etap === 'sprawdzanie' || etap === 'pobieranie' || etap === 'weryfikacja' || etap === 'uruchamianie'
-  const czyEtapBledu = etap === 'blad' || etap === 'brak_miejsca' || etap === 'blad_instalatora' || etap === 'blad_pobierania' || etap === 'bledny_sha' || etap === 'blad_finalizacji'
+  const czyEtapBledu = etap === 'blad' || etap === 'brak_miejsca' || etap === 'blad_instalatora' || etap === 'blad_pobierania' || etap === 'blad_sieci' || etap === 'blad_http' || etap === 'blad_rozmiaru' || etap === 'bledny_sha' || etap === 'blad_finalizacji'
   const wariant = czyEtapBledu ? 'blad' : etap === 'dostepna' || etap === 'zgoda' ? 'ostrzezenie' : etap === 'brak' || etap === 'gotowe' ? 'sukces' : 'neutralny'
 
   const maZweryfikowanyApk = Boolean(stanNatywny?.maZweryfikowanyApk || pobrana)

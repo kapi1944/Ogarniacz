@@ -80,7 +80,7 @@ jobs:
 
       - name: Testy natywnego updatera i eksportu pliku
         working-directory: android
-        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.MigracjaPozostalosciWebOtaTest' --tests 'pl.ogarniacz.app.RuntimeConfigPluginTest' --tests 'pl.ogarniacz.app.EksportPlikuPluginTest' --no-daemon
+        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.PobieranieApkTest' --tests 'pl.ogarniacz.app.MigracjaPozostalosciWebOtaTest' --tests 'pl.ogarniacz.app.RuntimeConfigPluginTest' --tests 'pl.ogarniacz.app.EksportPlikuPluginTest' --no-daemon
 
       - name: Gradle assembleDebug
         working-directory: android

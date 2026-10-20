@@ -18,29 +18,29 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 @CapacitorPlugin(name = "Aktualizacje")
 public class AktualizacjePlugin extends Plugin {
-    private static final long MAKSYMALNY_ROZMIAR_APK = 250L * 1024L * 1024L;
+    private static final long MAKSYMALNY_ROZMIAR_APK = PobieranieApk.MAKSYMALNY_ROZMIAR;
     private static final long MEBIBAJT = 1024L * 1024L;
     private static final long MARGINES_OPERACYJNY = 64L * MEBIBAJT;
     private static final long ROZMIAR_STARTOWY_BEZ_CONTENT_LENGTH = 16L * MEBIBAJT;
     private static final long LICZBA_KOPII_PODCZAS_POBIERANIA = 3L;
     private static final long RETENCJA_NIEUDANYCH_ARTEFAKTOW_MS = 24L * 60L * 60L * 1000L;
-    private static final int LIMIT_PRZEKIEROWAN = 5;
     private static final String KATALOG_AKTUALIZACJI = "aktualizacje";
     private static final String KOD_BRAK_MIEJSCA = "BRAK_MIEJSCA";
     private static final String KOD_BRAK_INSTALATORA = "BRAK_INSTALATORA";
     private static final String KOD_BLAD_POBIERANIA = "BLAD_POBIERANIA";
     private static final String KOD_BLEDNY_SHA = "BLEDNY_SHA";
     private static final String KOD_BLAD_FINALIZACJI = "BLAD_FINALIZACJI";
+
+    private final AtomicBoolean trwaPobieranie = new AtomicBoolean();
 
     @Override public void load() {
         super.load();
@@ -58,6 +58,7 @@ public class AktualizacjePlugin extends Plugin {
         if (nazwaPliku == null || !nazwaPliku.matches("^[A-Za-z0-9._-]+\\.apk$")) { wywolanie.reject("Nieprawidłowa nazwa pliku APK.", KOD_BLAD_POBIERANIA); return; }
         if (deklarowanyRozmiar != null && (deklarowanyRozmiar <= 0 || deklarowanyRozmiar > MAKSYMALNY_ROZMIAR_APK)) { wywolanie.reject("Manifest zawiera nieprawidłowy rozmiar APK.", KOD_BLAD_POBIERANIA); return; }
         if (wersjaDocelowa == null || versionCodeDocelowy == null || versionCodeDocelowy <= 0) { wywolanie.reject("Manifest nie zawiera prawidłowej wersji APK.", KOD_BLAD_POBIERANIA); return; }
+        if (!trwaPobieranie.compareAndSet(false, true)) { wywolanie.reject("Pobieranie APK już trwa.", KOD_BLAD_POBIERANIA); return; }
         execute(() -> {
             File tymczasowy = null, docelowy = null;
             try {
@@ -72,9 +73,10 @@ public class AktualizacjePlugin extends Plugin {
                     JSObject wynik = new JSObject(); wynik.put("nazwaPliku", nazwaPliku); wynik.put("sha256", oczekiwanySkrot); wywolanie.resolve(wynik);
                     return;
                 }
-                sprawdzMiejscePrzedPobraniem(katalog, deklarowanyRozmiar); usunJesliIstnieje(tymczasowy);
-                powiadomOStanie("pobieranie", 0);
-                String skrot = pobierz(adres, tymczasowy, deklarowanyRozmiar);
+                sprawdzMiejscePrzedPobraniem(katalog, deklarowanyRozmiar);
+                String skrot = PobieranieApk.pobierz(adres, tymczasowy, deklarowanyRozmiar,
+                    (rozmiar) -> sprawdzMiejscePodczasPobierania(katalog, rozmiar),
+                    (procent) -> powiadomOStanie("pobieranie", procent));
                 StanInstalacjiApk.zapiszPobrano(getContext(), nazwaPliku, oczekiwanySkrot, wersjaDocelowa, versionCodeDocelowy);
                 powiadomOStanie("weryfikacja", 100);
                 if (!zweryfikujSkrotLubUsunPlik(tymczasowy, skrot, oczekiwanySkrot)) throw new BladShaException();
@@ -87,7 +89,20 @@ public class AktualizacjePlugin extends Plugin {
                 if (blad instanceof BrakMiejscaException) odrzucBrakMiejsca(wywolanie, (BrakMiejscaException) blad);
                 else if (blad instanceof BladShaException) wywolanie.reject(blad.getMessage(), KOD_BLEDNY_SHA);
                 else if (blad instanceof BladFinalizacjiException) wywolanie.reject(blad.getMessage(), KOD_BLAD_FINALIZACJI);
-                else wywolanie.reject(bezpiecznyKomunikat(blad, "Nie udało się pobrać aktualizacji."), KOD_BLAD_POBIERANIA);
+                else if (blad instanceof PobieranieApk.Blad) {
+                    PobieranieApk.Blad szczegoly = (PobieranieApk.Blad) blad;
+                    JSObject dane = new JSObject(); dane.put("etap", szczegoly.etap); dane.put("rodzaj", szczegoly.rodzaj);
+                    dane.put("http", szczegoly.http); dane.put("proba", szczegoly.proba);
+                    android.util.Log.w("AktualizacjeApk", "kod=" + szczegoly.kod + " etap=" + szczegoly.etap + " rodzaj=" + szczegoly.rodzaj + " http=" + szczegoly.http + " proba=" + szczegoly.proba);
+                    wywolanie.reject(szczegoly.getMessage(), szczegoly.kod, dane);
+                }
+                else if (blad instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                    wywolanie.reject("Pobieranie APK zostało przerwane. Ponów pobieranie.", "BLAD_SIECI");
+                }
+                else wywolanie.reject("Nie udało się przygotować pliku APK w prywatnej pamięci aplikacji.", "BLAD_ZAPISU");
+            } finally {
+                trwaPobieranie.set(false);
             }
         });
     }
@@ -234,33 +249,6 @@ public class AktualizacjePlugin extends Plugin {
     private void odrzucBrakMiejsca(PluginCall wywolanie, BrakMiejscaException blad) {
         JSObject dane = new JSObject(); dane.put("wolneBajty", blad.wolneBajty); dane.put("wymaganeBajty", blad.wymaganeBajty); dane.put("brakujaceBajty", blad.brakujaceBajty);
         wywolanie.reject(blad.getMessage(), KOD_BRAK_MIEJSCA, dane);
-    }
-
-    private String pobierz(String adresPoczatkowy, File docelowy, Long deklarowanyRozmiar) throws Exception {
-        URL adres = URI.create(adresPoczatkowy).toURL();
-        for (int numer = 0; numer <= LIMIT_PRZEKIEROWAN; numer++) {
-            HttpURLConnection polaczenie = (HttpURLConnection) adres.openConnection(); polaczenie.setInstanceFollowRedirects(false); polaczenie.setConnectTimeout(15000); polaczenie.setReadTimeout(30000); polaczenie.setRequestProperty("Accept", "application/vnd.android.package-archive, application/octet-stream"); polaczenie.setRequestProperty("User-Agent", "Ogarniacz-Android-Updater");
-            int kod = polaczenie.getResponseCode();
-            if (kod >= 300 && kod < 400) { String lokalizacja = polaczenie.getHeaderField("Location"); polaczenie.disconnect(); if (lokalizacja == null) throw new Exception("Serwer zwrócił przekierowanie bez adresu docelowego."); adres = new URL(adres, lokalizacja); if (!"https".equalsIgnoreCase(adres.getProtocol())) throw new Exception("Przekierowanie APK nie używa HTTPS."); continue; }
-            if (kod < 200 || kod >= 300) { polaczenie.disconnect(); throw new Exception("Serwer APK zwrócił HTTP " + kod + "."); }
-            long rozmiar = polaczenie.getContentLengthLong();
-            if (rozmiar > MAKSYMALNY_ROZMIAR_APK) { polaczenie.disconnect(); throw new Exception("Plik APK przekracza dozwolony rozmiar 250 MB."); }
-            if (deklarowanyRozmiar != null && rozmiar > 0 && rozmiar != deklarowanyRozmiar) { polaczenie.disconnect(); throw new Exception("Rozmiar APK z serwera nie zgadza się z manifestem."); }
-            if (rozmiar > 0) sprawdzMiejscePrzedPobraniem(docelowy.getParentFile(), rozmiar);
-            MessageDigest skrot = MessageDigest.getInstance("SHA-256"); long pobrano = 0; int ostatniProcent = -1;
-            try (InputStream wejscie = polaczenie.getInputStream(); FileOutputStream wyjscie = new FileOutputStream(docelowy)) {
-                byte[] bufor = new byte[64 * 1024]; int liczba;
-                while ((liczba = wejscie.read(bufor)) != -1) {
-                    pobrano += liczba; if (pobrano > MAKSYMALNY_ROZMIAR_APK) throw new Exception("Plik APK przekracza dozwolony rozmiar 250 MB.");
-                    if (rozmiar <= 0 && pobrano % (1024L * 1024L) < liczba) sprawdzMiejscePodczasPobierania(docelowy.getParentFile(), pobrano);
-                    wyjscie.write(bufor, 0, liczba); skrot.update(bufor, 0, liczba);
-                    if (rozmiar > 0) { int procent = (int) Math.min(99, pobrano * 100 / rozmiar); if (procent != ostatniProcent && procent % 5 == 0) { ostatniProcent = procent; powiadomOStanie("pobieranie", procent); } }
-                } wyjscie.getFD().sync();
-            } finally { polaczenie.disconnect(); }
-            if (deklarowanyRozmiar != null && pobrano != deklarowanyRozmiar) throw new Exception("Pobrany APK ma rozmiar niezgodny z manifestem.");
-            sprawdzMiejscePodczasPobierania(docelowy.getParentFile(), pobrano);
-            return zapisSzesnastkowy(skrot.digest());
-        } throw new Exception("Serwer APK przekroczył limit przekierowań.");
     }
 
     private boolean poprawnyAdresHttps(String adres) { try { return adres != null && "https".equalsIgnoreCase(URI.create(adres).getScheme()); } catch (Exception blad) { return false; } }
