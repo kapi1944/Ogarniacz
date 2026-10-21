@@ -2238,10 +2238,12 @@ input[type="radio"] {
 .wybor-stylu small { color: var(--tekst-2); line-height: 1.5; }
 
 :root[data-styl="premium"] {
-  --premium-powierzchnia: linear-gradient(165deg, color-mix(in srgb, var(--panel-2) 96%, var(--tekst)), var(--panel) 68%, color-mix(in srgb, var(--panel) 96%, var(--akcent)));
-  --premium-karta: linear-gradient(150deg, color-mix(in srgb, var(--panel-2) 97%, var(--tekst)), var(--panel-2) 32%, var(--panel) 100%);
+  --premium-powierzchnia: linear-gradient(165deg, color-mix(in srgb, var(--panel-2) 93%, var(--tekst)), var(--panel-2) 38%, var(--panel));
+  --premium-karta: linear-gradient(150deg, color-mix(in srgb, var(--panel-2) 93%, var(--tekst)), var(--panel-2) 42%, var(--panel) 100%);
   --premium-faktura: repeating-linear-gradient(118deg, color-mix(in srgb, var(--tekst) 1.2%, transparent) 0 1px, transparent 1px 4px);
-  --premium-zloto-gradient: linear-gradient(175deg, var(--premium-zloto-ciemne), var(--premium-zloto) 16%, var(--premium-zloto-jasne) 34%, var(--premium-zloto) 60%, var(--premium-zloto-ciemne));
+  --premium-zloto-gradient: linear-gradient(135deg, var(--premium-zloto-ciemne), var(--premium-zloto) 20%, var(--premium-zloto-jasne) 43%, var(--premium-zloto) 49%, var(--premium-zloto-ciemne) 76%, var(--premium-zloto) 100%);
+  --gradient-akcentowy: var(--premium-zloto-gradient);
+  --gradient-akcentowy-hover: var(--premium-zloto-gradient);
   --premium-zloto-obramowanie: color-mix(in srgb, var(--akcent) 55%, var(--obramowanie));
   --premium-scroll-tor: var(--ui-sidebar-bg);
   --ostrzezenie-tekst: var(--ostrzezenie);
@@ -2292,7 +2294,8 @@ input[type="radio"] {
   border-top-color: var(--premium-zloto-obramowanie);
 }
 
-:root[data-styl="premium"] :is(.przycisk--glowny, .przycisk-plus):where(:not(.motyw-playground--bazowy *)) {
+:root[data-styl="premium"] :is(.przycisk--glowny, .przycisk-plus):where(:not(.motyw-playground--bazowy *)),
+:root[data-styl="premium"][data-ui-hover="wylaczony"] :is(.przycisk--glowny, .przycisk-plus):where(:not(.motyw-playground--bazowy *)):hover {
   color: var(--premium-zloto-tekst);
   background: var(--premium-zloto-gradient);
   border-color: var(--premium-zloto-ciemne);
@@ -2302,16 +2305,27 @@ input[type="radio"] {
 :root[data-styl="premium"]:not([data-ui-hover="wylaczony"]) :is(.przycisk--glowny, .przycisk-plus):where(:not(.motyw-playground--bazowy *)):hover {
   color: var(--premium-zloto-tekst);
   background: var(--premium-zloto-gradient);
-  box-shadow: var(--ui-hover-shadow);
+  box-shadow: var(--premium-przycisk-hover-cien);
 }
 
 :root[data-styl="premium"] :is(.przycisk--glowny, .przycisk-plus):where(:not(.motyw-playground--bazowy *)):active {
   box-shadow: var(--ui-active-shadow);
 }
 
-:root[data-styl="premium"] .przycisk--drugorzedny:where(:not(.motyw-playground--bazowy *)) {
+:root[data-styl="premium"] :is(.przycisk, .przycisk-ikona, .przycisk-szukaj):where(:not(.przycisk--glowny, .przycisk--niebezpieczny, .przycisk--tekstowy, .motyw-playground--bazowy *)),
+:root[data-styl="premium"][data-ui-hover="wylaczony"] :is(.przycisk:not(.przycisk--glowny):not(.przycisk--niebezpieczny), .przycisk-ikona, .przycisk-szukaj):where(:not(.przycisk--tekstowy, .motyw-playground--bazowy *)):hover {
   background: var(--premium-powierzchnia);
   border-color: var(--premium-zloto-obramowanie);
+  box-shadow: var(--premium-refleks);
+}
+
+:root[data-styl="premium"]:not([data-ui-hover="wylaczony"]) :is(.przycisk, .przycisk-ikona, .przycisk-szukaj):where(:not(.przycisk--glowny, .przycisk--niebezpieczny, .przycisk--tekstowy, .motyw-playground--bazowy *)):hover {
+  border-color: var(--ui-hover-border);
+  box-shadow: var(--premium-przycisk-hover-cien);
+}
+
+:root[data-styl="premium"] :is(.przycisk, .przycisk-ikona, .przycisk-szukaj):where(:not(.przycisk--glowny, .przycisk--niebezpieczny, .przycisk--tekstowy, .motyw-playground--bazowy *)):active {
+  box-shadow: var(--ui-active-shadow);
 }
 
 :root[data-styl="premium"] :is(.dolna-nawigacja, .modal__naglowek) {
@@ -2320,6 +2334,8 @@ input[type="radio"] {
 }
 
 :root[data-styl="premium"] :is(.dolna-nawigacja, .modal-tlo) { backdrop-filter: none; }
+
+:root[data-styl="premium"] .dolna-nawigacja__dodaj > span { color: var(--premium-zloto-tekst); }
 
 :root[data-styl="premium"] .motyw-playground--bazowy {
   --premium-karta: var(--panel);
@@ -2334,8 +2350,9 @@ input[type="radio"] {
 
 :root[data-styl="premium"] :is(input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]), select, textarea) {
   color: var(--tekst);
-  background: var(--panel);
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--panel) 94%, var(--panel-2)));
   border-color: var(--obramowanie-mocne);
+  box-shadow: var(--premium-refleks);
 }
 
 :root[data-styl="premium"] :is(input, textarea)::placeholder {
@@ -2429,18 +2446,20 @@ input[type="radio"] {
   --premium-karta: var(--panel);
   --premium-zloto-gradient: var(--premium-zloto);
 }
-:root[data-styl="premium"][data-kontrast="wysoki"] :is(.karta, .strefa-pulpitu, .rekord, .przycisk, .personalizacja-sekcja, input, select, textarea) {
-  border-color: var(--tekst-2);
-  box-shadow: none;
+:root[data-styl="premium"][data-kontrast="wysoki"] :is(.karta, .strefa-pulpitu, .rekord, .przycisk, .przycisk-plus, .przycisk-ikona, .przycisk-szukaj, .personalizacja-sekcja, input, select, textarea) {
+  /* Czytelne kontury mają pierwszeństwo również nad szczegółowymi stanami hover. */
+  border-color: var(--tekst-2) !important;
+  box-shadow: none !important;
 }
 :root[data-styl="premium"][data-kontrast="wysoki"] body { background: var(--tlo); }
 
-/* Dotyk korzysta z systemowego przewijania; desktop z natywnych scrollbarów. */
+/* Kolor obowiązuje także na ekranie dotykowym i urządzeniach hybrydowych. */
+:root[data-styl="premium"], :root[data-styl="premium"] * {
+  scrollbar-color: var(--premium-zloto) var(--premium-scroll-tor);
+  scrollbar-width: thin;
+}
+
 @media (hover: hover) and (pointer: fine) {
-  :root[data-styl="premium"], :root[data-styl="premium"] * {
-    scrollbar-color: var(--premium-zloto) var(--premium-scroll-tor);
-    scrollbar-width: thin;
-  }
   @supports selector(::-webkit-scrollbar) {
     /* W Chromium/Safari wartości inne niż auto wyłączają pseudoelementy. */
     :root[data-styl="premium"], :root[data-styl="premium"] * {

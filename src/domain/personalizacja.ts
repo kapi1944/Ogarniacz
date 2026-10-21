@@ -918,7 +918,10 @@ export function zastosujPersonalizacje(
     '--premium-zloto-tekst': tekstMetalu,
     '--premium-refleks': p.komponenty.glebia === 'plaska'
       ? '0 0 transparent'
-      : 'inset 0 1px color-mix(in srgb, var(--tekst) 12%, transparent), inset 0 -1px rgb(0 0 0 / 14%)',
+      : 'inset 0 1px color-mix(in srgb, var(--premium-zloto) 22%, transparent), inset 0 -1px rgb(0 0 0 / 18%)',
+    '--premium-przycisk-hover-cien': interakcje.hoverCien === 0
+      ? 'var(--premium-refleks)'
+      : 'var(--premium-refleks), var(--ui-hover-shadow)',
   }
   for (const [nazwa, wartosc] of Object.entries(tokenyMetalu)) {
     if (p.styl === 'premium') style.setProperty(nazwa, wartosc)
@@ -1013,7 +1016,7 @@ export function zastosujPersonalizacje(
   style.setProperty('--ui-depth-shadow', CIENIE_GLEBI[p.komponenty.glebia])
   style.setProperty('--ui-card-shadow', p.styl === 'premium' && p.komponenty.kartaCien !== 'brak'
     ? `inset 0 1px color-mix(in srgb, var(--tekst) 7%, transparent), ${p.komponenty.kartaCien === 'lekki'
-      ? `0 2px 4px rgb(6 22 17 / ${motyw === 'ciemny' ? '16%' : '8%'}), 0 12px 28px rgb(6 22 17 / ${motyw === 'ciemny' ? '18%' : '7%'})`
+      ? `0 2px 4px rgb(6 22 17 / ${motyw === 'ciemny' ? '24%' : '8%'}), 0 12px 28px rgb(6 22 17 / ${motyw === 'ciemny' ? '28%' : '7%'})`
       : CIENIE[p.komponenty.kartaCien]}`
     : CIENIE[p.komponenty.kartaCien])
   style.setProperty('--ui-card-border', `${p.komponenty.kartaObramowanie}px`)
