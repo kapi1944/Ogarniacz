@@ -1,5 +1,14 @@
 ﻿# Model danych i migracje
 
+## Luxury — zgodność personalizacji
+
+Normalizator personalizacji odczytuje dawny identyfikator `premium` jako `luxury`,
+bez resetowania palety, animacji, komponentów ani zapisanych motywów.
+Opcjonalne w starszych rekordach pole `kolorPaskowPrzewijania` przyjmuje
+`zloty` (domyślnie) lub `szmaragdowy`. Zapis i eksport utrwalają nową nazwę
+w obecnym rekordzie ustawień; import i odczyt synchronizacji korzystają
+z tego samego normalizatora. Nie zmienia się schemat bazy ani format transportu.
+
 ## Reset hasła przez e-mail
 
 SQLite 7 → 8 dodaje tabelę hashy tokenów, indeks konta i trigger unieważniania

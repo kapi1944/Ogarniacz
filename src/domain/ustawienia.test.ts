@@ -14,8 +14,8 @@ describe.sequential('ustawienia aplikacji', () => {
     await inicjalizujBaze()
   })
 
-  it.each(['klasyczny', 'premium', 'flat'] as const)('zachowuje styl %s po otwarciu bazy i w istniejącym rekordzie synchronizacji', async (styl) => {
-    await repozytoriumUstawien.zapisz(normalizujUstawienia({ wyglad: { personalizacja: { styl: styl === 'flat' ? 'premium' : 'flat' } } }))
+  it.each(['klasyczny', 'luxury', 'flat'] as const)('zachowuje styl %s po otwarciu bazy i w istniejącym rekordzie synchronizacji', async (styl) => {
+    await repozytoriumUstawien.zapisz(normalizujUstawienia({ wyglad: { personalizacja: { styl: styl === 'flat' ? 'luxury' : 'flat' } } }))
     const ustawienia = normalizujUstawienia({ wyglad: { motyw: 'systemowy', personalizacja: { styl } } })
     await repozytoriumUstawien.zapisz(ustawienia)
     baza.close()
@@ -28,7 +28,22 @@ describe.sequential('ustawienia aplikacji', () => {
     expect(normalizujUstawienia(rekordDoSynchronizacji('ustawienia', wczytane)).wyglad).toEqual(wczytane.wyglad)
   })
 
-  it.each(['premium', 'flat'] as const)('stosuje %s w trybie systemowym i respektuje oba źródła ograniczenia animacji', (styl) => {
+  it.each(['zloty', 'szmaragdowy'] as const)('odczytuje stare Premium, zapisuje Luxury i zachowuje kolor %s w synchronizacji', async (kolorPaskowPrzewijania) => {
+    const ustawienia = normalizujUstawienia({ wyglad: { personalizacja: { styl: 'premium', kolorPaskowPrzewijania, uzyjWlasnejPalety: true, paleta: { akcent: '#426bdb' } } } })
+    await baza.tabela('ustawienia').put({ ...ustawienia, wyglad: { ...ustawienia.wyglad, personalizacja: { ...ustawienia.wyglad.personalizacja, styl: 'premium' } } } as unknown as Ustawienia)
+    expect((await repozytoriumUstawien.wczytaj()).wyglad).toEqual(ustawienia.wyglad)
+    await repozytoriumUstawien.zapisz(await repozytoriumUstawien.wczytaj())
+    baza.close()
+    await baza.open()
+    const wczytane = await repozytoriumUstawien.wczytaj()
+    expect(wczytane.wyglad).toEqual(ustawienia.wyglad)
+    expect((await baza.tabela('ustawienia').get('glowne'))?.wyglad.personalizacja.styl).toBe('luxury')
+    const oczekujaca = await tabelaKolejki().where('rekordId').equals('glowne').first()
+    expect((oczekujaca?.rekord as Ustawienia | undefined)?.wyglad.personalizacja).toMatchObject({ styl: 'luxury', kolorPaskowPrzewijania })
+    expect(normalizujUstawienia(JSON.parse(JSON.stringify(rekordDoSynchronizacji('ustawienia', wczytane)))).wyglad).toEqual(ustawienia.wyglad)
+  })
+
+  it.each(['luxury', 'flat'] as const)('stosuje %s w trybie systemowym i respektuje oba źródła ograniczenia animacji', (styl) => {
     const ustawienia = normalizujUstawienia({ wyglad: { motyw: 'systemowy', personalizacja: { styl } } })
     zastosujUstawieniaInterfejsu(ustawienia, true, true)
     expect(document.documentElement.dataset.motyw).toBe('ciemny')

@@ -18,21 +18,50 @@ import {
 } from './personalizacja'
 
 describe('personalizacja UI', () => {
+  it.each(['zloty', 'szmaragdowy'] as const)('migruje Premium bez utraty palety, motywów i koloru %s', (kolorPaskowPrzewijania) => {
+    const obecna = normalizujPersonalizacje({
+      styl: 'luxury', kolorPaskowPrzewijania, preset: 'wlasny', uzyjWlasnejPalety: true,
+      paleta: { akcent: '#426bdb' }, animacje: { profil: 'wlasne', hoverMs: 270 },
+      komponenty: { kartaCien: 'mocny' }, aktywnyMotywId: 'moj',
+      motywyWlasne: [{ id: 'moj', nazwa: 'Mój motyw', motyw: 'jasny' }],
+    })
+    const starsza = { ...obecna, styl: 'premium' }
+    expect(normalizujPersonalizacje(starsza)).toEqual(obecna)
+    for (const wersja of [1, 2]) {
+      const importowany = normalizujImportMotywu(JSON.parse(JSON.stringify({ format: 'ogarniacz-theme', wersja, personalizacja: starsza })))
+      expect(importowany.personalizacja).toEqual(obecna)
+    }
+    expect(starsza.styl).toBe('premium')
+  })
+
+  it('starszemu Premium nadaje domyślne złoto, a kolor Luxury usuwa z DOM po zmianie stylu', () => {
+    expect(normalizujPersonalizacje({ styl: 'premium' })).toMatchObject({ styl: 'luxury', kolorPaskowPrzewijania: 'zloty' })
+    expect(normalizujPersonalizacje({ kolorPaskowPrzewijania: 'nieznany' }).kolorPaskowPrzewijania).toBe('zloty')
+    const korzen = document.createElement('div')
+    const ustawienia = normalizujPersonalizacje({ styl: 'luxury', kolorPaskowPrzewijania: 'szmaragdowy' })
+    zastosujPersonalizacje(ustawienia, korzen, false)
+    expect(korzen.dataset.kolorPaskow).toBe('szmaragdowy')
+    for (const styl of ['klasyczny', 'flat'] as const) {
+      zastosujPersonalizacje({ ...ustawienia, styl }, korzen, false)
+      expect(korzen.dataset.kolorPaskow).toBeUndefined()
+    }
+  })
+
   it('starsze i nieznane style pozostawia jako Klasyczny', () => {
     expect(normalizujPersonalizacje({ preset: 'oled' }).styl).toBe('klasyczny')
     expect(normalizujPersonalizacje({ styl: 'nieznany' }).styl).toBe('klasyczny')
-    expect(normalizujPersonalizacje({ styl: 'premium' }).styl).toBe('premium')
+    expect(normalizujPersonalizacje({ styl: 'luxury' }).styl).toBe('luxury')
     expect(normalizujPersonalizacje({ styl: 'flat' }).styl).toBe('flat')
   })
 
-  it.each(['klasyczny', 'premium', 'flat'] as const)('zachowuje styl %s przy imporcie dotychczasowego formatu motywu', (styl) => {
+  it.each(['klasyczny', 'luxury', 'flat'] as const)('zachowuje styl %s przy imporcie dotychczasowego formatu motywu', (styl) => {
     const wynik = normalizujImportMotywu({ format: 'ogarniacz-theme', wersja: WERSJA_SCHEMATU_MOTYWU, motyw: 'jasny', personalizacja: { styl } })
     expect(wynik.personalizacja.styl).toBe(styl)
     expect(wynik.motyw).toBe('jasny')
   })
 
-  it.each((['premium', 'flat'] as const).flatMap((styl) => (['jasny', 'ciemny'] as const).map((motyw) => ({ styl, motyw }))))('zapewnia kontrast AA palety $styl: $motyw', ({ styl, motyw }) => {
-    const paleta = (styl === 'premium' ? PALETY_PREMIUM : PALETY_FLAT)[motyw]
+  it.each((['luxury', 'flat'] as const).flatMap((styl) => (['jasny', 'ciemny'] as const).map((motyw) => ({ styl, motyw }))))('zapewnia kontrast AA palety $styl: $motyw', ({ styl, motyw }) => {
+    const paleta = (styl === 'luxury' ? PALETY_PREMIUM : PALETY_FLAT)[motyw]
     for (const tlo of [paleta.tlo, paleta.panel, paleta.panel2]) {
       for (const kolor of [paleta.tekst, paleta.tekst2, paleta.akcent, paleta.akcentHover]) {
         expect(obliczKontrast(kolor, tlo)).toBeGreaterThanOrEqual(4.5)
@@ -52,17 +81,17 @@ describe('personalizacja UI', () => {
 
   it('przełącza style i tryby bez mutowania własnej palety, presetów i animacji', () => {
     const korzen = document.createElement('div')
-    const premium = normalizujPersonalizacje({ styl: 'premium' })
+    const premium = normalizujPersonalizacje({ styl: 'luxury' })
     const przed = structuredClone(premium)
     for (const motyw of ['jasny', 'ciemny'] as const) {
       zastosujPersonalizacje(premium, korzen, false, motyw)
-      expect(korzen.dataset.styl).toBe('premium')
+      expect(korzen.dataset.styl).toBe('luxury')
       expect(korzen.style.getPropertyValue('--tlo')).toBe(PALETY_PREMIUM[motyw].tlo)
     }
     expect(premium).toEqual(przed)
     for (const preset of PRESETY_MOTYWOW) {
       const wynik = zastosujPresetMotywu(premium, preset.id)
-      expect(wynik.personalizacja.styl).toBe('premium')
+      expect(wynik.personalizacja.styl).toBe('luxury')
       expect(rozwiazPaletePersonalizacji(wynik.personalizacja, wynik.motyw)).toEqual(preset.paleta)
       zastosujPersonalizacje(wynik.personalizacja, korzen, false, wynik.motyw)
       expect(korzen.style.getPropertyValue('--tlo')).toBe(preset.paleta.tlo)
@@ -73,9 +102,9 @@ describe('personalizacja UI', () => {
     expect(korzen.style.getPropertyValue('--ui-sidebar-bg')).toBe('')
   })
 
-  it.each([true, false])('Premium respektuje ograniczenie ruchu: %s', (ograniczRuch) => {
+  it.each([true, false])('Luxury respektuje ograniczenie ruchu: %s', (ograniczRuch) => {
     const korzen = document.createElement('div')
-    const premium = normalizujPersonalizacje({ styl: 'premium', animacje: { profil: 'wlasne', hoverMs: 150, activeMs: 100, modalMs: 200, animujKarty: false } })
+    const premium = normalizujPersonalizacje({ styl: 'luxury', animacje: { profil: 'wlasne', hoverMs: 150, activeMs: 100, modalMs: 200, animujKarty: false } })
     zastosujPersonalizacje(premium, korzen, ograniczRuch)
     expect(korzen.style.getPropertyValue('--ui-hover-ms')).toBe(ograniczRuch ? '0ms' : '150ms')
     expect(korzen.style.getPropertyValue('--ui-active-ms')).toBe(ograniczRuch ? '0ms' : '100ms')
@@ -85,11 +114,11 @@ describe('personalizacja UI', () => {
     expect(korzen.style.getPropertyValue('--ui-modal-ms')).toBe('0ms')
   })
 
-  it.each(['jasny', 'ciemny'] as const)('zachowuje AA na całym metalicznym przycisku Premium: %s', (motyw) => {
+  it.each(['jasny', 'ciemny'] as const)('zachowuje AA na całym metalicznym przycisku Luxury: %s', (motyw) => {
     const korzen = document.createElement('div')
     for (const akcent of [undefined, '#000000', '#ffffff', '#777777', '#086248', '#db4284', '#426bdb']) {
       const premium = normalizujPersonalizacje({
-        styl: 'premium', uzyjWlasnejPalety: akcent !== undefined,
+        styl: 'luxury', uzyjWlasnejPalety: akcent !== undefined,
         paleta: { ...DOMYSLNA_PERSONALIZACJA.paleta, ...(akcent ? { akcent } : {}) },
       })
       const przed = structuredClone(premium)
@@ -103,9 +132,9 @@ describe('personalizacja UI', () => {
     }
   })
 
-  it('Premium respektuje wyłączenie cieni i usuwa swoje tokeny przy zmianie stylu', () => {
+  it('Luxury respektuje wyłączenie cieni i usuwa swoje tokeny przy zmianie stylu', () => {
     const korzen = document.createElement('div')
-    const premium = normalizujPersonalizacje({ styl: 'premium', komponenty: { kartaCien: 'brak', glebia: 'plaska' }, interakcje: { hoverPoziom: 'wylaczony' } })
+    const premium = normalizujPersonalizacje({ styl: 'luxury', komponenty: { kartaCien: 'brak', glebia: 'plaska' }, interakcje: { hoverPoziom: 'wylaczony' } })
     zastosujPersonalizacje(premium, korzen, false)
     expect(korzen.style.getPropertyValue('--ui-card-shadow')).toBe('none')
     expect(korzen.style.getPropertyValue('--ui-depth-shadow')).toBe('none')
@@ -117,9 +146,9 @@ describe('personalizacja UI', () => {
     }
   })
 
-  it('stosuje standardowe czasy Premium bez zmiany zapisanych preferencji Klasycznego', () => {
+  it('stosuje standardowe czasy Luxury bez zmiany zapisanych preferencji Klasycznego', () => {
     const korzen = document.createElement('div')
-    const premium = normalizujPersonalizacje({ styl: 'premium' })
+    const premium = normalizujPersonalizacje({ styl: 'luxury' })
     zastosujPersonalizacje(premium, korzen, false)
     expect(korzen.style.getPropertyValue('--ui-hover-ms')).toBe('150ms')
     expect(korzen.style.getPropertyValue('--ui-active-ms')).toBe('100ms')

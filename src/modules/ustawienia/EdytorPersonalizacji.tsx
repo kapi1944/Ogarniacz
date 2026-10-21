@@ -368,7 +368,7 @@ export function EdytorPersonalizacji() {
         <div>
           <strong>{p.preset === 'wlasny' ? 'Motyw własny' : PRESETY_MOTYWOW.find((item) => item.id === p.preset)?.nazwa ?? 'Motyw bazowy'}</strong>
           <span>
-            Podgląd na żywo · {p.uzyjWlasnejPalety ? 'własna paleta' : p.styl === 'premium' ? 'paleta Premium' : p.styl === 'flat' ? 'paleta Flat' : 'kolory bazowe aplikacji'}
+            Podgląd na żywo · {p.uzyjWlasnejPalety ? 'własna paleta' : p.styl === 'luxury' ? 'paleta Luxury' : p.styl === 'flat' ? 'paleta Flat' : 'kolory bazowe aplikacji'}
             {niezapisaneZmiany && <em className="personalizacja__dirty"> · Niezapisane zmiany</em>}
           </span>
         </div>
@@ -402,6 +402,15 @@ export function EdytorPersonalizacji() {
           </div>
 
           <WyborStyluInterfejsu styl={p.styl} zmien={(styl) => aktualizujPersonalizacje({ ...p, styl })} />
+          {p.styl === 'luxury' && <label className="pole wybor-stylu">
+            <span>Kolor pasków przewijania</span>
+            <select value={p.kolorPaskowPrzewijania} onChange={(zdarzenie) => aktualizujPersonalizacje({
+              ...p, kolorPaskowPrzewijania: zdarzenie.target.value as PersonalizacjaUI['kolorPaskowPrzewijania'],
+            })}>
+              <option value="szmaragdowy">Szmaragdowa zieleń</option>
+              <option value="zloty">Metaliczne złoto</option>
+            </select>
+          </label>}
 
           <div className="motywy-grid">
             <button

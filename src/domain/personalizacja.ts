@@ -1,8 +1,9 @@
-export type StylInterfejsu = 'klasyczny' | 'premium' | 'flat'
+export type StylInterfejsu = 'klasyczny' | 'luxury' | 'flat'
+export type KolorPaskowPrzewijania = 'szmaragdowy' | 'zloty'
 
 export const STYLE_INTERFEJSU: { id: StylInterfejsu; nazwa: string; opis: string }[] = [
   { id: 'klasyczny', nazwa: 'Klasyczny', opis: 'Dotychczasowy wygląd Ogarniacza.' },
-  { id: 'premium', nazwa: 'Premium', opis: 'OGARNIACZ PREMIUM / SIGNATURE · satynowa zieleń i szampańskie złoto.' },
+  { id: 'luxury', nazwa: 'Luxury', opis: 'OGARNIACZ LUXURY / SIGNATURE · satynowa zieleń i szampańskie złoto.' },
   { id: 'flat', nazwa: 'Flat', opis: 'OGARNIACZ FLAT / ESSENTIAL · proste powierzchnie, szmaragd i wyraźne granice.' },
 ]
 
@@ -137,6 +138,7 @@ export interface MotywWlasny {
 
 export interface PersonalizacjaUI {
   styl: StylInterfejsu
+  kolorPaskowPrzewijania: KolorPaskowPrzewijania
   preset: PresetMotywu
   uzyjWlasnejPalety: boolean
   paleta: PaletaPersonalizacji
@@ -294,7 +296,7 @@ export function rozwiazPaletePersonalizacji(
   motyw: 'jasny' | 'ciemny',
 ): PaletaPersonalizacji {
   if (personalizacja.uzyjWlasnejPalety) return personalizacja.paleta
-  if (personalizacja.styl === 'premium') return PALETY_PREMIUM[motyw]
+  if (personalizacja.styl === 'luxury') return PALETY_PREMIUM[motyw]
   if (personalizacja.styl === 'flat') return PALETY_FLAT[motyw]
   return motyw === 'jasny' ? PALETA_LIGHT : PALETA_DARK
 }
@@ -304,7 +306,7 @@ export function rozwiazAnimacjePersonalizacji(personalizacja: PersonalizacjaUI):
   if (personalizacja.styl === 'flat' && animacje.profil === 'standardowe') {
     return { ...animacje, hoverMs: 100, activeMs: 70, modalMs: 0, dropdownMs: 0, tooltipMs: 0, pageMs: 0, kartaMs: 0, dragMs: 0 }
   }
-  if (personalizacja.styl !== 'premium' || animacje.profil !== 'standardowe') return animacje
+  if (personalizacja.styl !== 'luxury' || animacje.profil !== 'standardowe') return animacje
   const domyslne = DOMYSLNA_PERSONALIZACJA.animacje
   return {
     ...animacje,
@@ -413,6 +415,7 @@ export const PRESETY_MOTYWOW: DefinicjaPresetu[] = [
 
 export const DOMYSLNA_PERSONALIZACJA: PersonalizacjaUI = {
   styl: 'klasyczny',
+  kolorPaskowPrzewijania: 'zloty',
   preset: 'bazowy',
   uzyjWlasnejPalety: false,
   paleta: PALETA_DARK,
@@ -658,7 +661,8 @@ export function normalizujPersonalizacje(value: unknown): PersonalizacjaUI {
     ? source.aktywnyMotywId
     : undefined
   return {
-    styl: enumValue(source.styl, STYLE_INTERFEJSU.map((styl) => styl.id), d.styl),
+    styl: enumValue(source.styl === 'premium' ? 'luxury' : source.styl, STYLE_INTERFEJSU.map((styl) => styl.id), d.styl),
+    kolorPaskowPrzewijania: enumValue(source.kolorPaskowPrzewijania, ['szmaragdowy', 'zloty'], d.kolorPaskowPrzewijania),
     preset: enumValue(source.preset, ['bazowy', 'ogarniacz-dark', 'ogarniacz-light', 'midnight', 'oled', 'soft', 'wlasny'], d.preset),
     uzyjWlasnejPalety: bool(source.uzyjWlasnejPalety, d.uzyjWlasnejPalety),
     paleta: normalizujPalete(source.paleta),
@@ -903,6 +907,8 @@ export function zastosujPersonalizacje(
   const interakcje = rozwiazInterakcje(p.interakcje)
 
   root.dataset.styl = p.styl
+  if (p.styl === 'luxury') root.dataset.kolorPaskow = p.kolorPaskowPrzewijania
+  else delete root.dataset.kolorPaskow
   root.dataset.uiHover = p.interakcje.hoverPoziom
   root.dataset.uiActive = p.interakcje.activePoziom
   root.dataset.uiSelected = p.interakcje.selectedPoziom
@@ -924,7 +930,7 @@ export function zastosujPersonalizacje(
       : 'var(--premium-refleks), var(--ui-hover-shadow)',
   }
   for (const [nazwa, wartosc] of Object.entries(tokenyMetalu)) {
-    if (p.styl === 'premium') style.setProperty(nazwa, wartosc)
+    if (p.styl === 'luxury') style.setProperty(nazwa, wartosc)
     else style.removeProperty(nazwa)
   }
 
@@ -1014,7 +1020,7 @@ export function zastosujPersonalizacje(
 
   style.setProperty('--ui-component-border', OBRAMOWANIA[p.komponenty.obramowanie])
   style.setProperty('--ui-depth-shadow', CIENIE_GLEBI[p.komponenty.glebia])
-  style.setProperty('--ui-card-shadow', p.styl === 'premium' && p.komponenty.kartaCien !== 'brak'
+  style.setProperty('--ui-card-shadow', p.styl === 'luxury' && p.komponenty.kartaCien !== 'brak'
     ? `inset 0 1px color-mix(in srgb, var(--tekst) 7%, transparent), ${p.komponenty.kartaCien === 'lekki'
       ? `0 2px 4px rgb(6 22 17 / ${motyw === 'ciemny' ? '24%' : '8%'}), 0 12px 28px rgb(6 22 17 / ${motyw === 'ciemny' ? '28%' : '7%'})`
       : CIENIE[p.komponenty.kartaCien]}`
