@@ -5,6 +5,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const pakiet = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
 export default defineConfig({
+  server: {
+    watch: {
+      ignored: ['**/android/build/**', '**/android/app/build/**'],
+    },
+  },
   define: {
     __WERSJA_APLIKACJI__: JSON.stringify(pakiet.version),
   },
