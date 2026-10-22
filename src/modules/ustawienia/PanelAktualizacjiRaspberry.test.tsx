@@ -27,7 +27,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); cleanup(); vi.clearAllMocks() })
 
 describe('PanelAktualizacjiRaspberry', () => {
-  it('pokazuje panel tylko przy dostępnym API', async () => {
+  it('pokazuje panel po potwierdzeniu endpointu, a brak funkcji odróżnia od awarii połączenia', async () => {
     render(<PanelAktualizacjiRaspberry />)
     expect(await screen.findByText('Raspberry / serwer')).toBeInTheDocument()
     expect(screen.getByText('abcdef01')).toBeInTheDocument()
@@ -38,7 +38,19 @@ describe('PanelAktualizacjiRaspberry', () => {
     pobierzStatus.mockRejectedValueOnce(new Error('brak połączenia'))
     cleanup()
     render(<PanelAktualizacjiRaspberry />)
-    await waitFor(() => expect(screen.queryByText('Raspberry / serwer')).not.toBeInTheDocument())
+    expect(await screen.findByText('Raspberry / serwer')).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent('Backend Raspberry chwilowo nie odpowiada')
+    expect(screen.getByRole('button', { name: 'Ponów połączenie' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zainstaluj aktualizację' })).toBeDisabled()
+  })
+
+  it('ponawia odczyt statusu i czyści diagnostykę po odzyskaniu backendu', async () => {
+    pobierzStatus.mockReset().mockRejectedValueOnce(new Error('brak połączenia')).mockResolvedValueOnce(dostepnyStatus)
+    render(<PanelAktualizacjiRaspberry />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ponów połączenie' }))
+    expect(await screen.findByText('abcdef01')).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ponów połączenie' })).not.toBeInTheDocument()
   })
 
   it('Właściciel wysyła CSRF-zabezpieczone akcje API', async () => {
@@ -54,8 +66,9 @@ describe('PanelAktualizacjiRaspberry', () => {
     konto.biezace = { rola: 'edytor' }
     render(<PanelAktualizacjiRaspberry />)
     await screen.findByText('Edytor nie może uruchamiać aktualizacji Raspberry.')
-    expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Zainstaluj aktualizację' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Sprawdź aktualizacje' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Zainstaluj aktualizację' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Przywróć poprzednią wersję' })).not.toBeInTheDocument()
   })
 
   it('rozróżnia brak sesji od niedostępnego endpointu', async () => {
@@ -63,7 +76,7 @@ describe('PanelAktualizacjiRaspberry', () => {
     pobierzStatus.mockReset().mockRejectedValue(new BladKonta(401, 'Wymagana sesja właściciela.'))
     render(<PanelAktualizacjiRaspberry />)
     expect(await screen.findByRole('alert')).toHaveTextContent('Brak sesji')
-    expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Sprawdź aktualizacje' })).not.toBeInTheDocument()
   })
 
   it('odświeża stan podczas update i toleruje chwilowy restart backendu', async () => {
@@ -97,5 +110,15 @@ describe('PanelAktualizacjiRaspberry', () => {
     expect(await screen.findByRole('button', { name: 'Przywróć poprzednią wersję' })).toBeEnabled()
     fireEvent.click(screen.getByRole('button', { name: 'Przywróć poprzednią wersję' }))
     await waitFor(() => expect(uruchomAktualizacje).toHaveBeenCalledWith('rollback'))
+  })
+
+  it('nie udostępnia instalacji ani rollbacku bez roli Właściciela', async () => {
+    konto.biezace = { rola: 'edytor' }
+    pobierzStatus.mockReset().mockResolvedValue({ ...dostepnyStatus, stan: 'error' as const, moznaPrzywrocic: true })
+    render(<PanelAktualizacjiRaspberry />)
+    await screen.findByText('Edytor nie może uruchamiać aktualizacji Raspberry.')
+    expect(screen.queryByRole('button', { name: 'Zainstaluj aktualizację' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Przywróć poprzednią wersję' })).not.toBeInTheDocument()
+    expect(uruchomAktualizacje).not.toHaveBeenCalled()
   })
 })

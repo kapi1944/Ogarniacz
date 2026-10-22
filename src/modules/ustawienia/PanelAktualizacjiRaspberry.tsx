@@ -36,18 +36,18 @@ function wariantStatusu(stan: StatusAktualizacjiRaspberry['stan']): 'neutralny' 
 export function PanelAktualizacjiRaspberry() {
   const { konto } = useKonto()
   const [dostepny, ustawDostepny] = useState<boolean>()
-  const dostepnyRef = useRef<boolean | undefined>(undefined)
   const [status, ustawStatus] = useState<StatusAktualizacjiRaspberry>()
   const [blad, ustawBlad] = useState('')
+  const [backendNiedostepny, ustawBackendNiedostepny] = useState(false)
   const [trwaOperacja, ustawTrwaOperacja] = useState(false)
   const oczekiwanieNaStan = useRef<{ podpis: string; odczyty: number; niepewna: boolean } | null>(null)
 
   const odswiezStatus = useCallback(async (podczasRestartu = false) => {
     try {
       const nowyStatus = await pobierzStatusAktualizacjiRaspberry()
-      dostepnyRef.current = true
       ustawDostepny(true)
       ustawStatus(nowyStatus)
+      ustawBackendNiedostepny(false)
       ustawBlad('')
       if (STANY_W_TRAKCIE.has(nowyStatus.stan)) oczekiwanieNaStan.current = null
       else if (oczekiwanieNaStan.current) {
@@ -59,25 +59,22 @@ export function PanelAktualizacjiRaspberry() {
       } else ustawTrwaOperacja(false)
     } catch (przyczyna) {
       if (przyczyna instanceof BladKonta && przyczyna.status === 404) {
-        dostepnyRef.current = false
         ustawDostepny(false)
         return
       }
       if (przyczyna instanceof BladKonta && (przyczyna.status === 401 || przyczyna.status === 403)) {
-        dostepnyRef.current = true
         ustawDostepny(true)
+        ustawBackendNiedostepny(false)
         ustawBlad(opisBledu(przyczyna, Boolean(konto)))
         ustawTrwaOperacja(false)
         return
       }
-      if (dostepnyRef.current !== true) {
-        ustawDostepny(false)
-        return
-      }
       ustawDostepny(true)
-      if (podczasRestartu) return
-      ustawBlad(opisBledu(przyczyna, Boolean(konto)))
-      ustawTrwaOperacja(false)
+      ustawBackendNiedostepny(true)
+      ustawBlad(podczasRestartu
+        ? 'Backend Raspberry chwilowo nie odpowiada podczas restartu. Panel ponowi odczyt stanu.'
+        : 'Backend Raspberry chwilowo nie odpowiada. Sprawdź połączenie i ponów odczyt statusu.')
+      if (!podczasRestartu) ustawTrwaOperacja(false)
     }
   }, [konto])
 
@@ -127,8 +124,9 @@ export function PanelAktualizacjiRaspberry() {
   return <Karta>
     <div className="naglowek-karty"><div><h2><ServerCog aria-hidden="true" /> Raspberry / serwer</h2><p>Frontend i backend z zatwierdzonego kanału rpi-stable.</p></div>{status && <Znacznik wariant={wariantStatusu(status.stan)}>{ETYKIETY_STANOW[status.stan]}</Znacznik>}</div>
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
+    {backendNiedostepny && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void odswiezStatus()}>Ponów połączenie</button>}
     {status && <><div className="lista-kompaktowa"><div><span>Commit wdrożenia</span><strong>{status.commit.slice(0, 8)}</strong></div><div><span>Wersja informacyjna</span><strong>{status.wersja}</strong></div><div><span>Dostępność</span><strong>{status.dostepnosc}</strong></div><div><span>Stan</span><strong>{ETYKIETY_STANOW[status.stan]}</strong></div></div>{status.komunikat && <p className="tekst-pomocniczy">{status.komunikat}</p>}</>}
     {!wlasciciel && <p className="tekst-pomocniczy">{konto ? 'Edytor nie może uruchamiać aktualizacji Raspberry.' : 'Zaloguj się jako Właściciel, aby uruchamiać aktualizacje Raspberry.'}</p>}
-    <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" disabled={akcjeZablokowane} onClick={() => void uruchom('check')}><RefreshCw aria-hidden="true" />Sprawdź aktualizacje</button><button type="button" className="przycisk przycisk--glowny" disabled={akcjeZablokowane || status?.dostepnosc !== 'dostepna'} onClick={() => void uruchom('start')}>Zainstaluj aktualizację</button>{moznaPrzywrocic && <button type="button" className="przycisk przycisk--niebezpieczny" disabled={akcjeZablokowane} onClick={() => void uruchom('rollback')}><RotateCcw aria-hidden="true" />Przywróć poprzednią wersję</button>}</div>
+    {wlasciciel && <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" disabled={akcjeZablokowane || backendNiedostepny} onClick={() => void uruchom('check')}><RefreshCw aria-hidden="true" />Sprawdź aktualizacje</button><button type="button" className="przycisk przycisk--glowny" disabled={akcjeZablokowane || backendNiedostepny || status?.dostepnosc !== 'dostepna'} onClick={() => void uruchom('start')}>Zainstaluj aktualizację</button>{moznaPrzywrocic && <button type="button" className="przycisk przycisk--niebezpieczny" disabled={akcjeZablokowane || backendNiedostepny} onClick={() => void uruchom('rollback')}><RotateCcw aria-hidden="true" />Przywróć poprzednią wersję</button>}</div>}
   </Karta>
 }
