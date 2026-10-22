@@ -46,4 +46,5 @@ artifacts/
 ogarniacz-backup*
 ogarniacz-before-restore*
 ogarniacz-przed-*.sqlite*
+ogarniacz-przed-*.json
 ogarniacz-windows*.7z
