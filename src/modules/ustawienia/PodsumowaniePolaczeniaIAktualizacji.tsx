@@ -1,7 +1,7 @@
-import { useSyncExternalStore } from 'react'
+import { useRef, useState, useSyncExternalStore } from 'react'
 import { Karta, Znacznik } from '../../components/Interfejs'
 import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, type StanKontroliAktualizacji } from '../../services/KontrolaAktualizacjiAplikacji'
-import type { DaneDiagnostykiSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
+import { utworzTekstRaportuDiagnostycznego, type DaneDiagnostykiSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
 
 export interface PodsumowaniePolaczeniaIAktualizacjiProps {
   synchronizacjaSkonfigurowana: boolean
@@ -47,7 +47,30 @@ export function ustalPodsumowaniePolaczeniaIAktualizacji(
 export function PodsumowaniePolaczeniaIAktualizacji({ synchronizacjaSkonfigurowana, diagnostyka, stan: stanWejsciowy }: PodsumowaniePolaczeniaIAktualizacjiProps) {
   const stanZSerwisu = useSyncExternalStore(nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, pobierzStanKontroliAktualizacji)
   const podsumowanie = ustalPodsumowaniePolaczeniaIAktualizacji(synchronizacjaSkonfigurowana, stanWejsciowy ?? stanZSerwisu, diagnostyka)
+  const [raportDoRecznegoSkopiowania, ustawRaportDoRecznegoSkopiowania] = useState('')
+  const [komunikatKopiowania, ustawKomunikatKopiowania] = useState('')
+  const poleRaportu = useRef<HTMLTextAreaElement>(null)
+
+  const kopiujRaport = async () => {
+    if (!diagnostyka) return
+    const raport = utworzTekstRaportuDiagnostycznego(diagnostyka)
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('Schowek niedostępny')
+      await navigator.clipboard.writeText(raport)
+      ustawRaportDoRecznegoSkopiowania('')
+      ustawKomunikatKopiowania('Raport diagnostyczny skopiowano do schowka.')
+    } catch {
+      ustawRaportDoRecznegoSkopiowania(raport)
+      ustawKomunikatKopiowania('Nie udało się skopiować raportu. Zaznacz go poniżej i skopiuj ręcznie.')
+    }
+  }
+
   return <Karta>
     <div className="naglowek-karty"><div><h2>{podsumowanie.tytul}</h2><p>{podsumowanie.opis}</p></div><Znacznik wariant={podsumowanie.wariant}>{podsumowanie.tytul}</Znacznik></div>
+    {diagnostyka && <div className="akcje-formularza">
+      <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void kopiujRaport()}>Kopiuj raport diagnostyczny</button>
+      {komunikatKopiowania && <p role={raportDoRecznegoSkopiowania ? 'alert' : 'status'}>{komunikatKopiowania}</p>}
+      {raportDoRecznegoSkopiowania && <><label htmlFor="raport-diagnostyczny-synchronizacji">Raport do ręcznego skopiowania</label><textarea id="raport-diagnostyczny-synchronizacji" ref={poleRaportu} readOnly value={raportDoRecznegoSkopiowania} rows={12} /><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => poleRaportu.current?.select()}>Zaznacz raport</button></>}
+    </div>}
   </Karta>
 }

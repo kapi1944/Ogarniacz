@@ -39,6 +39,66 @@ export interface DaneDiagnostykiSynchronizacji {
   trybAutoryzacji: 'sesja'
 }
 
+const ETYKIETY_STANOW_SYNCHRONIZACJI = {
+  zsynchronizowano: 'zsynchronizowano',
+  synchronizacja: 'synchronizacja w toku',
+  oczekuje: 'oczekuje na synchronizację',
+  offline: 'offline',
+  konflikt: 'wymaga rozstrzygnięcia konfliktu',
+  blad: 'błąd synchronizacji',
+} as const
+
+const ETYKIETY_STANOW_POLACZENIA = {
+  'brak konfiguracji': 'brak konfiguracji',
+  'nie sprawdzono': 'nie sprawdzono',
+  dostępne: 'dostępne',
+  niedostępne: 'niedostępne',
+  offline: 'offline',
+} as const
+
+function formatujCzasRaportu(wartosc: string | undefined): string {
+  if (!wartosc) return 'jeszcze nie wykonano'
+  const czas = new Date(wartosc)
+  return Number.isNaN(czas.getTime()) ? 'jeszcze nie wykonano' : czas.toISOString()
+}
+
+function formatujLiczbeRaportu(wartosc: number): string {
+  return Number.isSafeInteger(wartosc) && wartosc >= 0 ? String(wartosc) : '0'
+}
+
+export function utworzTekstRaportuDiagnostycznego(dane: DaneDiagnostykiSynchronizacji, wygenerowano = new Date()): string {
+  const platforma = dane.srodowisko === 'Android' ? 'Android' : 'Web'
+  const konfiguracja = dane.stanPolaczenia === 'brak konfiguracji' ? 'brak konfiguracji' : 'skonfigurowana'
+  const stanPolaczenia = Object.hasOwn(ETYKIETY_STANOW_POLACZENIA, dane.stanPolaczenia)
+    ? ETYKIETY_STANOW_POLACZENIA[dane.stanPolaczenia]
+    : 'nie sprawdzono'
+  const stanLogowania = dane.stanSesji === 'zalogowany' || dane.stanSesji === 'wymaga logowania'
+    ? dane.stanSesji
+    : 'niezalogowany'
+  const stanSynchronizacji = dane.stanSynchronizacji && Object.hasOwn(ETYKIETY_STANOW_SYNCHRONIZACJI, dane.stanSynchronizacji)
+    ? ETYKIETY_STANOW_SYNCHRONIZACJI[dane.stanSynchronizacji]
+    : 'nieznany'
+  const kodBledu = dane.ostatniBlad && Object.hasOwn(komunikatyBledowSynchronizacji, dane.ostatniBlad.kod)
+    ? dane.ostatniBlad.kod
+    : 'brak'
+  const czasWygenerowania = Number.isNaN(wygenerowano.getTime()) ? 'nieznany' : wygenerowano.toISOString()
+
+  return [
+    'Raport diagnostyczny synchronizacji',
+    `Platforma: ${platforma}`,
+    `Konfiguracja połączenia: ${konfiguracja}`,
+    `Stan połączenia: ${stanPolaczenia}`,
+    `Stan logowania: ${stanLogowania}`,
+    `Status synchronizacji: ${stanSynchronizacji}`,
+    `Ostatni pull: ${formatujCzasRaportu(dane.ostatniPull)}`,
+    `Ostatni push: ${formatujCzasRaportu(dane.ostatniPush)}`,
+    `Oczekujące zmiany: ${formatujLiczbeRaportu(dane.liczbaOczekujacych)}`,
+    `Konflikty: ${formatujLiczbeRaportu(dane.liczbaKonfliktow)}`,
+    `Kod ostatniego błędu: ${kodBledu}`,
+    `Wygenerowano: ${czasWygenerowania}`,
+  ].join('\n')
+}
+
 export function utworzDiagnostykeSynchronizacji({
   czyAndroid,
   adresApi,

@@ -77,6 +77,38 @@ it('pokazuje brak połączenia nawet przy pustym outboxie', () => {
   expect(screen.getByRole('heading', { name: 'Brak połączenia z backendem' })).toBeInTheDocument()
 })
 
+it('kopiuje raport diagnostyczny i potwierdza powodzenie', async () => {
+  const zapisanoDoSchowka = vi.fn().mockResolvedValue(undefined)
+  const schowekPoprzedni = navigator.clipboard
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: zapisanoDoSchowka } })
+  try {
+    const diagnostyka = utworzDiagnostykeSynchronizacji({ czyAndroid: true, adresApi: 'https://prywatny-serwer.example', installationId: 'pelne-id', csrfDostepny: true })
+    render(<PodsumowaniePolaczeniaIAktualizacji synchronizacjaSkonfigurowana diagnostyka={diagnostyka} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Kopiuj raport diagnostyczny' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Raport diagnostyczny skopiowano do schowka.'))
+    expect(zapisanoDoSchowka).toHaveBeenCalledWith(expect.stringContaining('Platforma: Android'))
+    expect(zapisanoDoSchowka.mock.calls[0][0]).not.toContain('prywatny-serwer.example')
+    expect(zapisanoDoSchowka.mock.calls[0][0]).not.toContain('pelne-id')
+  } finally {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: schowekPoprzedni })
+  }
+})
+
+it('udostępnia raport do ręcznego skopiowania, gdy schowek jest niedostępny', async () => {
+  const schowekPoprzedni = navigator.clipboard
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
+  try {
+    const diagnostyka = utworzDiagnostykeSynchronizacji({ czyAndroid: false, csrfDostepny: false, installationId: '' })
+    render(<PodsumowaniePolaczeniaIAktualizacji synchronizacjaSkonfigurowana={false} diagnostyka={diagnostyka} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Kopiuj raport diagnostyczny' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Nie udało się skopiować raportu')
+    expect((screen.getByLabelText('Raport do ręcznego skopiowania') as HTMLTextAreaElement).value).toContain('Konfiguracja połączenia: brak konfiguracji')
+    expect(screen.getByRole('button', { name: 'Zaznacz raport' })).toBeInTheDocument()
+  } finally {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: schowekPoprzedni })
+  }
+})
+
 it('po sukcesie 1.0.14 i sprzątnięciu starego APK pozwala pobrać następną wersję', async () => {
   const nastepna = { ...dostepnaAktualizacja, adresApk: 'https://example.test/Ogarniacz-1.0.15-release.apk',
     manifest: { ...dostepnaAktualizacja.manifest, versionName: '1.0.15', versionCode: 1_000_015, apkUrl: 'Ogarniacz-1.0.15-release.apk' } }
