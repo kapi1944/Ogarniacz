@@ -12,7 +12,7 @@ describe.sequential('import i eksport ustawień', () => {
     await inicjalizujBaze()
   })
 
-  it.each(['premium', 'flat'] as const)('przenosi styl %s w dotychczasowym formacie ustawień', async (styl) => {
+  it.each(['luxury', 'flat'] as const)('przenosi styl %s w dotychczasowym formacie ustawień', async (styl) => {
     const ustawienia = await repozytoriumUstawien.wczytaj()
     await repozytoriumUstawien.zapisz({ ...ustawienia, wyglad: { ...ustawienia.wyglad, personalizacja: { ...ustawienia.wyglad.personalizacja, styl } } })
     const eksport = await utworzEksportUstawien()
@@ -21,6 +21,18 @@ describe.sequential('import i eksport ustawień', () => {
     const importowane = await importujUstawienia(JSON.stringify(eksport))
     expect(importowane.wyglad.personalizacja.styl).toBe(styl)
     expect(importowane.wyglad.motyw).toBe(ustawienia.wyglad.motyw)
+  })
+
+  it('importuje dawny styl premium jako luxury, zachowując personalizację', async () => {
+    const eksport = await utworzEksportUstawien()
+    const personalizacja = { ...eksport.settings.wyglad.personalizacja, styl: 'premium', uzyjWlasnejPalety: true, kolorPaskowPrzewijania: 'szmaragdowy' }
+    const importowane = await importujUstawienia(JSON.stringify({
+      ...eksport,
+      settings: { ...eksport.settings, wyglad: { ...eksport.settings.wyglad, personalizacja } },
+    }))
+
+    expect(importowane.wyglad.personalizacja).toEqual({ ...personalizacja, styl: 'luxury' })
+    expect((await repozytoriumUstawien.wczytaj()).wyglad.personalizacja).toEqual(importowane.wyglad.personalizacja)
   })
 
   it('błędny import nie zmienia obecnych ustawień', async () => {
