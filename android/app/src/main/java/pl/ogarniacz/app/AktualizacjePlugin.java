@@ -213,18 +213,15 @@ public class AktualizacjePlugin extends Plugin {
 
     @PluginMethod public void pobierzStanInstalacji(PluginCall wywolanie) {
         getBridge().executeOnMainThread(() -> {
-            potwierdzSukcesPoRestarcie();
+            uzgodnijSesjePoUruchomieniu();
             wywolanie.resolve(StanInstalacjiApk.odczytaj(getContext()));
         });
     }
 
-    @Override public void handleOnStart() { super.handleOnStart(); aktywnaWtyczka = this; potwierdzSukcesPoRestarcie(); }
+    @Override public void handleOnStart() { super.handleOnStart(); aktywnaWtyczka = this; uzgodnijSesjePoUruchomieniu(); powiadomOStatusieInstalacji(getContext()); }
     @Override public void handleOnDestroy() { if (aktywnaWtyczka == this) aktywnaWtyczka = null; super.handleOnDestroy(); }
     private void potwierdzSukcesPoRestarcie() {
-        long oczekiwanyKod = StanInstalacjiApk.kodDocelowy(getContext());
-        if (oczekiwanyKod > 0 && oczekiwanyKod == BuildConfig.VERSION_CODE && !StanInstalacjiApk.SUKCES.equals(StanInstalacjiApk.status(getContext()))) {
-            StanInstalacjiApk.zapiszSukces(getContext(), BuildConfig.VERSION_NAME, oczekiwanyKod);
-        }
+        StanInstalacjiApk.potwierdzZainstalowanaWersje(getContext());
     }
 
     private void uzgodnijSesjePoUruchomieniu() {
@@ -240,7 +237,7 @@ public class AktualizacjePlugin extends Plugin {
             boolean zatwierdzona = sesja != null && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || sesja.isSealed());
             uzgodnijPrzerwanaSesje(status, sesja != null, zatwierdzona,
                 () -> instalator.abandonSession(numerSesji),
-                () -> StanInstalacjiApk.zapiszBladUruchomienia(getContext(), "Instalacja została przerwana przed zakończeniem. Ponów instalację zweryfikowanego APK."));
+                () -> StanInstalacjiApk.zapiszNiepotwierdzonyWynik(getContext()));
         } catch (Exception ignored) { /* Błąd odczytu systemu nie pozwala uznać aktywnej sesji za przerwaną. */ }
     }
 

@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInstaller;
+import android.content.pm.PackageInfo;
+import android.os.Build;
 import com.getcapacitor.JSObject;
 import java.net.URISyntaxException;
 import java.util.Locale;
@@ -15,6 +17,7 @@ final class StanInstalacjiApk {
     static final String OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI = "OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI";
     static final String INSTALOWANIE = "INSTALOWANIE";
     static final String SUKCES = "SUKCES";
+    static final String NIEPOTWIERDZONO = "NIEPOTWIERDZONO";
     static final String ANULOWANO = "ANULOWANO";
     static final String BRAK_MIEJSCA = "BRAK_MIEJSCA";
     static final String NIEZGODNY_PODPIS = "NIEZGODNY_PODPIS";
@@ -57,7 +60,7 @@ final class StanInstalacjiApk {
             || ANULOWANO.equals(status) || BRAK_MIEJSCA.equals(status) || NIEZGODNY_PODPIS.equals(status)
             || NIEPRAWIDLOWY_APK.equals(status) || KONFLIKT_PAKIETU.equals(status) || KONFLIKT_WERSJI.equals(status)
             || NIEDOZWOLONE_ZRODLO.equals(status) || BRAK_SYSTEMOWEGO_INSTALATORA.equals(status)
-            || BLOKADA_SYSTEMOWA.equals(status) || NIEZNANY_BLAD.equals(status);
+            || BLOKADA_SYSTEMOWA.equals(status) || NIEZNANY_BLAD.equals(status) || NIEPOTWIERDZONO.equals(status);
     }
 
     static void zapiszPobrano(Context kontekst, String nazwaPliku, String sha256, String wersja, long kodWersji) {
@@ -79,17 +82,44 @@ final class StanInstalacjiApk {
     static void zapiszWynikSystemu(Context kontekst, String wersja, long kodWersji, int sesja, int statusAndroida, String komunikat, Intent potwierdzenie) {
         boolean brakPotwierdzenia = statusAndroida == PackageInstaller.STATUS_PENDING_USER_ACTION && potwierdzenie == null;
         String status = brakPotwierdzenia ? NIEZNANY_BLAD : mapujStatus(statusAndroida, komunikat);
+        long kodDocelowy = kodWersji > 0 ? kodWersji : kodDocelowy(kontekst);
+        PackageInfo zainstalowana = pobierzZainstalowanaWersje(kontekst);
+        if (SUKCES.equals(status) && (zainstalowana == null || kodDocelowy <= 0 || kodWersji(zainstalowana) != kodDocelowy)) status = NIEPOTWIERDZONO;
         String zapisanePotwierdzenie = statusAndroida == PackageInstaller.STATUS_PENDING_USER_ACTION && potwierdzenie != null
             ? potwierdzenie.toUri(Intent.URI_INTENT_SCHEME) : null;
         if (brakPotwierdzenia) komunikat = "Android wymaga potwierdzenia, ale nie przekazał ekranu systemowego. Ponów instalację.";
         zapisz(kontekst,
-            wersja != null ? wersja : wersja(kontekst), kodWersji > 0 ? kodWersji : kodDocelowy(kontekst),
+            wersja != null ? wersja : wersja(kontekst), kodDocelowy,
             sesja >= 0 ? sesja : sesja(kontekst), status, statusAndroida, komunikat,
             nazwaPliku(kontekst), sha256(kontekst), zapisanePotwierdzenie);
     }
 
     static void zapiszSukces(Context kontekst, String wersja, long kodWersji) {
         zapiszZachowujacArtefakt(kontekst, -1, SUKCES, PackageInstaller.STATUS_SUCCESS, null, null, wersja, kodWersji);
+    }
+
+    static void potwierdzZainstalowanaWersje(Context kontekst) {
+        long oczekiwanyKod = kodDocelowy(kontekst);
+        if (oczekiwanyKod <= 0) return;
+        PackageInfo zainstalowana = pobierzZainstalowanaWersje(kontekst);
+        if (zainstalowana != null && kodWersji(zainstalowana) == oczekiwanyKod) {
+            if (!SUKCES.equals(status(kontekst))) zapiszSukces(kontekst, zainstalowana.versionName, oczekiwanyKod);
+        } else if (SUKCES.equals(status(kontekst))) {
+            zapiszNiepotwierdzonyWynik(kontekst);
+        }
+    }
+
+    static void zapiszNiepotwierdzonyWynik(Context kontekst) {
+        zapiszZachowujacArtefakt(kontekst, -1, NIEPOTWIERDZONO, null, null, null);
+    }
+
+    private static PackageInfo pobierzZainstalowanaWersje(Context kontekst) {
+        try { return kontekst.getPackageManager().getPackageInfo(kontekst.getPackageName(), 0); }
+        catch (Exception blad) { return null; }
+    }
+
+    private static long kodWersji(PackageInfo informacje) {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? informacje.getLongVersionCode() : informacje.versionCode;
     }
 
     static void zapiszBrakSystemowegoInstalatora(Context kontekst, String komunikat) {
@@ -158,6 +188,7 @@ final class StanInstalacjiApk {
         if (OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI.equals(status)) return "Android oczekuje systemowego potwierdzenia instalacji.";
         if (INSTALOWANIE.equals(status)) return "Instalowanie aktualizacji…";
         if (SUKCES.equals(status)) return "Aktualizacja zakończona.";
+        if (NIEPOTWIERDZONO.equals(status)) return "Nie udało się potwierdzić wyniku instalacji. Sprawdź zainstalowaną wersję aplikacji.";
         if (ANULOWANO.equals(status)) return "Instalacja została anulowana.";
         if (BRAK_MIEJSCA.equals(status)) return "Android nie ma wystarczającego miejsca na instalację.";
         if (NIEZGODNY_PODPIS.equals(status)) return "APK jest podpisane innym kluczem niż zainstalowana aplikacja.";

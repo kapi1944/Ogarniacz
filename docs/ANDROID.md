@@ -26,6 +26,21 @@ Debug nie wymaga release keystore. Telefon produkcyjny aktualizuj oficjalnym APK
 
 ### Pobieranie APK po 1.0.18
 
+Panel APK ponownie odczytuje zainstalowaną wersję i trwały stan instalatora po
+zdarzeniu `aktywny` istniejącego lifecycle. Natywna obsługa potwierdza sukces
+odczytem `PackageManager`: zainstalowany `versionCode` musi zgadzać się z celem
+aktualizacji, również po ponownym uruchomieniu procesu. Sam wynik
+`STATUS_SUCCESS` bez zgodnej wersji nie oznacza zakończonej aktualizacji.
+Powrót bez zmiany wersji i bez aktywnej sesji daje `NIEPOTWIERDZONO`, a jawny
+wynik anulowania pozostaje `ANULOWANO`. Zweryfikowany APK pozostaje dostępny
+do ponowienia. Odczyt wersji i wyniku nie wymaga połączenia z serwerem.
+
+Regresja obejmuje odczyt wersji pakietu i trwałego stanu w Robolectric oraz
+wznowienie panelu w jsdom. Fizyczny Samsung wymaga osobnej próby: aktualizacja
+oficjalnym podpisanym APK do wyższego `versionCode`, anulowanie instalatora,
+powrót bez zmiany wersji i ponowny start aplikacji. Testy automatyczne nie
+potwierdzają zachowania systemowego instalatora na urządzeniu.
+
 Ścieżka aktualizacji: `AktualizacjeService` pobiera `latest.json` przez natywny
 `CapacitorHttp`, waliduje manifest i rozwiązuje `apkUrl`. `AktualizacjePlugin`
 przekazuje transfer do `PobieranieApk`: HTTPS → maksymalnie pięć przekierowań →

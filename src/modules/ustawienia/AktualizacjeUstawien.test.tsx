@@ -1,5 +1,5 @@
 import { platforma } from '../../platform/platforma'
-import { cleanup as wyczysc, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup as wyczysc, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { komunikatBleduAktualizacji, PanelAktualizacji } from './PanelAktualizacji'
 import { PodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
@@ -9,8 +9,9 @@ import { utworzMetadane } from '../../domain/fabryki'
 
 vi.mock('./PanelAktualizacjiRaspberry', () => ({ PanelAktualizacjiRaspberry: () => <div>Raspberry / serwer</div> }))
 
-const { nasluchujKontroli, pobierzApk, pobierzStanKontroli, sprawdzAktualizacjeApk, uruchomInstalator } = vi.hoisted(() => ({
+const { nasluchujKontroli, nasluchujCykluZycia, pobierzApk, pobierzStanKontroli, sprawdzAktualizacjeApk, uruchomInstalator } = vi.hoisted(() => ({
   nasluchujKontroli: vi.fn(() => () => undefined),
+  nasluchujCykluZycia: vi.fn(),
   pobierzApk: vi.fn(),
   pobierzStanKontroli: vi.fn(),
   sprawdzAktualizacjeApk: vi.fn(),
@@ -28,6 +29,7 @@ let stanKontroli = { sprawdzono: true, wynikApk: dostepnaAktualizacja }
 vi.mock('../../platform/platforma', () => ({
   platforma: {
     natywna: true,
+    cyklZycia: { nasluchuj: nasluchujCykluZycia },
     aktualizacje: { skonfigurowane: () => true, sprawdz: vi.fn(), pobierz: pobierzApk, uruchomInstalator, pobierzInformacje: vi.fn().mockResolvedValue({ wersja: '1.0.11', kod: 1_000_011 }), pobierzStanInstalacji: vi.fn().mockResolvedValue({}), nasluchujStanuInstalacji: vi.fn().mockResolvedValue(() => undefined) },
   },
 }))
@@ -45,6 +47,7 @@ beforeEach(() => {
   sprawdzAktualizacjeApk.mockResolvedValue(dostepnaAktualizacja)
   pobierzApk.mockReset()
   uruchomInstalator.mockReset()
+  nasluchujCykluZycia.mockResolvedValue(() => undefined)
 })
 
 afterEach(() => {
@@ -319,4 +322,42 @@ it('pokazuje wersję i versionCode w jedynym panelu Android APK', async () => {
   await screen.findByText('1.0.11 (versionCode: 1000011)')
   expect(screen.getByText('1.0.12')).toBeInTheDocument()
   expect(screen.queryByText('Android Web OTA')).not.toBeInTheDocument()
+})
+
+it.each([
+  { status: 'POBRANO' as const, opis: 'APK pobrano. Trwa weryfikacja SHA-256.' },
+  { status: 'ZWERYFIKOWANO' as const, opis: 'APK pobrano i zweryfikowano. Możesz uruchomić instalację.' },
+  { status: 'INSTALOWANIE' as const, opis: 'Instalowanie aktualizacji…' },
+  { status: 'ANULOWANO' as const, opis: 'Instalacja została anulowana.' },
+  { status: 'NIEPOTWIERDZONO' as const, opis: 'Nie udało się potwierdzić wyniku instalacji. Sprawdź zainstalowaną wersję aplikacji.' },
+])('po ponownym otwarciu zachowuje stan $status bez ogłaszania sukcesu', async ({ status, opis }) => {
+  vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockResolvedValueOnce({ status, wymagaZgody: false })
+  render(<PanelAktualizacji />)
+  await screen.findByText(opis)
+  expect(screen.queryByText('Aktualizacja zakończona.')).not.toBeInTheDocument()
+})
+
+it('po powrocie do aplikacji odczytuje wersję i potwierdzony wynik instalacji', async () => {
+  render(<PanelAktualizacji />)
+  await screen.findByText('1.0.11 (versionCode: 1000011)')
+  await waitFor(() => expect(platforma.aktualizacje.pobierzStanInstalacji).toHaveBeenCalled())
+  vi.mocked(platforma.aktualizacje.pobierzInformacje).mockResolvedValueOnce({ wersja: '1.0.12', kod: 1_000_012 })
+  vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockResolvedValueOnce({ status: 'SUKCES', wymagaZgody: false, versionCodeDocelowy: 1_000_012 })
+  act(() => nasluchujCykluZycia.mock.calls[0][0]('aktywny'))
+  await screen.findByText('1.0.12 (versionCode: 1000012)')
+  await screen.findByText('Aktualizacja zakończona.')
+  expect(pobierzApk).not.toHaveBeenCalled()
+})
+
+it('po powrocie bez zmiany wersji pokazuje wynik niepotwierdzony', async () => {
+  render(<PanelAktualizacji />)
+  await screen.findByText('1.0.11 (versionCode: 1000011)')
+  await waitFor(() => expect(platforma.aktualizacje.pobierzStanInstalacji).toHaveBeenCalled())
+  vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockResolvedValueOnce({ status: 'NIEPOTWIERDZONO', wymagaZgody: false, versionCodeDocelowy: 1_000_012 })
+  act(() => nasluchujCykluZycia.mock.calls[0][0]('nieaktywny'))
+  expect(platforma.aktualizacje.pobierzInformacje).toHaveBeenCalledTimes(1)
+  act(() => nasluchujCykluZycia.mock.calls[0][0]('aktywny'))
+  await screen.findByText('wynik niepotwierdzony')
+  expect(screen.getByText('1.0.11 (versionCode: 1000011)')).toBeInTheDocument()
+  expect(screen.queryByText('Aktualizacja zakończona.')).not.toBeInTheDocument()
 })

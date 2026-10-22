@@ -13,9 +13,12 @@ import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import android.content.pm.PackageInstaller;
+import android.content.Context;
+import org.robolectric.RuntimeEnvironment;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PluginCall;
 import org.junit.Test;
+import org.junit.Before;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
@@ -25,6 +28,58 @@ import org.robolectric.annotation.Config;
 public class AktualizacjePluginTest {
     private static final long GIB = 1024L * 1024L * 1024L;
     private static final long MIB = 1024L * 1024L;
+
+    @Before public void wyczyscStanInstalacjiTestowej() {
+        RuntimeEnvironment.getApplication().getSharedPreferences("stan_instalacji_apk", Context.MODE_PRIVATE).edit().clear().commit();
+    }
+
+    @Test public void wynikSystemuBezZainstalowanejWersjiNieOglaszaSukcesu() throws Exception {
+        Context kontekst = RuntimeEnvironment.getApplication();
+        long kodDocelowy = kontekst.getPackageManager().getPackageInfo(kontekst.getPackageName(), 0).getLongVersionCode() + 1;
+        StanInstalacjiApk.zapiszZweryfikowano(kontekst, "aktualizacja.apk", "a".repeat(64), "nowsza", kodDocelowy);
+        StanInstalacjiApk.zapiszWynikSystemu(kontekst, "nowsza", kodDocelowy, 42, PackageInstaller.STATUS_SUCCESS, null, null);
+        assertEquals(StanInstalacjiApk.NIEPOTWIERDZONO, StanInstalacjiApk.status(kontekst));
+        assertEquals(PackageInstaller.STATUS_SUCCESS, StanInstalacjiApk.odczytaj(kontekst).getInt("statusAndroida"));
+        assertTrue(StanInstalacjiApk.czyMoznaPonowicInstalacje(StanInstalacjiApk.status(kontekst)));
+    }
+
+    @Test public void ponownyOdczytPotwierdzaZainstalowanaWersjeBezWynikuOdbiornika() throws Exception {
+        Context kontekst = RuntimeEnvironment.getApplication();
+        long kod = kontekst.getPackageManager().getPackageInfo(kontekst.getPackageName(), 0).getLongVersionCode();
+        assertTrue(kod > 0);
+        StanInstalacjiApk.zapiszZweryfikowano(kontekst, "aktualizacja.apk", "a".repeat(64), "docelowa", kod);
+        StanInstalacjiApk.zapiszInstalowanie(kontekst, 42);
+        Context ponownyKontekst = kontekst.createPackageContext(kontekst.getPackageName(), 0);
+        StanInstalacjiApk.potwierdzZainstalowanaWersje(ponownyKontekst);
+        assertEquals(StanInstalacjiApk.SUKCES, StanInstalacjiApk.status(ponownyKontekst));
+        assertFalse(StanInstalacjiApk.odczytaj(ponownyKontekst).getBool("maZweryfikowanyApk"));
+    }
+
+    @Test public void powrotBezZmianyWersjiOrazBezSesjiPozostajeNiepotwierdzony() throws Exception {
+        Context kontekst = RuntimeEnvironment.getApplication();
+        long kod = kontekst.getPackageManager().getPackageInfo(kontekst.getPackageName(), 0).getLongVersionCode() + 1;
+        StanInstalacjiApk.zapiszZweryfikowano(kontekst, "aktualizacja.apk", "a".repeat(64), "nowsza", kod);
+        StanInstalacjiApk.zapiszInstalowanie(kontekst, 42);
+        StanInstalacjiApk.potwierdzZainstalowanaWersje(kontekst);
+        assertEquals(StanInstalacjiApk.INSTALOWANIE, StanInstalacjiApk.status(kontekst));
+        AktualizacjePlugin.uzgodnijPrzerwanaSesje(StanInstalacjiApk.status(kontekst), false, false,
+            () -> { throw new AssertionError("Brak sesji do porzucenia"); },
+            () -> StanInstalacjiApk.zapiszNiepotwierdzonyWynik(kontekst));
+        assertEquals(StanInstalacjiApk.NIEPOTWIERDZONO, StanInstalacjiApk.status(kontekst));
+        assertTrue(StanInstalacjiApk.odczytaj(kontekst).getBool("maZweryfikowanyApk"));
+    }
+
+    @Test public void anulowanieOrazNiepotwierdzonyHistorycznySukcesNieUdajaAktualizacji() throws Exception {
+        Context kontekst = RuntimeEnvironment.getApplication();
+        long kod = kontekst.getPackageManager().getPackageInfo(kontekst.getPackageName(), 0).getLongVersionCode() + 1;
+        StanInstalacjiApk.zapiszZweryfikowano(kontekst, "aktualizacja.apk", "a".repeat(64), "nowsza", kod);
+        StanInstalacjiApk.zapiszWynikSystemu(kontekst, "nowsza", kod, 42, PackageInstaller.STATUS_FAILURE_ABORTED, null, null);
+        StanInstalacjiApk.potwierdzZainstalowanaWersje(kontekst);
+        assertEquals(StanInstalacjiApk.ANULOWANO, StanInstalacjiApk.status(kontekst));
+        StanInstalacjiApk.zapiszSukces(kontekst, "nowsza", kod);
+        StanInstalacjiApk.potwierdzZainstalowanaWersje(kontekst);
+        assertEquals(StanInstalacjiApk.NIEPOTWIERDZONO, StanInstalacjiApk.status(kontekst));
+    }
 
     @Test public void liczbyJsonZManifestuNieBlokujaPobieraniaPrzedPolaczeniem() throws Exception {
         JSObject dane = new JSObject("{\"adres\":\"https://github.com/kapi1944/Ogarniacz/releases/latest/download/Ogarniacz-1.0.18-release.apk\","

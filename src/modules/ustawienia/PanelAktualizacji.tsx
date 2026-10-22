@@ -6,7 +6,7 @@ import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
 import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeApk } from '../../services/KontrolaAktualizacjiAplikacji'
 import type { PobranaAktualizacja, StanInstalacjiAktualizacji, StatusInstalacjiAktualizacji, WynikSprawdzeniaAktualizacji, WynikUruchomieniaInstalatora } from '../../platform/typy'
 
-type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'blad_instalatora' | 'blad_pobierania' | 'blad_sieci' | 'blad_http' | 'blad_rozmiaru' | 'bledny_sha' | 'blad_finalizacji' | 'blad'
+type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'zainstalowano' | 'niepotwierdzono' | 'blad_instalatora' | 'blad_pobierania' | 'blad_sieci' | 'blad_http' | 'blad_rozmiaru' | 'bledny_sha' | 'blad_finalizacji' | 'blad'
 
 const etykietyEtapu: Record<EtapAktualizacji, string> = {
   gotowy: 'gotowe',
@@ -16,7 +16,9 @@ const etykietyEtapu: Record<EtapAktualizacji, string> = {
   pobieranie: 'pobieranie',
   weryfikacja: 'weryfikacja',
   brak_miejsca: 'za mało miejsca',
-  gotowe: 'instalacja',
+  gotowe: 'APK zweryfikowano',
+  zainstalowano: 'zainstalowano',
+  niepotwierdzono: 'wynik niepotwierdzony',
   zgoda: 'wymaga zgody',
   uruchamianie: 'uruchamianie instalatora',
   blad_instalatora: 'błąd instalatora',
@@ -118,7 +120,8 @@ function opisStatusuInstalacji(status: StatusInstalacjiAktualizacji): [EtapAktua
     OCZEKUJE_NA_ZGODE_NIEZNANYCH_ZRODEL: ['zgoda', 'Android oczekuje zgody na instalowanie nieznanych aplikacji. Wróć tutaj po jej włączeniu.'],
     OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI: ['zgoda', 'Android oczekuje systemowego potwierdzenia instalacji.'],
     INSTALOWANIE: ['uruchamianie', 'Instalowanie aktualizacji…'],
-    SUKCES: ['gotowe', 'Aktualizacja zakończona.'], ANULOWANO: ['blad_instalatora', 'Instalacja została anulowana.'],
+    SUKCES: ['zainstalowano', 'Aktualizacja zakończona.'], ANULOWANO: ['blad_instalatora', 'Instalacja została anulowana.'],
+    NIEPOTWIERDZONO: ['niepotwierdzono', 'Nie udało się potwierdzić wyniku instalacji. Sprawdź zainstalowaną wersję aplikacji.'],
     BRAK_MIEJSCA: ['brak_miejsca', 'Za mało wolnego miejsca na aktualizację.'], NIEZGODNY_PODPIS: ['blad_instalatora', 'APK jest podpisane innym kluczem.'],
     NIEPRAWIDLOWY_APK: ['blad_instalatora', 'Pakiet aktualizacji jest nieprawidłowy.'], KONFLIKT_PAKIETU: ['blad_instalatora', 'Wystąpił konflikt pakietu aktualizacji.'],
     KONFLIKT_WERSJI: ['blad_instalatora', 'Android nie pozwala zainstalować tej wersji, ponieważ nie jest nowsza od zainstalowanej.'],
@@ -141,12 +144,6 @@ export function PanelAktualizacji() {
   const skonfigurowane = platforma.aktualizacje.skonfigurowane()
 
   useEffect(() => {
-    platforma.aktualizacje.pobierzInformacje()
-      .then((informacje) => ustawWersje(`${informacje.wersja} (versionCode: ${informacje.kod})`))
-      .catch(() => ustawWersje(__WERSJA_APLIKACJI__))
-  }, [])
-
-  useEffect(() => {
     let aktywny = true
     const zastosuj = (stan: StanInstalacjiAktualizacji) => {
       if (!aktywny || !stan?.status) return
@@ -162,13 +159,29 @@ export function PanelAktualizacji() {
       ustawEtap('blad')
       ustawKomunikat('Nie udało się odczytać stanu instalatora. Możesz ponownie sprawdzić aktualizacje.')
     }
-    void platforma.aktualizacje.pobierzStanInstalacji().then(zastosuj).catch(pokazBlad)
+    const odswiezPoPowrocie = async () => {
+      try {
+        const informacje = await platforma.aktualizacje.pobierzInformacje()
+        if (aktywny) ustawWersje(`${informacje.wersja} (versionCode: ${informacje.kod})`)
+      } catch {
+        if (aktywny) ustawWersje('nie udało się odczytać')
+      }
+      await platforma.aktualizacje.pobierzStanInstalacji().then(zastosuj).catch(pokazBlad)
+    }
+    void odswiezPoPowrocie()
     let usun: () => void = () => undefined
     void platforma.aktualizacje.nasluchujStanuInstalacji(zastosuj).then((odsubskrybuj) => {
       if (aktywny) usun = odsubskrybuj
       else odsubskrybuj()
     }).catch(pokazBlad)
-    return () => { aktywny = false; usun() }
+    let usunCyklZycia: () => void = () => undefined
+    void platforma.cyklZycia.nasluchuj((stan) => {
+      if (stan === 'aktywny') void odswiezPoPowrocie()
+    }).then((odsubskrybuj) => {
+      if (aktywny) usunCyklZycia = odsubskrybuj
+      else odsubskrybuj()
+    }).catch(pokazBlad)
+    return () => { aktywny = false; usun(); usunCyklZycia() }
   }, [])
 
   useEffect(() => {
@@ -283,7 +296,7 @@ export function PanelAktualizacji() {
 
   const zajete = etap === 'sprawdzanie' || etap === 'pobieranie' || etap === 'weryfikacja' || etap === 'uruchamianie'
   const czyEtapBledu = etap === 'blad' || etap === 'brak_miejsca' || etap === 'blad_instalatora' || etap === 'blad_pobierania' || etap === 'blad_sieci' || etap === 'blad_http' || etap === 'blad_rozmiaru' || etap === 'bledny_sha' || etap === 'blad_finalizacji'
-  const wariant = czyEtapBledu ? 'blad' : etap === 'dostepna' || etap === 'zgoda' ? 'ostrzezenie' : etap === 'brak' || etap === 'gotowe' ? 'sukces' : 'neutralny'
+  const wariant = czyEtapBledu ? 'blad' : etap === 'dostepna' || etap === 'zgoda' || etap === 'niepotwierdzono' ? 'ostrzezenie' : etap === 'brak' || etap === 'zainstalowano' ? 'sukces' : 'neutralny'
 
   const maZweryfikowanyApk = Boolean(stanNatywny?.maZweryfikowanyApk || pobrana)
   const czekaNaPotwierdzenie = stanNatywny?.status === 'OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI' && stanNatywny.maPotwierdzenieInstalacji
