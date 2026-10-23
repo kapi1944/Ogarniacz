@@ -1,7 +1,7 @@
 import { useMemo, useState, type FormEvent } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, getDay, isSameMonth, parseISO, startOfMonth, startOfWeek, subMonths } from 'date-fns'
+import { addDays, addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, getDay, isSameMonth, parseISO, startOfMonth, startOfWeek, subMonths } from 'date-fns'
 import { pl } from 'date-fns/locale'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { Karta, Komunikat, Modal, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
@@ -21,6 +21,7 @@ import { DostawcaNotatekPulpitu } from '../../providers/DostawcaNotatekPulpitu'
 import { anulujPlan, DOMYSLNE_PREFERENCJE_PLANOWANIA, generujPlan, generujPrzeplanowanie, walidujPozycjeDraftu, zatwierdzPlan, type PreferencjePlanowania, type WynikPlanera } from '../../services/PlanerService'
 import { ustalDostepnoscDniaPracy } from '../../services/KalendarzPracyService'
 import { utworzHarmonogramDnia } from '../pulpit/logikaOsiCzasu'
+import { NawigatorDnia } from '../pulpit/NawigatorDnia'
 import { czyZakresySieNakladaja, ETYKIETY_STATUSOW_URLOPU, ETYKIETY_TYPOW_URLOPU } from '../../services/UrlopyService'
 
 const dni = ['Niedziela', 'Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota']
@@ -127,12 +128,12 @@ export function WidokPlanera() {
   }
 
   return <div className="widok">
-    <NaglowekWidoku tytul="Planer dnia" opis="Draft korzysta ze wspólnej dostępności dnia i twardych wydarzeń. Zapis następuje dopiero po zatwierdzeniu." akcje={<button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawReczneDodawanie(true)}><Plus aria-hidden="true" />Blok ręczny</button>} />
+    <NaglowekWidoku tytul="Planer dnia" opis="Draft korzysta ze wspólnej dostępności dnia i twardych wydarzeń. Zapis następuje dopiero po zatwierdzeniu." akcje={<><Link className="przycisk przycisk--tekstowy" to="/dzisiaj">Wróć do Dzisiaj</Link><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawReczneDodawanie(true)}><Plus aria-hidden="true" />Blok ręczny</button></>} />
     <Karta>
+      <NawigatorDnia data={data} zmienDate={(nowaData) => { ustawDate(nowaData); ustawWynik(undefined) }} />
       <div className="pasek-planera">
-        <label><span>Dzień</span><input type="date" value={data} onChange={(e) => { ustawDate(e.target.value); ustawWynik(undefined) }} /></label>
-        <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawDate(format(new Date(Date.now() + 86_400_000), 'yyyy-MM-dd')); ustawWynik(undefined) }}>Jutro</button>
-        <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawDate(format(new Date(Date.now() + 3 * 86_400_000), 'yyyy-MM-dd')); ustawWynik(undefined) }}>Za 3 dni</button>
+        <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawDate(format(addDays(new Date(), 1), 'yyyy-MM-dd')); ustawWynik(undefined) }}>Jutro</button>
+        <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => { ustawDate(format(addDays(new Date(), 3), 'yyyy-MM-dd')); ustawWynik(undefined) }}>Za 3 dni</button>
         <button type="button" className="przycisk przycisk--drugorzedny" disabled={data !== dzisiajIso()} onClick={przeplanujReszteDnia}><RefreshCw aria-hidden="true" />Przeplanuj resztę dnia</button>
         <button type="button" className="przycisk przycisk--glowny" onClick={generuj}><RefreshCw aria-hidden="true" />Generuj propozycję</button>
       </div>

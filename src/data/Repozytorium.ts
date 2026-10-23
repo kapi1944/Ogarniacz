@@ -49,7 +49,7 @@ export interface Repozytorium<T extends EncjaBazowa> {
   pobierz(id: string): Promise<T | undefined>
   zapisz(encja: T): Promise<string>
   zapiszWiele(encje: T[]): Promise<void>
-  usun(id: string): Promise<void>
+  usun(id: string, oczekiwana?: EncjaBazowa): Promise<void>
   przywroc(id: string): Promise<void>
 }
 
@@ -284,12 +284,13 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     this.powiadomODokumentach([...poprzednie, ...zapisane])
   }
 
-  async usun(id: string): Promise<void> {
+  async usun(id: string, oczekiwana?: EncjaBazowa): Promise<void> {
     const tabela = this.tabela()
     if (!czyHistoriaWlaczona(this.nazwa)) {
       await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), tabelaKolejki()], async () => {
         const encja = await tabela.get(id)
         await this.sprawdzDostep(encja)
+        if (oczekiwana && (!encja || JSON.stringify(encja) !== JSON.stringify(oczekiwana))) throw new Error('Element został zmieniony. Nie można bezpiecznie cofnąć dodania.')
         if (!encja) return
         const teraz = terazIso()
         const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }
@@ -304,6 +305,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     await baza.transaction('rw', [tabela, ...this.tabeleZrodelDokumentu(), historia, tabelaKolejki()], async () => {
       const encja = await tabela.get(id)
       await this.sprawdzDostep(encja)
+      if (oczekiwana && (!encja || JSON.stringify(encja) !== JSON.stringify(oczekiwana))) throw new Error('Element został zmieniony. Nie można bezpiecznie cofnąć dodania.')
       if (!encja) return
       const teraz = terazIso()
       const usunieta = { ...encja, usunietoAt: teraz, updatedAt: teraz }

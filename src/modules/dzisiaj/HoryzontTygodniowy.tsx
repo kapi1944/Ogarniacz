@@ -28,7 +28,7 @@ function WierszTygodnia({ zakres, dzisiaj, dni, ladowanie, wybranaData, wybierz,
       const dzien = dni.find((dane) => dane.data === data)
       const terminy = otwieraDialog ? dzien?.najwazniejszeTerminy.map((element) => `${element.godzina ? `${element.godzina} · ` : ''}${element.tytul}`) ?? [] : []
       return <KafelekDnia key={data} data={data} dzisiaj={dzisiaj}
-        liczbaDzialan={ladowanie ? undefined : dzien?.liczbaOtwartych} terminy={terminy}
+        liczbaDzialan={ladowanie ? undefined : dzien?.liczbaOtwartych} liczbaWykonanych={dzien?.liczbaWykonanych} terminy={terminy}
         zakresPracy={dzien?.zakresPracy} wybrany={data === wybranaData} otwieraDialog={otwieraDialog} otworz={wybierz} />
     })}
   </div>
@@ -50,7 +50,7 @@ export function HoryzontTygodniowy({ dzisiaj, dni, ladowanie = false, blad = fal
     otworz?.(data, zrodlo)
   }
   const wiersz = (zakres: ZakresDat) => <WierszTygodnia zakres={zakres} dzisiaj={dzisiaj} dni={dni} ladowanie={ladowanie} wybranaData={wybranaData} wybierz={wybierz} otwieraDialog={Boolean(otworz)} />
-  return <section className="karta przeglad-tygodnia" aria-label="Horyzont tygodniowy">
+  return <section className="karta przeglad-tygodnia" aria-label="Horyzont tygodniowy" aria-busy={ladowanie}>
     <h2>Ten tydzień</h2>
     {blad && <Komunikat typ="blad">Nie udało się pobrać części danych. Liczniki mogą być niepełne.</Komunikat>}
     {wiersz(tygodnie[0])}

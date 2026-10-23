@@ -118,10 +118,11 @@ export function klasaRozmiaruKafelka(rozmiar: RozmiarKafelkaPulpitu) {
   return `strefa-pulpitu--${rozmiar}`
 }
 
-export function adresReferencjiZrodla(sourceRef: ReferencjaZrodla): string {
+export function adresReferencjiZrodla(sourceRef: ReferencjaZrodla, data?: string): string {
   const adresy = { zadania: '/zadania', projekty: '/projekty', cele: '/cele', terminy: '/terminy', leki: '/zdrowie/leki', wizyty: '/zdrowie/wizyty', skierowania: '/zdrowie/skierowania', zdrowie: '/zdrowie/recepty', finanse: '/finanse', rachunki: '/rachunki', samochod: '/samochod', zakupy: '/zakupy', notatki: '/notatki', skrzynka: '/poczekalnia', miasto: '/miasto' } as const
-  const adres = adresy[sourceRef.modul as keyof typeof adresy] ?? '/'
+  const adres = sourceRef.modul === 'planer' ? '/planer' : adresy[sourceRef.modul as keyof typeof adresy] ?? '/'
   const parametry = new URLSearchParams({ element: sourceRef.encjaId })
+  if (sourceRef.modul === 'planer' && data) parametry.set('data', data)
   if (sourceRef.wystapienieId) parametry.set('wystapienie', sourceRef.wystapienieId)
   return `${adres}?${parametry.toString()}`
 }

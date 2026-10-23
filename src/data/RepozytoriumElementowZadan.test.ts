@@ -2,7 +2,9 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { zadanieLegacyNaElement } from '../domain/adapterZadania'
 import { baza, inicjalizujBaze } from './BazaOgarniacza'
-import { RepozytoriumElementowZadan } from './RepozytoriumElementowZadan'
+import { KonfliktZmianyZadania, RepozytoriumElementowZadan } from './RepozytoriumElementowZadan'
+import { pobierzRepozytorium } from './Repozytorium'
+import { ustawBiezacyDostep } from '../services/UprawnieniaService'
 
 describe('wspólne repozytorium elementów zadań', () => {
   beforeEach(async () => {
@@ -97,5 +99,72 @@ describe('wspólne repozytorium elementów zadań', () => {
     const elementy = await repozytorium.lista({ od: '2026-09-02', do: '2026-09-08' })
 
     expect(elementy.map((element) => element.tytul)).toEqual(['W zakresie'])
+  })
+
+  it('wykonuje zadanie tylko raz przy dwóch równoległych próbach i przywraca dokładny status źródła', async () => {
+    const repozytorium = new RepozytoriumElementowZadan()
+    const element = await repozytorium.utworz({ typ: 'zadanie', tytul: 'Telefon' })
+    await baza.tabela('zadania').update(element.id, { status: 'w_toku' })
+    const aktualny = (await repozytorium.pobierz(element.id))!
+    const wyniki = await Promise.allSettled([repozytorium.zmienZDnia(aktualny, { status: 'wykonany' }), repozytorium.zmienZDnia(aktualny, { status: 'wykonany' })])
+    expect(wyniki.filter((wynik) => wynik.status === 'fulfilled')).toHaveLength(1)
+    const zapis = wyniki.find((wynik) => wynik.status === 'fulfilled')!
+    if (zapis.status !== 'fulfilled') throw new Error('Brak zapisu')
+    expect(await repozytorium.pobierz(element.id)).toMatchObject({ status: 'wykonany' })
+    await repozytorium.cofnijZmianeDnia(zapis.value)
+    expect(await baza.tabela('zadania').get(element.id)).toMatchObject({ status: 'w_toku' })
+  })
+
+  it('przekłada zadanie z godziną i cofa bez utraty wcześniejszego terminu', async () => {
+    const repozytorium = new RepozytoriumElementowZadan()
+    const element = await repozytorium.utworz({ typ: 'zadanie', tytul: 'Telefon', data: '2026-10-24', godzina: '12:30', trybTerminu: 'o_godzinie' })
+    const zmiana = await repozytorium.zmienZDnia(element, { data: '2026-10-25', godzina: element.godzina, trybTerminu: element.trybTerminu })
+    expect(await repozytorium.pobierz(element.id)).toMatchObject({ data: '2026-10-25', godzina: '12:30' })
+    await repozytorium.cofnijZmianeDnia(zmiana)
+    expect(await repozytorium.pobierz(element.id)).toMatchObject({ data: '2026-10-24', godzina: '12:30', trybTerminu: 'o_godzinie' })
+  })
+
+  it('odmawia cofnięcia po nowszej edycji, nawet w tej samej milisekundzie', async () => {
+    const repozytorium = new RepozytoriumElementowZadan()
+    const element = await repozytorium.utworz({ typ: 'zadanie', tytul: 'Telefon' })
+    const zmiana = await repozytorium.zmienZDnia(element, { status: 'wykonany' })
+    await baza.tabela('zadania').update(element.id, { opis: 'Nowsza zmiana', updatedAt: zmiana.po.updatedAt })
+    await expect(repozytorium.cofnijZmianeDnia(zmiana)).rejects.toBeInstanceOf(KonfliktZmianyZadania)
+    expect(await baza.tabela('zadania').get(element.id)).toMatchObject({ opis: 'Nowsza zmiana', status: 'wykonane' })
+  })
+
+  it('egzekwuje brak edycji w warstwie danych i zachowuje rekord', async () => {
+    const repozytorium = new RepozytoriumElementowZadan()
+    const element = await repozytorium.utworz({ typ: 'zadanie', tytul: 'Telefon' })
+    ustawBiezacyDostep((_modul, operacja) => operacja === 'odczyt')
+    await expect(repozytorium.zmienZDnia(element, { status: 'wykonany' })).rejects.toThrow('Brak uprawnień')
+    expect(await repozytorium.pobierz(element.id)).toMatchObject({ status: 'otwarty' })
+  })
+
+  it('liczy zaległości bez wykonanych, pominiętych, prywatnych i przyszłych; ogranicza wynik do trzech', async () => {
+    const repozytorium = new RepozytoriumElementowZadan()
+    for (let indeks = 0; indeks < 5; indeks += 1) await repozytorium.utworz({ typ: 'zadanie', tytul: `Otwarte ${indeks}`, data: '2026-10-01', priorytet: indeks === 4 ? 'asap' : 'normalny' })
+    await repozytorium.utworz({ typ: 'zadanie', tytul: 'Wykonane', data: '2026-10-01', status: 'wykonany' })
+    await repozytorium.utworz({ typ: 'zadanie', tytul: 'Pominięte', data: '2026-10-01', status: 'pominiety' })
+    await repozytorium.utworz({ typ: 'zadanie', tytul: 'Przyszłe', data: '2026-10-30' })
+    const prywatne = await repozytorium.utworz({ typ: 'zadanie', tytul: 'Prywatne', data: '2026-10-01' })
+    await baza.tabela('zadania').update(prywatne.id, { sesjaTerapiiId: 'sesja' })
+    const wynik = await repozytorium.zalegle('2026-10-24')
+    expect(wynik.liczba).toBe(5)
+    expect(wynik.elementy).toHaveLength(3)
+    expect(wynik.elementy[0].priorytet).toBe('asap')
+  })
+
+  it('cofnięcie dodania odrzuca zmieniony rekord w transakcji i nie dopisuje usunięcia', async () => {
+    const repozytorium = pobierzRepozytorium('zadania')
+    const elementy = new RepozytoriumElementowZadan(repozytorium)
+    const element = await elementy.utworz({ typ: 'zadanie', tytul: 'Nowe' })
+    const oczekiwany = (await repozytorium.pobierz(element.id))!
+    await baza.tabela('zadania').update(element.id, { opis: 'Zmieniono', updatedAt: oczekiwany.updatedAt })
+    await expect(repozytorium.usun(element.id, oczekiwany)).rejects.toThrow('Nie można bezpiecznie')
+    expect(await repozytorium.pobierz(element.id)).toMatchObject({ opis: 'Zmieniono' })
+    const aktualny = (await repozytorium.pobierz(element.id))!
+    await repozytorium.usun(element.id, aktualny)
+    expect(await repozytorium.pobierz(element.id)).toBeUndefined()
   })
 })

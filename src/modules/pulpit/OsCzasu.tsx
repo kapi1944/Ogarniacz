@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { CarFront, Clock3, RotateCcw, Settings2 } from 'lucide-react'
 import { dzisiajIso } from '../../domain/fabryki'
 import type { ElementOgarniacza } from '../../domain/elementyOgarniacza'
@@ -8,6 +8,8 @@ import type {
   ZakresSnuDnia,
 } from './logikaOsiCzasu'
 import { NawigatorDnia } from './NawigatorDnia'
+import { etykietaStatusuElementu } from './logikaDniaPulpitu'
+import { rozmiescZnaczniki } from './rozmieszczenieZnacznikow'
 import {
   minutyDnia,
   pozycjaGodzinyNaOsi,
@@ -63,6 +65,11 @@ export function OsCzasu({
 }) {
   const [teraz, ustawTeraz] = useState(new Date())
   const [wybranyElementOsi, ustawWybranyElementOsi] = useState<string | null>(null)
+  const wybranyPrzedzial = harmonogram.przedzialy.find((przedzial) => `przedzial:${przedzial.id}` === wybranyElementOsi)
+  const { od, do: doSnu, skala } = zakresSnu
+  const znaczniki = useMemo(() => rozmiescZnaczniki(elementy, { od, do: doSnu, skala }), [elementy, od, doSnu, skala])
+  const liczbaWierszy = znaczniki.reduce((liczba, znacznik) => Math.max(liczba, znacznik.wiersz + 1), 0)
+  const wysokosc = `max(205px, calc(128px + ${liczbaWierszy} * 4rem))`
 
   useEffect(() => {
     const interwal = window.setInterval(() => ustawTeraz(new Date()), 60_000)
@@ -134,7 +141,7 @@ export function OsCzasu({
       </div>
 
       <div className="os-czasu-przewijana" role="region" aria-label="Oś czasu doby z harmonogramem i wydarzeniami" tabIndex={0}>
-        <div className="os-czasu" aria-label={`Oś czasu dla ${data}`}>
+        <div className="os-czasu" style={{ height: wysokosc }} aria-label={`Oś czasu dla ${data}`}>
           <div
             className="os-czasu__aktywny"
             style={{
@@ -179,26 +186,26 @@ export function OsCzasu({
             </span>
           ))}
 
-          {elementy.map((element, indeks) => element.godzina && (
+          {znaczniki.map(({ element, pozycja }) => <span key={`punkt:${element.id}`} className="os-czasu__punkt-elementu" style={{ left: `${pozycja}%` }} aria-hidden="true" />)}
+          {znaczniki.map(({ element, lewa, wiersz }) => (
             <button
               type="button"
               key={element.id}
               className={`os-czasu__marker os-czasu__marker--${element.typ} os-czasu__marker--${element.status ?? 'bez-statusu'}`}
               style={{
-                left: `${pozycjaGodzinyNaOsi(element.godzina, zakresSnu)}%`,
-                top: `${122 + indeks % 3 * 24}px`,
+                left: `${lewa}%`,
+                top: `calc(128px + ${wiersz} * 4rem)`,
               }}
-              title={`${element.godzina} ${element.tytul} · ${element.status ?? 'bez statusu'}`}
-              aria-label={`${element.godzina} ${element.tytul} · ${element.status ?? 'bez statusu'}`}
+              title={`${element.godzina} ${element.tytul} · ${etykietaStatusuElementu(element)}`}
+              aria-label={`${element.godzina} ${element.tytul} · ${etykietaStatusuElementu(element)}`}
               aria-pressed={wybranyElementOsi === `element:${element.id}`}
               onClick={() => {
                 ustawWybranyElementOsi(`element:${element.id}`)
                 otworzElement(element)
               }}
             >
-              <span />
-              <strong>{element.tytul}</strong>
-              <small>{element.typ === 'lek' ? 'Lek' : element.typ === 'wizyta' ? 'Wizyta' : element.typ === 'platnosc' ? 'Płatność' : element.typ === 'samochod' ? 'Samochód' : element.typ === 'zakupy' ? 'Zakupy' : 'Zadanie'} · {element.status ?? 'bez statusu'}</small>
+              <strong>{element.godzina} · {element.tytul}</strong>
+              <small>{etykietaStatusuElementu(element)}{element.priorytet === 'asap' ? ' · Najpilniejsze' : element.priorytet === 'pilny' ? ' · Pilne' : ''}</small>
             </button>
           ))}
 
@@ -215,6 +222,7 @@ export function OsCzasu({
         </div>
       </div>
 
+      {wybranyPrzedzial && <p className="os-czasu__szczegoly" role="status">{wybranyPrzedzial.etykieta}: {wybranyPrzedzial.od}–{wybranyPrzedzial.do}</p>}
       {harmonogram.pracuje
         && zezwalajNaPelnaDostepnosc
         && (harmonogram.dojazdDoPracyMinuty > 0 || harmonogram.powrotZPracyMinuty > 0)

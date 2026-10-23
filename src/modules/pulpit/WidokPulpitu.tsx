@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { addDays, format } from 'date-fns'
@@ -46,6 +46,7 @@ import {
 } from './logikaKafelkow'
 import { FormularzHarmonogramuDnia } from './FormularzHarmonogramuDnia'
 import { OsCzasu } from './OsCzasu'
+import { etykietaStatusuElementu } from './logikaDniaPulpitu'
 import { kandydaciSugestiiEchoPulpitu, widoczneSugestieEchoPulpitu } from './SugestieEchoPulpitu'
 
 const dostawcaZadan = new DostawcaZadanPulpitu()
@@ -106,7 +107,7 @@ function opisElementuKafelka(element: ElementOgarniacza): string {
   if (element.typ === 'zakupy') return `${element.dane?.kupione ?? 0}/${element.dane?.liczbaPozycji ?? 0} kupionych${termin ? ` · ${termin}` : ''}`
   if (element.typ === 'notatka') return [element.dane?.przypieta ? 'Przypięta' : '', termin].filter(Boolean).join(' · ') || 'Bez terminu'
   if (element.typ === 'poczekalnia') return `Do sklasyfikowania: ${element.dane?.liczbaNieprzetworzonych ?? 0}`
-  return termin || 'Bez terminu'
+  return [termin || 'Bez terminu', etykietaStatusuElementu(element), element.priorytet === 'asap' ? 'Najpilniejsze' : element.priorytet === 'pilny' ? 'Pilne' : ''].filter(Boolean).join(' · ')
 }
 
 function stanKafelka(kafelek: KonfiguracjaKafelkaPulpitu, wyniki: WynikiModulow | undefined) {
@@ -132,7 +133,7 @@ function ZawartoscKafelka({
   const dane = rozwiazDaneKafelka(kafelek, elementy, dataReferencyjna)
   if (dane.stan === 'niedostepny') return <PustyStan tytul="Brak danych" opis="Integracja modułu nie jest jeszcze dostępna." />
   if (dane.elementy.length === 0) return <PustyStan tytul="Brak danych" opis="Brak elementów w wybranym zakresie." />
-  return <div className="lista-kompaktowa">{dane.elementy.map((element) => <div key={element.id}><div>{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla)}><strong>{element.tytul}</strong></Link> : <strong>{element.tytul}</strong>}<small>{opisElementuKafelka(element)}</small></div></div>)}</div>
+  return <div className="lista-kompaktowa">{dane.elementy.map((element) => <div key={element.id}><div>{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla, element.data)}><strong>{element.tytul}</strong></Link> : <strong>{element.tytul}</strong>}<small>{opisElementuKafelka(element)}</small></div></div>)}</div>
 }
 
 export function WidokPulpitu() {
@@ -144,8 +145,14 @@ export function WidokPulpitu() {
   const { dane: cele } = useRepozytorium('cele')
   const { dane: terminyWaznosci } = useRepozytorium('terminyWaznosci')
   const { dane: platnosciStale } = useRepozytorium('platnosciStale')
-  const dzisiaj = dzisiajIso()
   const [teraz, ustawTeraz] = useState(() => new Date())
+  const dzisiaj = dzisiajIso(teraz)
+  const poprzedniaData = useRef(dzisiaj)
+  useEffect(() => {
+    const poprzednia = poprzedniaData.current
+    ustawDate((wybrana) => wybrana === poprzednia ? dzisiaj : wybrana)
+    poprzedniaData.current = dzisiaj
+  }, [dzisiaj])
   useEffect(() => {
     const identyfikator = window.setInterval(() => ustawTeraz(new Date()), 60_000)
     return () => window.clearInterval(identyfikator)
@@ -200,7 +207,6 @@ export function WidokPulpitu() {
   ], [modulyKafelkow])
   const elementyKafelkow = useMemo(() => [...zadaniaKafelkow, ...elementyModulowKafelkow], [elementyModulowKafelkow, zadaniaKafelkow])
   const alerty = useMemo(() => {
-    const teraz = new Date()
     return rangujAlerty(deduplikujAlerty([
       ...alertyZadan(zadaniaKafelkow, teraz),
       ...alertyKonfliktowTerminow(elementyKafelkow),
@@ -216,7 +222,7 @@ export function WidokPulpitu() {
       ...alertyTerminow(terminyWaznosci, teraz),
       ...alertyWzrostuCenSubskrypcji(platnosciStale),
     ]))
-  }, [cele, modulyAlertow, platnosciStale, terminyWaznosci, zadaniaKafelkow, zdrowieDoAlertow])
+  }, [cele, modulyAlertow, platnosciStale, terminyWaznosci, zadaniaKafelkow, zdrowieDoAlertow, teraz, elementyKafelkow])
   const widoczneAlerty = ograniczAlerty(alerty, ustawienia.pulpit.limitAlertow, pokazWiecejAlertow).widoczne
   const alertyWCentrum = pokazWiecejAlertow ? widoczneAlerty : widoczneAlerty.slice(0, 2)
   const kafelki = useMemo(() => sortujKafelki(ustawienia.pulpit.kafelki)
@@ -244,7 +250,7 @@ export function WidokPulpitu() {
 
   return <div className="widok widok-pulpitu">
     <div className="pulpit-sekcja--naglowek"><NaglowekWidoku tytul="Pulpit" opis="Najważniejsze sprawy wymagające Twojej uwagi." akcje={<><Link className="przycisk przycisk--drugorzedny" to="/dzisiaj">Przejdź do Dzisiaj</Link><button type="button" className="przycisk przycisk--glowny" onClick={otworzSzybkieDodawanie}><Plus aria-hidden="true" />Dodaj</button></>} /></div>
-    <OsCzasu data={data} zmienDate={zmienDatePulpitu} harmonogram={harmonogram} zakresSnu={{ od: ustawienia.harmonogram.poczatekSnu, do: ustawienia.harmonogram.koniecSnu, skala: ustawienia.harmonogram.skalaSnuNaOsi }} elementy={elementyOsi} zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu} edytujHarmonogram={() => ustawEdycjeHarmonogramu(true)} przelaczDostepnosc={przelaczDostepnosc} usunWyjatek={usunWyjatek} otworzElement={(element) => { if (element.referencjaZrodla) nawiguj(adresReferencjiZrodla(element.referencjaZrodla)) }} />
+    <OsCzasu data={data} zmienDate={zmienDatePulpitu} harmonogram={harmonogram} zakresSnu={{ od: ustawienia.harmonogram.poczatekSnu, do: ustawienia.harmonogram.koniecSnu, skala: ustawienia.harmonogram.skalaSnuNaOsi }} elementy={elementyOsi} zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu} edytujHarmonogram={() => ustawEdycjeHarmonogramu(true)} przelaczDostepnosc={przelaczDostepnosc} usunWyjatek={usunWyjatek} otworzElement={(element) => { if (element.referencjaZrodla) nawiguj(adresReferencjiZrodla(element.referencjaZrodla, element.data)) }} />
     {(komunikat || bladModuluDnia) && <div className="pulpit-sekcja--komunikaty">
       {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}
       {bladModuluDnia && <Komunikat typ="blad">Nie udało się pobrać części danych modułowych. Pozostałe elementy Pulpitu nadal działają.</Komunikat>}
@@ -253,7 +259,7 @@ export function WidokPulpitu() {
     <section className="pulpit-sekcja--uwaga centrum-dowodzenia centrum-dowodzenia--uwaga">
       <Karta klasa="centrum-dowodzenia__glowna centrum-dowodzenia__alerty"><div className="tytul-karty"><AlertCircle aria-hidden="true" /><span>Wymaga uwagi</span></div>{!ustawienia.pulpit.pokazAlerty || alertyWCentrum.length === 0 ? <PustyStan tytul="Nic pilnego" opis="Najważniejsze obszary nie zgłaszają teraz spraw wymagających reakcji." /> : <div className="lista-kompaktowa">{alertyWCentrum.map((alert) => <div key={alert.id}><div><Link to={adresReferencjiZrodla(alert.sourceRef)}><strong>{alert.tytul}</strong></Link><small>{poziomSmartSygnalu(alert) === 'pilne' ? 'Pilne' : poziomSmartSygnalu(alert) === 'wazne' ? 'Ważne' : 'Informacyjne'} · {alert.opis}</small></div></div>)}</div>}{ustawienia.pulpit.pokazAlerty && alerty.length > ustawienia.pulpit.limitAlertow && <button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawPokazWiecejAlertow((wartosc) => !wartosc)}>{pokazWiecejAlertow ? 'Pokaż mniej' : 'Pokaż wszystkie sygnały'}</button>}</Karta>
     </section>
-    <Karta klasa="centrum-dowodzenia__bok pulpit-sekcja--horyzont"><div className="tytul-karty"><CalendarDays aria-hidden="true" /><span>Najbliższe terminy</span></div>{horyzontSiedmiuDni.length === 0 ? <p className="tekst-pomocniczy">Brak ważnych terminów w ciągu 7 dni.</p> : <div className="lista-kompaktowa">{horyzontSiedmiuDni.slice(0, 3).map((element) => <div key={element.id}><div>{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla)}><strong>{element.tytul}</strong></Link> : <strong>{element.tytul}</strong>}<small>{element.data}{element.godzina ? ` · ${element.godzina}` : ''}</small></div></div>)}</div>}</Karta>
+    <Karta klasa="centrum-dowodzenia__bok pulpit-sekcja--horyzont"><div className="tytul-karty"><CalendarDays aria-hidden="true" /><span>Najbliższe terminy</span></div>{horyzontSiedmiuDni.length === 0 ? <p className="tekst-pomocniczy">Brak ważnych terminów w ciągu 7 dni.</p> : <div className="lista-kompaktowa">{horyzontSiedmiuDni.slice(0, 3).map((element) => <div key={element.id}><div>{element.referencjaZrodla ? <Link to={adresReferencjiZrodla(element.referencjaZrodla, element.data)}><strong>{element.tytul}</strong></Link> : <strong>{element.tytul}</strong>}<small>{element.data}{element.godzina ? ` · ${element.godzina}` : ''}</small></div></div>)}</div>}</Karta>
     <Karta klasa="centrum-dowodzenia__bok pulpit-sekcja--poczekalnia"><div className="tytul-karty"><Inbox aria-hidden="true" /><span>Poczekalnia</span></div>{elementyPoczekalni.length === 0 ? <p className="tekst-pomocniczy">Poczekalnia jest pusta.</p> : <><strong className="pulpit-licznik-uwagi">{elementyPoczekalni.length}</strong><p className="tekst-pomocniczy">{elementyPoczekalni.length === 1 ? 'sprawa czeka na uporządkowanie' : 'spraw czeka na uporządkowanie'}</p><Link className="przycisk przycisk--tekstowy" to="/poczekalnia">Otwórz poczekalnię</Link></>}</Karta>
     <section className="pulpit-sekcja--szybkie-akcje" aria-label="Szybkie akcje"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworzSzybkieDodawanieZDanymi({ typ: 'zadanie' })}><Plus aria-hidden="true" />Zadanie</button><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworzSzybkieDodawanieZDanymi({ typ: 'przypomnienie' })}><Plus aria-hidden="true" />Przypomnienie</button><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworzSzybkieDodawanieZDanymi({ typ: 'wydatek' })}><Plus aria-hidden="true" />Wydatek</button><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => otworzSzybkieDodawanieZDanymi({ typ: 'wydarzenie' })}><Plus aria-hidden="true" />Wydarzenie</button></section>
     <PrzegladTygodnia dzisiaj={dzisiaj} />

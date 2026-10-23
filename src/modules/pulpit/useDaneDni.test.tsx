@@ -4,12 +4,26 @@ import { repozytoriumElementowZadan } from '../../data/RepozytoriumElementowZada
 import { pobierzRepozytorium } from '../../data/Repozytorium'
 import { useDaneDni } from './useDaneDni'
 import { usePlanDniaPulpitu } from './usePlanDniaPulpitu'
+import { utworzMetadane } from '../../domain/fabryki'
 
 vi.mock('../../app/KontekstAplikacji', async () => {
   const { DOMYSLNE_USTAWIENIA } = await import('../../domain/ustawienia')
   return { useAplikacja: () => ({ ustawienia: DOMYSLNE_USTAWIENIA }) }
 })
 afterEach(cleanup)
+
+it('pokazuje ręczny blok planera z referencją źródła i reaguje na wykonanie', async () => {
+  const data = '2026-10-24'
+  const repozytorium = pobierzRepozytorium('blokiCzasu')
+  const blok = { ...utworzMetadane(), tytul: 'Przerwa testowa', poczatek: `${data}T12:00:00`, koniec: `${data}T12:30:00`, typ: 'przerwa' as const, elastycznosc: 'elastyczny' as const, status: 'zaakceptowany' as const }
+  await repozytorium.zapisz(blok)
+  const { result } = renderHook(() => useDaneDni({ od: data, do: data }))
+  await waitFor(() => expect(result.current.dni[0].elementyOsi).toEqual(expect.arrayContaining([expect.objectContaining({ id: `blok:${blok.id}`, referencjaZrodla: { modul: 'planer', encjaId: blok.id }, czasTrwaniaMinuty: 30 })])))
+  await act(async () => { await repozytorium.zapisz({ ...blok, status: 'wykonany' }) })
+  await waitFor(() => expect(result.current.dni[0].elementyOsi.some((element) => element.id === `blok:${blok.id}`)).toBe(false))
+  expect(result.current.dni[0].elementy.find((element) => element.id === `blok:${blok.id}`)?.status).toBe('wykonany')
+  await repozytorium.usun(blok.id)
+})
 
 it('aktualizuje model dnia i licznik horyzontu po zmianie zadania w istniejącym repozytorium', async () => {
   const data = '2026-10-09'

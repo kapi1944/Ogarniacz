@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Plus } from 'lucide-react'
 import { useAplikacja } from '../../app/KontekstAplikacji'
 import { SzybkieDodawanie } from '../../app/SzybkieDodawanie'
@@ -9,6 +9,7 @@ import { adresReferencjiZrodla } from './logikaKafelkow'
 import { usePlanDniaPulpitu } from './usePlanDniaPulpitu'
 import { OsCzasu } from './OsCzasu'
 import { FormularzHarmonogramuDnia } from './FormularzHarmonogramuDnia'
+import { etykietaStatusuElementu } from './logikaDniaPulpitu'
 
 export function PlanWybranegoDnia({ data, zamknij }: { data: string; zamknij: (poZamknieciu?: () => void) => void }) {
   const { ustawienia, moze } = useAplikacja()
@@ -17,7 +18,7 @@ export function PlanWybranegoDnia({ data, zamknij }: { data: string; zamknij: (p
   const plan = usePlanDniaPulpitu(data)
   const otworzElement = (element: ElementOgarniacza) => {
     if (element.referencjaZrodla) {
-      const adres = adresReferencjiZrodla(element.referencjaZrodla)
+      const adres = adresReferencjiZrodla(element.referencjaZrodla, element.data)
       zamknij(() => nawiguj(adres))
     }
   }
@@ -29,11 +30,11 @@ export function PlanWybranegoDnia({ data, zamknij }: { data: string; zamknij: (p
       zakresSnu={{ od: ustawienia.harmonogram.poczatekSnu, do: ustawienia.harmonogram.koniecSnu, skala: ustawienia.harmonogram.skalaSnuNaOsi }}
       elementy={plan.elementyOsi} zezwalajNaPelnaDostepnosc={ustawienia.harmonogram.zezwalajNaPelnaDostepnoscDojazdu}
       edytujHarmonogram={() => plan.ustawEdycjeHarmonogramu(true)} przelaczDostepnosc={plan.przelaczDostepnosc} usunWyjatek={plan.usunWyjatek} otworzElement={otworzElement} />
-    <div className="naglowek-karty"><h3>Elementy dnia</h3><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawDodawanie(true)}><Plus aria-hidden="true" />Dodaj</button></div>
+    <div className="naglowek-karty"><h3>Elementy dnia</h3><div><Link className="przycisk przycisk--tekstowy" to={`/planer?data=${data}`} onClick={(zdarzenie) => { zdarzenie.preventDefault(); zamknij(() => nawiguj(`/planer?data=${data}`)) }}>Otwórz planer</Link><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawDodawanie(true)}><Plus aria-hidden="true" />Dodaj</button></div></div>
     {plan.daneDnia && plan.elementyDnia.length === 0 && <p className="tekst-pomocniczy">Brak elementów zaplanowanych na ten dzień.</p>}
     <div className="lista-kompaktowa">{plan.elementyDnia.map((element) => <div key={element.id}>
       <div>{element.referencjaZrodla ? <button type="button" className="przycisk przycisk--tekstowy" onClick={() => otworzElement(element)}>{element.tytul}</button> : <strong>{element.tytul}</strong>}
-        <small>{element.godzina ?? (element.trybTerminu === 'koniec_dnia' ? 'Do końca dnia' : 'Bez godziny')} · {element.status ?? 'zaplanowany'}</small>
+        <small>{element.godzina ?? (element.trybTerminu === 'koniec_dnia' ? 'Do końca dnia' : 'Bez godziny')} · {etykietaStatusuElementu(element)}{element.priorytet === 'asap' ? ' · Najpilniejsze' : element.priorytet === 'pilny' ? ' · Pilne' : ''}</small>
         {element.opis && <small>{element.opis}</small>}
       </div>
     </div>)}</div>

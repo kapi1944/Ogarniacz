@@ -1,7 +1,7 @@
 import type { ElementOgarniacza } from '../../domain/elementyOgarniacza'
 import type { UstawieniaHarmonogramu, Urlop, WyjatekGrafiku } from '../../domain/typy'
 import { poprawnaGodzinaTerminu } from '../../domain/logikaTerminuZadania'
-import { sortujElementyDzisiaj } from './logikaDniaPulpitu'
+import { czyElementOtwarty, sortujElementyDzisiaj } from './logikaDniaPulpitu'
 import { utworzHarmonogramDnia, type HarmonogramDnia } from './logikaOsiCzasu'
 
 export interface DaneDnia {
@@ -31,7 +31,7 @@ export function utworzDaneDnia(data: string, elementyZakresu: readonly ElementOg
   const otwarte = elementy.filter((element) => element.status === undefined || element.status === 'otwarty')
   return {
     data, harmonogram, wyjatekDnia, elementy, elementyZGodzina, elementyBezGodziny,
-    elementyOsi: elementyZGodzina.filter((element) => element.status !== 'anulowany' && (element.typ === 'lek' || element.status !== 'wykonany')),
+    elementyOsi: elementyZGodzina.filter((element) => element.status !== 'anulowany' && (element.typ === 'lek' || czyElementOtwarty(element))),
     doZrobieniaBezGodziny: sortujElementyDzisiaj(elementyBezGodziny, data),
     najwazniejszeTerminy: otwarte.filter((element) => element.typ === 'wizyta' || element.typ === 'platnosc' || element.typ === 'samochod' || element.trybTerminu === 'koniec_dnia' || element.priorytet === 'pilny' || element.priorytet === 'asap').slice(0, 2),
     liczbaOtwartych: otwarte.length,

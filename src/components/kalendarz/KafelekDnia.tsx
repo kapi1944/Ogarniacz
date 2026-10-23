@@ -4,10 +4,11 @@ import { pl } from 'date-fns/locale'
 
 const skrotyDni = ['Nie', 'Pon', 'Wto', 'Śro', 'Czw', 'Pią', 'Sob']
 
-export function KafelekDnia({ data, dzisiaj, liczbaDzialan, terminy, zakresPracy, wybrany, otwieraDialog = true, otworz }: {
+export function KafelekDnia({ data, dzisiaj, liczbaDzialan, liczbaWykonanych = 0, terminy, zakresPracy, wybrany, otwieraDialog = true, otworz }: {
   data: string
   dzisiaj: string
   liczbaDzialan?: number
+  liczbaWykonanych?: number
   terminy: string[]
   zakresPracy?: { od: string; do: string }
   wybrany?: boolean
@@ -22,7 +23,7 @@ export function KafelekDnia({ data, dzisiaj, liczbaDzialan, terminy, zakresPracy
     <span className="kafelek-dnia__tydzien">{skrotyDni[dzien.getDay()]}</span>
     <strong className="kafelek-dnia__numer">{format(dzien, 'd')}</strong>
     {data === dzisiaj && <span className="kafelek-dnia__dzisiaj">DZIŚ</span>}
-    <span className="kafelek-dnia__liczba">{liczbaDzialan === undefined ? 'Ładowanie…' : liczbaDzialan === 0 ? 'Nic nie zaplanowano' : `Działania: ${liczbaDzialan}`}</span>
+    <span className="kafelek-dnia__liczba">{liczbaDzialan === undefined ? 'Ładowanie…' : liczbaDzialan === 0 ? (liczbaWykonanych > 0 ? `Wykonano: ${liczbaWykonanych}` : 'Nic nie zaplanowano') : `Działania: ${liczbaDzialan}`}</span>
     {zakresPracy && <span className="kafelek-dnia__praca">Praca {zakresPracy.od}–{zakresPracy.do}</span>}
     {terminy.map((termin, indeks) => <span className="kafelek-dnia__termin" key={indeks} title={termin}>{termin}</span>)}
   </button>

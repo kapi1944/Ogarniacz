@@ -9,6 +9,15 @@ import type {
 } from '../domain/elementyOgarniacza'
 import type { Zadanie } from '../domain/typy'
 import { pobierzRepozytorium, type Repozytorium } from './Repozytorium'
+import { baza } from './BazaOgarniacza'
+import { czyBiezacyDostep } from '../services/UprawnieniaService'
+
+export interface ZmianaZadaniaDnia {
+  przed: Zadanie
+  po: Zadanie
+}
+
+export class KonfliktZmianyZadania extends Error {}
 
 export class RepozytoriumElementowZadan implements RepozytoriumElementow<'zadanie'> {
   constructor(private readonly repozytorium: Repozytorium<Zadanie> = pobierzRepozytorium('zadania')) {}
@@ -23,6 +32,24 @@ export class RepozytoriumElementowZadan implements RepozytoriumElementow<'zadani
   async pobierz(id: string): Promise<ElementZadania | undefined> {
     const zadanie = await this.repozytorium.pobierz(id)
     return zadanie ? zadanieLegacyNaElement(zadanie) : undefined
+  }
+
+  async zalegle(data: string): Promise<{ elementy: ElementZadania[]; liczba: number }> {
+    if (!czyBiezacyDostep('zadania', 'odczyt')) return { elementy: [], liczba: 0 }
+    const elementy: ElementZadania[] = []
+    let liczba = 0
+    // Indeks ogranicza odczyt do przeszłości; zachowujemy tylko trzy najważniejsze.
+    await baza.tabela('zadania').where('termin').below(data).each((zadanie) => {
+      if (zadanie.usunietoAt || 'sesjaTerapiiId' in zadanie) return
+      const element = zadanieLegacyNaElement(zadanie)
+      if (element.pokazNaPulpicie === false || element.status !== 'otwarty' || !element.data || element.data >= data) return
+      liczba += 1
+      elementy.push(element)
+      const waga = (pozycja: ElementZadania) => pozycja.priorytet === 'asap' ? 2 : pozycja.priorytet === 'pilny' ? 1 : 0
+      elementy.sort((a, b) => waga(b) - waga(a) || a.data!.localeCompare(b.data!) || a.id.localeCompare(b.id))
+      if (elementy.length > 3) elementy.pop()
+    })
+    return { elementy, liczba }
   }
 
   async utworz(dane: DaneNowegoElementu<'zadanie'>): Promise<ElementZadania> {
@@ -66,6 +93,28 @@ export class RepozytoriumElementowZadan implements RepozytoriumElementow<'zadani
 
   async usun(id: string): Promise<void> {
     await this.repozytorium.usun(id)
+  }
+
+  // Odczyt warunku, zapis, historia i istniejący outbox należą do jednej transakcji.
+  async zmienZDnia(oczekiwany: ElementZadania, zmiany: Pick<ZmianyElementu<'zadanie'>, 'status' | 'data' | 'godzina' | 'trybTerminu'>): Promise<ZmianaZadaniaDnia> {
+    return baza.transaction('rw', [baza.tabela('zadania'), baza.tabela('historiaZmian'), baza.tabela('kolejkaSynchronizacji')], async () => {
+      if (!czyBiezacyDostep('zadania', 'edycja')) throw new Error('Brak uprawnień do edycji zadań.')
+      const przed = await this.repozytorium.pobierz(oczekiwany.id)
+      if (!przed || JSON.stringify(zadanieLegacyNaElement(przed)) !== JSON.stringify(oczekiwany)
+        || zadanieLegacyNaElement(przed).status !== 'otwarty') throw new KonfliktZmianyZadania()
+      await this.aktualizuj(przed.id, zmiany)
+      const po = (await this.repozytorium.pobierz(przed.id))!
+      return { przed, po }
+    })
+  }
+
+  async cofnijZmianeDnia(zmiana: ZmianaZadaniaDnia): Promise<void> {
+    await baza.transaction('rw', [baza.tabela('zadania'), baza.tabela('historiaZmian'), baza.tabela('kolejkaSynchronizacji')], async () => {
+      if (!czyBiezacyDostep('zadania', 'edycja')) throw new Error('Brak uprawnień do edycji zadań.')
+      const aktualny = await this.repozytorium.pobierz(zmiana.po.id)
+      if (!aktualny || JSON.stringify(aktualny) !== JSON.stringify(zmiana.po)) throw new KonfliktZmianyZadania()
+      await this.repozytorium.zapisz(zmiana.przed)
+    })
   }
 }
 

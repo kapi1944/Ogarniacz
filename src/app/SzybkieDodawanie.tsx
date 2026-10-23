@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { ArrowRight, Bell, CalendarPlus, Car, Check, ListTodo, NotebookPen, Pill, Receipt, SlidersHorizontal, Stethoscope, Undo2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { dzisiajIso, utworzMetadane } from '../domain/fabryki'
 import { parserRegulowySzybkiegoDodawania, uporzadkujTypySzybkiegoDodawania } from '../domain/parserSzybkiegoDodawania'
-import type { BlokCzasu, DaneSzybkiegoDodawania, Lek, NazwaModulu, Notatka, Pojazd, Priorytet, Przypomnienie, TypSzybkiegoDodawania, Wizyta, Wydatek } from '../domain/typy'
+import type { BlokCzasu, DaneSzybkiegoDodawania, EncjaBazowa, Lek, MapaTabel, NazwaModulu, NazwaTabeli, Notatka, Pojazd, Priorytet, Przypomnienie, TypSzybkiegoDodawania, Wizyta, Wydatek } from '../domain/typy'
 import { utworzZadanie } from '../services/ZadaniaService'
 import { Komunikat, Modal, Znacznik } from '../components/Interfejs'
 import { platforma } from '../platform/platforma'
@@ -31,16 +31,7 @@ function etykietaTerminu(data: string, godzina: string) {
   return godzina ? `${data}, ${godzina}` : data
 }
 
-async function usunUtworzony(typ: TypSzybkiegoDodawania, id: string) {
-  if (typ === 'zadanie') return pobierzRepozytorium('zadania').usun(id)
-  if (typ === 'notatka') return pobierzRepozytorium('notatki').usun(id)
-  if (typ === 'wydarzenie') return pobierzRepozytorium('blokiCzasu').usun(id)
-  if (typ === 'przypomnienie') return pobierzRepozytorium('przypomnienia').usun(id)
-  if (typ === 'wizyta') return pobierzRepozytorium('wizyty').usun(id)
-  if (typ === 'lek') return pobierzRepozytorium('leki').usun(id)
-  if (typ === 'wydatek') return pobierzRepozytorium('wydatki').usun(id)
-  return pobierzRepozytorium('pojazdy').usun(id)
-}
+const tabeleTypow: Record<TypSzybkiegoDodawania, NazwaTabeli> = { zadanie: 'zadania', notatka: 'notatki', wydarzenie: 'blokiCzasu', przypomnienie: 'przypomnienia', wizyta: 'wizyty', lek: 'leki', wydatek: 'wydatki', samochod: 'pojazdy' }
 
 export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamknij: () => void; moze: (modul: NazwaModulu, operacja?: 'odczyt' | 'edycja') => boolean; danePoczatkowe?: DaneSzybkiegoDodawania }) {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
@@ -55,9 +46,10 @@ export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamkn
   const [instrukcja, ustawInstrukcje] = useState('')
   const [blad, ustawBlad] = useState('')
   const [zapisywanie, ustawZapisywanie] = useState(false)
+  const blokadaZapisu = useRef(false)
   const [szczegoly, ustawSzczegoly] = useState(Boolean(danePoczatkowe.typ))
   const [wiecejTypow, ustawWiecejTypow] = useState(false)
-  const [utworzony, ustawUtworzony] = useState<{ id: string; typ: TypSzybkiegoDodawania; nazwa: string; termin: string } | null>(null)
+  const [utworzony, ustawUtworzony] = useState<{ id: string; typ: TypSzybkiegoDodawania; nazwa: string; termin: string; rekord?: EncjaBazowa } | null>(null)
   const [nadpisane, ustawNadpisane] = useState({ typ: Boolean(danePoczatkowe.typ), tytul: Boolean(danePoczatkowe.tytul), data: Boolean(danePoczatkowe.data), godzina: false })
   const sugestia = useMemo(() => ustawienia.szybkieDodawanie.parserWlaczony ? parserRegulowySzybkiegoDodawania.parse(tresc, { referenceDate: new Date() }) : undefined, [tresc, ustawienia.szybkieDodawanie.parserWlaczony])
   const uporzadkowane = useMemo(() => uporzadkujTypySzybkiegoDodawania(ustawienia.szybkieDodawanie).map((wartosc) => typy.find((element) => element.typ === wartosc)!).filter((element) => !element.modul || moze(element.modul, 'edycja')), [moze, ustawienia.szybkieDodawanie])
@@ -81,44 +73,69 @@ export function SzybkieDodawanie({ zamknij, moze, danePoczatkowe = {} }: { zamkn
 
   const zapisz = async (zdarzenie: FormEvent) => {
     zdarzenie.preventDefault()
-    if (zapisywanie) return
+    if (blokadaZapisu.current || utworzony) return
+    const modul = typy.find((element) => element.typ === typ)?.modul
+    if (!modul || !moze(modul, 'edycja')) return ustawBlad('Nie masz uprawnień do dodania tego elementu.')
     const nazwa = tytul.trim() || tresc.trim()
     if (!nazwa) return ustawBlad('Wpisz, co chcesz ogarnąć.')
+    blokadaZapisu.current = true
     ustawZapisywanie(true)
     try {
       let id = ''
+      let oczekiwany: EncjaBazowa | undefined
+      const zapiszNowy = async <K extends NazwaTabeli>(tabela: K, rekord: MapaTabel[K]) => {
+        await pobierzRepozytorium(tabela).zapisz(rekord)
+        oczekiwany = rekord
+      }
       if (typ === 'zadanie') {
         const zadanie = { ...utworzZadanie({ tytul: nazwa, opis: tytul.trim() ? tresc.trim() : '', priorytet, termin: data ? `${data}${godzina ? `T${godzina}:00` : ''}` : undefined }), ...(data ? { dataElementu: data, trybTerminuElementu: godzina ? 'o_godzinie' as const : 'koniec_dnia' as const, ...(godzina ? { godzinaElementu: godzina } : {}) } : {}) }
-        await pobierzRepozytorium('zadania').zapisz(zadanie); id = zadanie.id
+        await zapiszNowy('zadania', zadanie); id = zadanie.id
       }
-      if (typ === 'notatka') { const notatka = { ...utworzMetadane(), tytul: nazwa.slice(0, 70), tresc: tresc.trim(), tagi: [], powiazania: [] } satisfies Notatka; await pobierzRepozytorium('notatki').zapisz(notatka); id = notatka.id }
-      if (typ === 'wydarzenie') { if (!data || !godzina) throw new Error('Wydarzenie wymaga daty i godziny.'); const wydarzenie = { ...utworzMetadane(), tytul: nazwa, poczatek: `${data}T${godzina}:00`, koniec: koniecWydarzenia(data, godzina), typ: 'inne', elastycznosc: 'twardy', status: 'zaakceptowany' } satisfies BlokCzasu; await pobierzRepozytorium('blokiCzasu').zapisz(wydarzenie); id = wydarzenie.id }
-      if (typ === 'przypomnienie') { if (!data || !godzina) throw new Error('Przypomnienie wymaga daty i godziny.'); const przypomnienie = { ...utworzMetadane(), tytul: nazwa, typ: 'absolutne', czas: `${data}T${godzina}:00`, priorytet, stan: 'nowe', eskalacja: false } satisfies Przypomnienie; await pobierzRepozytorium('przypomnienia').zapisz(przypomnienie); id = przypomnienie.id }
-      if (typ === 'wizyta') { const wizyta = { ...utworzMetadane(), nazwa, status: data ? 'umowiona' : 'do_umowienia', data: data || undefined, godzina: godzina || undefined, notatka: '', pytania: [], dokumentyIds: [], checklista: [] } satisfies Wizyta; await pobierzRepozytorium('wizyty').zapisz(wizyta); id = wizyta.id }
-      if (typ === 'lek') { const lek = { ...utworzMetadane(), nazwa, dawkaInstrukcja: instrukcja.trim() || 'Uzupełnij instrukcję użytkownika', godziny: godzina ? [godzina] : [], aktywny: true } satisfies Lek; await pobierzRepozytorium('leki').zapisz(lek); id = lek.id }
-      if (typ === 'wydatek') { const liczba = Number(kwota.replace(',', '.')); if (!Number.isFinite(liczba) || liczba <= 0) throw new Error('Podaj prawidłową kwotę wydatku.'); const wydatek = { ...utworzMetadane(), opis: nazwa, kwota: liczba, data: data || dzisiajIso(), kategoria: 'Inne' } satisfies Wydatek; await pobierzRepozytorium('wydatki').zapisz(wydatek); id = wydatek.id }
-      if (typ === 'samochod') { const pojazd = { ...utworzMetadane(), nazwa, planowanySerwisData: data || undefined, planowanySerwisGodzina: data && godzina ? godzina : undefined, notatka: tresc.trim() || undefined } satisfies Pojazd; await pobierzRepozytorium('pojazdy').zapisz(pojazd); id = pojazd.id }
-      ustawUtworzony({ id, typ, nazwa, termin: etykietaTerminu(data, godzina) })
+      if (typ === 'notatka') { const notatka = { ...utworzMetadane(), tytul: nazwa.slice(0, 70), tresc: tresc.trim(), tagi: [], powiazania: [] } satisfies Notatka; await zapiszNowy('notatki', notatka); id = notatka.id }
+      if (typ === 'wydarzenie') { if (!data || !godzina) throw new Error('Wydarzenie wymaga daty i godziny.'); const wydarzenie = { ...utworzMetadane(), tytul: nazwa, poczatek: `${data}T${godzina}:00`, koniec: koniecWydarzenia(data, godzina), typ: 'inne', elastycznosc: 'twardy', status: 'zaakceptowany' } satisfies BlokCzasu; await zapiszNowy('blokiCzasu', wydarzenie); id = wydarzenie.id }
+      if (typ === 'przypomnienie') { if (!data || !godzina) throw new Error('Przypomnienie wymaga daty i godziny.'); const przypomnienie = { ...utworzMetadane(), tytul: nazwa, typ: 'absolutne', czas: `${data}T${godzina}:00`, priorytet, stan: 'nowe', eskalacja: false } satisfies Przypomnienie; await zapiszNowy('przypomnienia', przypomnienie); id = przypomnienie.id }
+      if (typ === 'wizyta') { const wizyta = { ...utworzMetadane(), nazwa, status: data ? 'umowiona' : 'do_umowienia', data: data || undefined, godzina: godzina || undefined, notatka: '', pytania: [], dokumentyIds: [], checklista: [] } satisfies Wizyta; await zapiszNowy('wizyty', wizyta); id = wizyta.id }
+      if (typ === 'lek') { const lek = { ...utworzMetadane(), nazwa, dawkaInstrukcja: instrukcja.trim() || 'Uzupełnij instrukcję użytkownika', godziny: godzina ? [godzina] : [], aktywny: true } satisfies Lek; await zapiszNowy('leki', lek); id = lek.id }
+      if (typ === 'wydatek') { const liczba = Number(kwota.replace(',', '.')); if (!Number.isFinite(liczba) || liczba <= 0) throw new Error('Podaj prawidłową kwotę wydatku.'); const wydatek = { ...utworzMetadane(), opis: nazwa, kwota: liczba, data: data || dzisiajIso(), kategoria: 'Inne' } satisfies Wydatek; await zapiszNowy('wydatki', wydatek); id = wydatek.id }
+      if (typ === 'samochod') { const pojazd = { ...utworzMetadane(), nazwa, planowanySerwisData: data || undefined, planowanySerwisGodzina: data && godzina ? godzina : undefined, notatka: tresc.trim() || undefined } satisfies Pojazd; await zapiszNowy('pojazdy', pojazd); id = pojazd.id }
+      const biezacy = await pobierzRepozytorium(tabeleTypow[typ]).pobierz(id).catch(() => undefined)
+      const rekord = biezacy && oczekiwany && JSON.stringify({ ...oczekiwany, updatedAt: biezacy.updatedAt }) === JSON.stringify(biezacy) ? biezacy : undefined
+      ustawUtworzony({ id, typ, nazwa, termin: etykietaTerminu(data, godzina), rekord })
       ustawBlad('')
       void zapiszUstawienia({ szybkieDodawanie: { ...ustawienia.szybkieDodawanie, licznikiUzyc: { ...ustawienia.szybkieDodawanie.licznikiUzyc, [typ]: ustawienia.szybkieDodawanie.licznikiUzyc[typ] + 1 } } }).catch(() => undefined)
       void platforma.haptyka.sukces().catch(() => undefined)
-    } catch (przyczyna) {
-      ustawBlad(przyczyna instanceof Error ? przyczyna.message : 'Nie udało się zapisać elementu.')
+    } catch {
+      ustawBlad('Nie udało się zapisać elementu. Sprawdź wymagane pola i spróbuj ponownie.')
       ustawSzczegoly(true)
     } finally {
       ustawZapisywanie(false)
+      blokadaZapisu.current = false
     }
   }
 
   const cofnij = async () => {
-    if (!utworzony) return
-    await usunUtworzony(utworzony.typ, utworzony.id)
-    ustawUtworzony(null)
+    if (!utworzony || blokadaZapisu.current) return
+    const modul = typy.find((element) => element.typ === utworzony.typ)?.modul
+    if (!modul || !moze(modul, 'edycja')) return ustawBlad('Nie masz uprawnień do cofnięcia dodania.')
+    if (!utworzony.rekord) return ustawBlad('Nie można potwierdzić stanu elementu. Otwórz jego szczegóły.')
+    blokadaZapisu.current = true
+    ustawZapisywanie(true)
+    try {
+      await pobierzRepozytorium(tabeleTypow[utworzony.typ]).usun(utworzony.id, utworzony.rekord)
+      ustawUtworzony(null)
+      ustawBlad('')
+    } catch {
+      ustawBlad('Nie udało się cofnąć dodania. Element mógł zostać zmieniony; sprawdź jego szczegóły.')
+    } finally {
+      blokadaZapisu.current = false
+      ustawZapisywanie(false)
+    }
   }
 
-  if (utworzony) return <Modal tytul="Dodano do Ogarniacza" opis="Sprawa jest zapisana. Możesz od razu przejść do jej szczegółów." zamknij={zamknij}>
+  if (utworzony) return <Modal tytul="Dodano do Ogarniacza" opis="Sprawa jest zapisana. Możesz od razu przejść do jej szczegółów." zamknij={zamknijBezpiecznie}>
+    {blad && <Komunikat typ="blad">{blad}</Komunikat>}
     <Komunikat typ="sukces"><Check aria-hidden="true" /> Utworzono: <strong>{utworzony.nazwa}</strong> · {typy.find((element) => element.typ === utworzony.typ)?.etykieta} · {utworzony.termin}</Komunikat>
-    <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void cofnij()}><Undo2 aria-hidden="true" />Cofnij</button><button type="button" className="przycisk przycisk--glowny" onClick={() => { nawiguj(`${sciezkiTypow[utworzony.typ]}?element=${encodeURIComponent(utworzony.id)}`); zamknij() }}><ArrowRight aria-hidden="true" />Przejdź do elementu</button></div>
+    <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" disabled={zapisywanie} onClick={() => void cofnij()}><Undo2 aria-hidden="true" />{zapisywanie ? 'Cofanie…' : 'Cofnij'}</button><button type="button" className="przycisk przycisk--glowny" disabled={zapisywanie} onClick={() => { nawiguj(`${sciezkiTypow[utworzony.typ]}?element=${encodeURIComponent(utworzony.id)}`); zamknij() }}><ArrowRight aria-hidden="true" />Przejdź do elementu</button></div>
   </Modal>
 
   return <Modal tytul="Dodaj do Ogarniacza" opis="Zacznij od treści. Najczęstsze typy i potrzebne szczegóły są pod ręką." zamknij={zamknijBezpiecznie} szeroki>

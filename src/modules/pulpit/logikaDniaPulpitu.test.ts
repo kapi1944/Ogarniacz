@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ElementOgarniacza } from '../../domain/elementyOgarniacza'
 import { alertyZadan } from './logikaKafelkow'
-import { sortujElementyDzisiaj, wybierzElementTeraz } from './logikaDniaPulpitu'
+import { sortujElementyDzisiaj, stanCzasuElementu, wybierzElementTeraz } from './logikaDniaPulpitu'
 
 const dzisiaj = '2026-09-03'
 
@@ -51,5 +51,15 @@ describe('logika dnia Pulpitu', () => {
 
   it('nie uzależnia dzisiejszych elementów od daty wybranej na osi', () => {
     expect(sortujElementyDzisiaj([element('globalny')], dzisiaj).map((pozycja) => pozycja.id)).toEqual(['globalny'])
+  })
+
+  it('pomija zakończone statusy, nie uznaje dawnego wydarzenia bez czasu trwania za trwające', () => {
+    const teraz = new Date('2026-09-03T11:00:00')
+    const elementy = [element('pominięte', { status: 'pominiety', godzina: '10:30', czasTrwaniaMinuty: 90 }), element('anulowane', { status: 'anulowany' }), element('minione', { godzina: '09:00' }), element('jutro', { data: '2026-09-04', godzina: '10:30', czasTrwaniaMinuty: 90 })]
+    expect(wybierzElementTeraz(elementy, dzisiaj, teraz)).toBeNull()
+    expect(sortujElementyDzisiaj(elementy, dzisiaj).map((pozycja) => pozycja.id)).toEqual(['minione'])
+    expect(stanCzasuElementu(elementy[2], dzisiaj, teraz)).toBe('przeszly')
+    expect(stanCzasuElementu(elementy[3], dzisiaj, teraz)).toBe('pozniej')
+    expect(stanCzasuElementu(element('wykonane', { status: 'wykonany', godzina: '09:00' }), dzisiaj, teraz)).toBe('pozniej')
   })
 })
