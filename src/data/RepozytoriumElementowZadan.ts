@@ -38,8 +38,8 @@ export class RepozytoriumElementowZadan implements RepozytoriumElementow<'zadani
     if (!czyBiezacyDostep('zadania', 'odczyt')) return { elementy: [], liczba: 0 }
     const elementy: ElementZadania[] = []
     let liczba = 0
-    // Indeks ogranicza odczyt do przeszłości; zachowujemy tylko trzy najważniejsze.
-    await baza.tabela('zadania').where('termin').below(data).each((zadanie) => {
+    // Starsze rekordy mogą mieć wyłącznie dataElementu. Kursor nie materializuje całej listy.
+    await baza.tabela('zadania').toCollection().each((zadanie) => {
       if (zadanie.usunietoAt || 'sesjaTerapiiId' in zadanie) return
       const element = zadanieLegacyNaElement(zadanie)
       if (element.pokazNaPulpicie === false || element.status !== 'otwarty' || !element.data || element.data >= data) return

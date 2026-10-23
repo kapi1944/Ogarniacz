@@ -3,7 +3,7 @@
 Zakres: Dzisiaj, wspólna projekcja dnia, oś Pulpitu, nawigacja planera i ergonomia trzech istniejących stylów. Bez migracji, nowych zależności, zmian backendu i publikacji.
 
 - Najbliższy krok uwzględnia datę, znany czas trwania i status źródła. Wykonane, anulowane i pominięte nie wracają jako propozycje działań. Zakończone sprawy pozostają w rozwijanym podsumowaniu.
-- Zaległości pokazują liczbę zadań zamiast sumy minut opóźnienia. Odczyt poprzednich dni używa istniejącego indeksu terminu i zachowuje w pamięci trzy najważniejsze pozycje; prywatne ćwiczenia terapii pozostają wykluczone.
+- Zaległości pokazują liczbę zadań zamiast sumy minut opóźnienia. Odczyt przechodzi jednym kursorem i zachowuje w pamięci trzy najważniejsze pozycje, bez materializowania i sortowania całej bazy zadań; prywatne ćwiczenia terapii pozostają wykluczone. Przegląd rekordów nadal ma koszt liniowy: sam indeks `termin` pomijałby starsze zadania mające wyłącznie `dataElementu`. Nie zmieniono schematu ani indeksów.
 - Wykonanie i przełożenie na jutro zachowujące godzinę korzystają z repozytorium zadań. Lokalna blokada dotyczy konkretnego zadania. Warunek aktualności, zapis, historia i istniejący outbox są w jednej transakcji.
 - Cofanie porównuje cały aktualny rekord ze stanem po operacji. Nowsza edycja, usunięcie lub synchronizacja powoduje odmowę. Cofnięcie dodania również sprawdza stan w transakcji usuwania. Błędy nie ujawniają surowych szczegółów i zwalniają blokadę.
 - Ręczne bloki planera korzystają z istniejącej projekcji `utworzWydarzeniaPlanera` i referencji źródłowej. Dzisiaj, Pulpit i podgląd dnia nie zapisują ich kopii.
