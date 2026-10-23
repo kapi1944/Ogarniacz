@@ -72,6 +72,10 @@ nie tworzą produkcyjnych tagów i nie zastępują testu na fizycznym Samsungu.
 
 Zapisz model Samsunga, Android/One UI, ilość wolnego miejsca oraz wersję z **Ustawienia → Android APK → Aktualnie zainstalowana wersja**. Wykonaj eksport danych i zanotuj przykładowe zadanie, wpis Rejestru, lek, harmonogram i ostatnią przyjętą dawkę. Nie odinstalowuj aplikacji ani nie czyść jej danych. Do synchronizacji włącz dotychczasowy Tailscale i użyj własnego konta.
 
+## Historyczne scenariusze testowe instalatora APK
+
+Poniższe testy A/B dokumentują starszą ścieżkę regresji 1.0.13–1.0.15+. Nie są aktualnym planem wydania ani potwierdzeniem testów na fizycznym Samsungu. Dla bieżącej wersji zastosuj punkt 9 z [SMOKE_ANDROID_WEB_RASPBERRY.md](SMOKE_ANDROID_WEB_RASPBERRY.md): odczyt faktycznego versionCode i przejście tylko do autoryzowanego, opublikowanego wyższego kodu.
+
 ## TEST A — Samsung 1.0.13 → 1.0.14
 
 1. Potwierdź `1.0.13 (1000013)` w aplikacji i wersję w systemowych informacjach o Ogarniaczu.

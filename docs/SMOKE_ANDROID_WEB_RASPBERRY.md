@@ -2,7 +2,7 @@
 
 Wykonuj punkty po kolei na tym samym koncie Właściciela. Użyj unikalnego znacznika, np. `SMOKE-2026-09-28-1930`, we wszystkich testowych zadaniach. Przed testem otwórz raz widok Zadań w Web/PWA, włącz Tailscale na Samsungu i komputerze oraz upewnij się, że **Ustawienia → Synchronizacja** pokazują `0` oczekujących zmian i `0` konfliktów na obu urządzeniach.
 
-Jeżeli dla Raspberry, Web OTA albo APK nie ma nowszej wersji, poprawne „wersja aktualna” potwierdza tylko sprawdzanie manifestu. Instalację oznacz wtedy jako **nieprzetestowaną**, a nie zaliczoną.
+Web OTA jest wycofane i nie jest testowane. Jeżeli dla Raspberry albo APK nie ma nowszej wersji, poprawne „wersja aktualna” potwierdza tylko sprawdzanie manifestu. Instalację oznacz wtedy jako **nieprzetestowaną**, a nie zaliczoną.
 
 ## 1. Logowanie i odtworzenie sesji
 
@@ -78,14 +78,7 @@ Wykonuj tylko wtedy, gdy panel w punkcie 6 pokazuje aktualizację dostępną. Te
 - **Błąd:** panel zatrzymany w stanie roboczym, brak powrotu Web, pusta baza po odświeżeniu, formularz logowania, brak komunikatu PWA dla faktycznie nowego frontendu, niedostępny wcześniej otwarty widok offline albo stare odpowiedzi API po odzyskaniu serwera.
 - **Tylko przy błędzie zbierz:** w przeglądarce eksport Console i Network oraz zrzut **Application → Service Workers**; na Pi `cat data/aktualizacja-rpi/status`; `sudo journalctl -u ogarniacz-update.service -u ogarniacz --since "20 minutes ago" --no-pager`; `curl -fsS http://127.0.0.1:8787/health`.
 
-## 9. Web OTA na Samsungu
-
-- **Wykonaj:** w Samsungu otwórz **Ustawienia → Android Web OTA**, zanotuj aktualny bundle i commit, wybierz **Sprawdź szybką aktualizację**. Jeśli jest dostępna i zgodna z APK, wybierz **Zastosuj szybką poprawkę**. Po przeładowaniu wróć do panelu, sprawdź nowy bundle oraz wcześniejsze zadania i sesję.
-- **Oczekuj:** brak aktualizacji daje stan `aktualna`; dostępna poprawka przechodzi pobieranie, SHA-256, podpis i aktywację. Zmienia się bundle/commit, lecz wersja APK i dane pozostają bez zmian. Manifest wymagający nowszego APK daje czytelny stan `wymaga APK` bez instalacji.
-- **Błąd:** aktywacja niepodpisanego lub niezgodnego bundle, pusta aplikacja po restarcie, utrata danych/sesji, zmiana wersji APK albo zapętlenie startu bez powrotu do poprzedniego/wbudowanego bundle.
-- **Tylko przy błędzie zbierz:** zrzut panelu z bundle i commitem; `adb logcat -d -v time > ogarniacz-web-ota.log`. Nie usuwaj danych aplikacji; użyj przycisku przywrócenia poprzedniej lub wbudowanej wersji, jeśli panel jest dostępny.
-
-## 10. Sprawdzenie nowego APK
+## 9. Sprawdzenie nowego APK
 
 - **Wykonaj:** w Samsungu otwórz **Ustawienia → Aktualizacja aplikacji**, zanotuj zainstalowane `versionName (versionCode)` i wybierz **Sprawdź aktualizacje**. Porównaj wynik z publicznym `latest.json`. Jeśli manifest wskazuje wyższy kod, panel ma pokazać nową wersję i informacje o wydaniu; nie instaluj jej w ramach tego punktu, jeśli nie zaplanowano osobnego testu instalatora.
 - **Oczekuj:** bieżący APK daje `aktualna`, a publiczny nowszy APK daje `dostępna`; Web OTA i aktualizacja Raspberry nie zmieniają tego wyniku ani numeru APK.
@@ -94,4 +87,4 @@ Wykonuj tylko wtedy, gdy panel w punkcie 6 pokazuje aktualizację dostępną. Te
 
 ## Wynik końcowy
 
-Test jest zaliczony, gdy punkty 1–6 przechodzą, kontrolowana awaria z punktu 7 nie narusza usługi ani danych, a każdy dostępny kanał aktualizacji przechodzi odpowiedni punkt 8–10. Przy braku nowszego artefaktu zapisz **nieprzetestowane — brak nowszej wersji**. Po zakończeniu usuń wyłącznie rekordy zaczynające się od użytego znacznika smoke testu.
+Test jest zaliczony, gdy punkty 1–6 przechodzą, kontrolowana awaria z punktu 7 nie narusza usługi ani danych, a każdy dostępny kanał aktualizacji przechodzi odpowiedni punkt 8–9. Przy braku nowszego artefaktu zapisz **nieprzetestowane — brak nowszej wersji**. Po zakończeniu usuń wyłącznie rekordy zaczynające się od użytego znacznika smoke testu.

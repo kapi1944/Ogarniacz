@@ -64,7 +64,7 @@ export async function sprawdzAktualizacjeApk() {
     return wynikApk
   } catch (blad) {
     const bladApk = tekstBledu(blad, 'Nie udało się sprawdzić aktualizacji aplikacji.')
-    zapiszStan({ bladApk, sprawdzono: true })
+    zapiszStan({ wynikApk: undefined, bladApk, sprawdzono: true })
     throw blad
   }
 }

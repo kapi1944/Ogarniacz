@@ -1,27 +1,29 @@
-# Otwarte decyzje
+# Ogarniacz — otwarte decyzje (23.10.2026)
 
-Poniższe decyzje pozostają otwarte po wdrożeniu backendu, kont, sesyjnej synchronizacji Androida, Androida oraz oddzielnych kanałów APK, Web OTA, PWA i aktualizacji Raspberry.
+Aktualny plan: [ROADMAP.md](ROADMAP.md). Kryteria weryfikacji: [ETAP_1_WERYFIKACJA_2026-10-23.md](ETAP_1_WERYFIKACJA_2026-10-23.md).
 
-1. **Finalny układ „Dzisiaj”** — obecny układ może być dalej strojony bez zmiany modeli.
-2. **Docelowa infrastruktura backendu** — obecnie działa Node.js + SQLite na Raspberry Pi przez prywatny HTTPS/Tailscale. Przyszła migracja nie powinna zmieniać kontraktów domenowych.
-3. **Dalsza polityka kont i współdzielenia** — Właściciel, Edytor, zaproszenia, odzyskiwanie dostępu i granty są wdrożone; otwarta pozostaje potrzeba dodatkowych ról lub dokładniejszych grantów.
-4. **Energia i bufory planera** — obecnie używany jest deterministyczny limit 75%, odstępy oraz wartości domyślne bez pełnego modelu energii.
-5. **Automatyczne kategorie pamięci Echo** — docelowa automatyzacja pamięci nie została jeszcze ustalona.
-6. **Poziomy proaktywności i cisza nocna** — istnieją podstawowe mechanizmy, ale ich finalna polityka pozostaje otwarta.
-7. **Finalne STT/TTS i słowo wybudzające** — mechanizmy głosowe działają warstwowo; docelowy wake word wymaga prywatnej konfiguracji Picovoice.
-8. **Dalszy zakres Smart Home** — pierwszy neutralny provider i adapter Home Assistant są opisane w `SMART_HOME.md`; otwarte pozostają wdrożenie, zakres przyszłych poleceń Echo i szczegółowa polityka ryzyka kolejnych akcji.
-9. **Poczta, kalendarz, mapy i inne integracje** — pozostają późniejszym zakresem.
-10. **Rola tylko do odczytu** — obecnie odczyt bez edycji realizowany jest przez zakres grantu, a nie osobną trzecią rolę.
+## Wymagają potwierdzenia operatora, nie ponownej implementacji
 
-## Weryfikacje wdrożeniowe
+1. **Raspberry:** odczyty SSH z 23.10.2026 potwierdzają HEAD `82f3d6f` zgodny z `rpi-stable`, zdrowy backend, jednostki i włączoną flagę aktualizatora. Do potwierdzenia pozostaje widok panelu w rzeczywistej sesji Właściciela; nowszy `main` nie jest wdrożony (szczegóły w raporcie).
+2. **Fizyczny Samsung:** zainstalowana wersja APK, kolejka/konflikty, odtworzenie sesji, alarmy i aktualizator; próba nowego APK tylko gdy dostępny jest wyższy versionCode.
+3. **Odtwarzalność danych:** pełny zakres poszczególnych backupów, w tym ograniczenia eksportu IndexedDB i brak pełnego snapshotu kolejki w zwykłym eksporcie.
+4. **Historyczny backup w publicznym Git:** ocena ryzyka, decyzja o rotacji ewentualnych sekretów, ewentualne przepisanie historii tylko po odrębnym zatwierdzeniu i planie dla wszystkich klonów.
+5. **Reset hasła e-mail:** jawne uruchomienie i test doręczenia w środowisku produkcyjnym, bez publikowania sekretów.
 
-- Test aktualizacji z APK 1.0.13 oraz późniejszy test poprawionego instalatora na fizycznym Androidzie; szczegóły w `ANDROID_RELEASE.md`.
-- Instalacja i sprawdzenie jednostek aktualizatora, panelu, healthchecku i rollbacku na działającym Raspberry Pi. Stan live nie wynika z testów lokalnych.
-- Przed wyłączeniem surowego LAN na działającym Pi: potwierdzenie wszystkich aktywnych klientów na HTTPS Tailscale, sprawdzenie starych timerów i ręczne przełączenie `HOST` na loopback.
+## Decyzje produktowe
 
-## Ograniczenia platformowe
+1. Dzisiaj 2.0: docelowy układ, priorytety szybkich działań oraz obsługa dotykowa.
+2. Planer: czy dotychczasowe limity i bufory energii odpowiadają rzeczywistemu użyciu.
+3. Echo: polityka pamięci, proaktywność, STT/TTS, budżet zasobów Raspberry i prywatna konfiguracja wake word.
+4. Smart Home: zakres widocznych urządzeń, sposób grupowania, częstotliwość odświeżania i polityka potwierdzeń; obecny adapter REST i UI już istnieją.
+5. Współdzielenie: czy potrzebna jest odrębna rola tylko do odczytu, skoro obsługują ją granty.
+6. Integracje zewnętrzne (kalendarz/poczta/mapy) i późniejszy panel sprzętu PC.
+7. Docelowa platforma Windows/Tauri tylko po określeniu wymaganych operacji systemowych.
 
-- Notification API w PWA nie gwarantuje alarmu po całkowitym zamknięciu przeglądarki.
-- Zachowanie alarmów i pracy w tle może zależeć od producenta i konfiguracji Androida.
-- Wake word wymaga poprawnej natywnej konfiguracji i prywatnych danych Picovoice.
-- Tauri nie jest obecnie wdrożone.
+## Ograniczenia platform
+
+- PWA nie gwarantuje alarmu po całkowitym zamknięciu przeglądarki.
+- Android może ograniczać działanie powiadomień i mikrofonu w tle.
+- Echo wake word wymaga prawidłowej konfiguracji natywnej i prywatnych danych dostawcy.
+- Web OTA zostało wycofane; brak natywnej szybkiej aktualizacji JS w APK.
+- Zielone testy repozytorium nie są dowodem wdrożenia, prawidłowego rollbacku ani zachowania danych na rzeczywistych urządzeniach.

@@ -30,6 +30,12 @@ Stopniowe przejście jest możliwe: najpierw pomiar N=32768/r=8/p=1, następnie 
 
 Nie wykonano pomiarów na Raspberry Pi 4 i nie zwiększono automatycznie parametrów. Przed podniesieniem kosztu trzeba zmierzyć czas logowania/zmiany hasła (w tym p95), RSS, temperaturę i opóźnienia pozostałych żądań na docelowym Pi z działającymi usługami. Obecny `scryptSync` blokuje pętlę zdarzeń: większy koszt wymaga oceny przejścia na asynchroniczny scrypt z ograniczoną liczbą równoległych operacji. Docelowy koszt można następnie stosować do nowych/zmienianych haseł i podnosić hash po poprawnym logowaniu, bez znajomości haseł z góry. Parametry starego hasha muszą nadal pozostawać obsługiwane; limit pamięci musi pozwalać sprawdzać najsilniejszy zapisany wariant także po cofnięciu konfiguracji. Te kroki wymagają osobnej implementacji i pomiarów.
 
+## Historyczny eksport w publicznym repozytorium (do decyzji właściciela)
+
+Commit `901c3627` zawierał plik o nazwie `ogarniacz-przed-migracja.json`. Commit `cb6198f` usunął go ze śledzonych plików, a `.gitignore` ogranicza ryzyko ponownego przypadkowego dodania. **Nie oznacza to usunięcia danych z historii ani cudzych klonów.**
+
+Nie odczytuj, nie publikuj i nie wklejaj zawartości historycznego eksportu do logów, zgłoszeń, AI ani raportów. Właściciel powinien lokalnie ocenić jego charakter i zakres (w tym ewentualne sekrety), a następnie podjąć decyzję o konieczności rotacji, usunięcia historii według kontrolowanej procedury oraz poinformowaniu osób mających dostęp. Historia Git jest publiczna: samo usunięcie pliku w nowym commicie nie usuwa ekspozycji. Przepisywanie historii / force-push wymaga osobnej zgody i planu dla wszystkich kopii repozytorium.
+
 ## Nigdy nie rób
 - nie commituj sekretów, kluczy API, tokenów, keystore,
 - nie generuj nowego klucza podpisującego APK,

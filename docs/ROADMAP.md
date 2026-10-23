@@ -1,49 +1,60 @@
-# Roadmapa po Ogarniaczu v1
+# Ogarniacz — roadmapa rozwoju (aktualizacja 23.10.2026)
 
-## Bieżąca walidacja wydań i wdrożenia
+Stan wersji przy aktualizacji dokumentu: publiczny APK `v1.0.21`, `main=d178979`, `rpi-stable=82f3d6f`. SHA są punktem kontrolnym, **nie** źródłem prawdy dla późniejszych wydań. Raport weryfikacji: [ETAP_1_WERYFIKACJA_2026-10-23.md](ETAP_1_WERYFIKACJA_2026-10-23.md).
 
-- test aktualizacji z wydanego APK 1.0.13 do następnej wersji na fizycznym Androidzie oraz osobny test poprawionego instalatora w kolejnym przejściu między wersjami;
-- potwierdzenie na Raspberry Pi instalacji jednostek aktualizatora, działania panelu, healthchecku i rollbacku; lokalne testy nie zastępują próby na urządzeniu;
-- po potwierdzeniu wszystkich aktywnych klientów na HTTPS Tailscale: ręczne przełączenie live `HOST` na loopback i wyłączenie starych timerów aktualizacji;
-- ręczne sprawdzenie najważniejszych przepływów, w tym synchronizacji, leków i backupu, przed kolejnym wydaniem.
+## Statusy i zasada dowodowa
 
-## Synchronizacja i konta — stan wdrożony
+- **Wdrożone w kodzie** — istnieje implementacja i testy; nie oznacza to potwierdzenia działania na urządzeniu.
+- **Zweryfikowane w CI** — zakończony powodzeniem workflow dla wskazanego SHA.
+- **Do potwierdzenia na urządzeniu** — wymaga obserwacji Raspberry/Androida/HA przez operatora.
+- **Planowane** — nie zlecaj ponownie gotowych fundamentów.
 
-- backend Node.js + SQLite na Raspberry Pi;
-- prywatny dostęp HTTPS przez Tailscale Serve;
-- konta, logowanie, sesje HttpOnly i CSRF;
-- synchronizacja Androida wyłącznie przez sesję; legacy Bearer został usunięty;
-- jednorazowy bootstrap Właściciela;
-- zaproszenia Edytora oraz odzyskiwanie dostępu;
-- synchronizacja local-first z trwałym outboxem;
-- idempotencja, tombstones oraz jawne konflikty HTTP 409 z wyborem pełnej wersji lub ręcznym scalaniem prostych pól;
-- serwerowe egzekwowanie grantów Właściciela i Edytora;
-- synchronizacja m.in. kont finansowych i miejsc.
+## Etap 1 — stabilizacja, wydania i prywatność (najbliższy)
 
-Do dalszego rozwoju pozostają obserwowalność synchronizacji oraz ewentualne dalsze utwardzenie polityki bezpieczeństwa.
+**Wdrożone w kodzie / sprawdzone historycznie w CI:**
+- konta Właściciel/Edytor, sesje i CSRF; lokalne profile, granty i synchronizacja local-first;
+- outbox, rozstrzyganie konfliktów, diagnostyka i bezpieczny eksport raportu;
+- szyfrowany backup, kontrolowane przywracanie z kopią ochronną;
+- podpisane APK z kontrolą SHA-256 i stanem instalacji, PWA/service worker;
+- osobny aktualizator Raspberry z kanału `rpi-stable`, zabezpieczeniami i rollbackiem;
+- ręczna integracja Home Assistant wybranych encji;
+- style Klasyczny, Luxury i Flat, oficjalny branding i biblioteka multimediów.
 
-## Warstwy platformowe
+**Pozostaje:**
+1. **Raspberry:** odczyty SSH z 23.10.2026 potwierdzają HEAD `82f3d6f` zgodny z `rpi-stable`, zdrowy backend, stan jednostek i `RPI_UPDATE_ENABLED=1` (szczegóły w raporcie). Pozostaje potwierdzenie sesji Właściciela i widoczności panelu na urządzeniu. `main` nie oznacza wdrożenia. Odróżnić udane sprawdzenie od udanej instalacji i przetestowanego rollbacku.
+2. **Android:** na rzeczywistym urządzeniu sprawdzić zainstalowany versionCode, aktualizator APK, ponowne uruchomienie i zachowanie danych. Test instalacji wymaga *rzeczywiście nowszego* APK. Nie publikować wersji jedynie dla testu.
+3. **Synchronizacja:** sprawdzić sesję, pull/push, kolejkę i konflikty na aktywnych klientach; brak sieci nie może usuwać danych.
+4. **Backup:** potwierdzić pochodzenie oraz odtwarzalność kopii i zakres eksportu; osobno zabezpieczyć niewysłaną kolejkę telefonu, jeśli istnieje. Nie używać produkcyjnej bazy do prób restore.
+5. **Bezpieczeństwo:** przeanalizować ekspozycję historycznego `ogarniacz-przed-migracja.json` z commita `901c3627` (usuniętego z bieżącego drzewa w `cb6198f`). Samo dodanie `.gitignore` nie usuwa historii. Nie kopiować treści pliku do narzędzi/raportów i nie przepisywać historii bez świadomej decyzji operatora.
+6. **Poczta resetowania hasła:** konfiguracja SMTP/Resend jest opcjonalna; rzeczywiste doręczenie i bezpieczny reset pozostają do potwierdzenia, bez ujawniania sekretów.
 
-- Android i PWA są aktywnymi platformami;
-- natywne przypomnienia Android i dokładne alarmy są wdrożone;
-- aktualizacja podpisanego APK z weryfikacją SHA-256 oraz podpisane Web OTA są wdrożone; PWA odświeża frontend przez service worker, a Raspberry ma osobny aktualizator z panelem i rollbackiem;
-- opcjonalne opakowanie Tauri dla funkcji systemowych;
-- dalsze testy zachowania w tle na różnych urządzeniach Android.
+## Etap 2 — Dzisiaj 2.0 i ergonomia (po etapie 1)
 
-## Echo
+- dopracowanie osi czasu, najbliższych czynności i działań szybkich bez duplikowania modeli;
+- poprawa responsywności i obsługi dotykowej: Android → panel Raspberry → desktop;
+- konsekwentna obsługa błędów, uprawnień i stanu offline;
+- spójność stylów Klasyczny/Luxury/Flat, czytelność ikon i prawdziwy rozmiar brandingu;
+- ręczne testy przypomnień dawek i powiadomień Androida z uwzględnieniem ograniczeń baterii i alarmów.
 
-- finalna polityka pamięci i proaktywności;
-- lepsza interpretacja języka naturalnego;
-- finalna technologia STT/TTS;
-- docelowe słowo wybudzające po dostarczeniu wymaganych prywatnych danych Picovoice;
-- opcjonalny zewnętrzny provider AI po jawnej decyzji użytkownika.
+## Etap 3 — Smart Home i Echo (po etapie 2)
 
-## Późniejsze kierunki
+- rozwinięcie istniejącego panelu `SekcjaDom` i adaptera Home Assistant, nie drugi backend automatyki;
+- ergonomia kafelków i czytelny stan autoryzowanych encji;
+- ograniczone narzędzia Echo do odczytu oraz **potwierdzanych** poleceń włączenia/wyłączenia;
+- dopracowanie ciągłości dialogu, STT/TTS i zachowania mikrofonu przy zmianach cyklu życia;
+- testy na urządzeniach; rzeczywiste wake word nadal zależy od prywatnej konfiguracji natywnej.
 
-- testy przeglądarkowe najczęstszych przepływów CRUD;
-- audyt dostępności z czytnikiem ekranu;
-- dalsze strojenie „Dzisiaj” na podstawie realnego użycia;
-- bardziej rozbudowana edycja relacji encji;
-- walidacja połączenia z Home Assistant, a dopiero potem osobny zakres wysokopoziomowych poleceń i polityki ryzyka;
-- integracje z kalendarzem, pocztą i mapami;
-- planer podróży jako osobny późniejszy moduł.
+## Dalszy backlog (poza etapami 1–3)
+
+- prywatna biblioteka plików (odrębna od obecnego publicznego katalogu GitHub);
+- integracje kalendarza, poczty i map; planer podróży;
+- opcjonalny Windows/Tauri i panel diagnostyki sprzętu PC (PWM/DC, RGB/ARGB);
+- przeglądarkowe e2e głównych ścieżek CRUD, dostępność z czytnikiem ekranu;
+- dodatkowe role tylko po potwierdzeniu realnej potrzeby.
+
+## Kanały aktualizacji — aktualny kontrakt
+
+- **Android:** wyłącznie instalacja podpisanego APK; Web OTA jest wycofane.
+- **Raspberry:** kod serwera i webowego frontendu tylko z zatwierdzonego `rpi-stable`.
+- **Web/PWA:** service worker na tym samym originie; nie utożsamiaj go z natywnym Androidem.
+- Publikacja, zmiana `rpi-stable` i instalacja na urządzeniu to **różne operacje**, żadna nie wynika automatycznie z samego zielonego CI.

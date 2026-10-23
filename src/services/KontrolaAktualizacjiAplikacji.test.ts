@@ -33,3 +33,19 @@ it('sprawdza przy każdym starcie mimo zapisanej kontroli, a wznowienia ogranicz
   nasluchuj.mock.calls[0][0]('aktywny')
   expect(sprawdzApk).toHaveBeenCalledTimes(1)
 })
+
+it('po błędzie ponownej kontroli usuwa nieaktualny wynik APK i odzyskuje stan po sukcesie', async () => {
+  const kontrola = await import('./KontrolaAktualizacjiAplikacji')
+  sprawdzApk.mockResolvedValueOnce({ czyNowsza: true }).mockRejectedValueOnce(new Error('brak sieci'))
+    .mockResolvedValueOnce({ czyNowsza: false })
+  await kontrola.sprawdzAktualizacjeApk()
+  expect(kontrola.pobierzStanKontroliAktualizacji().wynikApk?.czyNowsza).toBe(true)
+  await expect(kontrola.sprawdzAktualizacjeApk()).rejects.toThrow('brak sieci')
+  expect(kontrola.pobierzStanKontroliAktualizacji()).toMatchObject({
+    wynikApk: undefined, bladApk: 'brak sieci', sprawdzono: true,
+  })
+  await kontrola.sprawdzAktualizacjeApk()
+  expect(kontrola.pobierzStanKontroliAktualizacji()).toMatchObject({
+    wynikApk: { czyNowsza: false }, bladApk: undefined, sprawdzono: true,
+  })
+})

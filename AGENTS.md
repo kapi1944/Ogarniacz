@@ -17,7 +17,7 @@ Główna instrukcja: `docs/INSTRUCTIONS.md`
 - `docs/SYNC_ARCHITECTURE.md`, `docs/ARCHITEKTURA_SERWER_SYNC.md` — szczegóły synchronizacji
 - `docs/DATA_MODEL.md` — szczegółowy model danych
 - `docs/ECHO_AGENT_ARCHITEKTURA.md`, `docs/echo-model-lokalny.md` — szczegóły modułu Echo
-- `docs/web-ota.md` — OTA i release webowy
+- `docs/ANDROID_RELEASE.md` — aktualne wydania APK i rpi-stable; `docs/web-ota.md` — dokumentacja historyczna wycofanego Web OTA
 - `docs/SPECYFIKACJA_OGARNIACZ_V1.md` — specyfikacja produktu
 - `docs/ROADMAP.md` — plan rozwoju
 - `docs/OPEN_DECISIONS.md` — otwarte decyzje
