@@ -157,13 +157,15 @@ test('produkcja nie dopuszcza obejścia uprawnień, dowiązań, tworzenia bazy a
       chmodSync(join(sciezka, '..'), 0o755)
       assert.throws(() => sprawdzUprawnieniaSystemowe(sciezka), /prywatnego katalogu/)
       chmodSync(join(sciezka, '..'), 0o700)
-      const dowiazanie = sciezka + '-wal'
-      symlinkSync(sciezka, dowiazanie)
-      assert.throws(() => sprawdzUprawnieniaSystemowe(sciezka), /WAL/)
     } else {
       assert.throws(() => sprawdzUprawnieniaSystemowe(sciezka), /bez sudo/)
     }
     baza.exec('DROP TABLE odzyskiwanie_testowe')
     assert.throws(() => otworzBazeOdzyskiwania({ sciezka, testowa: true }))
+    if (process.platform === 'linux') {
+      const dowiazanie = sciezka + '-wal'
+      symlinkSync(sciezka, dowiazanie)
+      assert.throws(() => sprawdzUprawnieniaSystemowe(sciezka), /WAL/)
+    }
   })
 })
