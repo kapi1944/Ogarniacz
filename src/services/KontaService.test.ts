@@ -4,6 +4,7 @@ import { pobierzCsrfKonta, pobierzKontoOffline, pobierzListeSesji, pobierzSesjeK
 import { resetujHasloUzytkownika, wylogujPozostaleSesje } from './KontaService'
 import { pobierzStanDomu, sterujDomem } from './KontaService'
 import { poprosOLinkResetowaniaHasla, ustawHasloPrzezLink } from './KontaService'
+import * as profileLokalne from '../data/ProfileLokalne'
 
 // Setup uprawnień ładuje usługę kont; usuń ten cache przed zastosowaniem mocków.
 vi.hoisted(() => vi.resetModules())
@@ -35,6 +36,20 @@ beforeEach(() => {
 })
 
 describe('KontaService', () => {
+  it('zachowuje komunikat przy normalnej zmianie i przeładowuje start wymagający zmiany hasła', async () => {
+    const przeladuj = vi.fn()
+    vi.stubGlobal('location', { reload: przeladuj })
+    vi.spyOn(profileLokalne, 'czyProfileUruchomione').mockReturnValue(true)
+    const aktywnyProfil = vi.spyOn(profileLokalne, 'pobierzAktywnyProfil').mockReturnValue({ id: 'profil', serwer: 'https://raspberrypi.tailnet.ts.net', nazwaBazy: 'ogarniacz-profil-profil', uzytkownikId: konto.uzytkownikId, wlascicielId: konto.wlascicielId, konto })
+    vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 200, data: {}, headers: {}, url: '' })
+    try {
+      await zmienHaslo('Aktualne-haslo', 'Nowe-haslo')
+      expect(przeladuj).not.toHaveBeenCalled()
+      aktywnyProfil.mockReturnValue(undefined)
+      await zmienHaslo('Aktualne-haslo', 'Nowe-haslo')
+      expect(przeladuj).toHaveBeenCalledOnce()
+    } finally { vi.restoreAllMocks(); vi.unstubAllGlobals() }
+  })
   it('wysyła prośbę i reset przez obecny transport kont bez utrwalania sekretów', async () => {
     vi.mocked(CapacitorHttp.request).mockResolvedValue({ status: 202, data: { komunikat: 'Neutralny komunikat' }, headers: {}, url: '' })
     expect(await poprosOLinkResetowaniaHasla('konto@example.test')).toBe('Neutralny komunikat')
