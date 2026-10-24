@@ -8,7 +8,6 @@ import { platforma } from '../../platform/platforma'
 const { szyfruj, przygotuj, przywroc, zapiszPlik, zapiszZWynikiem, plikTymczasowy, udostepnijPlik, zapisWBazie, zapiszUstawienia } = vi.hoisted(() => ({ szyfruj: vi.fn(), przygotuj: vi.fn(), przywroc: vi.fn(), zapiszPlik: vi.fn(), zapiszZWynikiem: vi.fn(), plikTymczasowy: vi.fn(), udostepnijPlik: vi.fn(), zapisWBazie: vi.fn(), zapiszUstawienia: vi.fn() }))
 
 vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ ustawienia: DOMYSLNE_USTAWIENIA, zapiszUstawienia }) }))
-vi.mock('../../app/DostawcaKonta', () => ({ useKonto: () => ({ konto: undefined }) }))
 vi.mock('../../hooks/useRepozytorium', () => ({ useRepozytorium: () => ({ dane: [], repozytorium: {} }) }))
 vi.mock('dexie-react-hooks', () => ({ useLiveQuery: (_zapytanie: unknown, _zaleznosci: unknown, domyslne: unknown) => domyslne }))
 vi.mock('./PanelUstawienAplikacji', () => ({ PanelUstawienAplikacji: () => null }))

@@ -537,6 +537,11 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 .konta-uzytkownicy .wiersz-konta { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .konta-uzytkownicy .wiersz-konta span, .konta-uzytkownicy dd { overflow-wrap: anywhere; }
 .konta-uzytkownicy button { min-height: 44px; white-space: normal; }
+.konta-uzytkownicy .akcje-formularza { flex-wrap: wrap; justify-content: flex-start; }
+.konta-uzytkownicy .lista-kompaktowa > div { flex-wrap: wrap; }
+.konta-uzytkownicy dd { margin-left: 0; min-width: 0; }
+.konta-uzytkownicy summary { min-height: 44px; padding-block: 12px; cursor: pointer; }
+.konta-uzytkownicy summary:focus-visible { outline: 3px solid var(--akcent); outline-offset: 2px; }
 @media (max-width: 600px) {
   .konta-uzytkownicy .formularz { grid-template-columns: minmax(0, 1fr); }
   .konta-uzytkownicy .formularz > button { width: 100%; }

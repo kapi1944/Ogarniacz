@@ -1,5 +1,6 @@
 import { PRYWATNE_SEKCJE_ZDROWIA } from '../services/UprawnieniaService'
-import { createContext, useContext, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { KeyRound, LogOut, ShieldCheck, UserPlus } from 'lucide-react'
 import { Komunikat, Modal } from '../components/Interfejs'
 import { PanelAdministracjiKont } from './PanelAdministracjiKont'
@@ -50,7 +51,8 @@ function powiadomOSesji(): void {
   window.dispatchEvent(new Event('ogarniacz:konto'))
 }
 
-function PanelHaslaISesji({ odswiez, wyczysc }: { odswiez: () => Promise<void>; wyczysc: () => void }) {
+function PanelHaslaISesji({ odswiez, wyczysc, widok = 'wszystko' }: { odswiez: () => Promise<void>; wyczysc: () => void; widok?: 'wszystko' | 'haslo' | 'sesje' }) {
+  const idWymagan = useId()
   const [aktualneHaslo, ustawAktualneHaslo] = useState('')
   const [noweHaslo, ustawNoweHaslo] = useState('')
   const [powtorzoneHaslo, ustawPowtorzoneHaslo] = useState('')
@@ -58,6 +60,7 @@ function PanelHaslaISesji({ odswiez, wyczysc }: { odswiez: () => Promise<void>; 
   const [blad, ustawBlad] = useState('')
   const [komunikat, ustawKomunikat] = useState('')
   const [zajety, ustawZajety] = useState(false)
+  const [pokazHasla, ustawPokazHasla] = useState(false)
 
   const wykonaj = async (operacja: () => Promise<void>) => {
     if (zajety) return
@@ -70,28 +73,35 @@ function PanelHaslaISesji({ odswiez, wyczysc }: { odswiez: () => Promise<void>; 
   }
 
   return <section>
-    <h3>Hasło i sesje</h3>
+    <h3>{widok === 'sesje' ? 'Aktywne sesje' : widok === 'haslo' ? 'Zmień hasło' : 'Hasło i sesje'}</h3>
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
     {komunikat && <p role="status">{komunikat}</p>}
-    <form className="formularz" onSubmit={(zdarzenie) => {
+    {widok !== 'sesje' && <form className="formularz" onSubmit={(zdarzenie) => {
       zdarzenie.preventDefault()
+      if (zajety) return
+      ustawKomunikat('')
+      if (noweHaslo.length < 8) { ustawBlad('Nowe hasło musi mieć minimum 8 znaków.'); return }
       if (noweHaslo !== powtorzoneHaslo) { ustawBlad('Nowe hasła muszą być jednakowe.'); return }
       void wykonaj(async () => {
         const aktualne = aktualneHaslo
         const nowe = noweHaslo
         ustawAktualneHaslo(''); ustawNoweHaslo(''); ustawPowtorzoneHaslo('')
+        ustawPokazHasla(false)
         await zmienHaslo(aktualne, nowe)
         ustawKomunikat('Hasło zmienione. Pozostałe sesje zostały wylogowane.')
         ustawSesje(undefined)
-        await odswiez()
+        try { await odswiez() }
+        catch { ustawBlad('Hasło zapisano, ale nie udało się odświeżyć danych sesji. Sprawdź połączenie z serwerem.') }
       })
     }}>
-      <label className="pole"><span>Aktualne hasło</span><input type="password" autoComplete="current-password" required maxLength={200} value={aktualneHaslo} onChange={(zdarzenie) => ustawAktualneHaslo(zdarzenie.target.value)} /></label>
-      <label className="pole"><span>Nowe hasło</span><input type="password" autoComplete="new-password" required minLength={8} maxLength={200} value={noweHaslo} onChange={(zdarzenie) => ustawNoweHaslo(zdarzenie.target.value)} /></label>
-      <label className="pole"><span>Powtórz nowe hasło</span><input type="password" autoComplete="new-password" required minLength={8} maxLength={200} value={powtorzoneHaslo} onChange={(zdarzenie) => ustawPowtorzoneHaslo(zdarzenie.target.value)} /></label>
-      <p className="tekst-pomocniczy">Zmiana hasła wyloguje pozostałe sesje. Ta sesja pozostanie aktywna.</p>
+      <label className="pole pole--pelne"><span>Aktualne hasło</span><input type={pokazHasla ? 'text' : 'password'} disabled={zajety} autoComplete="current-password" required maxLength={200} value={aktualneHaslo} onChange={(zdarzenie) => ustawAktualneHaslo(zdarzenie.target.value)} /></label>
+      <label className="pole pole--pelne"><span>Nowe hasło</span><input type={pokazHasla ? 'text' : 'password'} disabled={zajety} autoComplete="new-password" aria-describedby={idWymagan} required minLength={8} maxLength={200} value={noweHaslo} onChange={(zdarzenie) => ustawNoweHaslo(zdarzenie.target.value)} /></label>
+      <label className="pole pole--pelne"><span>Powtórz nowe hasło</span><input type={pokazHasla ? 'text' : 'password'} disabled={zajety} autoComplete="new-password" required minLength={8} maxLength={200} value={powtorzoneHaslo} onChange={(zdarzenie) => ustawPowtorzoneHaslo(zdarzenie.target.value)} /></label>
+      <label className="pole pole-checkbox pole--pelne"><input type="checkbox" disabled={zajety} checked={pokazHasla} onChange={(zdarzenie) => ustawPokazHasla(zdarzenie.target.checked)} /><span>Pokaż hasła</span></label>
+      <p id={idWymagan} className="tekst-pomocniczy pole--pelne">Minimum 8 znaków. Zmiana hasła wyloguje pozostałe sesje. Ta sesja pozostanie aktywna.</p>
       <button className="przycisk przycisk--glowny" type="submit" disabled={zajety}>Zmień hasło</button>
-    </form>
+    </form>}
+    {widok !== 'haslo' && <>
     <button className="przycisk przycisk--drugorzedny" type="button" disabled={zajety} onClick={() => void wykonaj(async () => ustawSesje(await pobierzListeSesji()))}>Pokaż aktywne sesje</button>
     {sesje?.length === 0 && <p>Brak aktywnych sesji.</p>}
     {sesje?.map((sesja) => <div className="wiersz-konta" key={sesja.id}>
@@ -107,6 +117,7 @@ function PanelHaslaISesji({ odswiez, wyczysc }: { odswiez: () => Promise<void>; 
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={zajety} onClick={() => void wykonaj(async () => { await wyloguj(); wyczysc() })}><LogOut aria-hidden="true" />Wyloguj bieżącą sesję</button>
       <button type="button" className="przycisk przycisk--drugorzedny" disabled={zajety} onClick={() => void wykonaj(async () => { await wylogujWszystkieSesje(); wyczysc() })}>Wyloguj wszystkie sesje</button>
     </div>
+    </>}
   </section>
 }
 
@@ -170,7 +181,66 @@ function EkranLogowania({ bootstrapDostepny, poZalogowaniu, pracujLokalnie }: { 
   </section></main>
 }
 
+function DaneMojegoKonta({ konto, offline }: { konto: KontoUzytkownika; offline: boolean }) {
+  return <section><h3>Moje konto</h3><dl className="lista-kompaktowa">
+    <div><dt>Nazwa użytkownika</dt><dd>{konto.nazwa || 'Nie ustawiono'}</dd></div>
+    <div><dt>Login</dt><dd>{konto.login || 'Logowanie e-mailem'}</dd></div>
+    <div><dt>E-mail</dt><dd>{konto.email}</dd></div>
+    <div><dt>Rola systemowa</dt><dd>{konto.rolaSystemowa === 'administrator' ? 'Administrator systemu' : konto.rolaSystemowa === 'uzytkownik' ? 'Użytkownik' : 'Brak informacji w starszym serwerze'}</dd></div>
+    <div><dt>Dostęp do zbioru danych</dt><dd>{konto.rola === 'wlasciciel' ? 'Właściciel' : 'Edytor'}</dd></div>
+    <div><dt>Status sesji</dt><dd>{offline ? 'Brak połączenia — dane zapamiętanego konta' : 'Sesja potwierdzona przez serwer'}</dd></div>
+  </dl></section>
+}
+
+export function KontoIBezpieczenstwo() {
+  const { konto, offline, odswiez, wyczysc } = useKonto()
+  const [panel, ustawPanel] = useState<'haslo' | 'sesje' | 'odzyskiwanie'>()
+  const trescPanelu = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!panel) return
+    const elementPowrotu = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
+    const okno = trescPanelu.current?.closest('[role="dialog"]')
+    okno?.querySelector<HTMLButtonElement>('button')?.focus()
+    const obsluzKlawiature = (zdarzenie: KeyboardEvent) => {
+      if (zdarzenie.key === 'Escape') { zdarzenie.preventDefault(); ustawPanel(undefined); return }
+      if (zdarzenie.key !== 'Tab' || !okno) return
+      const pola = [...okno.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)')]
+      const cel = zdarzenie.shiftKey && document.activeElement === pola[0] ? pola.at(-1)
+        : !zdarzenie.shiftKey && document.activeElement === pola.at(-1) ? pola[0] : undefined
+      if (cel) { zdarzenie.preventDefault(); cel.focus() }
+    }
+    document.addEventListener('keydown', obsluzKlawiature)
+    return () => { document.removeEventListener('keydown', obsluzKlawiature); elementPowrotu?.focus() }
+  }, [panel])
+  return <section className="karta konta-uzytkownicy">
+    <h2>Konto i bezpieczeństwo</h2>
+    {konto ? <DaneMojegoKonta konto={konto} offline={offline} /> : <p>Pracujesz lokalnie. Połącz konto przez przycisk Tryb lokalny.</p>}
+    {konto && odswiez && wyczysc && <div className="akcje-formularza">
+      <button type="button" className="przycisk przycisk--glowny" disabled={offline} onClick={() => ustawPanel('haslo')}>Zmień hasło</button>
+      <button type="button" className="przycisk przycisk--drugorzedny" disabled={offline} onClick={() => ustawPanel('sesje')}>Aktywne sesje</button>
+    </div>}
+    <section><h3>Odzyskiwanie dostępu</h3>
+      <details><summary>Dostępne metody odzyskiwania</summary>
+      <ul>
+        <li>Znam aktualne hasło — wybieram „Zmień hasło”.</li>
+        <li>Nie znam hasła, ale mam dostęp do e-maila — wybieram „Nie pamiętasz hasła?”. Wysyłka zależy od konfiguracji poczty na serwerze; aplikacja nie potwierdza jej dostępności.</li>
+        <li>Mam zapisany kod odzyskiwania — używam „Odzyskaj dostęp” na ekranie logowania.</li>
+        <li>Nie znam hasła ani kodu, a poczta nie działa — administrator Raspberry Pi może przez SSH odczytać konto i wydać link ważny 15 minut. Ta operacja wymaga chronionego lokalnego dostępu do bazy.</li>
+      </ul>
+      <p>Reset linkiem wylogowuje wszystkie wcześniejsze sesje. Następnie zaloguj się nowym hasłem. Konto zachowuje dane i uprawnienia.</p>
+      </details>
+      <button type="button" className="przycisk przycisk--drugorzedny" disabled={offline} onClick={() => ustawPanel('odzyskiwanie')}>Nie pamiętasz hasła?</button>
+    </section>
+    {panel && createPortal(<Modal tytul={panel === 'haslo' ? 'Zmień hasło' : panel === 'sesje' ? 'Aktywne sesje' : 'Odzyskiwanie dostępu'} zamknij={() => ustawPanel(undefined)}>
+      <div ref={trescPanelu} className="konta-uzytkownicy">{panel === 'odzyskiwanie'
+        ? <FormularzLinkuResetowania powrot={() => ustawPanel(undefined)} etykietaPowrotu="Wróć do Ustawień" />
+        : odswiez && wyczysc && <PanelHaslaISesji widok={panel} odswiez={odswiez} wyczysc={wyczysc} />}</div>
+    </Modal>, document.body)}
+  </section>
+}
+
 function ZawartoscKonta({ konto, odswiez, wyczysc }: { konto: KontoUzytkownika; odswiez: () => Promise<void>; wyczysc: () => void }) {
+  const { offline } = useKonto()
   const [email, ustawEmail] = useState('')
   const [link, ustawLink] = useState('')
   const [editorId, ustawEditorId] = useState(konto.edytorzy[0]?.id ?? '')
@@ -190,13 +260,7 @@ function ZawartoscKonta({ konto, odswiez, wyczysc }: { konto: KontoUzytkownika; 
   }
 
   return <div className="konta-uzytkownicy">
-    <section><h3>Moje konto</h3><dl className="lista-kompaktowa">
-      <div><dt>Nazwa</dt><dd>{konto.nazwa || 'Nie ustawiono'}</dd></div>
-      <div><dt>Login</dt><dd>{konto.login || 'Logowanie e-mailem'}</dd></div>
-      <div><dt>E-mail</dt><dd>{konto.email}</dd></div>
-      <div><dt>Rola systemowa</dt><dd>{konto.rolaSystemowa === 'administrator' ? 'Administrator systemu' : 'Użytkownik'}</dd></div>
-      <div><dt>Dostęp do zbioru danych</dt><dd>{konto.rola === 'wlasciciel' ? 'Właściciel' : 'Edytor'}</dd></div>
-    </dl></section>
+    <DaneMojegoKonta konto={konto} offline={offline} />
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
     {konto.rola === 'wlasciciel' && <>
       <section><h3>Zaproszenie Edytora</h3><form className="szybki-wpis" onSubmit={zapros}><input type="email" required value={email} onChange={(e) => ustawEmail(e.target.value)} placeholder="edytor@example.com" /><button className="przycisk przycisk--glowny" type="submit"><UserPlus aria-hidden="true" />Zaproś</button></form>{link && <label className="pole"><span>Link ważny 7 dni — przekaż go bezpiecznym kanałem</span><input readOnly value={link} onFocus={(e) => e.currentTarget.select()} /></label>}</section>

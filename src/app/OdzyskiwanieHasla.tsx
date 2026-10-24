@@ -11,7 +11,7 @@ export function pobierzTokenResetuZAdresu(): string | undefined {
   return token
 }
 
-export function FormularzLinkuResetowania({ powrot }: { powrot: () => void }) {
+export function FormularzLinkuResetowania({ powrot, etykietaPowrotu = 'Wróć do logowania i kodów odzyskiwania' }: { powrot: () => void; etykietaPowrotu?: string }) {
   const [email, ustawEmail] = useState('')
   const [komunikat, ustawKomunikat] = useState('')
   const [blad, ustawBlad] = useState('')
@@ -33,7 +33,7 @@ export function FormularzLinkuResetowania({ powrot }: { powrot: () => void }) {
       <label className="pole pole--pelne"><span>E-mail konta</span><input type="email" autoComplete="email" maxLength={254} required value={email} onChange={(zdarzenie) => ustawEmail(zdarzenie.target.value)} /></label>
       <button className="przycisk przycisk--glowny" disabled={zajety || Boolean(komunikat)}>{zajety ? 'Proszę czekać…' : 'Wyślij link'}</button>
     </form>
-    <button type="button" className="przycisk przycisk--tekstowy" disabled={zajety} onClick={powrot}>Wróć do logowania i kodów odzyskiwania</button>
+    <button type="button" className="przycisk przycisk--tekstowy" disabled={zajety} onClick={powrot}>{etykietaPowrotu}</button>
   </>
 }
 

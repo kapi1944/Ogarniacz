@@ -1,4 +1,4 @@
-import { cleanup as wyczysc, fireEvent as zdarzenie, render, screen } from '@testing-library/react'
+import { act, cleanup as wyczysc, fireEvent as zdarzenie, render, screen, waitFor as poczekaj, within as wewnatrz } from '@testing-library/react'
 import { afterEach as poKazdym, beforeEach as przedKazdym, describe, expect, it, vi } from 'vitest'
 import {
   BladKonta,
@@ -12,7 +12,7 @@ import {
   zaloguj,
   type KontoUzytkownika,
 } from '../services/KontaService'
-import { DostawcaKonta } from './DostawcaKonta'
+import { DostawcaKonta, KontoIBezpieczenstwo } from './DostawcaKonta'
 
 vi.mock('../services/KonfiguracjaSynchronizacji', () => ({
   pobierzKonfiguracjeSynchronizacji: () => ({ adresApi: 'https://serwer.example.test' }),
@@ -57,6 +57,118 @@ poKazdym(() => {
 })
 
 describe('onboarding konta', () => {
+  it('Ustawienia pokazują dane konta, metody odzyskiwania oraz wspólne zarządzanie sesjami', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue({ ...konto, login: 'moj-login', nazwa: 'Moje konto', rolaSystemowa: 'uzytkownik' })
+    vi.mocked(pobierzListeSesji).mockResolvedValue([{ id: 'sesja', biezaca: true, utworzonoAt: '2026-10-24T10:00:00Z', ostatniaAktywnoscAt: '2026-10-24T11:00:00Z' }])
+    render(<DostawcaKonta><KontoIBezpieczenstwo /></DostawcaKonta>)
+    expect(await screen.findByText('moj-login')).toBeInTheDocument()
+    expect(screen.getByText('Moje konto', { selector: 'dd' })).toBeInTheDocument()
+    expect(screen.getByText(konto.email)).toBeInTheDocument()
+    expect(screen.getByText('Użytkownik')).toBeInTheDocument()
+    expect(screen.getByText('Sesja potwierdzona przez serwer')).toBeInTheDocument()
+    expect(screen.getByText(/administrator Raspberry Pi może przez SSH/)).toBeInTheDocument()
+    expect(screen.getByText(/aplikacja nie potwierdza jej dostępności/)).toBeInTheDocument()
+    const przyciskSesji = screen.getByRole('button', { name: 'Aktywne sesje' })
+    przyciskSesji.focus()
+    zdarzenie.click(przyciskSesji)
+    const panel = wewnatrz(screen.getByRole('dialog'))
+    expect(panel.getByRole('button', { name: 'Zamknij' })).toHaveFocus()
+    expect(panel.queryByLabelText('Aktualne hasło')).not.toBeInTheDocument()
+    zdarzenie.click(panel.getByRole('button', { name: 'Pokaż aktywne sesje' }))
+    expect(await panel.findByText(/Bieżąca sesja/)).toBeInTheDocument()
+    zdarzenie.click(panel.getByRole('button', { name: 'Zamknij' }))
+    expect(przyciskSesji).toHaveFocus()
+    zdarzenie.click(screen.getByRole('button', { name: 'Nie pamiętasz hasła?' }))
+    expect(wewnatrz(screen.getByRole('dialog')).getByLabelText('E-mail konta')).toBeInTheDocument()
+    const powrot = screen.getByRole('button', { name: 'Wróć do Ustawień' })
+    zdarzenie.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(powrot).toHaveFocus()
+    zdarzenie.keyDown(document, { key: 'Tab' })
+    expect(screen.getByRole('button', { name: 'Zamknij' })).toHaveFocus()
+    zdarzenie.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('zapamiętane konto offline nie udaje potwierdzonej sesji ani dostępnej zmiany hasła', async () => {
+    vi.mocked(pobierzKontoOffline).mockReturnValue(konto)
+    vi.mocked(pobierzSesjeKonta).mockRejectedValue(new Error('Brak połączenia'))
+    render(<DostawcaKonta><KontoIBezpieczenstwo /></DostawcaKonta>)
+    expect(await screen.findByText('Brak połączenia — dane zapamiętanego konta')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Zmień hasło' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Aktywne sesje' })).toBeDisabled()
+  })
+
+  it('waliduje nowe hasła, pokazuje je na żądanie i nie wysyła niezgodnych wartości', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
+    render(<DostawcaKonta><KontoIBezpieczenstwo /></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Zmień hasło' }))
+    const panel = wewnatrz(screen.getByRole('dialog'))
+    const aktualne = panel.getByLabelText('Aktualne hasło')
+    zdarzenie.change(aktualne, { target: { value: 'Stare-haslo' } })
+    zdarzenie.change(panel.getByLabelText('Nowe hasło'), { target: { value: 'Nowe-haslo' } })
+    zdarzenie.change(panel.getByLabelText('Powtórz nowe hasło'), { target: { value: 'Inne-haslo' } })
+    zdarzenie.click(panel.getByRole('checkbox', { name: 'Pokaż hasła' }))
+    expect(aktualne).toHaveAttribute('type', 'text')
+    zdarzenie.click(panel.getByRole('checkbox', { name: 'Pokaż hasła' }))
+    expect(aktualne).toHaveAttribute('type', 'password')
+    const formularz = aktualne.closest('form')!
+    zdarzenie.submit(formularz)
+    expect(panel.getByRole('alert')).toHaveTextContent('Nowe hasła muszą być jednakowe.')
+    zdarzenie.change(panel.getByLabelText('Nowe hasło'), { target: { value: 'krotkie' } })
+    zdarzenie.submit(formularz)
+    expect(panel.getByRole('alert')).toHaveTextContent('minimum 8 znaków')
+    expect(zmienHaslo).not.toHaveBeenCalled()
+  })
+
+  it.each(['Aktualne hasło jest nieprawidłowe.', 'Brak połączenia z backendem.'])('pokazuje błąd zmiany: %s i czyści hasła bez fałszywego sukcesu', async (komunikat) => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
+    vi.mocked(zmienHaslo).mockRejectedValue(new Error(komunikat))
+    render(<DostawcaKonta><KontoIBezpieczenstwo /></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Zmień hasło' }))
+    const panel = wewnatrz(screen.getByRole('dialog'))
+    zdarzenie.change(panel.getByLabelText('Aktualne hasło'), { target: { value: 'Stare-haslo' } })
+    for (const etykieta of ['Nowe hasło', 'Powtórz nowe hasło']) zdarzenie.change(panel.getByLabelText(etykieta), { target: { value: 'Nowe-haslo' } })
+    zdarzenie.click(panel.getByRole('button', { name: 'Zmień hasło' }))
+    expect(await panel.findByRole('alert')).toHaveTextContent(komunikat)
+    for (const etykieta of ['Aktualne hasło', 'Nowe hasło', 'Powtórz nowe hasło']) expect(panel.getByLabelText(etykieta)).toHaveValue('')
+    expect(panel.queryByRole('status')).not.toBeInTheDocument()
+    expect(JSON.stringify({ ...localStorage, ...sessionStorage })).not.toMatch(/Stare-haslo|Nowe-haslo/)
+  })
+
+  it('blokuje ponowne wysłanie i pokazuje sukces dopiero po odpowiedzi serwera', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValue(konto)
+    let potwierdzZapis = () => {}
+    const zapis = new Promise<void>((gotowe) => { potwierdzZapis = gotowe })
+    vi.mocked(zmienHaslo).mockReturnValue(zapis)
+    render(<DostawcaKonta><KontoIBezpieczenstwo /></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Zmień hasło' }))
+    const panel = wewnatrz(screen.getByRole('dialog'))
+    const aktualne = panel.getByLabelText('Aktualne hasło')
+    zdarzenie.change(aktualne, { target: { value: 'Stare-haslo' } })
+    for (const etykieta of ['Nowe hasło', 'Powtórz nowe hasło']) zdarzenie.change(panel.getByLabelText(etykieta), { target: { value: 'Nowe-haslo' } })
+    zdarzenie.submit(aktualne.closest('form')!)
+    zdarzenie.submit(aktualne.closest('form')!)
+    expect(zmienHaslo).toHaveBeenCalledOnce()
+    expect(panel.getByRole('button', { name: 'Zmień hasło' })).toBeDisabled()
+    expect(panel.queryByRole('status')).not.toBeInTheDocument()
+    await act(async () => { potwierdzZapis() })
+    await poczekaj(() => expect(panel.getByRole('status')).toHaveTextContent('Hasło zmienione. Pozostałe sesje zostały wylogowane.'))
+    expect(wyloguj).not.toHaveBeenCalled()
+  })
+
+  it('odróżnia zatwierdzoną zmianę hasła od błędu późniejszego odświeżania sesji', async () => {
+    vi.mocked(pobierzSesjeKonta).mockResolvedValueOnce(konto).mockRejectedValue(new Error('Brak połączenia'))
+    vi.mocked(zmienHaslo).mockResolvedValue(undefined)
+    render(<DostawcaKonta><KontoIBezpieczenstwo /></DostawcaKonta>)
+    zdarzenie.click(await screen.findByRole('button', { name: 'Zmień hasło' }))
+    const panel = wewnatrz(screen.getByRole('dialog'))
+    zdarzenie.change(panel.getByLabelText('Aktualne hasło'), { target: { value: 'Stare-haslo' } })
+    for (const etykieta of ['Nowe hasło', 'Powtórz nowe hasło']) zdarzenie.change(panel.getByLabelText(etykieta), { target: { value: 'Nowe-haslo' } })
+    zdarzenie.click(panel.getByRole('button', { name: 'Zmień hasło' }))
+    expect(await panel.findByRole('alert')).toHaveTextContent('Hasło zapisano, ale nie udało się odświeżyć danych sesji.')
+    expect(panel.getByRole('status')).toHaveTextContent('Hasło zmienione.')
+  })
+
   it('udostępnia formularz e-mail i zachowuje odzyskiwanie starym kodem', async () => {
     vi.mocked(pobierzSesjeKonta).mockRejectedValue(new BladKonta(401, 'Brak sesji.'))
     render(<DostawcaKonta><div>Aplikacja działa</div></DostawcaKonta>)

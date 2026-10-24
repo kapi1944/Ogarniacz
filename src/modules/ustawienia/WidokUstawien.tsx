@@ -18,7 +18,7 @@ import { pobierzKonfliktySynchronizacji, pobierzStanSynchronizacji } from '../..
 import { czySynchronizacjaSkonfigurowana, rozstrzygnijKonfliktSynchronizacji, synchronizujTeraz as uruchomSynchronizacje } from '../../services/SynchronizacjaAplikacji'
 import type { RozstrzygniecieKonfliktu } from '../../services/SyncEngine'
 import { useAplikacja } from '../../app/KontekstAplikacji'
-import { useKonto } from '../../app/DostawcaKonta'
+import { KontoIBezpieczenstwo, useKonto } from '../../app/DostawcaKonta'
 import { platforma } from '../../platform/platforma'
 import type { StanPowiadomienPlatformy, StanZgody } from '../../platform/typy'
 import { PanelUstawienAplikacji } from './PanelUstawienAplikacji'
@@ -308,6 +308,7 @@ export function WidokUstawien() {
   return <div className="widok widok-ustawien">
     <NaglowekWidoku tytul="Ustawienia" opis="Wygląd, nawigacja, Pulpit, harmonogram i pozostałe preferencje lokalnej aplikacji." />
     {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}{blad && <Komunikat typ="blad">{blad}</Komunikat>}
+    <KontoIBezpieczenstwo />
     <PanelUstawienAplikacji />
     <Karta><h2>Konta i użytkownicy</h2><p>Moje konto, hasło, aktywne sesje, udostępnianie i bezpieczna zmiana użytkownika.</p><Link className="przycisk przycisk--drugorzedny" to="/ustawienia/konta">Otwórz konta i użytkowników</Link></Karta>
     <section className="siatka-ustawien">

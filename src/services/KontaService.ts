@@ -239,7 +239,7 @@ export async function wyloguj(): Promise<void> {
 
 export async function zmienHaslo(aktualneHaslo: string, noweHaslo: string): Promise<void> {
   await wykonaj('POST', '/api/account/password', { aktualneHaslo, noweHaslo }, true)
-  if (czyProfileUruchomione()) window.location.reload()
+  if (czyProfileUruchomione() && pobierzKontoOffline()?.wymaganaZmianaHasla) window.location.reload()
 }
 
 export async function pobierzListeSesji(): Promise<SesjaKonta[]> {
