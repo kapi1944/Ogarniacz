@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { numeracjaBety, sprawdzPodpisBety, sprawdzPakietBety, przygotujPodpisBety } from './android-beta.mjs'
+import konfiguracjaRelease from '../config/android-release.json' with { type: 'json' }
 
 test('kolejne przebiegi rosną, ponowienie i przekroczenie limitu są blokowane', () => {
   assert.deepEqual(numeracjaBety(42), { kod: 42, wersja: '1.1.0-beta.42' })
@@ -16,6 +17,8 @@ test('podpis wymaga jednego certyfikatu zgodnego z niezależnym przypięciem', (
   assert.equal(sprawdzPodpisBety(podpis, 'a'.repeat(64)), 'a'.repeat(64))
   for (const wynik of ['', podpis + podpis, podpis.replace('a'.repeat(64), 'b'.repeat(64))]) assert.throws(() => sprawdzPodpisBety(wynik, 'a'.repeat(64)))
   assert.throws(() => sprawdzPodpisBety(podpis, undefined))
+  const produkcyjny = konfiguracjaRelease.sha256Certyfikatu.replaceAll(':', '').toLowerCase()
+  assert.throws(() => sprawdzPodpisBety('Signer #1 certificate SHA-256 digest: ' + produkcyjny + '\n', produkcyjny), /produkcyjnego/)
 })
 test('APK Stable i downgrade nie przechodzą jako Beta', () => {
   const wynik = "package: name='pl.ogarniacz.app.beta' versionCode='42' versionName='1.1.0-beta.42'"

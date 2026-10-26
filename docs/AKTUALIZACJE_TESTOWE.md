@@ -329,7 +329,7 @@ Wykonuje właściciel poza repozytorium, na zaufanym komputerze:
 
 Keystore trafia tylko do prywatnego katalogu RUNNER_TEMP z uprawnieniami 0600,
 nie do źródeł ani artefaktów; krok `always()` usuwa go po budowaniu.
-Nie jest generowany przy kolejnych buildach. Produkcyjne sekrety nie są odczytywane.
+Nie jest generowany przy kolejnych buildach. Przed Gradle keytool eksportuje wyłącznie certyfikat publiczny do pamięci; jego SHA-256 musi odpowiadać przypięciu Beta. Pipeline odrzuca również certyfikat produkcyjny znany z config/android-release.json, nawet gdy ktoś omyłkowo przypnie go jako Beta. Produkcyjne sekrety nie są odczytywane.
 `apksigner verify --verbose --print-certs` sprawdza integralność podpisu i wymaga
 jednego certyfikatu zgodnego z przypiętym SHA-256. `aapt dump badging` niezależnie
 sprawdza rzeczywisty pakiet, versionCode i versionName. Kontrola powtarza się po
