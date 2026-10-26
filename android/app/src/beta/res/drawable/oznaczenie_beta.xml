@@ -1,0 +1,4 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#245D50" android:pathData="M12,69h84v28h-84z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M20,73h4v4h-4z M24,73h4v4h-4z M20,77h4v4h-4z M28,77h4v4h-4z M20,81h4v4h-4z M24,81h4v4h-4z M20,85h4v4h-4z M28,85h4v4h-4z M20,89h4v4h-4z M24,89h4v4h-4z M36,73h4v4h-4z M40,73h4v4h-4z M44,73h4v4h-4z M36,77h4v4h-4z M36,81h4v4h-4z M40,81h4v4h-4z M36,85h4v4h-4z M36,89h4v4h-4z M40,89h4v4h-4z M44,89h4v4h-4z M52,73h4v4h-4z M56,73h4v4h-4z M60,73h4v4h-4z M56,77h4v4h-4z M56,81h4v4h-4z M56,85h4v4h-4z M56,89h4v4h-4z M72,73h4v4h-4z M68,77h4v4h-4z M76,77h4v4h-4z M68,81h4v4h-4z M72,81h4v4h-4z M76,81h4v4h-4z M68,85h4v4h-4z M76,85h4v4h-4z M68,89h4v4h-4z M76,89h4v4h-4z " />
+</vector>

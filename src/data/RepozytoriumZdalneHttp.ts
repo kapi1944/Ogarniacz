@@ -1,4 +1,5 @@
 import { CapacitorHttp, type HttpResponse } from '@capacitor/core'
+import { czyKanalBeta } from '../services/RuntimeConfigService'
 import { BladKonfliktuSynchronizacji, type RepozytoriumZdalne, type ZmianaSynchronizacji } from './DostawcaSynchronizacji'
 import { odtworzWartoscZTransportu, przygotujWartoscDoTransportu } from '../services/BackupService'
 import { pobierzInstallationId } from '../services/InstallationService'
@@ -30,6 +31,7 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   private readonly sygnal = pobierzSygnalProfilu()
 
   private sprawdzProfil(): void {
+    if (czyKanalBeta()) throw new BladSynchronizacjiHttp('brak_polaczenia', 'Synchronizacja w Beta jest zablokowana.')
     if (czyProfileUruchomione() && !this.profil) throw new BladSynchronizacjiHttp('brak_sesji', 'Tryb lokalny nie synchronizuje danych konta.')
     if (this.sygnal.aborted || this.profil && (pobierzAktywnyProfil()?.id !== this.profil.id || this.adresApi !== this.profil.serwer)) throw new BladSynchronizacjiHttp('brak_sesji', 'Profil zmienił się. Zatrzymano synchronizację.')
   }

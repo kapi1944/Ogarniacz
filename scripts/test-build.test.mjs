@@ -258,7 +258,7 @@ test('workflow jest ręczny, bezpieczny domyślnie, przypięty do SHA i nie doty
   assert.equal((workflow.match(/ref: \$\{\{ github.sha \}\}/g) ?? []).length, 2)
   assert.match(workflow, /needs: budowanie\s+if: \$\{\{ inputs.publish_beta \}\}/)
   assert.equal((workflow.match(/contents: write/g) ?? []).length, 1)
-  assert.doesNotMatch(workflow, /\n  (push|schedule|workflow_run):|rpi-stable|android-production|android:release|version:patch|deploy|signing|secrets\./)
+  assert.doesNotMatch(workflow, /\n  (push|schedule|workflow_run):|rpi-stable|android-production|android:release|version:patch|deploy|android-production-keystore|ANDROID_RELEASE_/)
   assert.throws(() => execFileSync(process.execPath, ['scripts/test-build.mjs', 'opublikuj'], {
     encoding: 'utf8', env: { ...process.env, ...srodowisko, GITHUB_RUN_ATTEMPT: '2' }, stdio: 'pipe',
   }), (blad) => blad.status === 1 && blad.stderr.includes('Ponowienia run_attempt'))

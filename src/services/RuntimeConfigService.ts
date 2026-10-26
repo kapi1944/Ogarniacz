@@ -1,6 +1,7 @@
 import { Capacitor, registerPlugin } from '@capacitor/core'
 
 export interface KonfiguracjaRuntime {
+  kanalBeta?: boolean
   syncApiUrl?: string
   androidUpdateManifestUrl?: string
   diagnostyka: string[]
@@ -24,9 +25,11 @@ function oczyscAdres(wartosc: string | undefined) {
 }
 
 function utworzKonfiguracje(zrodlo: Partial<KonfiguracjaRuntime>, czyAndroid: boolean): KonfiguracjaRuntime {
+  const kanalBeta = zrodlo.kanalBeta === true || import.meta.env.VITE_KANAL_BETA === 'true'
   const konfiguracja = {
-    syncApiUrl: oczyscAdres(zrodlo.syncApiUrl),
-    androidUpdateManifestUrl: oczyscAdres(zrodlo.androidUpdateManifestUrl),
+    kanalBeta,
+    syncApiUrl: kanalBeta ? undefined : oczyscAdres(zrodlo.syncApiUrl),
+    androidUpdateManifestUrl: kanalBeta ? undefined : oczyscAdres(zrodlo.androidUpdateManifestUrl),
   }
   const diagnostyka = czyAndroid
     ? [
@@ -50,8 +53,8 @@ export function utworzRuntimeConfigService(zaleznosci: ZaleznosciKonfiguracjiRun
     ? zaleznosci.pochodzenieWeb
     : undefined
   let konfiguracja = utworzKonfiguracje({
-    ...zaleznosci.konfiguracjaWeb,
-    syncApiUrl: oczyscAdres(zaleznosci.konfiguracjaWeb.syncApiUrl) ?? adresWlasnegoApi,
+    ...(zaleznosci.czyAndroid ? {} : zaleznosci.konfiguracjaWeb),
+    syncApiUrl: zaleznosci.czyAndroid ? undefined : oczyscAdres(zaleznosci.konfiguracjaWeb.syncApiUrl) ?? adresWlasnegoApi,
   }, false)
 
   return {
@@ -80,3 +83,5 @@ const serwisRuntimeConfig = utworzRuntimeConfigService({
 export const inicjalizujRuntimeConfig = () => serwisRuntimeConfig.inicjalizuj()
 export const pobierzKonfiguracjeRuntime = () => serwisRuntimeConfig.pobierz()
 export const pobierzDiagnostykeRuntime = () => pobierzKonfiguracjeRuntime().diagnostyka.join(' ')
+
+export const czyKanalBeta = () => import.meta.env.VITE_KANAL_BETA === 'true' || pobierzKonfiguracjeRuntime().kanalBeta === true

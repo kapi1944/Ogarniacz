@@ -19,9 +19,12 @@ concurrency:
 
 jobs:
   budowanie:
-    name: Zbuduj i zweryfikuj Web oraz Raspberry
+    name: Zbuduj i zweryfikuj Web, Raspberry oraz Android Beta
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
+    env:
+      VITE_KANAL_BETA: 'true'
+      ANDROID_BETA_CERT_SHA256: ${{ vars.ANDROID_BETA_CERT_SHA256 }}
     steps:
       - name: Dopuść wyłącznie pierwsze uruchomienie z main
         env:
@@ -41,6 +44,13 @@ jobs:
 
       - run: npm ci
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+
       - name: Potwierdź źródła, aktualny main, CI i brak publikacji
         env:
           GH_TOKEN: ${{ github.token }}
@@ -48,12 +58,42 @@ jobs:
 
       - name: Testy pipeline'u i czytnika Etapu A
         run: |
-          node --test scripts/test-build.test.mjs scripts/metadane-buildu.test.mjs
+          node --test scripts/test-build.test.mjs scripts/metadane-buildu.test.mjs scripts/android-beta.test.mjs
           npx vitest run src/platform/AktualizacjeTestoweService.test.ts src/modules/ustawienia/PanelAktualizacjiTestowych.test.tsx
 
       - run: npm run lint
       - run: npm run build:production
       - run: npm run pwa:smoke
+
+      - name: Przygotuj Capacitor i sprawdź oba warianty
+        run: |
+          npx cap sync android
+          cd android
+          bash ./gradlew :app:testDebugUnitTest :app:testBetaUnitTest :app:assembleDebug --no-daemon
+
+      - name: Przygotuj trwały podpis Beta
+        id: podpis
+        env:
+          ANDROID_BETA_KEYSTORE_BASE64: ${{ secrets.ANDROID_BETA_KEYSTORE_BASE64 }}
+          ANDROID_BETA_STORE_PASSWORD: ${{ secrets.ANDROID_BETA_STORE_PASSWORD }}
+          ANDROID_BETA_KEY_PASSWORD: ${{ secrets.ANDROID_BETA_KEY_PASSWORD }}
+          ANDROID_BETA_KEY_ALIAS: ${{ secrets.ANDROID_BETA_KEY_ALIAS }}
+        run: node scripts/android-beta.mjs
+
+      - name: Zbuduj podpisany Android Beta
+        if: steps.podpis.outputs.gotowy == 'true'
+        env:
+          ANDROID_BETA_STORE_PASSWORD: ${{ secrets.ANDROID_BETA_STORE_PASSWORD }}
+          ANDROID_BETA_KEY_PASSWORD: ${{ secrets.ANDROID_BETA_KEY_PASSWORD }}
+          ANDROID_BETA_KEY_ALIAS: ${{ secrets.ANDROID_BETA_KEY_ALIAS }}
+        run: |
+          cd android
+          bash ./gradlew :app:assembleBeta --no-daemon
+          echo "ANDROID_BETA_APK=android/app/build/outputs/apk/beta/Ogarniacz-beta-$GITHUB_RUN_NUMBER-android.apk" >> "$GITHUB_ENV"
+
+      - name: Usuń tymczasowy klucz Beta
+        if: always()
+        run: rm -f -- "$RUNNER_TEMP/ogarniacz-beta/beta.jks"
 
       - name: Spakuj rzeczywiste buildy i wygeneruj manifest
         run: node scripts/test-build.mjs przygotuj
@@ -101,8 +141,16 @@ jobs:
           name: ogarniacz-beta-${{ github.run_number }}-${{ github.sha }}
           path: artifacts/beta
 
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'build-tools;36.0.0'
+
       - name: Zweryfikuj pliki, opublikuj draft i potwierdź publiczne digesty
         env:
+          ANDROID_BETA_CERT_SHA256: ${{ vars.ANDROID_BETA_CERT_SHA256 }}
           GH_TOKEN: ${{ github.token }}
           PUBLIKUJ_BETA: ${{ inputs.publish_beta }}
         run: node scripts/test-build.mjs opublikuj

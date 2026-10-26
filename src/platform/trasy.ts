@@ -1,3 +1,4 @@
+import { czyKanalBeta } from '../services/RuntimeConfigService'
 import type { DaneSzybkiegoDodawania, NazwaModulu, PowiazanieEncji, TypSzybkiegoDodawania } from '../domain/typy'
 
 export interface CelNawigacji {
@@ -110,7 +111,7 @@ export function normalizujSciezkePowiadomienia(sciezka: string): string | null {
 export function parsujDeepLink(adres: string): string | null {
   try {
     const url = new URL(adres)
-    if (url.protocol !== 'ogarniacz:' || url.username || url.password || url.port || url.hash) return null
+    if (url.protocol !== (czyKanalBeta() ? 'ogarniacz-beta:' : 'ogarniacz:') || url.username || url.password || url.port || url.hash) return null
 
     if (url.hostname === 'pulpit' && url.pathname && url.pathname !== '/') return null
     const sciezka = url.hostname === 'pulpit'

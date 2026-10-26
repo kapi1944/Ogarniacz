@@ -116,13 +116,13 @@ workflow dla aktualnego main po zielonym CI.
 
 W runnerze komplet znajduje się w `artifacts/beta/`, a w GitHub Actions w
 artefakcie `ogarniacz-beta-<numerBuildu>-<pełny SHA>` (retencja 30 dni).
-Przy publikacji te same trzy pliki stają się osobnymi assetami prerelease:
+Przy publikacji pliki stają się osobnymi assetami prerelease (C1 dodaje opcjonalny APK):
 
 | Plik | Zawartość |
 | --- | --- |
 | `Ogarniacz-beta-<numerBuildu>-web.tar.gz` | kompletny `dist/` bez dodatkowego katalogu głównego: frontend, zasoby, manifest PWA, service worker |
 | `Ogarniacz-beta-<numerBuildu>-raspberry.tar.gz` | `dist/`, skompilowany `dist-server/`, niezmienione `package.json` i `package-lock.json` |
-| `manifest-testowy.json` | manifest `ogarniacz-test-v1`: faktyczne nazwy, rozmiary, SHA-256 i identyfikatory GitHub; wyłącznie Web/Raspberry |
+| `manifest-testowy.json` | manifest `ogarniacz-test-v1`: faktyczne nazwy, rozmiary, SHA-256 i identyfikatory GitHub; Web/Raspberry oraz opcjonalnie Android po C1 |
 
 Obie paczki zawierają `metadane-testowe.json` przy plikach frontendu
 (w Raspberry: `dist/metadane-testowe.json`) z pełnym SHA, `runId` i numerem.
@@ -135,7 +135,7 @@ backupy, katalogi danych użytkownika, `.git`, `node_modules` ani projekt Androi
 Nowe rodzaje zasobów buildu wymagają jawnego rozszerzenia listy dozwolonych plików.
 
 Nie ma instalacji, restartu usług, zmiany produkcyjnego originu PWA ani Web OTA.
-Nie powstaje APK ani fikcyjny wpis Androida. Panel potwierdza dostępne platformy
+Etap B nie tworzył APK; C1 dodaje opcjonalny podpisany APK według procedury poniżej. Nigdy nie powstaje fikcyjny wpis Androida. Panel potwierdza dostępne platformy
 i wyświetla osobny komunikat o braku artefaktu Android Beta.
 
 ### Publikacja i błędy
@@ -144,7 +144,7 @@ Tag `beta-<numerBuildu>-<pełny SHA>` jest tworzony atomowo jako referencja
 bezpośrednio do commita źródeł. Istniejący tag, wydanie lub ponowienie tego samego
 przebiegu blokują publikację. Nie ma przesuwania tagów ani nadpisywania assetów.
 Najpierw powstaje draft prerelease z jedynym blokiem `json` w treści, następnie
-wszystkie trzy pliki. Dopiero po sprawdzeniu rozmiarów, stanu `uploaded` i
+wszystkie pliki manifestu i sam manifest. Dopiero po sprawdzeniu rozmiarów, stanu `uploaded` i
 `digest: sha256:<hash>` wszystkich plików draft jest upubliczniany.
 `prerelease=true` i `make_latest=false` pozostają ustawione. Pipeline nie korzysta
 z `/releases/latest`, nie przesuwa `rpi-stable` i nie uruchamia **Publikuj Ogarniacza**.
@@ -278,3 +278,90 @@ testów usługi/panelu zakończone sukcesem; typecheck, build Web/Raspberry oraz
 smoke PWA poprawne. Lint bez błędów, z istniejącymi ostrzeżeniami poza zakresem.
 Vitest i smoke PWA wymagały ponowienia poza sandboxem Windows z powodu blokady
 cache/localhost. Nie uruchamiano publikacji Beta ani produkcyjnej.
+
+## Etap C1 — osobna aplikacja Android Beta
+
+Stan: **implementacja wymaga konfiguracji podpisu**. W repozytorium GitHub
+26.10.2026 nie było czterech sekretów Beta ani zmiennej fingerprintu.
+Nie wygenerowano klucza ani podpisanego APK; nie publikowano Bety.
+
+Istniejący projekt Capacitor ma dodatkowy build type `beta` (`assembleBeta`).
+`debug` i `release` zachowują pakiet `pl.ogarniacz.app`, dotychczasową numerację
+z package.json i konfigurację podpisu release. Beta używa `pl.ogarniacz.app.beta`,
+nazwy **Ogarniacz Beta**, ikony z napisem BETA i stałego oznaczenia w interfejsie.
+Nie zmienia namespace Java ani package/lock. Android izoluje UID, WebView/IndexedDB,
+preferencje i prywatne pliki według pakietu; nie ma współdzielonego UID.
+FileProvider używa `${applicationId}.fileprovider`. Skróty Bety kierują do pakietu
+Beta i `ogarniacz-beta://`; Stable zachowuje `ogarniacz://`.
+Identyfikatory alarmów, kanałów i PendingIntent są dodatkowo izolowane pakietem Androida.
+
+Beta deklaruje natywny `KANAL_BETA` i `kanalBeta` w RuntimeConfig. Test Build
+kompiluje frontend z `VITE_KANAL_BETA=true`. Natywna konfiguracja Bety zawsze ma
+puste adresy synchronizacji i aktualizatora produkcyjnego oraz klucz Picovoice,
+niezależnie od odziedziczonych zmiennych i plików .env. Runtime usuwa adresy także
+przy błędnej konfiguracji. Centralny serwis konfiguracji i RepozytoriumZdalneHttp
+blokują synchronizację nawet dla jawnego URL; brak fallbacku do produkcji.
+Dostarczanie powiadomień i harmonogramowanie alarmów jest zablokowane także po
+imporcie testowych danych. Import kopii jest świadomą operacją użytkownika.
+Połączenie z backendem testowym wymaga osobnego etapu.
+
+### Jednorazowe przygotowanie trwałego podpisu
+
+Wykonuje właściciel poza repozytorium, na zaufanym komputerze:
+
+1. Utwórz **jeden osobny** klucz Beta, np. interaktywnie:
+   `keytool -genkeypair -keystore ogarniacz-beta.jks -alias ogarniacz-beta -keyalg RSA -keysize 3072 -validity 10000`.
+   Nie używaj istniejącego klucza produkcyjnego ani debug. Zapisz zaszyfrowaną kopię
+   keystore, alias i hasła w bezpiecznym miejscu; ten sam klucz jest potrzebny do aktualizacji Bety.
+2. Odczytaj fingerprint przez `keytool -list -v -keystore ogarniacz-beta.jks -alias ogarniacz-beta`.
+   Sprawdź, że różni się od certyfikatu produkcyjnego. Usuń dwukropki i zapisz
+   64 małe znaki hex w **Actions → Variables → ANDROID_BETA_CERT_SHA256**.
+   To publiczne, niezależne przypięcie; pipeline nigdy nie bierze wartości oczekiwanej z APK.
+3. W **Actions → Secrets** ustaw:
+   `ANDROID_BETA_KEYSTORE_BASE64` (Base64 całego trwałego keystore),
+   `ANDROID_BETA_STORE_PASSWORD`, `ANDROID_BETA_KEY_PASSWORD`, `ANDROID_BETA_KEY_ALIAS`.
+   Wartości przekazuj z bezpiecznych plików/stdin lub formularza GitHub, bez wklejania
+   do poleceń, logów, issue ani historii terminala. Base64 nie jest szyfrowaniem.
+4. Po zielonym CI uruchom nowy Test Build z **main** i **publish_beta=false**.
+   Brak któregokolwiek pola pomija APK i zapisuje „wymaga konfiguracji” w summary.
+   Niepełna konfiguracja nigdy nie daje gotowości Android Beta. Błędny klucz,
+   hasło, pakiet, numeracja lub certyfikat kończą build błędem, bez publikacji.
+
+Keystore trafia tylko do prywatnego katalogu RUNNER_TEMP z uprawnieniami 0600,
+nie do źródeł ani artefaktów; krok `always()` usuwa go po budowaniu.
+Nie jest generowany przy kolejnych buildach. Produkcyjne sekrety nie są odczytywane.
+`apksigner verify --verbose --print-certs` sprawdza integralność podpisu i wymaga
+jednego certyfikatu zgodnego z przypiętym SHA-256. `aapt dump badging` niezależnie
+sprawdza rzeczywisty pakiet, versionCode i versionName. Kontrola powtarza się po
+pobraniu artefaktu przez zadanie publikacji, przed utworzeniem publicznego release.
+
+### Numeracja i artefakty C1
+
+`versionName=1.1.0-beta.<github.run_number>`, `versionCode=github.run_number`
+(1–2100000000). Kolejny dispatch daje większy kod, a luki po nieudanych przebiegach
+są dozwolone. Ponowienia `run_attempt > 1` pozostają zabronione. Nie resetuj licznika
+workflow ani nie przenoś go do nowego workflow z niższą numeracją. Przy wyczerpaniu
+zakresu wymagany jest osobny projekt zmiany numeracji. Android blokuje zwykłą
+instalację APK o niższym versionCode; pipeline wymaga dokładnego kodu bieżącego
+przebiegu. Nie używa opcji dopuszczających downgrade ani nie instaluje aplikacji.
+
+Manifest nadal wymaga Web i Raspberry, dopuszczając **opcjonalny trzeci artefakt**
+`Ogarniacz-beta-<numerBuildu>-android.apk`. Android pojawia się wyłącznie po
+rzeczywistym podpisanym buildzie i weryfikacji. Wpis zawiera rzeczywisty rozmiar,
+SHA-256 bajtów APK, `pakiet=pl.ogarniacz.app.beta` i SHA-256 certyfikatu odczytany
+z APK. Razem z manifestem komplet ma trzy lub cztery pliki. Allowlista archiwów,
+kontrola kompletności, publicznych digestów i blokady tagów/main/CI pozostają aktywne.
+Czytnik Etapu A już obsługuje trzy platformy; test C1 potwierdza pełny odczyt i
+odrzucenie niekompletnych publicznych assetów. Czytnik nie instaluje APK.
+
+CI sprawdza Stable oraz Beta przez Gradle/Robolectric, w tym pakiet, prywatny katalog,
+provider, nazwę, skróty i puste endpointy Bety. Testy JS sprawdzają brak wywołań
+HTTP push/pull przy jawnym produkcyjnym adresie, brak dostarczania alarmów i linki.
+Testy skryptów obejmują numerację, ponowienia, obcy/brakujący certyfikat i pakiet.
+Test Build zachowuje Web/PWA, Raspberry i opcjonalny APK w Actions bez publikacji.
+Testy Gradle nie potwierdzają instalacji na fizycznym Samsungu.
+
+**C2 pozostaje niewykonany:** pobieranie i instalacja z panelu, obsługa postępu,
+anulowania oraz potwierdzenie zainstalowanego pakietu i podpisu. C1 nie uruchamia
+C2/D/E/F, nie zmienia Raspberry ani danych użytkowników, nie przesuwa `rpi-stable`
+i nie publikuje Stable 1.1.0.

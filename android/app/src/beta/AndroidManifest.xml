@@ -1,0 +1,3 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <application android:icon="@drawable/ikona_beta" android:roundIcon="@drawable/ikona_beta" tools:replace="android:icon,android:roundIcon" />
+</manifest>

@@ -8,7 +8,7 @@ import { inicjalizujPlatforme } from './platform/platforma'
 import { inicjalizujWidgetSnapshotService } from './services/WidgetSnapshotService'
 import { inicjalizujSynchronizacjeAplikacji } from './services/SynchronizacjaAplikacji'
 import { inicjalizujKontroleAktualizacjiAplikacji } from './services/KontrolaAktualizacjiAplikacji'
-import { inicjalizujRuntimeConfig } from './services/RuntimeConfigService'
+import { czyKanalBeta, inicjalizujRuntimeConfig } from './services/RuntimeConfigService'
 import { AktualizacjaPwa } from './app/AktualizacjaPwa'
 import { AktualizacjaAndroid } from './app/AktualizacjaAndroid'
 import './styles/glowny.css'
@@ -24,6 +24,13 @@ window.addEventListener(ZDARZENIE_ZAMKNIECIA_PROFILU, () => korzen.render(<main 
 nasluchujZmianyProfilu()
 try {
   await inicjalizujRuntimeConfig()
+  if (czyKanalBeta() && !document.getElementById('oznaczenie-bety')) {
+    const oznaczenie = document.createElement('div')
+    oznaczenie.id = 'oznaczenie-bety'
+    oznaczenie.textContent = 'BETA — synchronizacja i powiadomienia wyłączone'
+    oznaczenie.style.cssText = 'position:sticky;top:0;z-index:10000;text-align:center;background:#245d50;color:white;font-size:12px;padding:4px'
+    document.body.prepend(oznaczenie)
+  }
   if (tokenResetowaniaHasla !== undefined) {
     korzen.render(<EkranResetowaniaHasla token={tokenResetowaniaHasla} />)
   } else {

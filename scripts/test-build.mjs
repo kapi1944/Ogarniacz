@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
+import { zweryfikujApkBety } from './android-beta.mjs'
 import { execFileSync } from 'node:child_process'
-import { lstat, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { copyFile, lstat, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parsujManifestTestowy } from '../src/platform/AktualizacjeTestoweService.ts'
@@ -128,7 +129,7 @@ export function sprawdzArchiwum(sciezka, platforma, kontekst) {
   return pliki
 }
 
-export async function przygotujArtefakty(kontekst, bramka, katalog = '.', wyjscie = katalogWynikow, odczytajGit = wykonajGit) {
+export async function przygotujArtefakty(kontekst, bramka, katalog = '.', wyjscie = katalogWynikow, odczytajGit = wykonajGit, apkBety = process.env.ANDROID_BETA_APK) {
   wymagaj(!odczytajGit('status', '--porcelain', '--untracked-files=normal'), 'Nie można pakować zmodyfikowanych źródeł.')
   wymagaj(odczytajGit('rev-parse', 'HEAD') === kontekst.sha, 'Niezgodny SHA źródeł i manifestu.')
   await mkdir(wyjscie, { recursive: true })
@@ -148,6 +149,13 @@ export async function przygotujArtefakty(kontekst, bramka, katalog = '.', wyjsci
     const bajty = await readFile(sciezka)
     artefakty.push({ platforma, nazwa, rozmiar: bajty.length, sha256: obliczSha256(bajty) })
   }
+  if (apkBety) {
+    const sha256Certyfikatu = zweryfikujApkBety(apkBety, kontekst)
+    const nazwa = `Ogarniacz-beta-${kontekst.numerBuildu}-android.apk`
+    await copyFile(apkBety, join(wyjscie, nazwa))
+    const bajty = await readFile(join(wyjscie, nazwa))
+    artefakty.push({ platforma: 'android', nazwa, rozmiar: bajty.length, sha256: obliczSha256(bajty), pakiet: 'pl.ogarniacz.app.beta', sha256Certyfikatu })
+  }
   const manifest = parsujManifestTestowy({
     format: 'ogarniacz-test-v1', repozytorium, galaz: 'main', kanal: 'beta', sha: kontekst.sha,
     wersja: `1.1.0-beta.${kontekst.numerBuildu}`, numerBuildu: kontekst.numerBuildu,
@@ -162,14 +170,16 @@ export async function zweryfikujPliki(kontekst, katalog = katalogWynikow) {
   const manifest = parsujManifestTestowy(JSON.parse(bajtyManifestu.toString('utf8')))
   wymagaj(manifest.sha === kontekst.sha && manifest.runId === kontekst.runId && manifest.numerBuildu === kontekst.numerBuildu
     && manifest.wersja === `1.1.0-beta.${kontekst.numerBuildu}`, 'Niezgodny SHA, przebieg lub numeracja Beta w manifeście.')
-  wymagaj(manifest.artefakty.length === 2 && ['web', 'raspberry'].every((platforma) => manifest.artefakty.some((artefakt) => artefakt.platforma === platforma)), 'Etap B wymaga rzeczywistych Web i Raspberry, bez Androida.')
+  wymagaj([2, 3].includes(manifest.artefakty.length) && ['web', 'raspberry'].every((platforma) => manifest.artefakty.some((artefakt) => artefakt.platforma === platforma)), 'Wymagane Web i Raspberry oraz opcjonalny Android.')
   const pliki = [{ nazwa: nazwaManifestu, bajty: bajtyManifestu }]
   for (const artefakt of manifest.artefakty) {
     const sciezka = join(katalog, artefakt.nazwa)
     wymagaj((await lstat(sciezka)).isFile(), 'Artefakt nie jest zwykłym plikiem.')
     const bajty = await readFile(sciezka)
     wymagaj(bajty.length === artefakt.rozmiar && obliczSha256(bajty) === artefakt.sha256, 'Niezgodny rozmiar lub SHA-256 artefaktu.')
-    sprawdzArchiwum(sciezka, artefakt.platforma, kontekst)
+    if (artefakt.platforma === 'android') {
+      wymagaj(artefakt.sha256Certyfikatu === zweryfikujApkBety(sciezka, kontekst), 'Niezgodny certyfikat manifestu.')
+    } else sprawdzArchiwum(sciezka, artefakt.platforma, kontekst)
     pliki.push({ nazwa: artefakt.nazwa, bajty })
   }
   wymagaj((await readdir(katalog)).sort().join('\n') === pliki.map((plik) => plik.nazwa).sort().join('\n'), 'Nieoczekiwane pliki obok manifestu.')

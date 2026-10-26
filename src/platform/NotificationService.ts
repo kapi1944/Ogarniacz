@@ -1,3 +1,4 @@
+import { czyKanalBeta } from '../services/RuntimeConfigService'
 import { czyBiezacyDostep, zakresDanychZdrowotnych } from '../services/UprawnieniaService'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import type { Przypomnienie } from '../domain/typy'
@@ -209,6 +210,7 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
   }
 
   const pokaz = async ({ tytul, tresc, sciezka, rodzaj }: DanePowiadomienia) => {
+    if (czyKanalBeta()) return false
     if (czyAndroid) {
       if (rodzaj !== 'synchronizacja') return false
       await inicjalizuj()

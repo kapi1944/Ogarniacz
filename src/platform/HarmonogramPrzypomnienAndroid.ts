@@ -1,3 +1,4 @@
+import { czyKanalBeta } from '../services/RuntimeConfigService'
 import {
   LocalNotifications,
   type LocalNotificationSchema,
@@ -59,7 +60,7 @@ function schematNatywny(powiadomienie: PowiadomieniePlatformowe, exactAlarmsDost
 
 export function utworzHarmonogramPrzypomnienAndroid(czyAndroid: boolean) {
   const czyDostarczenieDostepne = async () => {
-    if (!czyAndroid) return false
+    if (!czyAndroid || czyKanalBeta()) return false
     try {
       const [zgoda, systemowe] = await Promise.all([
         LocalNotifications.checkPermissions(),
@@ -72,7 +73,7 @@ export function utworzHarmonogramPrzypomnienAndroid(czyAndroid: boolean) {
   }
 
   const czyExactAlarmsDostepne = async () => {
-    if (!czyAndroid) return false
+    if (!czyAndroid || czyKanalBeta()) return false
     try {
       return (await LocalNotifications.checkExactNotificationSetting()).exact_alarm === 'granted'
     } catch {

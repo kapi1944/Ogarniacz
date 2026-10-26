@@ -45,6 +45,8 @@ def odczytajZmiennaRuntime = { nazwa ->
 def literalKonfiguracjiRuntime = { nazwa ->
     '"' + odczytajZmiennaRuntime(nazwa).replace('\\', '\\\\').replace('"', '\\"') + '"'
 }
+def numerBety = System.getenv('GITHUB_RUN_NUMBER') ?: '1'
+def poprawnyNumerBety = numerBety ==~ /[1-9][0-9]*/ && numerBety.toBigInteger() <= 2_100_000_000
 android {
     namespace = "pl.ogarniacz.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -58,6 +60,8 @@ android {
         buildConfigField "String", "PICOVOICE_ACCESS_KEY", literalKluczaPicovoice
         buildConfigField "String", "SYNC_API_URL", literalKonfiguracjiRuntime('VITE_SYNC_API_URL')
         buildConfigField "String", "ANDROID_UPDATE_MANIFEST_URL", literalKonfiguracjiRuntime('VITE_ANDROID_UPDATE_MANIFEST_URL')
+        buildConfigField "boolean", "KANAL_BETA", "false"
+        manifestPlaceholders = [schematLinkow: 'ogarniacz']
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -71,6 +75,12 @@ android {
         unitTests.includeAndroidResources = true
     }
     signingConfigs {
+        beta {
+            storeFile file(System.getenv('ANDROID_BETA_KEYSTORE_PATH') ?: 'brak-beta.jks')
+            storePassword System.getenv('ANDROID_BETA_STORE_PASSWORD')
+            keyAlias System.getenv('ANDROID_BETA_KEY_ALIAS')
+            keyPassword System.getenv('ANDROID_BETA_KEY_PASSWORD')
+        }
         release {
             if (czyKonfiguracjaPodpisuPelna) {
                 storeFile rootProject.file(wlasciwosciPodpisu.getProperty('storeFile'))
@@ -81,6 +91,17 @@ android {
         }
     }
     buildTypes {
+        beta {
+            initWith release
+            applicationIdSuffix '.beta'
+            signingConfig signingConfigs.beta
+            matchingFallbacks = ['release']
+            buildConfigField "boolean", "KANAL_BETA", "true"
+            buildConfigField "String", "SYNC_API_URL", '""'
+            buildConfigField "String", "ANDROID_UPDATE_MANIFEST_URL", '""'
+            buildConfigField "String", "PICOVOICE_ACCESS_KEY", '""'
+            manifestPlaceholders = [schematLinkow: 'ogarniacz-beta']
+        }
         release {
             if (czyKonfiguracjaPodpisuPelna) {
                 signingConfig signingConfigs.release
@@ -92,6 +113,10 @@ android {
 }
 
 gradle.taskGraph.whenReady { grafZadan ->
+    if (grafZadan.allTasks.any { it.path == ':app:packageBeta' }) {
+        if (!poprawnyNumerBety || (System.getenv('GITHUB_RUN_ATTEMPT') ?: '1') != '1') throw new GradleException('Nieprawidłowy numer Bety lub ponowienie workflow.')
+        if (!System.getenv('ANDROID_BETA_KEYSTORE_PATH') || !android.signingConfigs.beta.storeFile.exists()) throw new GradleException('Beta wymaga osobnego trwałego keystore.')
+    }
     def czyPowstajeArtefaktRelease = grafZadan.allTasks.any { zadanie ->
         zadanie.path == ':app:packageRelease' || zadanie.path == ':app:packageReleaseBundle'
     }
@@ -109,6 +134,12 @@ gradle.taskGraph.whenReady { grafZadan ->
 
 android.applicationVariants.all { wariant ->
     wariant.outputs.all { wyjscie ->
+        if (wariant.buildType.name == 'beta') {
+            wyjscie.versionCodeOverride = poprawnyNumerBety ? numerBety.toInteger() : 1
+            wyjscie.versionNameOverride = "1.1.0-beta." + numerBety
+            wyjscie.outputFileName = "Ogarniacz-beta-" + numerBety + "-android.apk"
+            return
+        }
         wyjscie.outputFileName = "Ogarniacz-${wersjaAplikacji}-${wariant.buildType.name}.apk"
     }
 }

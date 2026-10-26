@@ -16,6 +16,7 @@ function sprawdzAdresApi(adresApi: string): string | undefined {
 export function pobierzKonfiguracjeSynchronizacji(
   zmienne?: Record<string, string | undefined>,
 ): KonfiguracjaSynchronizacji {
+  if (czyKanalBeta()) return { blad: 'Synchronizacja w Beta jest zablokowana.' }
   const adresApi = (zmienne?.VITE_SYNC_API_URL ?? pobierzKonfiguracjeRuntime().syncApiUrl)?.trim()
   if (!adresApi) return {}
   const poprawnyAdres = adresApi ? sprawdzAdresApi(adresApi) : undefined
@@ -24,4 +25,4 @@ export function pobierzKonfiguracjeSynchronizacji(
   }
   return { adresApi: poprawnyAdres }
 }
-import { pobierzKonfiguracjeRuntime } from './RuntimeConfigService'
+import { czyKanalBeta, pobierzKonfiguracjeRuntime } from './RuntimeConfigService'

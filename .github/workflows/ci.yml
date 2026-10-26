@@ -54,7 +54,7 @@ jobs:
         run: node --test scripts/publikacja-klasyfikacja.test.mjs scripts/rpi-bezpieczenstwo.test.mjs scripts/aktualizuj-rpi.test.mjs scripts/deploy-rpi.test.mjs scripts/android.test.mjs
 
       - name: Build
-        run: node --test scripts/metadane-buildu.test.mjs && npm run build
+        run: node --test scripts/metadane-buildu.test.mjs scripts/test-build.test.mjs scripts/android-beta.test.mjs && npm run build
 
   android:
     name: Android (JDK 21 / updater / build)
@@ -80,8 +80,12 @@ jobs:
 
       - name: Testy natywnego updatera i eksportu pliku
         working-directory: android
-        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.PobieranieApkTest' --tests 'pl.ogarniacz.app.MigracjaPozostalosciWebOtaTest' --tests 'pl.ogarniacz.app.RuntimeConfigPluginTest' --tests 'pl.ogarniacz.app.EksportPlikuPluginTest' --no-daemon
+        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.PobieranieApkTest' --tests 'pl.ogarniacz.app.MigracjaPozostalosciWebOtaTest' --tests 'pl.ogarniacz.app.RuntimeConfigPluginTest' --tests 'pl.ogarniacz.app.EksportPlikuPluginTest' --tests 'pl.ogarniacz.app.WariantAndroidTest' --no-daemon
 
       - name: Gradle assembleDebug
         working-directory: android
         run: bash ./gradlew assembleDebug --no-daemon
+
+      - name: Regresja wariantu Beta bez klucza produkcyjnego
+        working-directory: android
+        run: bash ./gradlew :app:testBetaUnitTest :app:processBetaMainManifest --no-daemon

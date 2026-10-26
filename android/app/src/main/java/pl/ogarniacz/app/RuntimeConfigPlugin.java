@@ -11,6 +11,7 @@ public class RuntimeConfigPlugin extends Plugin {
     @PluginMethod
     public void pobierzKonfiguracje(PluginCall wywolanie) {
         JSObject konfiguracja = new JSObject();
+        konfiguracja.put("kanalBeta", BuildConfig.KANAL_BETA);
         konfiguracja.put("syncApiUrl", pobierzSyncApiUrl());
         konfiguracja.put("androidUpdateManifestUrl", pobierzAdresManifestuApk());
         wywolanie.resolve(konfiguracja);

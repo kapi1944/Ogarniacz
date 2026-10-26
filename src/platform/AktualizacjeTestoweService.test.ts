@@ -58,6 +58,19 @@ describe('wykrywanie rzeczywistej platformy', () => {
 })
 
 describe('manifest i pełne SHA', () => {
+  it('przyjmuje trzy platformy i weryfikuje komplet publicznych digestów', async () => {
+    const dane = { ...manifest, artefakty: [
+      ...manifest.artefakty,
+      { ...manifest.artefakty[0], platforma: 'web', nazwa: 'web.tar.gz' },
+      { ...manifest.artefakty[0], platforma: 'raspberry', nazwa: 'raspberry.tar.gz' },
+    ] }
+    expect(parsujManifestTestowy(dane).artefakty).toHaveLength(3)
+    const { usluga, sygnal } = przygotuj({ manifest: dane })
+    expect((await usluga.sprawdzBuild(sygnal)).manifest?.artefakty).toHaveLength(3)
+    const niekompletne = wydanie(dane)
+    niekompletne.assets.pop()
+    await expect(przygotuj({ manifest: dane, wydania: [niekompletne] }).usluga.sprawdzBuild(sygnal)).rejects.toThrow()
+  })
   it('porównuje wyłącznie pełne SHA, bez dopasowywania prefiksu', () => {
     expect(czyTeSameSha(sha, sha.toUpperCase())).toBe(true)
     expect(czyTeSameSha(sha, sha.slice(0, 7))).toBe(false)
