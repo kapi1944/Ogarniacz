@@ -13,6 +13,9 @@ obsługuje wyłącznie oryginalne artefakty częściowego wydania.
 
 **Actions → Publikuj Ogarniacza → Run workflow**, gałąź `main`.
 Wejścia: `version_bump` (patch domyślnie, minor lub major) i opcjonalne `release_notes`.
+Po produkcyjnym `1.0.23` domyślne patch przechodzi do `1.1.0`, następnie do
+`1.1.1`. Reguła znajduje się w istniejącym skrypcie przygotowania wydania.
+Kanał testowy jest rozwijany osobno: [Aktualizacje testowe — Etap A](AKTUALIZACJE_TESTOWE.md).
 Nie ma `new_release`. Workflow sprawdza dokładny SHA checkoutu, aktualny main oraz
 zakończone sukcesem CI typu push lub workflow_dispatch dla tego samego SHA. Brak zielonego CI zatrzymuje
 publikację przed przygotowaniem wersji i artefaktów.

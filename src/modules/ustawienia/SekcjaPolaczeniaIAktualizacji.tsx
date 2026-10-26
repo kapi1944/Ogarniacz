@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { PanelAktualizacji } from './PanelAktualizacji'
 import { PanelAktualizacjiRaspberry } from './PanelAktualizacjiRaspberry'
+import { PanelAktualizacjiTestowych } from './PanelAktualizacjiTestowych'
 import { PodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
 import { platforma } from '../../platform/platforma'
 import type { DaneDiagnostykiSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
@@ -12,5 +13,6 @@ export function SekcjaPolaczeniaIAktualizacji({ synchronizacjaSkonfigurowana, di
     {dzieci}
     <UstawieniaPowiadomienSynchronizacji />
     {platforma.natywna ? <PanelAktualizacji /> : <PanelAktualizacjiRaspberry />}
+    <PanelAktualizacjiTestowych />
   </section>
 }

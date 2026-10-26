@@ -54,7 +54,7 @@ jobs:
         run: node --test scripts/publikacja-klasyfikacja.test.mjs scripts/rpi-bezpieczenstwo.test.mjs scripts/aktualizuj-rpi.test.mjs scripts/deploy-rpi.test.mjs scripts/android.test.mjs
 
       - name: Build
-        run: npm run build
+        run: node --test scripts/metadane-buildu.test.mjs && npm run build
 
   android:
     name: Android (JDK 21 / updater / build)

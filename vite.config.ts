@@ -1,9 +1,12 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { odczytajMetadaneBuildu } from './scripts/metadane-buildu.ts'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 const pakiet = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string }
+const metadaneBuildu = odczytajMetadaneBuildu(fileURLToPath(new URL('.', import.meta.url)))
 export default defineConfig({
   server: {
     watch: {
@@ -12,6 +15,7 @@ export default defineConfig({
   },
   define: {
     __WERSJA_APLIKACJI__: JSON.stringify(pakiet.version),
+    __METADANE_BUILDU__: JSON.stringify(metadaneBuildu),
   },
   plugins: [
     react(),

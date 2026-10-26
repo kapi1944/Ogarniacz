@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { execFileSync, spawnSync, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, chmodSync, existsSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { DatabaseSync } from 'node:sqlite'
 import test from 'node:test'
 
@@ -11,7 +12,8 @@ const unix = (sciezka) => process.platform === 'win32' ? `/${sciezka[0].toLowerC
 const git = (katalog, ...argumenty) => execFileSync('git', argumenty, { cwd: katalog, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 
 test('rpi-stable, preflight, izolowany build, snapshot i rollback kodu oraz bazy', async () => {
-  const katalog = mkdtempSync(join(process.cwd(), '.ogarniacz-rpi-test-'))
+  // Krótka ścieżka chroni SQLite wraz z plikami journal przed limitem ścieżek Windows.
+  const katalog = mkdtempSync(join(tmpdir(), 'ogarniacz-rpi-'))
   try {
     const zrodlo = join(katalog, 'zrodlo'), origin = join(katalog, 'origin.git'), produkcja = join(katalog, 'produkcja'), narzedzia = join(katalog, 'narzedzia')
     mkdirSync(zrodlo); mkdirSync(narzedzia)
