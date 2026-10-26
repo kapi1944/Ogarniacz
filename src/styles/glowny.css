@@ -2030,12 +2030,13 @@ input[type="radio"] {
   .mobilny-drawer {
     position: fixed;
     right: 0;
-    bottom: calc(var(--wysokosc-nawigacji-mobilnej) + var(--bezpieczny-obszar-dol));
+    bottom: calc(var(--dol-widoku-modulow, 0px) + var(--wysokosc-nawigacji-mobilnej) + var(--bezpieczny-obszar-dol));
     left: 0;
     z-index: 80;
     display: flex;
-    max-height: min(72dvh, 650px);
+    max-height: min(650px, calc(var(--wysokosc-widoku-modulow, 100dvh) - var(--wysokosc-nawigacji-mobilnej) - var(--bezpieczny-obszar-dol) - var(--bezpieczny-obszar-gora) - 8px));
     flex-direction: column;
+    padding-inline: var(--bezpieczny-obszar-lewo) var(--bezpieczny-obszar-prawo);
     color: var(--tekst);
     background: var(--panel);
     border: 1px solid var(--obramowanie);
@@ -2044,6 +2045,7 @@ input[type="radio"] {
     box-shadow: 0 -22px 60px rgb(0 0 0 / 24%);
   }
 
+  .mobilny-drawer > :not(.mobilny-drawer__nawigacja) { flex-shrink: 0; }
   .mobilny-drawer__uchwyt { width: 42px; height: 4px; margin: 8px auto 2px; background: var(--obramowanie-mocne); border-radius: 999px; }
   .mobilny-drawer__naglowek { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px 10px; gap: 12px; border-bottom: 1px solid var(--obramowanie); }
   .mobilny-drawer__naglowek > div { display: grid; gap: 2px; }
@@ -2052,7 +2054,7 @@ input[type="radio"] {
   .mobilny-drawer__wyszukiwanie:focus-within { border-color: var(--akcent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--akcent) 16%, transparent); }
   .mobilny-drawer__wyszukiwanie svg { width: 18px; color: var(--tekst-2); }
   .mobilny-drawer__wyszukiwanie input { flex: 1; min-width: 0; color: var(--tekst); background: transparent; border: 0; outline: 0; font-size: 1rem; }
-  .mobilny-drawer__nawigacja { padding: 10px 12px 18px; overflow-y: auto; overscroll-behavior: contain; }
+  .mobilny-drawer__nawigacja { min-height: 0; padding: 10px 12px 18px; overflow-y: auto; overscroll-behavior: contain; }
   .mobilny-drawer__grupa { display: grid; gap: 5px; margin-bottom: 13px; }
   .mobilny-drawer__grupa > span { color: var(--tekst-2); font-size: .65rem; font-weight: 760; letter-spacing: .08em; text-transform: uppercase; }
   .mobilny-drawer__grupa > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }

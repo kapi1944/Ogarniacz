@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   AlarmClock, Archive, Bell, BookOpen, CalendarClock, CalendarDays, CheckSquare, ChevronLeft,
@@ -87,6 +87,9 @@ export function DolnaNawigacjaMobilna({
 }) {
   const [wiecejOtwarte, ustawWiecejOtwarte] = useState(false)
   const [frazaModulow, ustawFrazeModulow] = useState('')
+  const przyciskWiecej = useRef<HTMLButtonElement>(null)
+  const przyciskZamkniecia = useRef<HTMLButtonElement>(null)
+  const panelModulow = useRef<HTMLElement>(null)
   const { pathname } = useLocation()
   const wiecejAktywne = !glowneAdresyMobilne.has(pathname)
 
@@ -97,14 +100,52 @@ export function DolnaNawigacjaMobilna({
   }, [wiecejOtwarte])
   useEffect(() => {
     if (!wiecejOtwarte) return
+    const przyciskPowrotu = przyciskWiecej.current
+    przyciskZamkniecia.current?.focus({ preventScroll: true })
     const zamknijPoEscape = (zdarzenie: KeyboardEvent) => {
-      if (zdarzenie.key === 'Escape') ustawWiecejOtwarte(false)
+      if (zdarzenie.key === 'Escape') {
+        ustawWiecejOtwarte(false)
+        ustawFrazeModulow('')
+      }
+      if (zdarzenie.key !== 'Tab') return
+      const elementy = panelModulow.current?.querySelectorAll<HTMLElement>('button, input, a[href]')
+      if (!elementy?.length) return
+      const pierwszy = elementy[0]
+      const ostatni = elementy[elementy.length - 1]
+      if (zdarzenie.shiftKey && document.activeElement === pierwszy) {
+        zdarzenie.preventDefault()
+        ostatni.focus()
+      } else if (!zdarzenie.shiftKey && document.activeElement === ostatni
+        || !panelModulow.current?.contains(document.activeElement)) {
+        zdarzenie.preventDefault()
+        pierwszy.focus()
+      }
     }
     window.addEventListener('keydown', zamknijPoEscape)
-    return () => window.removeEventListener('keydown', zamknijPoEscape)
+    return () => {
+      window.removeEventListener('keydown', zamknijPoEscape)
+      przyciskPowrotu?.focus({ preventScroll: true })
+    }
   }, [wiecejOtwarte])
-  useObslugaWstecz(wiecejOtwarte, () => ustawWiecejOtwarte(false), 80)
+  useEffect(() => {
+    if (!wiecejOtwarte || !window.visualViewport) return
+    const widok = window.visualViewport
+    const dopasujPanel = () => {
+      panelModulow.current?.style.setProperty('--wysokosc-widoku-modulow', `${widok.height}px`)
+      panelModulow.current?.style.setProperty('--dol-widoku-modulow', `${Math.max(0, window.innerHeight - widok.height - widok.offsetTop)}px`)
+    }
+    dopasujPanel()
+    widok.addEventListener('resize', dopasujPanel)
+    widok.addEventListener('scroll', dopasujPanel)
+    window.addEventListener('resize', dopasujPanel)
+    return () => {
+      widok.removeEventListener('resize', dopasujPanel)
+      widok.removeEventListener('scroll', dopasujPanel)
+      window.removeEventListener('resize', dopasujPanel)
+    }
+  }, [wiecejOtwarte])
   const zamknijWiecej = () => { ustawWiecejOtwarte(false); ustawFrazeModulow('') }
+  useObslugaWstecz(wiecejOtwarte, zamknijWiecej, 80)
   const szukanaFraza = frazaModulow.trim().toLocaleLowerCase('pl-PL')
   const widoczneGrupy = grupy.map((grupa) => ({
     ...grupa,
@@ -118,13 +159,13 @@ export function DolnaNawigacjaMobilna({
   return <>
     {wiecejOtwarte && <>
       <div className="mobilny-drawer-tlo" aria-hidden="true" />
-      <section className="mobilny-drawer" role="dialog" aria-modal="true" aria-labelledby="mobilny-drawer-tytul">
+      <section ref={panelModulow} className="mobilny-drawer" role="dialog" aria-modal="true" aria-labelledby="mobilny-drawer-tytul">
         <div className="mobilny-drawer__uchwyt" aria-hidden="true" />
         <header className="mobilny-drawer__naglowek">
           <div><strong id="mobilny-drawer-tytul">Więcej modułów</strong><small>Wszystkie dostępne obszary Ogarniacza</small></div>
-          <button type="button" className="przycisk-ikona" onClick={zamknijWiecej} aria-label="Zamknij listę modułów"><X aria-hidden="true" /></button>
+          <button ref={przyciskZamkniecia} type="button" className="przycisk-ikona" onClick={zamknijWiecej} aria-label="Zamknij listę modułów"><X aria-hidden="true" /></button>
         </header>
-        <label className="mobilny-drawer__wyszukiwanie"><Search aria-hidden="true" /><span className="sr-only">Znajdź moduł</span><input type="search" autoFocus value={frazaModulow} onChange={(zdarzenie) => ustawFrazeModulow(zdarzenie.target.value)} placeholder="Znajdź moduł…" /></label>
+        <label className="mobilny-drawer__wyszukiwanie"><Search aria-hidden="true" /><span className="sr-only">Znajdź moduł</span><input type="search" value={frazaModulow} onChange={(zdarzenie) => ustawFrazeModulow(zdarzenie.target.value)} placeholder="Znajdź moduł…" /></label>
         <nav className="mobilny-drawer__nawigacja" aria-label="Pozostałe moduły">
           {widoczneGrupy.map((grupa) => <div className="mobilny-drawer__grupa" key={grupa.etykieta}>
               <span>{grupa.etykieta}</span>
@@ -142,7 +183,7 @@ export function DolnaNawigacjaMobilna({
       <NavLink to="/dzisiaj" className="dolna-nawigacja__element"><CalendarDays aria-hidden="true" /><span>Dzisiaj</span></NavLink>
       <button type="button" className="dolna-nawigacja__dodaj" onClick={otworzSzybkieDodawanie} aria-label="Dodaj nowy element"><span><Plus aria-hidden="true" /></span><small>Dodaj</small></button>
       <NavLink to="/echo" className="dolna-nawigacja__element"><MessageCircle aria-hidden="true" /><span>Echo</span></NavLink>
-      <button type="button" className={`dolna-nawigacja__element ${wiecejAktywne || wiecejOtwarte ? 'active' : ''}`} onClick={() => ustawWiecejOtwarte(true)} aria-haspopup="dialog" aria-expanded={wiecejOtwarte}><Ellipsis aria-hidden="true" /><span>Więcej</span></button>
+      <button ref={przyciskWiecej} type="button" className={`dolna-nawigacja__element ${wiecejAktywne || wiecejOtwarte ? 'active' : ''}`} onClick={() => ustawWiecejOtwarte(true)} aria-haspopup="dialog" aria-expanded={wiecejOtwarte}><Ellipsis aria-hidden="true" /><span>Więcej</span></button>
     </nav>
   </>
 }
