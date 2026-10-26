@@ -1,8 +1,9 @@
-# Aktualizacje testowe — Etap A
+# Aktualizacje testowe — Etapy A i B
 
 Zaimplementowano fundament: Ustawienia → Połączenie i aktualizacje →
 **Aktualizacje testowe**, metadane uruchomionego frontendu, odczyt GitHub i walidację
-kontraktu manifestu. Nie jest to jeszcze kompletny system instalacji Beta.
+kontraktu manifestu. Etap B dodaje ręczne budowanie, weryfikację i opcjonalne
+udostępnianie Web/Raspberry przez GitHub Actions. Nie jest to jeszcze system instalacji Beta.
 
 ## Działanie na platformach
 
@@ -33,10 +34,11 @@ Archiwum przygotowywane przez istniejący skrypt Raspberry otrzymuje `GITHUB_SHA
 dokładnego commita i nie dziedziczy HEAD nadrzędnego repozytorium. Bez możliwości
 sprawdzenia checkoutu panel nie deklaruje czystości źródeł.
 
-## Kontrakt kanału testowego dla Etapu B
+## Kontrakt kanału testowego
 
-Poniższy kontrakt jest obsługiwany przez czytnik. Workflow `test-build.yml`
-**nie został jeszcze dodany**; żaden prerelease nie został opublikowany w ramach Etapu A.
+Poniższy kontrakt jest obsługiwany przez czytnik Etapu A i generator
+`scripts/test-build.mjs`. Ręczny workflow `.github/workflows/test-build.yml`
+nosi nazwę **Test Build Ogarniacza**. Dodanie workflow nie publikuje prerelease.
 
 Kanał to publiczny, niedraftowy **prerelease**, z nowym, nieprzesuwanym tagiem
 `beta-<numerBuildu>-<pełny SHA>`. Nie korzysta z `/releases/latest`.
@@ -55,7 +57,7 @@ Manifest `ogarniacz-test-v1` ma pola:
 | każdy artefakt | `platforma`, `nazwa`, `rozmiar` w bajtach, `sha256` |
 | dodatkowo Android | `pakiet`: `pl.ogarniacz.app.beta`, `sha256Certyfikatu` |
 
-Przyszły pipeline ma udostępnić manifest jako plik oraz umieścić identyczny JSON
+Pipeline udostępnia manifest jako plik oraz umieszcza identyczny JSON
 w treści prerelease, w pojedynczym bloku kodu `json`. Czytnik korzysta z treści
 publicznego API zamiast pobierać manifest przez domenę pobierania plików GitHub,
 która wymagałaby osobnego sprawdzenia CORS. Nazwy, rozmiary i `digest` SHA-256
@@ -71,6 +73,114 @@ Wyszukiwanie ma limit 1000 wydań; przekroczenie jest błędem, a nie fałszywym
 To walidacja metadanych, **nie weryfikacja pobranego pliku, podpisu APK ani
 potwierdzenie instalacji**. Te operacje pozostają zablokowane do kolejnych etapów.
 
+## Ręczne uruchomienie Etapu B
+
+1. W repozytorium `kapi1944/Ogarniacz` otwórz **Actions → Test Build Ogarniacza →
+   Run workflow** i wybierz istniejącą gałąź **main**.
+2. Najpierw upewnij się, że najnowsze CI dokładnego SHA zakończyło się sukcesem.
+   Workflow nie czeka na CI: brak, błąd, anulowanie lub trwający przebieg blokuje build.
+3. Pozostaw **publish_beta=false** (domyślnie). Powstaną zweryfikowane pliki
+   w sekcji **Artifacts** przebiegu, bez taga, release ani wdrożenia.
+4. Dopiero na osobne, świadome polecenie uruchom **nowy** przebieg z
+   **publish_beta=true**, aby udostępnić publiczny prerelease. Nie używaj
+   „Re-run jobs”: `run_attempt > 1` jest blokowane w obu zadaniach.
+
+Z CLI odpowiednikiem bezpiecznego sprawdzenia jest:
+
+```bash
+gh workflow run test-build.yml --repo kapi1944/Ogarniacz --ref main -f publish_beta=false
+```
+
+Workflow przypina checkout do pełnego `github.sha`, sprawdza czystość źródeł,
+`origin/main` przez Git oraz aktualny main i pochodzenie przebiegów przez API.
+Wybiera najnowszy pasujący `ci.yml` dokładnego SHA/main (push lub ręczny),
+bez filtrowania odpowiedzi tylko do zakończonych sukcesem. Identyfikatory
+przebiegów i numer Bety pochodzą z GitHub, a opis z dokładnego commita.
+Numeracja manifestu to `1.1.0-beta.<github.run_number>`; package/lock zachowują
+wersję źródeł, również w paczce Raspberry. Bundle pokazuje dotychczasową wersję
+aplikacji i pełny SHA; numer Bety odczytuje się z manifestu/panelu aktualizacji.
+
+Jedna grupa concurrency blokuje równoległe przebiegi Beta bez anulowania
+trwającego. Zadanie budowania ma tylko `contents: read` i `actions: read`.
+Osobne zadanie publikacji ma `contents: write` i uruchamia się wyłącznie dla
+`publish_beta=true` po sukcesie budowania. Nie korzysta z produkcyjnego
+środowiska ani sekretów podpisywania. Potrzebny jest standardowy `GITHUB_TOKEN`
+z uprawnieniami zadeklarowanymi przez workflow; polityka repozytorium musi je dopuszczać.
+
+Po budowaniu i bezpośrednio przed upublicznieniem następuje ponowna kontrola
+main/CI. Przesunięcie main albo zmiana najnowszego identyfikatora CI od
+przygotowania manifestu przerywa przebieg. W takim przypadku uruchom nowy
+workflow dla aktualnego main po zielonym CI.
+
+## Pliki wynikowe
+
+W runnerze komplet znajduje się w `artifacts/beta/`, a w GitHub Actions w
+artefakcie `ogarniacz-beta-<numerBuildu>-<pełny SHA>` (retencja 30 dni).
+Przy publikacji te same trzy pliki stają się osobnymi assetami prerelease:
+
+| Plik | Zawartość |
+| --- | --- |
+| `Ogarniacz-beta-<numerBuildu>-web.tar.gz` | kompletny `dist/` bez dodatkowego katalogu głównego: frontend, zasoby, manifest PWA, service worker |
+| `Ogarniacz-beta-<numerBuildu>-raspberry.tar.gz` | `dist/`, skompilowany `dist-server/`, niezmienione `package.json` i `package-lock.json` |
+| `manifest-testowy.json` | manifest `ogarniacz-test-v1`: faktyczne nazwy, rozmiary, SHA-256 i identyfikatory GitHub; wyłącznie Web/Raspberry |
+
+Obie paczki zawierają `metadane-testowe.json` przy plikach frontendu
+(w Raspberry: `dist/metadane-testowe.json`) z pełnym SHA, `runId` i numerem.
+SHA pozostaje też w metadanych bundle Vite. Generator sprawdza obie reprezentacje.
+Pakowanie korzysta z jawnej listy plików buildu i zależności, bez archiwizowania
+repozytorium. Walidacja odrzuca niedozwolone ścieżki, dowiązania, pliki specjalne,
+puste/niekompletne i uszkodzone archiwa, niezgodny SHA pochodzenia, rozmiar i hash.
+Nie są pakowane `.env` (także `.env.example`), klucze, keystore, SQLite,
+backupy, katalogi danych użytkownika, `.git`, `node_modules` ani projekt Androida.
+Nowe rodzaje zasobów buildu wymagają jawnego rozszerzenia listy dozwolonych plików.
+
+Nie ma instalacji, restartu usług, zmiany produkcyjnego originu PWA ani Web OTA.
+Nie powstaje APK ani fikcyjny wpis Androida. Panel potwierdza dostępne platformy
+i wyświetla osobny komunikat o braku artefaktu Android Beta.
+
+### Publikacja i błędy
+
+Tag `beta-<numerBuildu>-<pełny SHA>` jest tworzony atomowo jako referencja
+bezpośrednio do commita źródeł. Istniejący tag, wydanie lub ponowienie tego samego
+przebiegu blokują publikację. Nie ma przesuwania tagów ani nadpisywania assetów.
+Najpierw powstaje draft prerelease z jedynym blokiem `json` w treści, następnie
+wszystkie trzy pliki. Dopiero po sprawdzeniu rozmiarów, stanu `uploaded` i
+`digest: sha256:<hash>` wszystkich plików draft jest upubliczniany.
+`prerelease=true` i `make_latest=false` pozostają ustawione. Pipeline nie korzysta
+z `/releases/latest`, nie przesuwa `rpi-stable` i nie uruchamia **Publikuj Ogarniacza**.
+
+Po upublicznieniu wykonywany jest anonimowy odczyt release i taga: treść musi
+odpowiadać plikowi JSON, a publiczne rozmiary/digesty muszą być zgodne z bajtami
+wszystkich assetów, łącznie z manifestem. Odczyt ma ograniczoną liczbę ponowień
+na propagację metadanych; brak digest nigdy nie jest pomijany. Błąd kończy workflow
+niepowodzeniem. Częściowy draft/tag może pozostać do ręcznej oceny; pipeline go
+nie usuwa ani nie naprawia przez nadpisanie. Kolejna próba wymaga nowego dispatchu
+i nowego numeru. Awaria weryfikacji już upublicznionego wydania również blokuje
+uznanie go za poprawny build przez czytnik.
+
+W trakcie publikacji własny workflow ma status `in_progress`. Pipeline nie udaje
+jego sukcesu. **Sprawdź build testowy** potwierdzi wydanie dopiero po sukcesie
+całego przebiegu, przy nadal zgodnym main i zielonym najnowszym CI. Tryb
+`publish_beta=false` nie tworzy wydania widocznego dla panelu. **Sprawdź najnowszy
+commit** działa niezależnie w obu trybach.
+
+### Co pozostaje do Etapu D
+
+Paczka Raspberry nie zawiera zainstalowanych zależności ani instalatora.
+Etap D musi zapewnić Node.js 24 z `node:sqlite` na docelowej architekturze oraz
+zainstalować zależności produkcyjne z locka (`npm ci --omit=dev`) we własnym
+katalogu Bety; backend korzysta m.in. z `zod` i `nodemailer`. Build nie wymaga
+ponownej kompilacji TypeScript ani Vite na Raspberry.
+
+Przed uruchomieniem potrzebne będą izolowane: użytkownik/katalog runtime,
+konfiguracja i sekrety, SQLite/dane, port/usługa, prywatny HTTPS i origin.
+`HOST`, `PORT`, `DATABASE_PATH`, `STATIC_DIR`, `CORS_ALLOWED_ORIGINS` i ewentualny
+bootstrap kont muszą wskazywać wyłącznie Betę. Produkcyjny updater Raspberry
+ma pozostać wyłączony (`RPI_UPDATE_ENABLED` bez wartości `1`). Uruchomienie
+skompilowanego `dist-server/main.js` i potwierdzenie izolacji oraz dostępu przez
+Tailscale należą do D. Etap B nie uruchamia backendu na urządzeniu ani nie
+testuje migracji na produkcyjnej bazie. Osobny origin PWA należy do Etapu E.
+
 ## Numeracja produkcyjna
 
 Domyślne `patch` w **Publikuj Ogarniacza** korzysta ze zmienionego istniejącego
@@ -81,8 +191,9 @@ Etap A nie zmienia package.json/package-lock.json i nie publikuje `1.1.0`.
 
 ## Pozostałe etapy
 
-1. **B:** ręczny workflow dla dokładnego main po CI, sprawdzanie integralności,
-   nieprzesuwane tagi i publiczne prerelease bez dotykania rpi-stable/Stable.
+1. **B — zaimplementowany:** ręczny workflow dla dokładnego main po CI,
+   integralność Web/Raspberry, opcjonalny publiczny prerelease bez zmiany Stable.
+   Rzeczywista publikacja wymaga osobnego polecenia; nie wynika z samego dodania pipeline'u.
 2. **C:** wariant Android Beta, trwały osobny klucz w CI, przypięty fingerprint,
    spójny versionCode, rozdzielone zasoby/linki/powiadomienia oraz ograniczone
    rozszerzenie istniejącego downloadera i instalatora. Wymagane testy blokady
@@ -95,10 +206,9 @@ Etap A nie zmienia package.json/package-lock.json i nie publikuje `1.1.0`.
 5. **F:** testy pobierania, instalacji, izolacji i danych na urządzeniach, regresja
    oraz kwalifikacja do `1.1.0`. Etap A nie potwierdza gotowości tego wydania.
 
-Do czasu Etapu B nie ma procedury uruchomienia/pobrania nowego buildu testowego
-z GitHub Actions ani z panelu. Można uruchomić lokalnie standardowe `npm run dev`
-lub `npm run build` i sprawdzić sam panel. Nie uruchamiaj publikacji produkcyjnej
-tylko w celu testowania tego etapu.
+Artefakty można pobrać z GitHub Actions, a po świadomej publikacji także z
+prerelease. Pobieranie i instalacja przez panel pozostają wyłączone.
+Nie uruchamiaj publikacji produkcyjnej w celu testowania kanału Beta.
 
 ## Prywatność i ograniczenia
 
@@ -132,7 +242,7 @@ Pełna regresja poprzedza ostatnie dwa celowane przypadki testowe; końcowe 102
 testy sprawdzają finalny kod tego etapu. Inne, równoległe zmiany ustawień nie są
 częścią commitów aktualizatora. Nie uruchamiano żadnej publikacji ani instalacji.
 
-## Pliki zmienione w tym zadaniu
+## Pliki zmienione w Etapie A
 
 - Numeracja: `.github/workflows/android-release.yml`,
   `scripts/android-release-przygotowanie.mjs`,
@@ -147,3 +257,24 @@ częścią commitów aktualizatora. Nie uruchamiano żadnej publikacji ani insta
   `src/modules/ustawienia/SekcjaPolaczeniaIAktualizacji.tsx` (wyłącznie import i panel).
 - Przenośność testu: `scripts/aktualizuj-rpi.test.mjs`.
 - Dokumentacja: `docs/ANDROID_RELEASE.md`, `docs/AKTUALIZACJE_TESTOWE.md`.
+
+## Weryfikacja Etapu B
+
+Testy pipeline'u: `node --test scripts/test-build.test.mjs scripts/metadane-buildu.test.mjs`.
+Obejmują bramki SHA/main/CI, numerację, brak/uszkodzenie plików, rozmiary/hashe,
+duplikaty, ponowienia, wykluczenie danych, przygotowanie draftu przed publikacją,
+publiczne digesty oraz rzeczywisty parser i usługę Etapu A na syntetycznym API.
+Czytnik odrzuca własny workflow w toku i akceptuje komplet Web/Raspberry po sukcesie.
+Test panelu sprawdza komunikat braku Androida bez blokowania pozostałych platform.
+
+Wymagane sprawdzenia: powyższe testy, celowane testy usługi/panelu Vitest,
+`npm run lint`, `npm run build:production` (z typecheckiem) i `npm run pwa:smoke`.
+Syntetyczne testy publikacji nie potwierdzają rzeczywistego publicznego prerelease,
+CORS na telefonie ani instalacji. Do takiego potwierdzenia konieczny jest osobno
+autoryzowany przebieg z publikacją i publiczna weryfikacja po jego sukcesie.
+
+Lokalna weryfikacja 26.10.2026: 20/20 testów pipeline'u/metadanych i 44/44
+testów usługi/panelu zakończone sukcesem; typecheck, build Web/Raspberry oraz
+smoke PWA poprawne. Lint bez błędów, z istniejącymi ostrzeżeniami poza zakresem.
+Vitest i smoke PWA wymagały ponowienia poza sandboxem Windows z powodu blokady
+cache/localhost. Nie uruchamiano publikacji Beta ani produkcyjnej.

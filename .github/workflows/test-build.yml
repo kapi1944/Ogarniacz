@@ -1,0 +1,108 @@
+name: Test Build Ogarniacza
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_beta:
+        description: Opublikuj zweryfikowane pliki jako publiczny prerelease Beta
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ogarniacz-test-beta
+  cancel-in-progress: false
+
+jobs:
+  budowanie:
+    name: Zbuduj i zweryfikuj Web oraz Raspberry
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Dopuść wyłącznie pierwsze uruchomienie z main
+        env:
+          GALAZ: ${{ github.ref }}
+          PROBA: ${{ github.run_attempt }}
+        run: test "$GALAZ" = refs/heads/main && test "$PROBA" = 1
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Potwierdź źródła, aktualny main, CI i brak publikacji
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/test-build.mjs sprawdz
+
+      - name: Testy pipeline'u i czytnika Etapu A
+        run: |
+          node --test scripts/test-build.test.mjs scripts/metadane-buildu.test.mjs
+          npx vitest run src/platform/AktualizacjeTestoweService.test.ts src/modules/ustawienia/PanelAktualizacjiTestowych.test.tsx
+
+      - run: npm run lint
+      - run: npm run build:production
+      - run: npm run pwa:smoke
+
+      - name: Spakuj rzeczywiste buildy i wygeneruj manifest
+        run: node scripts/test-build.mjs przygotuj
+
+      - name: Ponownie sprawdź main i najnowsze CI po budowaniu
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/test-build.mjs zweryfikuj
+
+      - name: Zachowaj komplet również bez publikacji
+        uses: actions/upload-artifact@v4
+        with:
+          name: ogarniacz-beta-${{ github.run_number }}-${{ github.sha }}
+          path: artifacts/beta/*
+          if-no-files-found: error
+          retention-days: 30
+
+  publikacja:
+    name: Opublikuj kompletny prerelease Beta
+    needs: budowanie
+    if: ${{ inputs.publish_beta }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Zablokuj ponowienia także przy wznawianiu pojedynczego zadania
+        run: test "$GITHUB_REF" = refs/heads/main && test "$GITHUB_RUN_ATTEMPT" = 1
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ogarniacz-beta-${{ github.run_number }}-${{ github.sha }}
+          path: artifacts/beta
+
+      - name: Zweryfikuj pliki, opublikuj draft i potwierdź publiczne digesty
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLIKUJ_BETA: ${{ inputs.publish_beta }}
+        run: node scripts/test-build.mjs opublikuj

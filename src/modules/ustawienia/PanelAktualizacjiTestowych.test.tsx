@@ -57,6 +57,23 @@ it('pokazuje starszy SHA jawnie i nie proponuje go jako aktualizacji main', asyn
   expect(screen.getByRole('button', { name: 'Pobierz wersję testową' })).toBeDisabled()
 })
 
+it('potwierdza Web i Raspberry bez APK oraz pokazuje brak artefaktu Android', async () => {
+  sprawdzBuild.mockResolvedValue({ commit, ci, dostepnyDlaMain: true, manifest: {
+    sha, wersja: '1.1.0-beta.42', numerBuildu: 42, data: commit.data, opis: 'Build Etapu B.',
+    artefakty: [{ platforma: 'web' }, { platforma: 'raspberry' }],
+  } })
+  render(<PanelAktualizacjiTestowych />)
+  fireEvent.click(screen.getByRole('button', { name: 'Sprawdź build testowy' }))
+  await screen.findByText(/Potwierdzono manifest i pomyślny build/)
+  expect(screen.getByText('web, raspberry')).toBeInTheDocument()
+  expect(screen.getByText('Potwierdzony')).toBeInTheDocument()
+  expect(screen.getByText(/Brak artefaktu Android Beta w tym buildzie/)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Pobierz wersję testową' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Uruchom / zainstaluj wersję testową' })).toBeDisabled()
+  expect(pobierz).not.toHaveBeenCalled()
+  expect(instaluj).not.toHaveBeenCalled()
+})
+
 it('informuje o blokadzie po nieudanym CI nawet przy zgodnym SHA manifestu', async () => {
   sprawdzBuild.mockResolvedValue({ commit, ci: { stan: 'blad' }, dostepnyDlaMain: false, manifest: { sha, wersja: '1.1.0-beta.42', numerBuildu: 42, data: commit.data, artefakty: [] } })
   render(<PanelAktualizacjiTestowych />)

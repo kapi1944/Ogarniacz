@@ -84,6 +84,7 @@ export function PanelAktualizacjiTestowych() {
       <div><span>Porównanie z uruchomionym buildem</span><strong>{!manifest || !__METADANE_BUILDU__.sha || __METADANE_BUILDU__.zmodyfikowany !== false ? 'Nie można potwierdzić' : czyTeSameSha(manifest.sha, __METADANE_BUILDU__.sha) ? 'Ten sam commit' : 'Inny commit'}</strong></div>
       <div><span>Pobieranie / weryfikacja pliku / instalacja</span><strong>Niedostępne w tym etapie</strong></div>
     </div>
+    {manifest && !manifest.artefakty.some((artefakt) => artefakt.platforma === 'android') && <p className="tekst-pomocniczy">Brak artefaktu Android Beta w tym buildzie. Dostępne platformy są wymienione powyżej.</p>}
     {__METADANE_BUILDU__.zmodyfikowany === true && <p className="tekst-pomocniczy">Build zawiera lokalne zmiany. SHA wskazuje bazowy commit, a nie dokładny zestaw uruchomionych plików.</p>}
     {__METADANE_BUILDU__.zmodyfikowany === null && <p className="tekst-pomocniczy">Nie można potwierdzić czystości źródeł tego buildu.</p>}
     {opisZmian && <div><h3>Skrót zmian {manifest ? 'testowego buildu' : 'main'}</h3><p className="tekst-pomocniczy" style={{ whiteSpace: 'pre-wrap' }}>{opisZmian}</p></div>}
