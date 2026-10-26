@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       version_bump:
-        description: Rodzaj kolejnej wersji
+        description: Rodzaj kolejnej wersji (patch po 1.0.23 przechodzi do 1.1.0)
         required: true
         type: choice
         options: [patch, minor, major]

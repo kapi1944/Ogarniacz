@@ -18,7 +18,11 @@ function porownajWersje(lewa, prawa) {
 
 export function wyznaczNastepnaWersje(wersja, rodzaj) {
   const [glowna, poboczna, poprawka] = rozlozWersje(wersja)
-  if (rodzaj === 'patch') return `${glowna}.${poboczna}.${poprawka + 1}`
+  if (rodzaj === 'patch') {
+    // Nowa linia wydań zaczyna się od 1.1.0; późniejsze patche pozostają standardowe.
+    if (glowna === 1 && poboczna === 0 && poprawka >= 23) return '1.1.0'
+    return `${glowna}.${poboczna}.${poprawka + 1}`
+  }
   if (rodzaj === 'minor') return `${glowna}.${poboczna + 1}.0`
   if (rodzaj === 'major') return `${glowna + 1}.0.0`
   throw new Error('version_bump musi mieć wartość patch, minor albo major.')
