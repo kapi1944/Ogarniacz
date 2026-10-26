@@ -49,6 +49,9 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
 
       - name: Potwierdź źródła, aktualny main, CI i brak publikacji
@@ -146,6 +149,9 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - run: sdkmanager 'build-tools;36.0.0'
 
       - name: Zweryfikuj pliki, opublikuj draft i potwierdź publiczne digesty
