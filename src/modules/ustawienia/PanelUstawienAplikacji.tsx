@@ -7,6 +7,8 @@ import { DOMYSLNE_USTAWIENIA, normalizujUstawienia, rozwiazPromienKart } from '.
 import type { NazwaModulu, TypSzybkiegoDodawania, Ustawienia } from '../../domain/typy'
 import { useSesjaEcho } from '../../app/DostawcaSesjiEcho'
 import { WyborStyluInterfejsu } from './WyborStyluInterfejsu'
+import { KategoriaUstawien } from './NawigacjaUstawien'
+import type { KategoriaUstawienId } from './kategorieUstawien'
 
 type NazwaSekcji = 'wyglad' | 'nawigacja' | 'pulpit' | 'harmonogram' | 'zadania' | 'szybkieDodawanie' | 'dostepnosc'
 
@@ -127,7 +129,7 @@ export function PanelUstawienAplikacji() {
     ;[kolejnosc[indeks], kolejnosc[nowyIndeks]] = [kolejnosc[nowyIndeks], kolejnosc[indeks]]
     aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, kolejnoscTypow: kolejnosc } })
   }
-  return <section className="panel-ustawien-aplikacji" aria-labelledby="ustawienia-aplikacji-tytul">
+  return <KategoriaUstawien kategorie={['wyglad', 'pulpit', 'echo']}><section className="panel-ustawien-aplikacji" aria-labelledby="ustawienia-aplikacji-tytul">
     <div className="naglowek-karty panel-ustawien-aplikacji__naglowek">
       <div>
         <h2 id="ustawienia-aplikacji-tytul">Ustawienia aplikacji</h2>
@@ -142,7 +144,7 @@ export function PanelUstawienAplikacji() {
     {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}
 
     <div className="siatka-sekcji-ustawien">
-      <SekcjaUstawien tytul="Wygląd" resetuj={() => resetujSekcje('wyglad')}>
+      <SekcjaUstawien kategoria="wyglad" tytul="Wygląd" resetuj={() => resetujSekcje('wyglad')}>
         <WyborStyluInterfejsu styl={szkic.wyglad.personalizacja.styl} zmien={(styl) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, personalizacja: { ...szkic.wyglad.personalizacja, styl } } })} />
         <div className="pole pole--pelne personalizacja-zajawka"><div><strong>Motywy i personalizacja</strong><small>Palety kolorów, komponenty, hover/active, animacje i podgląd na żywo.</small></div><Link to="/ustawienia/personalizacja" className="przycisk przycisk--drugorzedny"><Palette aria-hidden="true" />Otwórz edytor motywu</Link></div>
         <label className="pole"><span>Motyw</span><select value={szkic.wyglad.motyw} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, motyw: e.target.value as Ustawienia['wyglad']['motyw'] } })}><option value="systemowy">Systemowy</option><option value="jasny">Jasny</option><option value="ciemny">Ciemny</option></select></label>
@@ -152,14 +154,14 @@ export function PanelUstawienAplikacji() {
         <label className="pole pole--pelne"><span>Czas animacji: {szkic.wyglad.czasAnimacjiMs} ms</span><input type="range" min="0" max="600" step="20" value={szkic.wyglad.czasAnimacjiMs} onChange={(e) => aktualizujSzkic({ ...szkic, wyglad: { ...szkic.wyglad, czasAnimacjiMs: Number(e.target.value) } })} /></label>
       </SekcjaUstawien>
 
-      <SekcjaUstawien tytul="Nawigacja" resetuj={() => resetujSekcje('nawigacja')}>
+      <SekcjaUstawien kategoria="wyglad" tytul="Nawigacja" resetuj={() => resetujSekcje('nawigacja')}>
         <label className="pole"><span>Szerokość menu: {szkic.nawigacja.szerokoscMenu}px</span><input type="range" min="220" max="360" value={szkic.nawigacja.szerokoscMenu} onChange={(e) => aktualizujSzkic({ ...szkic, nawigacja: { ...szkic.nawigacja, szerokoscMenu: Number(e.target.value) } })} /></label>
         <label className="pole"><span>Wysokość pozycji: {szkic.nawigacja.wysokoscPozycji}px</span><input type="range" min="32" max="52" value={szkic.nawigacja.wysokoscPozycji} onChange={(e) => aktualizujSzkic({ ...szkic, nawigacja: { ...szkic.nawigacja, wysokoscPozycji: Number(e.target.value) } })} /></label>
         <Przelacznik etykieta="Domyślnie zwiń menu" opis="Zapamiętuje stan menu bez bezpośredniego użycia storage przez UI." zaznaczony={szkic.nawigacja.menuDomyslnieZwiniete} zmien={(menuDomyslnieZwiniete) => aktualizujSzkic({ ...szkic, nawigacja: { ...szkic.nawigacja, menuDomyslnieZwiniete } })} />
         <Przelacznik etykieta="Przypnij menu" opis="Preferencja dla docelowego zachowania na dużym ekranie." zaznaczony={szkic.nawigacja.przypiete} zmien={(przypiete) => aktualizujSzkic({ ...szkic, nawigacja: { ...szkic.nawigacja, przypiete } })} />
       </SekcjaUstawien>
 
-      <SekcjaUstawien tytul="Pulpit" resetuj={() => resetujSekcje('pulpit')}>
+      <SekcjaUstawien kategoria="pulpit" tytul="Pulpit" resetuj={() => resetujSekcje('pulpit')}>
         <Przelacznik etykieta="Alerty" opis="Pokazuj ograniczony miks najważniejszych alertów." zaznaczony={szkic.pulpit.pokazAlerty} zmien={(pokazAlerty) => aktualizujSzkic({ ...szkic, pulpit: { ...szkic.pulpit, pokazAlerty } })} />
         <Przelacznik etykieta="Kafelki" opis="Pokazuj podsumowania modułów." zaznaczony={szkic.pulpit.pokazKafelki} zmien={(pokazKafelki) => aktualizujSzkic({ ...szkic, pulpit: { ...szkic.pulpit, pokazKafelki } })} />
         <p className="tekst-pomocniczy pole--pelne">Oś czasu z wyborem dnia jest zawsze widoczna u góry Pulpitu.</p>
@@ -168,7 +170,7 @@ export function PanelUstawienAplikacji() {
         <div className="pole pole--pelne"><span>Kafelki Pulpitu</span><div className="lista-typow-szybkich">{szkic.pulpit.kafelki.map((kafelek, indeks) => <div key={kafelek.id}><label><input type="checkbox" checked={kafelek.widoczny} onChange={(e) => aktualizujSzkic({ ...szkic, pulpit: { ...szkic.pulpit, kafelki: szkic.pulpit.kafelki.map((element) => element.id === kafelek.id ? { ...element, widoczny: e.target.checked } : element) } })} />{kafelek.typ}</label><select aria-label={`Zakres ${kafelek.typ}`} value={kafelek.zakresCzasu} onChange={(e) => aktualizujSzkic({ ...szkic, pulpit: { ...szkic.pulpit, kafelki: szkic.pulpit.kafelki.map((element) => element.id === kafelek.id ? { ...element, zakresCzasu: e.target.value as typeof kafelek.zakresCzasu } : element) } })}><option value="today">Dzisiaj</option><option value="3d">3 dni</option><option value="7d">7 dni</option><option value="30d">30 dni</option></select><select aria-label={`Rozmiar ${kafelek.typ}`} value={kafelek.rozmiar} onChange={(e) => aktualizujSzkic({ ...szkic, pulpit: { ...szkic.pulpit, kafelki: szkic.pulpit.kafelki.map((element) => element.id === kafelek.id ? { ...element, rozmiar: e.target.value as typeof kafelek.rozmiar } : element) } })}><option value="small">Mały</option><option value="medium">Średni</option><option value="large">Duży</option></select><input aria-label={`Limit ${kafelek.typ}`} type="number" min="1" max="10" value={kafelek.limit} onChange={(e) => aktualizujSzkic({ ...szkic, pulpit: { ...szkic.pulpit, kafelki: szkic.pulpit.kafelki.map((element) => element.id === kafelek.id ? { ...element, limit: Number(e.target.value) } : element) } })} /><button type="button" className="przycisk przycisk--maly" aria-label={`Przesuń ${kafelek.typ} w górę`} disabled={indeks === 0} onClick={() => { const kafelki = [...szkic.pulpit.kafelki]; [kafelki[indeks - 1], kafelki[indeks]] = [kafelki[indeks], kafelki[indeks - 1]]; aktualizujSzkic({ ...szkic, pulpit: { ...szkic.pulpit, kafelki: kafelki.map((element, kolejnosc) => ({ ...element, kolejnosc })) } }) }}>↑</button><button type="button" className="przycisk przycisk--maly" aria-label={`Przesuń ${kafelek.typ} w dół`} disabled={indeks === szkic.pulpit.kafelki.length - 1} onClick={() => { const kafelki = [...szkic.pulpit.kafelki]; [kafelki[indeks], kafelki[indeks + 1]] = [kafelki[indeks + 1], kafelki[indeks]]; aktualizujSzkic({ ...szkic, pulpit: { ...szkic.pulpit, kafelki: kafelki.map((element, kolejnosc) => ({ ...element, kolejnosc })) } }) }}>↓</button></div>)}</div></div>
       </SekcjaUstawien>
 
-      <SekcjaUstawien tytul="Harmonogram" resetuj={() => resetujSekcje('harmonogram')}>
+      <SekcjaUstawien kategoria="pulpit" tytul="Harmonogram" resetuj={() => resetujSekcje('harmonogram')}>
         <div className="pole pole--pelne"><span>Dni pracy</span><div className="dni-tygodnia">{dniTygodnia.map((dzien) => <label key={dzien.wartosc}><input type="checkbox" checked={szkic.harmonogram.dniPracy.includes(dzien.wartosc)} onChange={(e) => { const dniPracy = e.target.checked ? [...szkic.harmonogram.dniPracy, dzien.wartosc] : szkic.harmonogram.dniPracy.filter((x) => x !== dzien.wartosc); aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, dniPracy } }) }} /><span>{dzien.etykieta}</span></label>)}</div></div>
         <label className="pole"><span>Początek pracy</span><input type="time" value={szkic.harmonogram.godzinaRozpoczecia} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, godzinaRozpoczecia: e.target.value } })} /></label>
         <label className="pole"><span>Koniec pracy</span><input type="time" value={szkic.harmonogram.godzinaZakonczenia} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, godzinaZakonczenia: e.target.value } })} /></label>
@@ -181,19 +183,19 @@ export function PanelUstawienAplikacji() {
         <label className="pole pole--pelne"><span>Zakres zmiany harmonogramu</span><select value={szkic.harmonogram.domyslnyZakresZmiany} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, domyslnyZakresZmiany: e.target.value as Ustawienia['harmonogram']['domyslnyZakresZmiany'] } })}><option value="tylko_ten_dzien">Tylko ten dzień</option><option value="nowa_regula">Zapisz jako nową regułę</option></select></label>
       </SekcjaUstawien>
 
-      <SekcjaUstawien tytul="Zadania" resetuj={() => resetujSekcje('zadania')}>
+      <SekcjaUstawien kategoria="pulpit" tytul="Zadania" resetuj={() => resetujSekcje('zadania')}>
         <label className="pole"><span>Domyślny priorytet</span><select value={szkic.zadania.domyslnyPriorytet} onChange={(e) => aktualizujSzkic({ ...szkic, zadania: { ...szkic.zadania, domyslnyPriorytet: e.target.value as Ustawienia['zadania']['domyslnyPriorytet'] } })}><option value="niski">Niski</option><option value="normalny">Normalny</option><option value="wysoki">Wysoki</option><option value="krytyczny">Krytyczny</option></select></label>
         <label className="pole"><span>Domyślny tryb terminu</span><select value={szkic.zadania.domyslnyTrybTerminu} onChange={(e) => aktualizujSzkic({ ...szkic, zadania: { ...szkic.zadania, domyslnyTrybTerminu: e.target.value as Ustawienia['zadania']['domyslnyTrybTerminu'] } })}><option value="o_godzinie">O godzinie</option><option value="koniec_dnia">Do końca dnia</option><option value="bez_godziny">Bez godziny</option></select></label>
         <Przelacznik etykieta="Pokazuj po wykonaniu" opis="Zachowaj wykonane elementy w widocznej sekcji." zaznaczony={szkic.zadania.pokazPoWykonaniu} zmien={(pokazPoWykonaniu) => aktualizujSzkic({ ...szkic, zadania: { ...szkic.zadania, pokazPoWykonaniu } })} />
       </SekcjaUstawien>
 
-      <SekcjaUstawien tytul="Szybkie dodawanie" resetuj={() => resetujSekcje('szybkieDodawanie')}>
+      <SekcjaUstawien kategoria="pulpit" tytul="Szybkie dodawanie" resetuj={() => resetujSekcje('szybkieDodawanie')}>
         <div className="pole pole--pelne"><span>Widoczne typy</span><div className="lista-typow-szybkich">{typySzybkiegoDodawania.map((typ) => <label key={typ.wartosc}><input type="checkbox" checked={szkic.szybkieDodawanie.widoczneTypy.includes(typ.wartosc)} onChange={(e) => zmienWidocznoscTypu(typ.wartosc, e.target.checked)} />{typ.etykieta}</label>)}</div></div>
         <div className="pole pole--pelne"><span>Ręczna kolejność</span><div className="lista-typow-szybkich">{szkic.szybkieDodawanie.kolejnoscTypow.map((typ, indeks) => <div key={typ}><span>{typySzybkiegoDodawania.find((element) => element.wartosc === typ)?.etykieta}</span><button type="button" className="przycisk przycisk--maly" disabled={indeks === 0} onClick={() => przesunTyp(typ, -1)}>↑</button><button type="button" className="przycisk przycisk--maly" disabled={indeks === szkic.szybkieDodawanie.kolejnoscTypow.length - 1} onClick={() => przesunTyp(typ, 1)}>↓</button></div>)}</div><small>Obowiązuje po wyłączeniu uczenia kolejności.</small></div><Przelacznik etykieta="Ucz kolejności" opis="Najczęściej używane typy mogą przesuwać się wyżej." zaznaczony={szkic.szybkieDodawanie.uczKolejnosci} zmien={(uczKolejnosci) => aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, uczKolejnosci } })} />
         <Przelacznik etykieta="Parser lokalny" opis="Włącza deterministyczne rozpoznawanie typu, daty i godziny." zaznaczony={szkic.szybkieDodawanie.parserWlaczony} zmien={(parserWlaczony) => aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, parserWlaczony } })} />
       </SekcjaUstawien>
 
-      <SekcjaUstawien tytul="Echo" resetuj={resetujEcho}>
+      <SekcjaUstawien kategoria="echo" tytul="Echo" resetuj={resetujEcho}>
         <label className="pole pole--pelne"><span>Tryb rozmowy</span><select value={szkic.trybRozmowyEcho} onChange={(e) => aktualizujSzkic({ ...szkic, trybRozmowyEcho: e.target.value as Ustawienia['trybRozmowyEcho'] })}><option value="szybki">Szybki</option><option value="swobodny">Swobodny</option></select><small>Zmienia styl odpowiedzi, bez wpływu na głos, tempo nasłuchiwania ani historię rozmowy.</small></label>
         <Przelacznik etykieta="Głos" opis="Pozwala korzystać z wejścia głosowego, gdy urządzenie je udostępnia." zaznaczony={szkic.glosEcho} zmien={(glosEcho) => aktualizujSzkic({ ...szkic, glosEcho })} />
         <Przelacznik etykieta="Hej Echo" opis="Lokalnie wykrywa wyłącznie frazę aktywującą i dopiero wtedy uruchamia rozmowę." zaznaczony={szkic.hejEcho} zmien={(hejEcho) => aktualizujSzkic({ ...szkic, hejEcho })} />
@@ -205,20 +207,20 @@ export function PanelUstawienAplikacji() {
         <div className="pole pole--pelne"><span>Uprawnienia do modułów</span><div className="lista-typow-szybkich">{modulyEcho.map((modul) => <label key={modul.wartosc}><input type="checkbox" checked={szkic.modulyEcho.includes(modul.wartosc)} onChange={(e) => zmienDostepEcho(modul.wartosc, e.target.checked)} />{modul.etykieta}</label>)}</div></div>
       </SekcjaUstawien>
 
-      <SekcjaUstawien tytul="Dostępność" resetuj={() => resetujSekcje('dostepnosc')}>
+      <SekcjaUstawien kategoria="wyglad" tytul="Dostępność" resetuj={() => resetujSekcje('dostepnosc')}>
         <Przelacznik etykieta="Ogranicz ruch" opis="Wyłącza animacje i przejścia interfejsu." zaznaczony={szkic.dostepnosc.ograniczRuch} zmien={(ograniczRuch) => aktualizujSzkic({ ...szkic, dostepnosc: { ...szkic.dostepnosc, ograniczRuch } })} />
         <Przelacznik etykieta="Wysoki kontrast" opis="Wzmacnia obramowania i czytelność aktywnych elementów." zaznaczony={szkic.dostepnosc.wysokiKontrast} zmien={(wysokiKontrast) => aktualizujSzkic({ ...szkic, dostepnosc: { ...szkic.dostepnosc, wysokiKontrast } })} />
         <Przelacznik etykieta="Nie tylko kolor" opis="Stany powinny zachowywać tekst lub ikonę obok koloru." zaznaczony={szkic.dostepnosc.nieTylkoKolor} zmien={(nieTylkoKolor) => aktualizujSzkic({ ...szkic, dostepnosc: { ...szkic.dostepnosc, nieTylkoKolor } })} />
       </SekcjaUstawien>
     </div>
-  </section>
+  </section></KategoriaUstawien>
 }
 
-function SekcjaUstawien({ tytul, resetuj, children }: { tytul: string; resetuj: () => void; children: ReactNode }) {
-  return <Karta klasa="sekcja-ustawien">
+function SekcjaUstawien({ kategoria, tytul, resetuj, children }: { kategoria: KategoriaUstawienId; tytul: string; resetuj: () => void; children: ReactNode }) {
+  return <KategoriaUstawien kategorie={[kategoria]}><Karta klasa="sekcja-ustawien">
     <div className="naglowek-karty"><h3>{tytul}</h3><button type="button" className="przycisk przycisk--tekstowy przycisk--maly" onClick={resetuj}>Resetuj sekcję</button></div>
     <div className="formularz">{children}</div>
-  </Karta>
+  </Karta></KategoriaUstawien>
 }
 
 function Przelacznik({ etykieta, opis, zaznaczony, zmien }: { etykieta: string; opis: string; zaznaczony: boolean; zmien: (wartosc: boolean) => void }) {

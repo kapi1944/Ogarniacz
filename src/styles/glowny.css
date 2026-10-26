@@ -492,6 +492,45 @@ th { color: var(--tekst-2); background: var(--panel-2); font-size: .68rem; lette
 
 .siatka-ustawien { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .siatka-ustawien .karta p { color: var(--tekst-2); font-size: .8rem; }
+.ustawienia-kategorie { display: grid; grid-template-columns: minmax(200px, 250px) minmax(0, 1fr); gap: 24px; align-items: start; min-width: 0; }
+.ustawienia-kategorie__menu { display: grid; gap: 16px; min-width: 0; padding: 16px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); }
+.ustawienia-kategorie__menu nav { display: grid; gap: 6px; }
+.ustawienia-kategorie__wybor { display: none; }
+.ustawienia-kategorie__menu a { display: flex; align-items: center; min-height: 48px; padding: 10px 12px; color: var(--tekst); border: 1px solid transparent; border-radius: var(--promien-pola); text-decoration: none; overflow-wrap: anywhere; }
+.ustawienia-kategorie__menu a:hover { background: var(--panel-2); border-color: var(--obramowanie-mocne); }
+.ustawienia-kategorie__menu a[aria-current="page"] { color: var(--akcent); background: var(--akcent-jasny); border-color: var(--akcent); box-shadow: inset 3px 0 var(--akcent); font-weight: 700; }
+.ustawienia-kategorie__menu :is(a, input, select, button):focus-visible { outline: 3px solid var(--akcent); outline-offset: 2px; }
+.ustawienia-kategorie__menu :is(input, select) { width: 100%; min-width: 0; min-height: 44px; }
+.ustawienia-kategorie__wyniki ul { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.ustawienia-kategorie__wyniki a { flex-direction: column; align-items: start; gap: 6px; background: var(--panel-2); }
+.ustawienia-kategorie__wyniki :is(p, small) { color: var(--tekst-2); overflow-wrap: anywhere; }
+.ustawienia-kategorie__zawartosc { display: grid; gap: 16px; min-width: 0; }
+.ustawienia-kategorie__zawartosc > h2 { margin: 0; }
+.ustawienia-kategoria, .ustawienia-kategorie .sekcja-synchronizacji { display: contents; }
+.ustawienia-kategoria[hidden] { display: none !important; }
+.ustawienia-kategorie :is(.siatka-ustawien, .siatka-sekcji-ustawien) { grid-template-columns: minmax(0, 1fr); }
+.ustawienia-kategorie :is(.karta, .formularz, .panel-ustawien-aplikacji) { min-width: 0; }
+.ustawienia-kategorie .karta { overflow-wrap: anywhere; }
+.ustawienia-kategorie .panel-ustawien-aplikacji__naglowek { flex-wrap: wrap; gap: 12px; }
+.ustawienia-kategorie .akcje-formularza { flex-wrap: wrap; }
+.ustawienia-kategorie .lista-typow-szybkich > div { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px; }
+.ustawienia-kategorie .lista-typow-szybkich :is(input, select) { min-width: 0; max-width: 100%; }
+.ustawienia-kategorie .lista-typow-szybkich input[type="number"] { width: 5rem; }
+.ustawienia-kategorie .lista-typow-szybkich button { min-width: 44px; min-height: 44px; }
+@media (max-width: 1000px) {
+  .ustawienia-kategorie { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .ustawienia-kategorie__menu nav { display: none; }
+  .ustawienia-kategorie__wybor { display: grid; }
+}
+@media (max-width: 600px) {
+  .ustawienia-kategorie__menu { padding: 12px; }
+  .ustawienia-kategorie__menu a { padding: 8px; font-size: .85rem; }
+  .ustawienia-kategorie :is(.formularz, .siatka-dwie-kolumny, .lista-typow-szybkich) { grid-template-columns: minmax(0, 1fr); }
+  .ustawienia-kategorie .szybki-wpis { flex-wrap: wrap; }
+  .ustawienia-kategorie .szybki-wpis input { min-width: 0; width: 100%; }
+  .ustawienia-kategorie .przycisk { white-space: normal; min-height: 44px; }
+  .ustawienia-kategorie .lista-kompaktowa > div { flex-wrap: wrap; }
+}
 .wybor-motywu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .wybor-motywu button { display: grid; min-height: 68px; place-items: center; align-content: center; gap: 4px; color: var(--tekst-2); background: var(--panel-2); border: 1px solid var(--obramowanie); border-radius: 8px; cursor: pointer; font-size: .7rem; text-transform: capitalize; }
 .wybor-motywu button.aktywny { color: var(--akcent); background: var(--akcent-jasny); border-color: var(--akcent); }

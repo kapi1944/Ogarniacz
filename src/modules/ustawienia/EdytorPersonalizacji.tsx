@@ -352,7 +352,7 @@ export function EdytorPersonalizacji() {
       tytul="Personalizacja"
       opis="Centralny edytor motywów, kolorów, komponentów, reakcji hover/active i animacji."
       akcje={<>
-        <Link className="przycisk przycisk--drugorzedny" to="/ustawienia">← Ustawienia</Link>
+        <Link className="przycisk przycisk--drugorzedny" to="/ustawienia?kategoria=wyglad">← Ustawienia</Link>
         <button className="przycisk przycisk--drugorzedny" type="button" onClick={resetuj}><RotateCcw aria-hidden="true" />Resetuj</button>
         <button className="przycisk przycisk--drugorzedny" type="button" disabled={!niezapisaneZmiany} onClick={anulujPodglad}>Anuluj podgląd</button>
         <button className="przycisk przycisk--glowny" type="button" disabled={!niezapisaneZmiany} onClick={zapisz}><Save aria-hidden="true" />Zapisz ustawienia</button>

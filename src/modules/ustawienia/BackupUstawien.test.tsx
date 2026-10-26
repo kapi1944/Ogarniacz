@@ -43,7 +43,7 @@ beforeEach(() => {
     zapisWBazie()
     return { backupPrzedPrzywracaniem: kopiaOchronna, liczbaRekordow: 0 }
   })
-  renderuj(<RouterPamieci><WidokUstawien /></RouterPamieci>)
+  renderuj(<RouterPamieci initialEntries={['/ustawienia?kategoria=dane']}><WidokUstawien /></RouterPamieci>)
 })
 afterEach(wyczysc)
 
