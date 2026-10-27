@@ -347,3 +347,33 @@ Debug APK i release APK są podpisane różnymi kluczami. Android nie zainstaluj
 6. Kolejne wersje instaluj już przez OTA. Nie wymagają ponownego eksportu ani odinstalowania.
 
 Nie odinstalowuj debug, jeśli backup nie został zapisany i zweryfikowany. `android:deploy` nie zastąpi potem release, ponieważ celowo używa klucza debug.
+
+## Lokalna blokada aplikacji Android
+
+Ustawienia → Konta i uprawnienia → Blokada aplikacji → Konfiguruj blokadę aplikacji.
+Domyślnie wyłączona. Natywny formularz pozwala ustawić PIN 4–12 cyfr albo hasło
+minimum 8 znaków bez białych znaków, z dwukrotnym potwierdzeniem. Zmiana kodu,
+czasu, opcji restartu i wyłączenie wymagają aktualnego kodu. Puste nowe pola
+zachowują dotychczasowy kod. Nie ma odzyskiwania zapomnianego kodu.
+
+Czas jest liczony od przejścia w tło: natychmiast, 1/5/15/30/60 minut.
+Osobna opcja wymusza odblokowanie po utworzeniu aktywności, także po śmierci
+procesu; po jej wyłączeniu nadal obowiązuje zapamiętany czas tła.
+Osłona natywna zakrywa WebView przy pauzie i przed pierwszym wyświetleniem.
+FLAG_SECURE chroni okno i podgląd ostatnich aplikacji przy włączonej blokadzie.
+
+Oddzielne prywatne SharedPreferences przechowują konfigurację, losową sól,
+PBKDF2-HMAC-SHA256 (600000 iteracji) uwierzytelnione HMAC-SHA256 z nieeksportowalnym
+kluczem Android Keystore oraz trwały licznik prób. Pięć błędów wymusza minutę
+przerwy; kolejne błędy ponawiają przerwę. Cofnięcie zegara blokuje próby do
+wyrównania czasu. Sekrety nie trafiają do WebView, synchronizacji ani backupu.
+Blokada nie szyfruje bazy i nie wylogowuje konta. Nie zmienia schematów danych,
+Web/PWA, serwera ani aktualizacji APK. Utrata klucza kończy się odmową dostępu.
+
+Testy Robolectric sprawdzają konfigurację, błędny kod, zmianę i wyłączenie,
+limit po odtworzeniu obiektu, czas tła i restart. Używają testowego klucza HMAC;
+nie potwierdzają sprzętowego Keystore ani zachowania One UI. Samsung wymaga
+próby w trybie samolotowym: PIN/hasło, wszystkie czasy, przycisk Wstecz,
+tło/ostatnie aplikacje, zabicie procesu, restart telefonu, limit prób,
+zmiana/wyłączenie z błędnym i poprawnym kodem oraz zachowanie prawdziwych danych
+i zalogowanej sesji. Nie czyść danych aplikacji podczas tych prób.

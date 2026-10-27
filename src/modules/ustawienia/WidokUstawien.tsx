@@ -1,3 +1,4 @@
+import { PanelBlokadyAplikacji } from './PanelBlokadyAplikacji'
 import { PRYWATNE_SEKCJE_ZDROWIA } from '../../services/UprawnieniaService'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Bell, Cloud, Database, Download, History as IkonaHistorii, RefreshCw, Share2, Shield, Sparkles, Upload, UserCog } from 'lucide-react'
@@ -310,7 +311,7 @@ export function WidokUstawien() {
     <NaglowekWidoku tytul="Ustawienia" opis="Wybierz kategorię lub wyszukaj potrzebną opcję." />
     {komunikat && <Komunikat typ="sukces">{komunikat}</Komunikat>}{blad && <Komunikat typ="blad">{blad}</Komunikat>}
     <NawigacjaUstawien>
-    <KategoriaUstawien kategorie={['konta']}><KontoIBezpieczenstwo /></KategoriaUstawien>
+    <KategoriaUstawien kategorie={['konta']}><KontoIBezpieczenstwo /><PanelBlokadyAplikacji /></KategoriaUstawien>
     <PanelUstawienAplikacji />
     <KategoriaUstawien kategorie={['konta']}><Karta><h2>Konta i użytkownicy</h2><p>Moje konto, hasło, aktywne sesje, udostępnianie i bezpieczna zmiana użytkownika.</p><Link className="przycisk przycisk--drugorzedny" to="/ustawienia/konta">Otwórz konta i użytkowników</Link></Karta></KategoriaUstawien>
     <KategoriaUstawien kategorie={['pulpit']}><Karta><h2>Grafik pracy</h2><Link to="/grafik" className="przycisk przycisk--drugorzedny">Ustaw grafik pracy</Link></Karta></KategoriaUstawien>
