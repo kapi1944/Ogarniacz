@@ -8,6 +8,35 @@ import { WidokRejestru } from './WidokRejestru'
 
 afterEach(cleanup)
 
+it('zapisuje i ponownie odczytuje daty systemowe oraz własne w modalu rejestru', async () => {
+  const repozytorium = utworzRepozytorium()
+  let rekord: RekordTestowy & { termin: string } = { id: 'data-1', nazwa: 'Daty', termin: '2026-10-25', createdAt: '2026-10-01', updatedAt: '2026-10-01', polaWlasne: { 'custom:data': '2024-02-29' } }
+  vi.mocked(repozytorium.zapisz).mockImplementation(async (encja) => { rekord = encja as typeof rekord; return rekord.id })
+  function Rejestr() {
+    return <WidokRejestru tytul="Daty" opis="Test" etykietaDodawania="Dodaj" dane={[rekord]} repozytorium={repozytorium}
+      pola={[{ klucz: 'termin', etykieta: 'Termin', typ: 'date', wymagane: true, min: '2020-01-01', max: '2030-12-31' }]}
+      polaRejestru={[{ id: 'custom:data', zrodlo: 'wlasne', etykieta: 'Data własna', typ: 'data' }]}
+      zbuduj={(formularz) => ({ ...rekord, termin: formularz.termin })} etykieta={(encja) => encja.nazwa} szczegoly={() => null} />
+  }
+  const { rerender } = render(<Rejestr />)
+  fireEvent.click(screen.getByTitle('Edytuj'))
+  expect(screen.getByRole('textbox', { name: /^Termin/ })).toHaveProperty('value', '25.10.2026')
+  expect(screen.getByLabelText('Data własna')).toHaveProperty('value', '29.02.2024')
+  fireEvent.change(screen.getByRole('textbox', { name: /^Termin/ }), { target: { value: '31.04.2026' } })
+  fireEvent.click(screen.getByText('Zapisz'))
+  expect(repozytorium.zapisz).not.toHaveBeenCalled()
+  fireEvent.change(screen.getByRole('textbox', { name: /^Termin/ }), { target: { value: '29.03.2026' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Kalendarz: Data własna' }))
+  fireEvent.click(screen.getByRole('button', { name: '28.02.2024' }))
+  fireEvent.click(screen.getByText('Zapisz'))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(repozytorium.zapisz).toHaveBeenCalledWith(expect.objectContaining({ termin: '2026-03-29', polaWlasne: { 'custom:data': '2024-02-28' } }))
+  rerender(<Rejestr />)
+  fireEvent.click(screen.getByTitle('Edytuj'))
+  expect(screen.getByRole('textbox', { name: /^Termin/ })).toHaveProperty('value', '29.03.2026')
+  expect(screen.getByLabelText('Data własna')).toHaveProperty('value', '28.02.2024')
+})
+
 interface RekordTestowy extends EncjaBazowa {
   nazwa: string
 }

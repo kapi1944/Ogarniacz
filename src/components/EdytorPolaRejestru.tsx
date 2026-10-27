@@ -1,5 +1,6 @@
 import { utworzDefinicjePolaRejestru, type DefinicjaPolaRejestru, type TypPolaRejestru, type WartoscPolaWlasnego } from '../domain/rejestr'
 import type { EncjaBazowa } from '../domain/typy'
+import { PoleDaty } from './PoleDaty'
 
 export interface DefinicjaPola {
   klucz: string
@@ -7,7 +8,8 @@ export interface DefinicjaPola {
   typ?: 'text' | 'textarea' | 'date' | 'time' | 'number' | 'email' | 'url' | 'select' | 'multiselect'
   wymagane?: boolean
   podpowiedz?: string
-  min?: number
+  min?: number | string
+  max?: string
   krok?: number
   opcje?: { wartosc: string; etykieta: string }[]
   widoczne?: (formularz: Record<string, string>) => boolean
@@ -18,7 +20,8 @@ export interface PoleDoEdycjiRejestru {
   definicja: DefinicjaPolaRejestru
   wymagane?: boolean
   podpowiedz?: string
-  min?: number
+  min?: number | string
+  max?: string
   krok?: number
   typHtml?: 'email'
   widoczne?: (formularz: Record<string, string>) => boolean
@@ -53,6 +56,7 @@ export function normalizujStarePolaRejestru(pola: DefinicjaPola[]): PoleDoEdycji
     wymagane: pole.wymagane,
     podpowiedz: pole.podpowiedz,
     min: pole.min,
+    max: pole.max,
     krok: pole.krok,
     typHtml: pole.typ === 'email' ? 'email' : undefined,
     widoczne: pole.widoczne ? (formularz) => pole.widoczne!(Object.fromEntries(
@@ -106,6 +110,8 @@ export function EdytorPolaRejestru({ pole, wartosc, zmien }: Wlasciwosci) {
   const { definicja } = pole
   const wspolne = { required: pole.wymagane, placeholder: pole.podpowiedz }
   const tylkoOdczyt = definicja.zrodlo === 'systemowe' && definicja.trybObslugi === 'tylko_odczyt'
+
+  if (definicja.typ === 'data' && !tylkoOdczyt) return <PoleDaty etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={pole.max} krok={pole.krok} />
 
   return (
     <label className={definicja.typ === 'textarea' ? 'pole pole--pelne' : 'pole'}>

@@ -1,0 +1,16 @@
+.pole-daty { min-width: 0; }
+.pole-daty__wiersz { display: flex; align-items: center; gap: 4px; }
+.pole-daty__wiersz input { min-width: 0; flex: 1; }
+.pole-daty__wiersz button { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.pole-daty__kalendarz { min-width: 0; padding: 8px; background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: var(--promien-pola); }
+.pole-daty__nawigacja { display: grid; grid-template-columns: 32px minmax(0, 1fr) minmax(58px, .65fr) 32px; align-items: center; gap: 2px; }
+.pole-daty__nawigacja label { min-width: 0; }
+.pole-daty__nawigacja :is(input, select) { padding-inline: 3px; }
+.pole-daty__nawigacja button { min-width: 0; width: 32px; min-height: 44px; }
+.pole-daty__dni { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); margin-block: 8px; text-align: center; }
+.pole-daty__dni button { min-width: 0; min-height: 44px; padding: 0; color: var(--tekst); background: var(--panel); border: 1px solid transparent; border-radius: var(--promien-pola); cursor: pointer; }
+.pole-daty__dni button[aria-pressed="true"] { background: var(--akcent-jasny); border-color: var(--akcent); }
+.pole-daty__dni button[aria-current="date"] { text-decoration: underline; }
+.pole-daty__dni button:disabled { opacity: .4; cursor: default; }
+.pole-daty :is(button, input, select):focus-visible { outline: 2px solid var(--akcent); outline-offset: 1px; }
+.pole-daty [role="alert"] { color: var(--blad); }
