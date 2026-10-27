@@ -1,17 +1,30 @@
 import { platforma } from '../platform/platforma'
 import type { WynikSprawdzeniaAktualizacji } from '../platform/typy'
 
-const OKRES_AUTOMATYCZNEJ_KONTROLI_MS = 4 * 60 * 60 * 1000
 const KLUCZ_OSTATNIEJ_KONTROLI = 'ogarniacz:ostatnia-kontrola-aktualizacji'
+const KLUCZ_CZESTOTLIWOSCI = 'ogarniacz:czestotliwosc-aktualizacji-apk'
+export const CZESTOTLIWOSCI_AKTUALIZACJI = [1, 4, 12, 24, 0] as const
+
+function odczytajCzestotliwosc() {
+  try {
+    const zapisana = window.localStorage.getItem(KLUCZ_CZESTOTLIWOSCI)
+    const godziny = zapisana?.trim() ? Number(zapisana) : 4
+    return CZESTOTLIWOSCI_AKTUALIZACJI.some((wartosc) => wartosc === godziny) ? godziny : 4
+  } catch {
+    return 4
+  }
+}
 
 export interface StanKontroliAktualizacji {
   wynikApk?: WynikSprawdzeniaAktualizacji
   bladApk?: string
   sprawdzono: boolean
+  czestotliwoscGodzin: number
 }
 
-let stan: StanKontroliAktualizacji = { sprawdzono: false }
+let stan: StanKontroliAktualizacji = { sprawdzono: false, czestotliwoscGodzin: odczytajCzestotliwosc() }
 let inicjalizacja: Promise<() => void> | undefined
+let trwajacaKontrola: Promise<WynikSprawdzeniaAktualizacji> | undefined
 const nasluchujacy = new Set<() => void>()
 
 function powiadom() {
@@ -44,7 +57,15 @@ function zapiszOstatniaKontrole() {
 }
 
 function czyWymagaAutomatycznejKontroli() {
-  return Date.now() - odczytajOstatniaKontrole() >= OKRES_AUTOMATYCZNEJ_KONTROLI_MS
+  const ostatniaKontrola = odczytajOstatniaKontrole()
+  return stan.czestotliwoscGodzin > 0 && (Date.now() < ostatniaKontrola || Date.now() - ostatniaKontrola >= stan.czestotliwoscGodzin * 60 * 60 * 1000)
+}
+
+export function zapiszCzestotliwoscAktualizacji(godziny: number) {
+  if (!CZESTOTLIWOSCI_AKTUALIZACJI.some((wartosc) => wartosc === godziny)) throw new Error('Nieprawidłowa częstotliwość sprawdzania aktualizacji.')
+  try { window.localStorage.setItem(KLUCZ_CZESTOTLIWOSCI, String(godziny)) }
+  catch { throw new Error('Nie udało się zapisać częstotliwości sprawdzania aktualizacji. Spróbuj ponownie.') }
+  zapiszStan({ czestotliwoscGodzin: godziny })
 }
 
 export function pobierzStanKontroliAktualizacji() {
@@ -58,6 +79,13 @@ export function nasluchujKontroliAktualizacji(obsluga: () => void) {
 
 export async function sprawdzAktualizacjeApk() {
   if (!platforma.aktualizacje.skonfigurowane()) return undefined
+  if (trwajacaKontrola) return trwajacaKontrola
+  trwajacaKontrola = wykonajKontroleApk()
+  try { return await trwajacaKontrola }
+  finally { trwajacaKontrola = undefined }
+}
+
+async function wykonajKontroleApk() {
   try {
     const wynikApk = await platforma.aktualizacje.sprawdz()
     zapiszStan({ wynikApk, bladApk: undefined, sprawdzono: true })
@@ -81,7 +109,7 @@ export function inicjalizujKontroleAktualizacjiAplikacji(): Promise<() => void> 
       void sprawdzAktualizacjeTeraz()
     }
 
-    if (platforma.natywna) {
+    if (platforma.natywna && stan.czestotliwoscGodzin > 0) {
       zapiszOstatniaKontrole()
       void sprawdzAktualizacjeTeraz()
     }

@@ -4,6 +4,9 @@ import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.pm.PackageInstaller;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.content.pm.Signature;
 import android.net.Uri;
 import android.os.Build;
 import android.os.StatFs;
@@ -23,6 +26,8 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.util.Locale;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 @CapacitorPlugin(name = "Aktualizacje")
@@ -164,7 +169,18 @@ public class AktualizacjePlugin extends Plugin {
             String oczekiwanySkrot = StanInstalacjiApk.sha256(getContext());
             if (!plik.isFile() || oczekiwanySkrot == null || !obliczSkrotPliku(plik).equalsIgnoreCase(oczekiwanySkrot)) {
                 StanInstalacjiApk.zapiszUszkodzonyApk(getContext());
+                powiadomOStatusieInstalacji(getContext());
                 wywolanie.reject("Zweryfikowany plik APK nie jest już dostępny lub jest uszkodzony. Pobierz go ponownie.", KOD_BRAK_INSTALATORA); return;
+            }
+            PackageManager menedzer = getContext().getPackageManager();
+            int flagiPodpisu = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? PackageManager.GET_SIGNING_CERTIFICATES : PackageManager.GET_SIGNATURES;
+            String bladZgodnosci = sprawdzZgodnoscApk(menedzer.getPackageArchiveInfo(plik.getAbsolutePath(), flagiPodpisu),
+                menedzer.getPackageInfo(getContext().getPackageName(), flagiPodpisu), wersjaDocelowa, versionCodeDocelowy);
+            if (bladZgodnosci != null) {
+                StanInstalacjiApk.zapiszBladZgodnosci(getContext(), bladZgodnosci);
+                powiadomOStatusieInstalacji(getContext());
+                wywolanie.resolve(StanInstalacjiApk.odczytaj(getContext()));
+                return;
             }
             sprawdzMiejscePrzedInstalacja(plik.getParentFile(), plik.length());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !getContext().getPackageManager().canRequestPackageInstalls()) {
@@ -175,6 +191,7 @@ public class AktualizacjePlugin extends Plugin {
                 JSObject wynik = StanInstalacjiApk.odczytaj(getContext()); wynik.put("wymagaZgody", true); wywolanie.resolve(wynik); return;
             }
             PackageInstaller.SessionParams parametry = new PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            parametry.setAppPackageName(getContext().getPackageName());
             parametry.setSize(plik.length());
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) parametry.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) parametry.setPackageSource(PackageInstaller.PACKAGE_SOURCE_DOWNLOADED_FILE);
@@ -202,6 +219,24 @@ public class AktualizacjePlugin extends Plugin {
 
     interface SynchronizacjaStrumienia { void wykonaj(OutputStream strumien) throws Exception; }
 
+    static String sprawdzZgodnoscApk(PackageInfo pobrana, PackageInfo zainstalowana, String wersjaDocelowa, long kodDocelowy) {
+        if (pobrana == null || zainstalowana == null) return StanInstalacjiApk.NIEPRAWIDLOWY_APK;
+        if (!zainstalowana.packageName.equals(pobrana.packageName)) return StanInstalacjiApk.KONFLIKT_PAKIETU;
+        long kodPobrany = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? pobrana.getLongVersionCode() : pobrana.versionCode;
+        long kodZainstalowany = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? zainstalowana.getLongVersionCode() : zainstalowana.versionCode;
+        if (kodPobrany != kodDocelowy || !wersjaDocelowa.equals(pobrana.versionName)) return StanInstalacjiApk.NIEPRAWIDLOWY_APK;
+        if (kodPobrany <= kodZainstalowany) return StanInstalacjiApk.KONFLIKT_WERSJI;
+        Signature[] podpisPobrany = pobierzPodpisy(pobrana), podpisZainstalowany = pobierzPodpisy(zainstalowana);
+        if (podpisPobrany == null || podpisZainstalowany == null || podpisPobrany.length == 0 || podpisZainstalowany.length == 0
+            || !new HashSet<>(Arrays.asList(podpisPobrany)).equals(new HashSet<>(Arrays.asList(podpisZainstalowany)))) return StanInstalacjiApk.NIEZGODNY_PODPIS;
+        return null;
+    }
+
+    private static Signature[] pobierzPodpisy(PackageInfo informacje) {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && informacje.signingInfo != null
+            ? informacje.signingInfo.getApkContentsSigners() : informacje.signatures;
+    }
+
     static void zapiszApkWSesji(File plik, OutputStream strumien, SynchronizacjaStrumienia synchronizacja) throws Exception {
         // Android wymaga zamknięcia openWrite przed zatwierdzeniem sesji.
         try (OutputStream wyjscie = strumien; InputStream wejscie = new FileInputStream(plik)) {
@@ -227,6 +262,12 @@ public class AktualizacjePlugin extends Plugin {
     private void uzgodnijSesjePoUruchomieniu() {
         potwierdzSukcesPoRestarcie();
         String status = StanInstalacjiApk.status(getContext());
+        if (StanInstalacjiApk.czyMaZweryfikowanyApk(status, StanInstalacjiApk.nazwaPliku(getContext()), StanInstalacjiApk.sha256(getContext()))) {
+            try {
+                File plik = bezpiecznyPlik(new File(getContext().getCacheDir(), KATALOG_AKTUALIZACJI), StanInstalacjiApk.nazwaPliku(getContext()));
+                if (!plik.isFile() && StanInstalacjiApk.czyMoznaPonowicInstalacje(status)) StanInstalacjiApk.zapiszUszkodzonyApk(getContext());
+            } catch (Exception blad) { StanInstalacjiApk.zapiszUszkodzonyApk(getContext()); }
+        }
         if (!StanInstalacjiApk.INSTALOWANIE.equals(status) && !StanInstalacjiApk.OCZEKUJE_NA_POTWIERDZENIE_INSTALACJI.equals(status)) return;
         try {
             PackageInstaller instalator = getContext().getPackageManager().getPackageInstaller();

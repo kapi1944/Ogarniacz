@@ -26,6 +26,50 @@ Debug nie wymaga release keystore. Telefon produkcyjny aktualizuj oficjalnym APK
 
 ### Pobieranie APK po 1.0.18
 
+Stable korzysta z publicznego manifestu
+`https://github.com/kapi1944/Ogarniacz/releases/latest/download/latest.json`.
+Brak adresu w konfiguracji APK lub błąd jej odczytu włącza to domyślne źródło;
+jawnie skonfigurowany adres pozostaje zachowany. Beta nie korzysta ze Stable.
+Sprawdzenie i pobranie nie wymagają konta, Tailscale ani Raspberry Pi.
+Panel APK pokazuje źródło bez parametrów zapytania i danych logowania.
+
+Manifest i APK obsługują do pięciu przekierowań HTTPS bez danych logowania.
+Względny adres APK z GitHub jest rozwiązywany względem przypiętego wydania
+z łańcucha przekierowań manifestu, aby zmiana `latest` w trakcie pobierania
+nie podmieniła artefaktu. Pozostają weryfikacje rozmiaru i SHA-256.
+Przed zgodami i otwarciem sesji instalatora sprawdzane są packageName,
+zgodność versionName/versionCode z manifestem, wyższy kod od zainstalowanego
+oraz bieżące certyfikaty obu APK. PackageInstaller nadal weryfikuje instalację.
+Nie zmieniono applicationId ani klucza Stable.
+
+W panelu APK można wybrać kontrolę co 1, 4, 12 lub 24 godziny albo tylko ręczną.
+Domyślne zachowanie pozostaje: kontrola przy uruchomieniu aplikacji, następnie
+przy powrocie po co najmniej czterech godzinach. Wybrany okres dotyczy powrotów;
+nie dodano usługi sprawdzającej po zamknięciu aplikacji. Tryb ręczny wyłącza też
+kontrolę przy uruchomieniu. Ustawienie jest lokalne dla urządzenia, niezależne
+od konta i synchronizacji; nie zmienia istniejących rekordów użytkownika.
+
+Zachowane APK można ponowić z globalnego powiadomienia również bez wyniku
+kontroli sieciowej. Usunięcie APK z cache przez Androida jest rozpoznawane
+przy odczycie stanu i umożliwia ponowne pobranie zamiast nieskutecznego retry.
+
+Próby wymagające fizycznego Samsunga (APK zawierające te zmiany → osobno
+zatwierdzony, opublikowany wyższy versionCode): aktualizacja bez konta i z
+wyłączonym Tailscale, brak dostępu do Raspberry, zgoda na nieznane aplikacje
+i powrót bez/z tą zgodą, systemowe potwierdzenie, anulowanie i retry offline,
+restart procesu przed zatwierdzeniem sesji, utrata sieci podczas pobierania,
+Auto Blocker/One UI, mało miejsca, odczyt faktycznej nowej wersji i zachowanie
+danych po aktualizacji. Bez wyższego wydania pełna instalacja pozostaje
+NIETESTOWANA; nie publikuj wersji tylko na potrzeby tej listy.
+
+Weryfikacja publicznego wydania 1.1.0 (2026-10-27): manifest HTTPS
+302 → 302 → 200; produkcyjny `PobieranieApk` pobrał przez te same hosty
+60 495 024 bajty. SHA-256:
+`542e10af89901c6bd0c666ba6378328a9eea0fdff06c492798c0fd8afb515d3d`.
+`aapt` potwierdził `pl.ogarniacz.app`, versionCode `1001000`, versionName `1.1.0`;
+`apksigner verify` potwierdził podpis i certyfikat z `config/android-release.json`.
+To kontrola publicznych artefaktów na JDK, bez instalacji i publikacji APK.
+
 Panel APK ponownie odczytuje zainstalowaną wersję i trwały stan instalatora po
 zdarzeniu `aktywny` istniejącego lifecycle. Natywna obsługa potwierdza sukces
 odczytem `PackageManager`: zainstalowany `versionCode` musi zgadzać się z celem
@@ -158,9 +202,17 @@ Testy automatyczne: `FileService.test.ts`, `ShareService.test.ts`,
 `BackupUstawien.test.tsx`, regresja `BackupService.test.ts` i `BackupProfili.test.ts`.
 `EksportPlikuPluginTest` używa Robolectric (tylko zależność testowa), testowego
 dostawcy dokumentów oraz faktycznego FileProvider i Capacitor Share. CI Android
-uruchamia całą klasę na Linuksie. Dwa testy FileProvider wymagają ścieżek uniksowych:
-AndroidX 1.17.0 porównuje katalog z separatorem `/`, co uniemożliwia ich wykonanie
-w Robolectric na Windows; pozostałe testy dostawcy dokumentów działają także tam.
+uruchamia całą klasę na Linuksie. AndroidX 1.17.0 sprawdza przynależność do katalogu
+z separatorem `/`, a Robolectric na Windows przekazuje ścieżki z `\`. Powodowało
+to dwa błędy `Failed to find configured root that contains`. Lokalny shadow testowy
+normalizuje separator hosta przed wywołaniem oryginalnego `removeTrailingSlash`;
+oryginalne kontrole katalogu, kanonikalizacja, odczyt i Capacitor Share pozostają
+wykonywane. Testy odrzucają sąsiedni katalog, APK i próbę wyjścia przez `..`.
+Manifest i produkcyjny FileProvider pozostają bez zmian: tylko `cache/eksport/`,
+`exported=false`, tymczasowe uprawnienia URI i authority zależne od applicationId.
+Stable/Debug używają `pl.ogarniacz.app`, Beta — `pl.ogarniacz.app.beta`.
+Aktualizator przekazuje APK do sesji PackageInstaller przez strumień, bez
+udostępniania katalogu `cache/aktualizacje/` przez FileProvider.
 Nie zastępuje to testu prawdziwego odbiorcy działającego z innym UID.
 
 Próba na fizycznym Samsungu z APK zawierającym poprawkę (bez odinstalowywania

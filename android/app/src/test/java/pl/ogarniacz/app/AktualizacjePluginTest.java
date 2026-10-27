@@ -13,6 +13,10 @@ import java.io.FileOutputStream;
 import java.nio.file.Files;
 import java.security.MessageDigest;
 import android.content.pm.PackageInstaller;
+import android.content.pm.PackageInfo;
+import android.content.pm.Signature;
+import android.content.pm.SigningInfo;
+import org.robolectric.Shadows;
 import android.content.Context;
 import org.robolectric.RuntimeEnvironment;
 import com.getcapacitor.JSObject;
@@ -31,6 +35,50 @@ public class AktualizacjePluginTest {
 
     @Before public void wyczyscStanInstalacjiTestowej() {
         RuntimeEnvironment.getApplication().getSharedPreferences("stan_instalacji_apk", Context.MODE_PRIVATE).edit().clear().commit();
+    }
+
+    @Test @Config(sdk = {27, 35}) public void sprawdzaPakietWersjeIPodpisPrzedOtwarciemInstalatora() {
+        PackageInfo zainstalowana = pakietTestowy("pl.ogarniacz.app", "1.0.23", 1000023, "abcd");
+        PackageInfo pobrana = pakietTestowy("pl.ogarniacz.app", "1.1.0", 1001000, "abcd");
+        assertEquals(null, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, zainstalowana, "1.1.0", 1001000));
+        pobrana.packageName = "pl.ogarniacz.app.beta";
+        assertEquals(StanInstalacjiApk.KONFLIKT_PAKIETU, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, zainstalowana, "1.1.0", 1001000));
+        pobrana.packageName = zainstalowana.packageName;
+        pobrana.signatures = new Signature[] { new Signature("1234") };
+        assertEquals(StanInstalacjiApk.NIEZGODNY_PODPIS, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, zainstalowana, "1.1.0", 1001000));
+        pobrana.signatures = null;
+        assertEquals(StanInstalacjiApk.NIEZGODNY_PODPIS, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, zainstalowana, "1.1.0", 1001000));
+        assertEquals(StanInstalacjiApk.NIEPRAWIDLOWY_APK, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, zainstalowana, "1.1.0", 1001001));
+        assertEquals(StanInstalacjiApk.NIEPRAWIDLOWY_APK, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, zainstalowana, "1.1.1", 1001000));
+        assertEquals(StanInstalacjiApk.NIEPRAWIDLOWY_APK, AktualizacjePlugin.sprawdzZgodnoscApk(null, zainstalowana, "1.1.0", 1001000));
+        assertEquals(StanInstalacjiApk.KONFLIKT_WERSJI, AktualizacjePlugin.sprawdzZgodnoscApk(zainstalowana, pobrana, "1.0.23", 1000023));
+        assertEquals(StanInstalacjiApk.KONFLIKT_WERSJI, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, pobrana, "1.1.0", 1001000));
+    }
+
+    @Test public void odrzuconyPakietNieBlokujePobraniaPoprawnejAktualizacji() {
+        Context kontekst = RuntimeEnvironment.getApplication();
+        StanInstalacjiApk.zapiszZweryfikowano(kontekst, "aktualizacja.apk", "a".repeat(64), "1.1.0", 1001000);
+        StanInstalacjiApk.zapiszBladZgodnosci(kontekst, StanInstalacjiApk.NIEZGODNY_PODPIS);
+        assertFalse(StanInstalacjiApk.odczytaj(kontekst).getBool("maZweryfikowanyApk"));
+        assertEquals(StanInstalacjiApk.NIEZGODNY_PODPIS, StanInstalacjiApk.status(kontekst));
+    }
+
+    @Test public void sprawdzaBiezaceCertyfikatySigningInfoNaNowymAndroidzie() {
+        PackageInfo zainstalowana = pakietTestowy("pl.ogarniacz.app", "1.0.23", 1000023, "abcd");
+        PackageInfo pobrana = pakietTestowy("pl.ogarniacz.app", "1.1.0", 1001000, "abcd");
+        zainstalowana.signingInfo = new SigningInfo(); pobrana.signingInfo = new SigningInfo();
+        Shadows.shadowOf(zainstalowana.signingInfo).setSignatures(zainstalowana.signatures);
+        Shadows.shadowOf(pobrana.signingInfo).setSignatures(pobrana.signatures);
+        assertEquals(null, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, zainstalowana, "1.1.0", 1001000));
+        Shadows.shadowOf(pobrana.signingInfo).setSignatures(new Signature[] { new Signature("1234") });
+        assertEquals(StanInstalacjiApk.NIEZGODNY_PODPIS, AktualizacjePlugin.sprawdzZgodnoscApk(pobrana, zainstalowana, "1.1.0", 1001000));
+    }
+
+    private static PackageInfo pakietTestowy(String identyfikator, String wersja, int kod, String podpis) {
+        PackageInfo pakiet = new PackageInfo();
+        pakiet.packageName = identyfikator; pakiet.versionName = wersja; pakiet.versionCode = kod;
+        pakiet.signatures = new Signature[] { new Signature(podpis) };
+        return pakiet;
     }
 
     @Test public void wynikSystemuBezZainstalowanejWersjiNieOglaszaSukcesu() throws Exception {

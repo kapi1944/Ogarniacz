@@ -24,7 +24,7 @@ const dostepnaAktualizacja = {
   manifest: { versionName: '1.0.12', versionCode: 1_000_012, apkUrl: 'Ogarniacz-1.0.12-release.apk', sha256: 'a'.repeat(64) },
 }
 
-let stanKontroli = { sprawdzono: true, wynikApk: dostepnaAktualizacja }
+let stanKontroli = { sprawdzono: true, wynikApk: dostepnaAktualizacja, czestotliwoscGodzin: 4 }
 
 vi.mock('../../platform/platforma', () => ({
   platforma: {
@@ -34,7 +34,8 @@ vi.mock('../../platform/platforma', () => ({
   },
 }))
 
-vi.mock('../../services/KontrolaAktualizacjiAplikacji', () => ({
+vi.mock('../../services/KontrolaAktualizacjiAplikacji', async (oryginal) => ({
+  ...await oryginal<typeof import('../../services/KontrolaAktualizacjiAplikacji')>(),
   nasluchujKontroliAktualizacji: nasluchujKontroli,
   pobierzStanKontroliAktualizacji: pobierzStanKontroli,
   sprawdzAktualizacjeApk,
@@ -42,7 +43,7 @@ vi.mock('../../services/KontrolaAktualizacjiAplikacji', () => ({
 
 beforeEach(() => {
   platforma.natywna = true
-  stanKontroli = { sprawdzono: true, wynikApk: dostepnaAktualizacja }
+  stanKontroli = { sprawdzono: true, wynikApk: dostepnaAktualizacja, czestotliwoscGodzin: 4 }
   pobierzStanKontroli.mockImplementation(() => stanKontroli)
   sprawdzAktualizacjeApk.mockResolvedValue(dostepnaAktualizacja)
   pobierzApk.mockReset()
@@ -115,7 +116,7 @@ it('udostępnia raport do ręcznego skopiowania, gdy schowek jest niedostępny',
 it('po sukcesie 1.0.14 i sprzątnięciu starego APK pozwala pobrać następną wersję', async () => {
   const nastepna = { ...dostepnaAktualizacja, adresApk: 'https://example.test/Ogarniacz-1.0.15-release.apk',
     manifest: { ...dostepnaAktualizacja.manifest, versionName: '1.0.15', versionCode: 1_000_015, apkUrl: 'Ogarniacz-1.0.15-release.apk' } }
-  stanKontroli = { sprawdzono: true, wynikApk: nastepna }
+  stanKontroli = { sprawdzono: true, wynikApk: nastepna, czestotliwoscGodzin: 4 }
   sprawdzAktualizacjeApk.mockResolvedValueOnce(nastepna)
   vi.mocked(platforma.aktualizacje.pobierzInformacje).mockResolvedValueOnce({ wersja: '1.0.14', kod: 1_000_014 })
   vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockResolvedValueOnce({
@@ -133,6 +134,27 @@ it('po sukcesie 1.0.14 i sprzątnięciu starego APK pozwala pobrać następną w
     { nazwaPliku: 'Ogarniacz-1.0.15-release.apk', sha256: 'a'.repeat(64) }, nastepna.manifest,
   ))
   expect(pobierzApk).toHaveBeenCalledTimes(1)
+})
+
+it('zapisuje częstotliwość na urządzeniu i pokazuje niezależność APK od konta', async () => {
+  render(<PanelAktualizacji />)
+  await screen.findByRole('button', { name: 'Pobierz i zainstaluj' })
+  expect(screen.getByLabelText('Częstotliwość sprawdzania aktualizacji')).toHaveValue('4')
+  fireEvent.change(screen.getByLabelText('Częstotliwość sprawdzania aktualizacji'), { target: { value: '24' } })
+  expect(localStorage.getItem('ogarniacz:czestotliwosc-aktualizacji-apk')).toBe('24')
+  expect(screen.getByText(/Działa bez konta, Tailscale/)).toBeInTheDocument()
+})
+
+it('po usunięciu APK z cache pozwala pobrać aktualizację ponownie', async () => {
+  let zastosujStan: ((stan: import('../../platform/typy').StanInstalacjiAktualizacji) => void) | undefined
+  vi.mocked(platforma.aktualizacje.pobierzStanInstalacji).mockResolvedValueOnce({ status: 'ANULOWANO', wymagaZgody: false,
+    maZweryfikowanyApk: true, moznaPonowicInstalacje: true, nazwaPliku: 'aktualizacja.apk', sha256: 'a'.repeat(64) })
+  vi.mocked(platforma.aktualizacje.nasluchujStanuInstalacji).mockImplementationOnce(async (obsluga) => { zastosujStan = obsluga; return () => undefined })
+  render(<PanelAktualizacji />)
+  await screen.findByRole('button', { name: 'Ponów instalację' })
+  act(() => zastosujStan?.({ status: 'NIEPRAWIDLOWY_APK', wymagaZgody: false, maZweryfikowanyApk: false, moznaPonowicInstalacje: false }))
+  expect(screen.getByRole('button', { name: 'Ponów pobieranie' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Ponów instalację' })).not.toBeInTheDocument()
 })
 
 describe('końcowa sekcja synchronizacji i aktualizacji', () => {
@@ -212,6 +234,7 @@ describe('końcowa sekcja synchronizacji i aktualizacji', () => {
   it('promuje dostępne APK ponad szybką poprawkę', () => {
     render(<PodsumowaniePolaczeniaIAktualizacji synchronizacjaSkonfigurowana stan={{
       sprawdzono: true,
+      czestotliwoscGodzin: 4,
       wynikApk: { czyNowsza: true, adresApk: 'https://example.test/app.apk', manifest: { versionName: '1.0.10', versionCode: 1_000_010, apkUrl: 'app.apk', sha256: 'a'.repeat(64) } },
     }} />)
     expect(screen.getAllByText('Dostępna nowa wersja aplikacji')).not.toHaveLength(0)

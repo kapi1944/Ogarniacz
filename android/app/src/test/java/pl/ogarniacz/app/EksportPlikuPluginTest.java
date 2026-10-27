@@ -29,11 +29,25 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.Robolectric;
 import org.robolectric.RuntimeEnvironment;
 import org.robolectric.annotation.Config;
+import org.robolectric.annotation.Implementation;
+import org.robolectric.annotation.Implements;
+import org.robolectric.shadow.api.Shadow;
+import org.robolectric.util.ReflectionHelpers.ClassParameter;
 import org.robolectric.shadows.ShadowContentResolver;
 
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = 35)
+@Config(sdk = 35, instrumentedPackages = {"androidx.core.content.FileProvider"}, shadows = EksportPlikuPluginTest.SciezkiFileProvider.class)
 public class EksportPlikuPluginTest {
+    @Implements(value = androidx.core.content.FileProvider.class, isInAndroidSdk = false)
+    public static class SciezkiFileProvider {
+        @Implementation protected static String removeTrailingSlash(String sciezka) {
+            // AndroidX zakłada separator Androida. Normalizujemy tylko ścieżki hosta testów,
+            // zachowując oryginalne sprawdzanie katalogu, kanonikalizację i odczyt plików.
+            return Shadow.directlyOn(androidx.core.content.FileProvider.class, "removeTrailingSlash",
+                ClassParameter.from(String.class, sciezka.replace(File.separatorChar, '/')));
+        }
+    }
+
     private final Uri adres = Uri.parse("content://dokumenty-test/kopia.json");
     private KontekstTestowy wtyczka;
     private DostawcaTestowy dostawca;
@@ -154,6 +168,18 @@ public class EksportPlikuPluginTest {
             assertNotNull(wywolanie.blad);
             assertNull(wywolanie.wynik);
         }
+    }
+
+    @Test public void fileProviderNieUdostepniaApkAniSasiedniegoKatalogu() throws Exception {
+        String nazwaDostawcy = wtyczka.getContext().getPackageName() + ".fileprovider";
+        for (String sciezka : new String[] { "aktualizacje/aktualizacja.apk", "eksport-obcy/kopia.json", "eksport/../prywatny.json" }) {
+            File plik = new File(wtyczka.getContext().getCacheDir(), sciezka);
+            assertTrue(plik.getParentFile().mkdirs() || plik.getParentFile().isDirectory());
+            Files.write(plik.toPath(), "prywatne".getBytes(StandardCharsets.UTF_8));
+            assertThrows(IllegalArgumentException.class, () -> androidx.core.content.FileProvider.getUriForFile(wtyczka.getContext(), nazwaDostawcy, plik));
+        }
+        Uri ucieczka = Uri.parse("content://" + nazwaDostawcy + "/eksport/..%2Fprywatny.json");
+        assertThrows(SecurityException.class, () -> wtyczka.getContext().getContentResolver().openInputStream(ucieczka));
     }
 
     @Test public void capacitorPrzekazujeJsonZPrawemOdczytuBezTekstu() throws Exception {

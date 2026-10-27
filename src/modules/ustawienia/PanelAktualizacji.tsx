@@ -2,8 +2,8 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Download, RefreshCw } from 'lucide-react'
 import { Karta, Znacznik } from '../../components/Interfejs'
 import { platforma } from '../../platform/platforma'
-import { pobierzDiagnostykeRuntime } from '../../services/RuntimeConfigService'
-import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeApk } from '../../services/KontrolaAktualizacjiAplikacji'
+import { pobierzDiagnostykeRuntime, pobierzDiagnostykeZrodlaAktualizacji } from '../../services/RuntimeConfigService'
+import { CZESTOTLIWOSCI_AKTUALIZACJI, nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, sprawdzAktualizacjeApk, zapiszCzestotliwoscAktualizacji } from '../../services/KontrolaAktualizacjiAplikacji'
 import type { PobranaAktualizacja, StanInstalacjiAktualizacji, StatusInstalacjiAktualizacji, WynikSprawdzeniaAktualizacji, WynikUruchomieniaInstalatora } from '../../platform/typy'
 
 type EtapAktualizacji = 'gotowy' | 'sprawdzanie' | 'brak' | 'dostepna' | 'pobieranie' | 'weryfikacja' | 'brak_miejsca' | 'zgoda' | 'uruchamianie' | 'gotowe' | 'zainstalowano' | 'niepotwierdzono' | 'blad_instalatora' | 'blad_pobierania' | 'blad_sieci' | 'blad_http' | 'blad_rozmiaru' | 'bledny_sha' | 'blad_finalizacji' | 'blad'
@@ -140,6 +140,7 @@ export function PanelAktualizacji() {
   const [pobrana, ustawPobrana] = useState<PobranaAktualizacja>()
   const [stanNatywny, ustawStanNatywny] = useState<StanInstalacjiAktualizacji>()
   const [czyLokalnyPrzebieg, ustawCzyLokalnyPrzebieg] = useState(false)
+  const [bladUstawienia, ustawBladUstawienia] = useState('')
   const stanKontroli = useSyncExternalStore(nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, pobierzStanKontroliAktualizacji)
   const skonfigurowane = platforma.aktualizacje.skonfigurowane()
 
@@ -150,7 +151,7 @@ export function PanelAktualizacji() {
       const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(stan.status)
       ustawCzyLokalnyPrzebieg(true)
       ustawStanNatywny(stan)
-      if (stan.maZweryfikowanyApk && stan.nazwaPliku && stan.sha256) ustawPobrana({ nazwaPliku: stan.nazwaPliku, sha256: stan.sha256 })
+      ustawPobrana(stan.maZweryfikowanyApk && stan.nazwaPliku && stan.sha256 ? { nazwaPliku: stan.nazwaPliku, sha256: stan.sha256 } : undefined)
       ustawEtap(nowyEtap); ustawKomunikat(stan.komunikatUzytkownika || nowyKomunikat)
     }
     const pokazBlad = () => {
@@ -225,6 +226,7 @@ export function PanelAktualizacji() {
   const zastosujWynikInstalatora = (wynik: WynikUruchomieniaInstalatora) => {
     ustawStanNatywny(wynik)
     if (wynik.maZweryfikowanyApk && wynik.nazwaPliku && wynik.sha256) ustawPobrana({ nazwaPliku: wynik.nazwaPliku, sha256: wynik.sha256 })
+    else if (wynik.maZweryfikowanyApk === false) ustawPobrana(undefined)
     const [nowyEtap, nowyKomunikat] = opisStatusuInstalacji(wynik.status)
     ustawEtap(wynik.wymagaZgody ? 'zgoda' : nowyEtap)
     ustawKomunikat(wynik.wymagaZgody
@@ -307,6 +309,18 @@ export function PanelAktualizacji() {
       <div><span>Aktualnie zainstalowana wersja</span><strong>{wersja}</strong></div>
       <div><span>Dostępna wersja</span><strong>{dostepna?.manifest.versionName ?? '—'}</strong></div>
     </div>
+    <p className="tekst-pomocniczy">{pobierzDiagnostykeZrodlaAktualizacji()}</p>
+    <p className="tekst-pomocniczy">Aktualizacja APK wymaga internetu. Działa bez konta, Tailscale i połączenia z Raspberry Pi.</p>
+    <label>Częstotliwość sprawdzania aktualizacji
+      <select value={stanKontroli.czestotliwoscGodzin} onChange={(zdarzenie) => {
+        try { zapiszCzestotliwoscAktualizacji(Number(zdarzenie.target.value)); ustawBladUstawienia('') }
+        catch (blad) { ustawBladUstawienia(blad instanceof Error ? blad.message : 'Nie udało się zapisać ustawienia.') }
+      }}>
+        {CZESTOTLIWOSCI_AKTUALIZACJI.map((godziny) => <option key={godziny} value={godziny}>{godziny === 0 ? 'Tylko ręcznie' : godziny === 1 ? 'Co godzinę' : godziny === 4 ? 'Co 4 godziny (domyślnie)' : godziny === 24 ? 'Raz dziennie' : `Co ${godziny} godzin`}</option>)}
+      </select>
+    </label>
+    <p className="tekst-pomocniczy">Kontrola przy każdym uruchomieniu aplikacji i po powrocie po wybranym czasie. „Tylko ręcznie” wyłącza automatyczne sprawdzanie. Ustawienie dotyczy tego urządzenia.</p>
+    {bladUstawienia && <p role="alert">{bladUstawienia}</p>}
     {dostepna?.manifest.releaseNotes && <div><h3>Informacje o wydaniu</h3><p className="tekst-pomocniczy" style={{ whiteSpace: 'pre-wrap' }}>{dostepna.manifest.releaseNotes}</p></div>}
     {komunikat && <p className="tekst-pomocniczy" role={czyEtapBledu ? 'alert' : 'status'}>{komunikat}</p>}
     {postep !== undefined && (etap === 'pobieranie' || etap === 'weryfikacja') && <progress value={postep} max="100" aria-label="Postęp pobierania aktualizacji" />}

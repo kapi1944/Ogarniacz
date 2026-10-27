@@ -65,8 +65,41 @@ function sprawdzAdresHttps(adres: string, etykieta: string) {
   } catch {
     throw new Error(`${etykieta} jest nieprawidłowy.`)
   }
-  if (url.protocol !== 'https:') throw new Error(`${etykieta} musi używać HTTPS.`)
+  if (url.protocol !== 'https:' || url.username || url.password) throw new Error(`${etykieta} musi używać HTTPS bez danych logowania.`)
   return url.toString()
+}
+
+async function pobierzManifest(adresPoczatkowy: string) {
+  let adres = adresPoczatkowy
+  let adresWydania: string | undefined
+  for (let numer = 0; numer <= 5; numer++) {
+    sprawdzAdresHttps(adres, 'Adres manifestu aktualizacji lub przekierowania')
+    const adresZrodla = new URL(adres)
+    // Względny APK należy do wydania, nie do tymczasowego adresu CDN manifestu.
+    if (adresZrodla.hostname === 'github.com' && /^\/[^/]+\/[^/]+\/releases\/download\/[^/]+\/latest\.json$/.test(adresZrodla.pathname)) adresWydania = adres
+    let odpowiedz
+    try {
+      odpowiedz = await CapacitorHttp.get({
+        url: adres, disableRedirects: true, connectTimeout: 15_000, readTimeout: 15_000,
+        responseType: 'json', headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+      })
+    } catch {
+      throw new Error('Nie udało się pobrać manifestu aktualizacji przez HTTPS. Sprawdź internet, datę urządzenia i ponów próbę. Konto i Raspberry Pi nie są wymagane.')
+    }
+    if ([301, 302, 303, 307, 308].includes(odpowiedz.status)) {
+      const cel = Object.entries(odpowiedz.headers).find(([nazwa]) => nazwa.toLowerCase() === 'location')?.[1]
+      if (!cel || numer === 5) throw new Error('Serwer manifestu zwrócił nieprawidłowe przekierowanie lub przekroczono limit przekierowań.')
+      try { adres = new URL(cel, adres).toString() }
+      catch { throw new Error('Serwer manifestu zwrócił nieprawidłowy adres przekierowania.') }
+      continue
+    }
+    if (odpowiedz.status !== 200) throw new Error(`Serwer aktualizacji zwrócił HTTP ${odpowiedz.status}. Spróbuj ponownie później.`)
+    let dane: unknown
+    try { dane = typeof odpowiedz.data === 'string' ? JSON.parse(odpowiedz.data) : odpowiedz.data }
+    catch { throw new Error('Źródło aktualizacji nie zwróciło prawidłowego latest.json. Spróbuj ponownie później.') }
+    return { manifest: parsujManifestAktualizacji(dane), adresBazowy: adresWydania ?? adres }
+  }
+  throw new Error('Przekroczono limit przekierowań manifestu aktualizacji.')
 }
 
 function nazwaApk(manifest: ManifestAktualizacji) {
@@ -78,9 +111,10 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
     if (czyAndroid) {
       const informacje = await App.getInfo()
       const kod = Number(informacje.build)
+      if (!Number.isSafeInteger(kod) || kod <= 0) throw new Error('Nie udało się odczytać zainstalowanego versionCode. Uruchom aplikację ponownie.')
       return {
         wersja: informacje.version,
-        kod: Number.isInteger(kod) && kod > 0 ? kod : obliczKodWersji(informacje.version),
+        kod,
       }
     }
     return { wersja: __WERSJA_APLIKACJI__, kod: obliczKodWersji(__WERSJA_APLIKACJI__) }
@@ -94,20 +128,9 @@ export function utworzUslugeAktualizacji(czyAndroid: boolean) {
       const adresManifestu = pobierzKonfiguracjeRuntime().androidUpdateManifestUrl
       if (!adresManifestu) throw new Error(pobierzDiagnostykeRuntime() || 'Źródło aktualizacji nie jest skonfigurowane w tym buildzie.')
       const bezpiecznyAdresManifestu = sprawdzAdresHttps(adresManifestu, 'Adres manifestu aktualizacji')
-      const odpowiedz = await CapacitorHttp.get({
-        url: bezpiecznyAdresManifestu,
-        connectTimeout: 15_000,
-        readTimeout: 15_000,
-        responseType: 'json',
-        headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
-      })
-      if (odpowiedz.status < 200 || odpowiedz.status >= 300) {
-        throw new Error(`Serwer aktualizacji zwrócił HTTP ${odpowiedz.status}.`)
-      }
-      const surowyManifest = typeof odpowiedz.data === 'string' ? JSON.parse(odpowiedz.data) : odpowiedz.data
-      const manifest = parsujManifestAktualizacji(surowyManifest)
+      const { manifest, adresBazowy } = await pobierzManifest(bezpiecznyAdresManifestu)
       const informacje = await pobierzInformacje()
-      const adresApk = sprawdzAdresHttps(new URL(manifest.apkUrl, bezpiecznyAdresManifestu).toString(), 'Adres APK')
+      const adresApk = sprawdzAdresHttps(new URL(manifest.apkUrl, adresBazowy).toString(), 'Adres APK')
       return { manifest, adresApk, czyNowsza: czyNowszaWersja(manifest, informacje.kod) }
     },
     pobierz: async (

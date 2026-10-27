@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { utworzRuntimeConfigService } from './RuntimeConfigService'
 
 describe('RuntimeConfigService', () => {
@@ -73,9 +73,10 @@ describe('RuntimeConfigService', () => {
 
     expect(serwis.pobierz().diagnostyka).toEqual([
       'Brak syncApiUrl w natywnej konfiguracji APK.',
-      'Brak androidUpdateManifestUrl w natywnej konfiguracji APK.',
+      'Brak adresu manifestu w APK; używane jest publiczne źródło GitHub Releases (Stable).',
     ])
     expect(serwis.pobierz().syncApiUrl).toBeUndefined()
+    expect(serwis.pobierz().androidUpdateManifestUrl).toBe('https://github.com/kapi1944/Ogarniacz/releases/latest/download/latest.json')
   })
 
   it('błąd odczytu APK nie uruchamia fallbacku same-origin', async () => {
@@ -90,5 +91,24 @@ describe('RuntimeConfigService', () => {
     await serwis.inicjalizuj()
     expect(serwis.pobierz().syncApiUrl).toBeUndefined()
     expect(serwis.pobierz().diagnostyka).toContain('Nie udało się odczytać natywnej konfiguracji APK.')
+    expect(serwis.pobierz().androidUpdateManifestUrl).toBe('https://github.com/kapi1944/Ogarniacz/releases/latest/download/latest.json')
+  })
+
+  it('Beta bez backendu nie włącza aktualizacji Stable', async () => {
+    const serwis = utworzRuntimeConfigService({ czyAndroid: true, pobierzKonfiguracjeNatywna: async () => ({ kanalBeta: true }), konfiguracjaWeb: {} })
+    await serwis.inicjalizuj()
+    expect(serwis.pobierz().androidUpdateManifestUrl).toBeUndefined()
+  })
+
+  it.each(['https://example.test/latest.json?token=sekret#fragment', 'https://login:sekret@example.test/latest.json'])('diagnostyka źródła nie ujawnia danych logowania ani parametrów: %s', async (adres) => {
+    vi.stubGlobal('__OGARNIACZ_RUNTIME_CONFIG__', { androidUpdateManifestUrl: adres })
+    vi.resetModules()
+    try {
+      const { pobierzDiagnostykeZrodlaAktualizacji } = await import('./RuntimeConfigService')
+      expect(pobierzDiagnostykeZrodlaAktualizacji()).not.toMatch(/sekret|login|fragment/)
+    } finally {
+      vi.unstubAllGlobals()
+      vi.resetModules()
+    }
   })
 })

@@ -9,7 +9,7 @@ vi.mock('../services/RuntimeConfigService', () => ({
   pobierzKonfiguracjeRuntime: () => ({ androidUpdateManifestUrl: 'https://github.com/kapi1944/Ogarniacz/releases/latest/download/latest.json' }),
   pobierzDiagnostykeRuntime: () => '',
 }))
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks() })
 
 it('wykrywa 1.0.12 na 1.0.11 i rozwiązuje względny URL publicznego APK', async () => {
   vi.spyOn(App, 'getInfo').mockResolvedValue({ id: 'pl.ogarniacz.app', name: 'Ogarniacz', version: '1.0.11', build: '1000011' })
@@ -20,6 +20,44 @@ it('wykrywa 1.0.12 na 1.0.11 i rozwiązuje względny URL publicznego APK', async
 it('nie udaje dostępności APK po błędzie serwera manifestu', async () => {
   vi.spyOn(CapacitorHttp, 'get').mockResolvedValue({ status: 503, headers: {}, url: '', data: {} })
   await expect(utworzUslugeAktualizacji(true).sprawdz()).rejects.toThrow('503')
+})
+
+it('śledzi przekierowania GitHub i przypina względny APK do wersji manifestu zamiast ruchomego latest lub CDN', async () => {
+  vi.spyOn(App, 'getInfo').mockResolvedValue({ id: 'pl.ogarniacz.app', name: 'Ogarniacz', version: '1.0.23', build: '1000023' })
+  const zadanie = vi.spyOn(CapacitorHttp, 'get')
+    .mockResolvedValueOnce({ status: 302, headers: { Location: '/kapi1944/Ogarniacz/releases/download/v1.1.0/latest.json' }, url: '', data: '' })
+    .mockResolvedValueOnce({ status: 302, headers: { location: 'https://release-assets.githubusercontent.com/manifest?token=ukryty' }, url: '', data: '' })
+    .mockResolvedValueOnce({ status: 200, headers: {}, url: '', data: { versionName: '1.1.0', versionCode: 1001000, apkUrl: 'Ogarniacz-1.1.0-release.apk', sha256: 'a'.repeat(64) } })
+  await expect(utworzUslugeAktualizacji(true).sprawdz()).resolves.toMatchObject({ czyNowsza: true, adresApk: 'https://github.com/kapi1944/Ogarniacz/releases/download/v1.1.0/Ogarniacz-1.1.0-release.apk' })
+  expect(zadanie).toHaveBeenCalledTimes(3)
+  expect(zadanie.mock.calls.every(([opcje]) => opcje.disableRedirects === true)).toBe(true)
+})
+
+it.each(['http://example.test/latest.json', 'https://login:sekret@example.test/latest.json'])('odrzuca niebezpieczne przekierowanie manifestu %s', async (cel) => {
+  const zadanie = vi.spyOn(CapacitorHttp, 'get').mockResolvedValue({ status: 302, headers: { location: cel }, url: '', data: '' })
+  await expect(utworzUslugeAktualizacji(true).sprawdz()).rejects.toThrow('HTTPS bez danych logowania')
+  expect(zadanie).toHaveBeenCalledTimes(1)
+})
+
+it('przerywa pętlę przekierowań manifestu', async () => {
+  const zadanie = vi.spyOn(CapacitorHttp, 'get').mockResolvedValue({ status: 307, headers: { location: '/latest.json' }, url: '', data: '' })
+  await expect(utworzUslugeAktualizacji(true).sprawdz()).rejects.toThrow('limit przekierowań')
+  expect(zadanie).toHaveBeenCalledTimes(6)
+})
+
+it('komunikat o błędzie sieci manifestu nie ujawnia adresu CDN ani jego tokenu', async () => {
+  vi.spyOn(CapacitorHttp, 'get').mockRejectedValue(new Error('https://cdn.example.test?token=sekret'))
+  await expect(utworzUslugeAktualizacji(true).sprawdz()).rejects.toThrow('Konto i Raspberry Pi nie są wymagane')
+})
+
+it('zgłasza nieprawidłowy JSON zamiast technicznego wyjątku parsera', async () => {
+  vi.spyOn(CapacitorHttp, 'get').mockResolvedValue({ status: 200, headers: {}, url: '', data: '<html>przerwa</html>' })
+  await expect(utworzUslugeAktualizacji(true).sprawdz()).rejects.toThrow('prawidłowego latest.json')
+})
+
+it('nie zastępuje nieznanego natywnego versionCode numerem wyliczonym z versionName', async () => {
+  vi.spyOn(App, 'getInfo').mockResolvedValue({ id: 'pl.ogarniacz.app', name: 'Ogarniacz', version: '1.0.11', build: 'brak' })
+  await expect(utworzUslugeAktualizacji(true).pobierzInformacje()).rejects.toThrow('versionCode')
 })
 
 it('przekazuje liczby manifestu do pluginu, zachowuje diagnostykę i sprząta nasłuchiwanie przed ręcznym ponowieniem', async () => {

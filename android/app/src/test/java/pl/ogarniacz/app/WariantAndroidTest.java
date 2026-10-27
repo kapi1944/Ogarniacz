@@ -24,6 +24,9 @@ public class WariantAndroidTest {
         assertNotNull(dostawca);
         assertEquals(pakiet, dostawca.packageName);
         assertFalse(dostawca.exported);
+        assertTrue(dostawca.grantUriPermissions);
+        assertNull(kontekst.getPackageManager().resolveContentProvider(
+            (BuildConfig.KANAL_BETA ? "pl.ogarniacz.app" : "pl.ogarniacz.app.beta") + ".fileprovider", PackageManager.GET_META_DATA));
         assertEquals(BuildConfig.KANAL_BETA ? "Ogarniacz Beta" : "Ogarniacz", kontekst.getString(R.string.app_name));
         XmlResourceParser skroty = kontekst.getResources().getXml(R.xml.shortcuts);
         int liczba = 0;

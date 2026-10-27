@@ -20,10 +20,54 @@ it('ręczna kontrola sprawdza tylko APK', async () => {
 it('start i wznowienie aplikacji sprawdzają tylko APK', async () => {
   const kontrola = await import('./KontrolaAktualizacjiAplikacji')
   await kontrola.inicjalizujKontroleAktualizacjiAplikacji()
+  await vi.waitFor(() => expect(kontrola.pobierzStanKontroliAktualizacji().sprawdzono).toBe(true))
   localStorage.clear()
   nasluchuj.mock.calls[0][0]('aktywny')
   expect(sprawdzApk).toHaveBeenCalledTimes(2)
   expect(sprawdzWeb).not.toHaveBeenCalled()
+})
+
+it('zapamiętuje częstotliwość i w trybie ręcznym nie sprawdza na starcie ani po wznowieniu', async () => {
+  let kontrola = await import('./KontrolaAktualizacjiAplikacji')
+  kontrola.zapiszCzestotliwoscAktualizacji(0)
+  vi.resetModules()
+  kontrola = await import('./KontrolaAktualizacjiAplikacji')
+  expect(kontrola.pobierzStanKontroliAktualizacji().czestotliwoscGodzin).toBe(0)
+  await kontrola.inicjalizujKontroleAktualizacjiAplikacji()
+  nasluchuj.mock.calls[0][0]('aktywny')
+  expect(sprawdzApk).not.toHaveBeenCalled()
+  await kontrola.sprawdzAktualizacjeApk()
+  expect(sprawdzApk).toHaveBeenCalledTimes(1)
+})
+
+it('zmiana okresu obowiązuje przy następnym wznowieniu bez restartu aplikacji', async () => {
+  const kontrola = await import('./KontrolaAktualizacjiAplikacji')
+  await kontrola.inicjalizujKontroleAktualizacjiAplikacji()
+  await vi.waitFor(() => expect(kontrola.pobierzStanKontroliAktualizacji().sprawdzono).toBe(true))
+  localStorage.setItem('ogarniacz:ostatnia-kontrola-aktualizacji', String(Date.now() - 2 * 60 * 60 * 1000))
+  kontrola.zapiszCzestotliwoscAktualizacji(24)
+  nasluchuj.mock.calls[0][0]('aktywny')
+  expect(sprawdzApk).toHaveBeenCalledTimes(1)
+  kontrola.zapiszCzestotliwoscAktualizacji(1)
+  nasluchuj.mock.calls[0][0]('aktywny')
+  expect(sprawdzApk).toHaveBeenCalledTimes(2)
+})
+
+it('nie uruchamia równoległych kontroli i po błędzie pozwala ponowić', async () => {
+  const kontrola = await import('./KontrolaAktualizacjiAplikacji')
+  sprawdzApk.mockRejectedValueOnce(new Error('brak sieci'))
+  const wyniki = await Promise.allSettled([kontrola.sprawdzAktualizacjeApk(), kontrola.sprawdzAktualizacjeApk()])
+  expect(wyniki.every((wynik) => wynik.status === 'rejected')).toBe(true)
+  expect(sprawdzApk).toHaveBeenCalledTimes(1)
+  await kontrola.sprawdzAktualizacjeApk()
+  expect(sprawdzApk).toHaveBeenCalledTimes(2)
+})
+
+it.each(['999', '', '  ', 'brak'])('uszkodzone ustawienie %s przywraca domyślne cztery godziny', async (wartosc) => {
+  localStorage.setItem('ogarniacz:czestotliwosc-aktualizacji-apk', wartosc)
+  const kontrola = await import('./KontrolaAktualizacjiAplikacji')
+  expect(kontrola.pobierzStanKontroliAktualizacji().czestotliwoscGodzin).toBe(4)
+  expect(() => kontrola.zapiszCzestotliwoscAktualizacji(999)).toThrow('Nieprawidłowa częstotliwość')
 })
 it('sprawdza przy każdym starcie mimo zapisanej kontroli, a wznowienia ogranicza do czterech godzin', async () => {
   localStorage.setItem('ogarniacz:ostatnia-kontrola-aktualizacji', String(Date.now()))

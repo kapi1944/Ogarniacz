@@ -138,6 +138,11 @@ final class StanInstalacjiApk {
         zapisz(kontekst, wersja(kontekst), kodDocelowy(kontekst), -1, NIEPRAWIDLOWY_APK, PackageInstaller.STATUS_FAILURE_INVALID, "Zweryfikowany plik APK jest niedostępny lub uszkodzony.", null, null, null);
     }
 
+    static void zapiszBladZgodnosci(Context kontekst, String status) {
+        zapisz(kontekst, wersja(kontekst), kodDocelowy(kontekst), -1, status, PackageInstaller.STATUS_FAILURE_INVALID,
+            komunikatDlaUzytkownika(status), null, null, null);
+    }
+
     static Intent pobierzPotwierdzenie(Context kontekst) throws URISyntaxException {
         String zapisane = prefs(kontekst).getString("potwierdzenie", null);
         return zapisane == null ? null : Intent.parseUri(zapisane, Intent.URI_INTENT_SCHEME);
