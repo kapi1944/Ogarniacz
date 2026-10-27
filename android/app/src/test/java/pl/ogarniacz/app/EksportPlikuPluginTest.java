@@ -172,6 +172,9 @@ public class EksportPlikuPluginTest {
 
     @Test public void fileProviderNieUdostepniaApkAniSasiedniegoKatalogu() throws Exception {
         String nazwaDostawcy = wtyczka.getContext().getPackageName() + ".fileprovider";
+        // Linux wymaga istniejącego katalogu przed „..”, także przy sprawdzaniu jego rodzica.
+        File katalogEksportu = new File(wtyczka.getContext().getCacheDir(), "eksport");
+        assertTrue(katalogEksportu.mkdirs() || katalogEksportu.isDirectory());
         for (String sciezka : new String[] { "aktualizacje/aktualizacja.apk", "eksport-obcy/kopia.json", "eksport/../prywatny.json" }) {
             File plik = new File(wtyczka.getContext().getCacheDir(), sciezka);
             assertTrue(plik.getParentFile().mkdirs() || plik.getParentFile().isDirectory());
