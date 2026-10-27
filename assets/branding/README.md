@@ -17,12 +17,10 @@ obramowania ani zaokrągleń. Nie wymaga instalowania zależności aplikacji.
   Adresy mają `branding=pro-1`, a Workbox rozpoznaje ten parametr przy
   odczycie zasobów z precache. Rewizje treści nadal wylicza Workbox;
   aktualizacja service workera pozostaje zatwierdzana przez użytkownika.
-- Android: pięć gęstości mdpi–xxxhdpi. Ikony zwykłe zachowują pełny kafelek;
-  okrągłe mają przezroczysty margines. Adaptive Icons używają istniejących
-  XML i warstwy 108 dp, z oryginałem wyśrodkowanym w 48 dp oraz przezroczystym
-  tłem. Cały nieprzezroczysty znak mieści się w bezpiecznym kole 66 dp.
-  Istniejące skróty i ekran startowy korzystają z tych samych zasobów.
-  Konfiguracja nie używa warstwy monochromatycznej, więc jej nie dodajemy.
+- Android od 2026-10-27 używa osobnego oryginału Luxury, pięciu gęstości
+  mdpi–xxxhdpi i nieprzezroczystego tła Adaptive Icon. Wspólny generator
+  wywołuje generator Androida, więc nie przywraca poprzednich bitmap PRO.
+  Szczegóły, odtwarzanie i ograniczenia masek: [ikona Android Luxury](../../docs/ANDROID_IKONA_LUXURY.md).
 - Windows: repozytorium nie zawiera aplikacji natywnej; instalowana PWA,
   jej skróty i pasek zadań korzystają z manifestu. ICO obsługuje przeglądarkę
   i może być wykorzystane do ręcznie utworzonego skrótu systemowego.

@@ -1,6 +1,7 @@
 """Generuje zasoby PRO z oryginalnego PNG; wymaga dostępnego Pillow."""
 
 import base64
+import runpy
 from pathlib import Path
 
 from PIL import Image
@@ -15,13 +16,6 @@ ROZMIARY_ICO = (16, 24, 32, 48, 64, 128, 256)
 def przeskaluj(obraz, rozmiar):
     # Pillow skaluje RGBA przez premultiplikację alfa, bez ciemnych obwódek.
     return obraz.resize((rozmiar, rozmiar), Image.Resampling.LANCZOS)
-
-
-def dodaj_margines(obraz, rozmiar, bok_znaku):
-    wynik = Image.new("RGBA", (rozmiar, rozmiar), (0, 0, 0, 0))
-    odstep = (rozmiar - bok_znaku) // 2
-    wynik.alpha_composite(przeskaluj(obraz, bok_znaku), (odstep, odstep))
-    return wynik
 
 
 def generuj():
@@ -58,24 +52,7 @@ def generuj():
         encoding="utf-8",
     )
 
-    zasoby_androida = KATALOG / "android" / "app" / "src" / "main" / "res"
-    for gestosc, rozmiar, rozmiar_warstwy, bok_znaku in (
-        ("mdpi", 48, 108, 48),
-        ("hdpi", 72, 162, 72),
-        ("xhdpi", 96, 216, 96),
-        ("xxhdpi", 144, 324, 144),
-        ("xxxhdpi", 192, 432, 192),
-    ):
-        katalog_gestosci = zasoby_androida / f"mipmap-{gestosc}"
-        przeskaluj(obraz, rozmiar).save(katalog_gestosci / "ic_launcher.png")
-        # Cały kafelek mieści się w kole także w launcherach sprzed API 26.
-        dodaj_margines(obraz, rozmiar, int(rozmiar * 0.68)).save(
-            katalog_gestosci / "ic_launcher_round.png"
-        )
-        # Oryginał 48 dp na warstwie 108 dp mieści się w bezpiecznym kole 66 dp.
-        dodaj_margines(obraz, rozmiar_warstwy, bok_znaku).save(
-            katalog_gestosci / "ic_launcher_foreground.png"
-        )
+    runpy.run_path(str(KATALOG / "scripts" / "generuj-ikony-android.py"), run_name="__main__")
 
     print("Wygenerowano ikony Web/PWA, ICO oraz pięć gęstości Androida.")
 
