@@ -1,4 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { PoleCzasu } from '../../components/PoleCzasu'
+import { PoleLiczbowe } from '../../components/PoleLiczbowe'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Palette, Save, Undo2 } from 'lucide-react'
 import { useAplikacja } from '../../app/KontekstAplikacji'
@@ -51,6 +53,7 @@ export function PanelUstawienAplikacji() {
     ustawPodgladUstawien,
     wyczyscPodgladUstawien,
   } = useAplikacja()
+  const panel = useRef<HTMLElement>(null)
   const [szkic, ustawSzkic] = useState(() => normalizujUstawienia(zapisaneUstawienia))
   const [komunikat, ustawKomunikat] = useState('')
   const [wynikTestuWakeWord, ustawWynikTestuWakeWord] = useState('')
@@ -66,6 +69,13 @@ export function PanelUstawienAplikacji() {
     const znormalizowany = normalizujUstawienia(nowySzkic)
     ustawSzkic(znormalizowany)
     ustawPodgladUstawien(znormalizowany)
+    ustawKomunikat('')
+  }
+
+  const aktualizujHarmonogram = (harmonogram: Ustawienia['harmonogram']) => {
+    const nowySzkic = { ...szkic, harmonogram }
+    ustawSzkic(nowySzkic)
+    ustawPodgladUstawien(normalizujUstawienia(nowySzkic))
     ustawKomunikat('')
   }
 
@@ -102,6 +112,8 @@ export function PanelUstawienAplikacji() {
   })
 
   const zapisz = async () => {
+    const pola = panel.current?.querySelectorAll<HTMLInputElement>('.pole-czasu input, .pole-liczbowe input')
+    if (pola && [...pola].some((pole) => !pole.reportValidity())) return
     await zapiszUstawienia(szkic)
     ustawKomunikat('Ustawienia zostały zapisane.')
   }
@@ -129,7 +141,7 @@ export function PanelUstawienAplikacji() {
     ;[kolejnosc[indeks], kolejnosc[nowyIndeks]] = [kolejnosc[nowyIndeks], kolejnosc[indeks]]
     aktualizujSzkic({ ...szkic, szybkieDodawanie: { ...szkic.szybkieDodawanie, kolejnoscTypow: kolejnosc } })
   }
-  return <KategoriaUstawien kategorie={['wyglad', 'pulpit', 'echo']}><section className="panel-ustawien-aplikacji" aria-labelledby="ustawienia-aplikacji-tytul">
+  return <KategoriaUstawien kategorie={['wyglad', 'pulpit', 'echo']}><section ref={panel} className="panel-ustawien-aplikacji" aria-labelledby="ustawienia-aplikacji-tytul">
     <div className="naglowek-karty panel-ustawien-aplikacji__naglowek">
       <div>
         <h2 id="ustawienia-aplikacji-tytul">Ustawienia aplikacji</h2>
@@ -172,13 +184,13 @@ export function PanelUstawienAplikacji() {
 
       <SekcjaUstawien kategoria="pulpit" tytul="Harmonogram" resetuj={() => resetujSekcje('harmonogram')}>
         <div className="pole pole--pelne"><span>Dni pracy</span><div className="dni-tygodnia">{dniTygodnia.map((dzien) => <label key={dzien.wartosc}><input type="checkbox" checked={szkic.harmonogram.dniPracy.includes(dzien.wartosc)} onChange={(e) => { const dniPracy = e.target.checked ? [...szkic.harmonogram.dniPracy, dzien.wartosc] : szkic.harmonogram.dniPracy.filter((x) => x !== dzien.wartosc); aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, dniPracy } }) }} /><span>{dzien.etykieta}</span></label>)}</div></div>
-        <label className="pole"><span>Początek pracy</span><input type="time" value={szkic.harmonogram.godzinaRozpoczecia} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, godzinaRozpoczecia: e.target.value } })} /></label>
-        <label className="pole"><span>Koniec pracy</span><input type="time" value={szkic.harmonogram.godzinaZakonczenia} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, godzinaZakonczenia: e.target.value } })} /></label>
-        <label className="pole"><span>Sen — od</span><input type="time" value={szkic.harmonogram.poczatekSnu} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, poczatekSnu: e.target.value } })} /></label>
-        <label className="pole"><span>Sen — do</span><input type="time" value={szkic.harmonogram.koniecSnu} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, koniecSnu: e.target.value } })} /></label>
+        <PoleCzasu etykieta="Początek pracy" wartosc={szkic.harmonogram.godzinaRozpoczecia} zmien={(wartosc) => aktualizujHarmonogram({ ...szkic.harmonogram, godzinaRozpoczecia: wartosc })} />
+        <PoleCzasu etykieta="Koniec pracy" wartosc={szkic.harmonogram.godzinaZakonczenia} zmien={(wartosc) => aktualizujHarmonogram({ ...szkic.harmonogram, godzinaZakonczenia: wartosc })} />
+        <PoleCzasu etykieta="Sen — od" wartosc={szkic.harmonogram.poczatekSnu} zmien={(wartosc) => aktualizujHarmonogram({ ...szkic.harmonogram, poczatekSnu: wartosc })} />
+        <PoleCzasu etykieta="Sen — do" wartosc={szkic.harmonogram.koniecSnu} zmien={(wartosc) => aktualizujHarmonogram({ ...szkic.harmonogram, koniecSnu: wartosc })} />
         <label className="pole pole--pelne"><span>Skala snu na osi: {Math.round(szkic.harmonogram.skalaSnuNaOsi * 100)}%</span><input type="range" min="0.1" max="1" step="0.1" value={szkic.harmonogram.skalaSnuNaOsi} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, skalaSnuNaOsi: Number(e.target.value) } })} /><small>Poza ustawionym snem oś zawsze zachowuje skalę 1:1.</small></label>
-        <label className="pole"><span>Dojazd (min)</span><input type="number" min="0" max="180" value={szkic.harmonogram.dojazdDoPracyMinuty} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, dojazdDoPracyMinuty: Number(e.target.value) } })} /></label>
-        <label className="pole"><span>Powrót z pracy (min)</span><input type="number" min="0" max="180" value={szkic.harmonogram.powrotZPracyMinuty} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, powrotZPracyMinuty: Number(e.target.value) } })} /></label>
+        <PoleLiczbowe etykieta="Dojazd (min)" min={0} max={180} krok={1} wartosc={String(szkic.harmonogram.dojazdDoPracyMinuty)} zmien={(wartosc) => aktualizujHarmonogram({ ...szkic.harmonogram, dojazdDoPracyMinuty: Number(wartosc) })} />
+        <PoleLiczbowe etykieta="Powrót z pracy (min)" min={0} max={180} krok={1} wartosc={String(szkic.harmonogram.powrotZPracyMinuty)} zmien={(wartosc) => aktualizujHarmonogram({ ...szkic.harmonogram, powrotZPracyMinuty: Number(wartosc) })} />
         <label className="pole pole--pelne"><span>Dostępność podczas dojazdu</span><select value={szkic.harmonogram.dostepnoscDojazdu} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, dostepnoscDojazdu: e.target.value as Ustawienia['harmonogram']['dostepnoscDojazdu'] } })}><option value="czesciowa">Częściowa</option><option value="pelna">Pełna</option></select><small>Domyślnie częściowa. Ręczne przełączenie na pełną dostępność pozostaje możliwe.</small></label>
         <label className="pole pole--pelne"><span>Zakres zmiany harmonogramu</span><select value={szkic.harmonogram.domyslnyZakresZmiany} onChange={(e) => aktualizujSzkic({ ...szkic, harmonogram: { ...szkic.harmonogram, domyslnyZakresZmiany: e.target.value as Ustawienia['harmonogram']['domyslnyZakresZmiany'] } })}><option value="tylko_ten_dzien">Tylko ten dzień</option><option value="nowa_regula">Zapisz jako nową regułę</option></select></label>
       </SekcjaUstawien>

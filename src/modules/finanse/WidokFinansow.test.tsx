@@ -11,7 +11,7 @@ import { useState } from 'react'
 import type { DefinicjaPolaRejestru } from '../../domain/rejestr'
 
 beforeEach(async () => { baza.close(); await Dexie.delete('ogarniacz-v1'); await inicjalizujBaze() })
-afterEach(() => { cleanup(); baza.close() })
+afterEach(async () => { cleanup(); await baza.transaction('rw', baza.tables, async () => {}); baza.close() })
 
 it('zapisuje offline kwotę i walutę, ponownie je odczytuje i pokazuje rozdzielone podsumowania', async () => {
   const repozytorium = pobierzRepozytorium('wydatki')
@@ -71,4 +71,46 @@ it('czyta stare własne kwoty i zachowuje dokładny obiekt kwoty z walutą przez
   await baza.tabela('wydatki').delete(encja.id)
   await przywrocBackup(backup)
   expect((await pobierzRepozytorium('wydatki').pobierz(encja.id))?.polaWlasne?.['custom:cena']).toEqual(oczekiwana)
+})
+
+it('tworzy raty z polskiej kwoty i daty oraz zachowuje obliczenia po nadpłacie', async () => {
+  render(<WidokFinansow />)
+  fireEvent.click(screen.getAllByRole('button', { name: 'Dodaj zakup na raty' })[0])
+  let formularz = within(screen.getByRole('dialog'))
+  fireEvent.change(formularz.getByLabelText(/Opis zakupu/), { target: { value: 'Pralka' } })
+  fireEvent.change(formularz.getByLabelText(/Kwota końcowa/), { target: { value: '1200,00' } })
+  fireEvent.change(formularz.getByLabelText(/Liczba rat/), { target: { value: '3,5' } })
+  expect(formularz.getByLabelText(/Liczba rat/)).toBeInvalid()
+  fireEvent.change(formularz.getByLabelText(/Liczba rat/), { target: { value: '3' } })
+  fireEvent.change(formularz.getByRole('textbox', { name: /Pierwsza rata/ }), { target: { value: '28.10.2026' } })
+  fireEvent.change(formularz.getByRole('combobox', { name: /^Kategoria/ }), { target: { value: 'Dom' } })
+  for (const pole of screen.getByRole('dialog').querySelectorAll('input')) expect(pole.validationMessage, pole.outerHTML).toBe('')
+  fireEvent.click(formularz.getByRole('button', { name: 'Utwórz raty' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  const plan = (await pobierzRepozytorium('planyRat').lista())[0]
+  expect(plan).toMatchObject({ kwotaCalkowita: 1200, liczbaRat: 3, dataPierwszejRaty: '2026-10-28' })
+  fireEvent.click(screen.getByRole('button', { name: 'Raty' }))
+  fireEvent.click(screen.getAllByTitle('Edytuj ratę')[0])
+  formularz = within(screen.getByRole('heading', { name: 'Edytuj ratę 1' }).closest('[role=dialog]')!)
+  expect(formularz.getByLabelText('Wysokość raty *')).toHaveValue('400')
+  fireEvent.change(formularz.getByLabelText('Nadpłata *'), { target: { value: '100,00' } })
+  fireEvent.click(formularz.getByLabelText('Rata opłacona'))
+  fireEvent.click(formularz.getByRole('button', { name: 'Zapisz ratę' }))
+  await waitFor(async () => expect((await pobierzRepozytorium('wydatki').lista())[0]?.kwota).toBe(500))
+  const raty = (await pobierzRepozytorium('raty').lista()).sort((a, b) => a.numer - b.numer)
+  expect(raty.map((rata) => rata.kwota)).toEqual([400, 350, 350])
+})
+
+it.each([['Dodaj płatność stałą', 'Kwota'], ['Dodaj budżet', 'Limit']])('używa kwoty PLN w formularzu %s', async (przycisk, etykieta) => {
+  await pobierzRepozytorium('wydatki').zapisz({ ...utworzMetadane(), opis: 'Wpis kontrolny', kwota: 10, data: dzisiajIso(), kategoria: 'Dom' })
+  render(<WidokFinansow />)
+  await screen.findByText('Wpis kontrolny')
+  fireEvent.click(screen.getAllByRole('button', { name: przycisk })[0])
+  const pole = within(screen.getByRole('dialog')).getByRole('textbox', { name: new RegExp(etykieta) })
+  fireEvent.change(pole, { target: { value: '125,50' } })
+  expect(pole).toHaveValue('125,50')
+  expect(pole).toBeValid()
+  fireEvent.change(pole, { target: { value: '-1' } })
+  expect(pole).toBeInvalid()
+  expect(screen.queryByLabelText(`Waluta: ${etykieta}`)).toBeNull()
 })

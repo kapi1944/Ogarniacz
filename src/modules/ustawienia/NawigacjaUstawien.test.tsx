@@ -189,3 +189,16 @@ it('zachowuje formularz Edytora i istniejące odnośniki kont oraz personalizacj
   await czekajNa(() => expect(zapiszEdytora).toHaveBeenCalledWith(expect.objectContaining({ nazwa: 'Profil próbny' })))
   expect(ekran.getByPlaceholderText('Nazwa Edytora')).toHaveValue('')
 })
+
+it('zachowuje ręcznie wpisywaną godzinę harmonogramu i blokuje zapis niepełnego czasu', async () => {
+  pokazUstawienia('/ustawienia?kategoria=pulpit')
+  const pole = ekran.getByLabelText('Początek pracy')
+  wywolajZdarzenie.change(pole, { target: { value: '09:' } })
+  expect(pole).toHaveValue('09:')
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Zapisz ustawienia' }))
+  expect(ekran.queryByText('Ustawienia zostały zapisane.')).toBeNull()
+  wywolajZdarzenie.change(pole, { target: { value: '09:15' } })
+  wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Zapisz ustawienia' }))
+  await czekajNa(() => expect(ekran.getByText('Ustawienia zostały zapisane.')).toBeInTheDocument())
+  expect((await repozytoriumUstawien.wczytaj()).harmonogram.godzinaRozpoczecia).toBe('09:15')
+})
