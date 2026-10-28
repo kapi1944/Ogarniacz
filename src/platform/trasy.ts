@@ -41,6 +41,7 @@ const SCIEZKI_DEEP_LINKOW = new Set([
   '/dzisiaj',
   ...Object.values(SCIEZKI_MODULOW),
   '/ustawienia/personalizacja',
+  '/finanse/rozliczenia',
   '/dodaj',
 ])
 const DOZWOLONE_PARAMETRY = new Set(['element', 'wystapienie'])
@@ -76,7 +77,7 @@ function normalizujSciezke(sciezka: string): string | null {
     const url = new URL(sciezka, 'https://ogarniacz.local')
     if (url.origin !== 'https://ogarniacz.local' || url.hash || url.username || url.password || url.port) return null
     const znormalizowanaSciezka = url.pathname.length > 1 ? url.pathname.replace(/\/$/, '') : url.pathname
-    if (!SCIEZKI_DEEP_LINKOW.has(znormalizowanaSciezka)) return null
+    if (!SCIEZKI_DEEP_LINKOW.has(znormalizowanaSciezka) && !/^\/finanse\/rozliczenia\/[a-zA-Z0-9_-]{1,200}$/.test(znormalizowanaSciezka)) return null
 
     for (const [nazwa, wartosc] of url.searchParams) {
       const dozwolony = znormalizowanaSciezka === '/dodaj'

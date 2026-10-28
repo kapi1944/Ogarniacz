@@ -131,3 +131,17 @@ export async function pobierzBilansRozliczenia(id: string) {
     return obliczBilansZRekordow(rozliczenie, rekordy.wydatki, rekordy.zwroty)
   })
 }
+
+/** Spójny odczyt ekranu; brak kompletności nie ukrywa historii, ale blokuje bilans. */
+export async function pobierzWidokRozliczenia(id: string) {
+  return wTransakcjiFinansowej('odczyt', async () => {
+    const rozliczenie = wymagajRekordu(await baza.tabela('rozliczenia').get(id))
+    const rekordy = await rekordyRozliczenia(id)
+    try {
+      await sprawdzKompletnoscFinansow()
+      return { rozliczenie, ...rekordy, bilans: obliczBilansZRekordow(rozliczenie, rekordy.wydatki, rekordy.zwroty), ograniczenie: '' }
+    } catch (blad) {
+      return { rozliczenie, ...rekordy, bilans: undefined, ograniczenie: (blad as Error).message }
+    }
+  })
+}

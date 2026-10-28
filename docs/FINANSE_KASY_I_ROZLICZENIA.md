@@ -4,6 +4,30 @@ Data przeglądu: 27.10.2026. Punkt odniesienia: commit `21ce6f9`.
 
 Dokument przekłada specyfikację funkcjonalną na zakres wdrożenia zgodny z obecną implementacją. Powstał po celowanym przeglądzie Finansów, zapisu, profili, synchronizacji, historii i załączników. Nie jest pełnym audytem aplikacji. Pierwotny przegląd opisuje stan z 27.10.2026. Modele, obliczenia i serwisy F7.1–F7.3 są już zaimplementowane; poniższy rozdział F7.4 opisuje aktualny kontrakt synchronizacji. Ekrany kolejnych etapów pozostają poza zakresem.
 
+### Zrealizowany zakres F7.7 — interfejs rozliczeń
+
+Finanse udostępniają sekcję „Wspólne rozliczenia” pod `/finanse/rozliczenia`
+i szczegóły `/finanse/rozliczenia/:rozliczenieId`, bez nowej pozycji menu głównego.
+Formularze tworzą dowolną liczbę grup, uczestników bez kont (z trwałymi ID
+i numerami rozróżniającymi jednakowe nazwy) oraz wydatki finansowane przez
+jedną lub wiele osób. Cztery podziały korzystają wyłącznie z F7.1: po równo,
+kwotowo, procentowo i według udziałów. Zmiana nazwy/wyłączenie/dodanie osoby
+nie przelicza historii. Edycja wydatku zachowuje rewizje F7.3.
+
+Ekran pokazuje sumę kosztów, faktycznie wyłożone kwoty, przypisane koszty,
+bilans osób i wyraźnie oznaczone propozycje przelewów. Nie zapisuje propozycji
+jako spłat ani danych w osobistych `wydatki` lub budżetach. Niekompletna
+synchronizacja lub konflikt blokuje wynik bilansu, pozostawiając historię.
+Odczyt i zapis wymagają istniejącego dostępu właściciela.
+
+Formularze są jednokolumnowe i korzystają ze wspólnych pól kwoty, daty, modali
+i personalizacji. Android Wstecz najpierw zamyka formularz/kalendarz, potem
+wraca ze szczegółów do listy, a z listy do Finansów także po bezpośrednim wejściu.
+Testy: 108 celowanych testów klienta; pomiary headless Chrome dla Classic/Flat/Luxury
+na 320/390/768/1280 px, zapis offline i odświeżenie szczegółów. Test handlera
+Wstecz nie zastępuje próby na fizycznym Androidzie. F7.7 nie publikuje APK,
+nie wdraża serwera i nie udostępnia jeszcze rejestrowania zwrotów.
+
 ## 1. Co rzeczywiście istnieje
 
 | Obszar | Ustalenie z kodu | Wykorzystanie przy rozbudowie |

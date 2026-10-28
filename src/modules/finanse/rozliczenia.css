@@ -1,0 +1,21 @@
+.rozliczenia { min-width: 0; }
+.rozliczenia-lista { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.rozliczenia :is(p, h2, h3, strong, dd, li), .rozliczenia-formularz { overflow-wrap: anywhere; }
+.rozliczenia :is(.przycisk, summary), .rozliczenia-formularz .przycisk { min-height: 44px; }
+.rozliczenia-formularz, .rozliczenia-formularz fieldset { display: grid; gap: 16px; min-width: 0; }
+.rozliczenia-formularz fieldset { border: 0; padding: 0; margin: 0; }
+.rozliczenia-formularz .pole { min-width: 0; }
+.rozliczenia-formularz :is(input:not([type=checkbox]), select, textarea) { width: 100%; min-width: 0; }
+.rozliczenia-formularz .pole-kwoty__wiersz input { width: 0; flex: 1; }
+.rozliczenia-osoba { border-bottom: 1px solid var(--obramowanie); padding: 16px 0; }
+.rozliczenia-osoby { display: grid; gap: 8px; }
+.rozliczenia-wybor { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.rozliczenia-bilans { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rozliczenia-bilans dd { margin: 0; text-align: right; }
+.rozliczenia-suma { font-size: 1.6rem; }
+.rozliczenia-historia { padding-left: 24px; }
+.rozliczenia-historia li { padding-block: 8px; }
+@media (max-width: 600px) {
+  .rozliczenia .naglowek-widoku__akcje, .rozliczenia .naglowek-widoku__akcje .przycisk { width: 100%; }
+  .rozliczenia .akcje-formularza, .rozliczenia-formularz .akcje-formularza { display: grid; grid-template-columns: 1fr; }
+}
