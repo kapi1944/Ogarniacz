@@ -2,7 +2,7 @@ import Dexie from 'dexie'
 // @ts-expect-error Natywne Web Crypto jest używane wyłącznie w testach.
 import { webcrypto as kryptografiaWezla } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
+import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { pobierzKolejkeSynchronizacji } from '../data/KolejkaSynchronizacji'
 import { utworzMetadane } from '../domain/fabryki'
@@ -197,11 +197,11 @@ describe.sequential('Osobista historia i ważne informacje zdrowotne', () => {
     expect(stanZrodlaZdrowia(oryginal[0].zrodlo, await pobierzDaneHistoriiZdrowia(dostep), dostep)).toBe('dostepne')
   })
 
-  it('migruje rzeczywistą bazę Dexie 18 do 19 zachowując wyniki i dokumenty', async () => {
-    const schemat = Object.fromEntries(baza.tables.filter((tabela) => tabela.name !== 'wazneInformacjeZdrowotne').map((tabela) => [tabela.name, [tabela.schema.primKey.src, ...tabela.schema.indexes.map((indeks) => indeks.src)].join(',')]))
+  it('migruje rzeczywistą bazę Dexie 18 do aktualnej wersji zachowując wyniki i dokumenty', async () => {
+    const schemat = Object.fromEntries(baza.tables.filter((tabela) => !['wazneInformacjeZdrowotne', 'wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen'].includes(tabela.name)).map((tabela) => [tabela.name, [tabela.schema.primKey.src, ...tabela.schema.indexes.map((indeks) => indeks.src)].join(',')]))
     baza.close(); await Dexie.delete('ogarniacz-v1'); const stara = new Dexie('ogarniacz-v1'); stara.version(18).stores(schemat)
     await stara.open(); await stara.table('dokumenty').put({ ...utworzMetadane('dokument'), nazwa: 'Dokument', powiazania: [] }); await stara.table('wynikiBadan').put({ ...utworzMetadane('wynik'), dokumentId: 'dokument', oryginalnyWynik: '5,2' }); stara.close()
-    await baza.open(); expect(baza.verno).toBe(19)
+    await baza.open(); expect(baza.verno).toBe(WERSJA_SCHEMATU_BAZY)
     expect(await baza.tabela('wazneInformacjeZdrowotne').count()).toBe(0)
     expect((await baza.tabela('wynikiBadan').get('wynik'))?.dokumentId).toBe('dokument')
     expect((await baza.tabela('dokumenty').get('dokument'))?.nazwa).toBe('Dokument')
