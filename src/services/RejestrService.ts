@@ -10,7 +10,7 @@ import {
 } from '../domain/rejestr'
 
 type DaneNowegoPola<Typ extends TypPolaRejestru> = Omit<DefinicjaWlasnegoPolaRejestru<Typ>, 'id' | 'createdAt' | 'updatedAt' | 'usunietoAt' | 'aktywne' | 'revision'>
-type ZmianyDefinicjiPola<Typ extends TypPolaRejestru> = Pick<DefinicjaWlasnegoPolaRejestru<Typ>, 'etykieta' | 'opcje' | 'rolaSemantyczna'>
+type ZmianyDefinicjiPola<Typ extends TypPolaRejestru> = Pick<DefinicjaWlasnegoPolaRejestru<Typ>, 'etykieta' | 'opcje' | 'rolaSemantyczna' | 'jednostka' | 'min' | 'max' | 'krok'>
 type DaneWidokuRejestru = Omit<DefinicjaWidokuRejestru, 'createdAt' | 'updatedAt' | 'usunietoAt'>
 
 function sprawdzDefinicje(definicja: DefinicjaWlasnegoPolaRejestru): void {

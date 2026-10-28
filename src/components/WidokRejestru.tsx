@@ -7,6 +7,7 @@ import { EdytorPolaRejestru, normalizujPolaRejestru, normalizujStarePolaRejestru
 import { Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan } from './Interfejs'
 import { useWlasciwosciRejestru } from './useWlasciwosciRejestru'
 import { kwotaDoModelu } from '../domain/kwoty'
+import { liczbaDoModelu } from '../domain/liczby'
 
 export type { DefinicjaPola } from './EdytorPolaRejestru'
 
@@ -78,6 +79,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
       const formularzSystemowy = polaDoEdycji.reduce<Record<string, string>>((wynik, pole) => {
         if (pole.definicja.zrodlo === 'systemowe' && pole.definicja.trybObslugi === 'bezposrednie') {
           wynik[pole.definicja.kluczWlasciwosci] = formularz[pole.definicja.id] ?? ''
+          if (pole.definicja.typ === 'liczba' && wynik[pole.definicja.kluczWlasciwosci]) wynik[pole.definicja.kluczWlasciwosci] = String(liczbaDoModelu(wynik[pole.definicja.kluczWlasciwosci]))
           if (pole.definicja.typ === 'kwota') {
             const waluta = formularz[`${pole.definicja.id}:waluta`] ?? 'PLN'
             const kwota = wynik[pole.definicja.kluczWlasciwosci]

@@ -1,0 +1,6 @@
+.pole-liczbowe { min-width: 0; }
+.pole-liczbowe__wiersz { display: flex; align-items: center; gap: 8px; }
+.pole-liczbowe__wiersz input { min-width: 0; flex: 1; }
+.pole-liczbowe__wiersz :is(span, button) { flex-shrink: 0; }
+.pole-liczbowe__wiersz button { min-width: 44px; min-height: 44px; }
+.pole-liczbowe [role="alert"] { color: var(--blad); }

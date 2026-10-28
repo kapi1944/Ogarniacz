@@ -4,6 +4,8 @@ import { PoleDaty } from './PoleDaty'
 import { PoleCzasu } from './PoleCzasu'
 import { PoleKwoty } from './PoleKwoty'
 import { normalizujKwote, odczytajKwoteFormularza } from '../domain/kwoty'
+import { PoleLiczbowe } from './PoleLiczbowe'
+import { bladLiczby, czyJednostkaWEtykiecie, liczbaDoModelu, liczbaDoTekstu } from '../domain/liczby'
 
 export interface DefinicjaPola {
   klucz: string
@@ -13,8 +15,9 @@ export interface DefinicjaPola {
   wymagane?: boolean
   podpowiedz?: string
   min?: number | string
-  max?: string
+  max?: number | string
   krok?: number
+  jednostka?: string
   opcje?: { wartosc: string; etykieta: string }[]
   widoczne?: (formularz: Record<string, string>) => boolean
   domyslnaWartosc?: string
@@ -25,8 +28,9 @@ export interface PoleDoEdycjiRejestru {
   wymagane?: boolean
   podpowiedz?: string
   min?: number | string
-  max?: string
+  max?: number | string
   krok?: number
+  jednostka?: string
   typHtml?: 'email'
   widoczne?: (formularz: Record<string, string>) => boolean
   domyslnaWartosc?: string
@@ -57,13 +61,15 @@ export function normalizujStarePolaRejestru(pola: DefinicjaPola[]): PoleDoEdycji
       etykieta: pole.etykieta,
       typ: typyStarychPol[pole.typ ?? 'text'],
       kluczWaluty: pole.kluczWaluty,
+      jednostka: pole.jednostka,
       opcje: pole.opcje,
     },
     wymagane: pole.wymagane,
     podpowiedz: pole.podpowiedz,
     min: pole.min,
     max: pole.max,
-    krok: pole.krok,
+    krok: pole.krok ?? (pole.typ === 'number' ? 1 : undefined),
+    jednostka: pole.jednostka,
     typHtml: pole.typ === 'email' ? 'email' : undefined,
     widoczne: pole.widoczne ? (formularz) => pole.widoczne!(Object.fromEntries(
       Object.entries(formularz).map(([klucz, wartosc]) => [klucz.startsWith('system:') ? klucz.slice(7) : klucz, wartosc]),
@@ -73,7 +79,7 @@ export function normalizujStarePolaRejestru(pola: DefinicjaPola[]): PoleDoEdycji
 }
 
 export function normalizujPolaRejestru(pola: DefinicjaPolaRejestru[]): PoleDoEdycjiRejestru[] {
-  return pola.map((definicja) => ({ definicja: utworzDefinicjePolaRejestru(definicja) }))
+  return pola.map((definicja) => ({ definicja: utworzDefinicjePolaRejestru(definicja), min: definicja.min, max: definicja.max, krok: definicja.krok, jednostka: definicja.jednostka }))
 }
 
 export function wartoscFormularzaPola(encja: EncjaBazowa | undefined, pole: PoleDoEdycjiRejestru, doWyswietlenia = false): string {
@@ -84,6 +90,10 @@ export function wartoscFormularzaPola(encja: EncjaBazowa | undefined, pole: Pole
   if (Array.isArray(wartosc)) return wartosc.join(',')
   if (wartosc && typeof wartosc === 'object' && 'kwota' in wartosc && typeof wartosc.kwota === 'string' && 'waluta' in wartosc) return doWyswietlenia ? `${wartosc.kwota.replace('.', ',')} ${wartosc.waluta}` : JSON.stringify(wartosc)
   if (typeof wartosc === 'boolean') return String(wartosc)
+  if (definicja.typ === 'liczba' && typeof wartosc === 'number') {
+    const jednostka = pole.jednostka ?? definicja.jednostka
+    return `${liczbaDoTekstu(wartosc)}${doWyswietlenia && jednostka && !czyJednostkaWEtykiecie(definicja.etykieta, jednostka) ? ` ${jednostka}` : ''}`
+  }
   return wartosc === undefined || wartosc === null ? pole.domyslnaWartosc ?? '' : String(wartosc)
 }
 
@@ -96,9 +106,9 @@ export function skonwertujWartoscPolaWlasnego(pole: DefinicjaPolaRejestru, warto
   }
   if (pole.typ === 'liczba') {
     if (!wartosc) return null
-    const liczba = Number(wartosc)
-    if (!Number.isFinite(liczba)) throw new Error(`Pole „${pole.etykieta}” wymaga liczby.`)
-    return liczba
+    const blad = bladLiczby(wartosc, pole)
+    if (blad) throw new Error(`Pole „${pole.etykieta}”: ${blad}`)
+    return liczbaDoModelu(wartosc)
   }
   if (!wartosc) return null
   if (pole.typ === 'url') {
@@ -123,9 +133,12 @@ export function EdytorPolaRejestru({ pole, wartosc, zmien, waluta, zmienWalute }
   const { definicja } = pole
   const wspolne = { required: pole.wymagane, placeholder: pole.podpowiedz }
   const tylkoOdczyt = definicja.zrodlo === 'systemowe' && definicja.trybObslugi === 'tylko_odczyt'
+  const jednostka = pole.jednostka ?? definicja.jednostka
 
-  if (definicja.typ === 'data' && !tylkoOdczyt) return <PoleDaty etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={pole.max} krok={pole.krok} />
-  if (definicja.typ === 'czas' && !tylkoOdczyt) return <PoleCzasu etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={pole.max} krok={pole.krok} />
+  if (definicja.typ === 'data' && !tylkoOdczyt) return <PoleDaty etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={typeof pole.max === 'string' ? pole.max : undefined} krok={pole.krok} />
+  if (definicja.typ === 'czas' && !tylkoOdczyt) return <PoleCzasu etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={typeof pole.max === 'string' ? pole.max : undefined} krok={pole.krok} />
+  if (definicja.typ === 'liczba' && !tylkoOdczyt) return <PoleLiczbowe etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} podpowiedz={pole.podpowiedz}
+    min={pole.min ?? definicja.min} max={pole.max ?? definicja.max} krok={pole.krok ?? definicja.krok} jednostka={pole.jednostka ?? definicja.jednostka} />
   if (definicja.typ === 'kwota' && !tylkoOdczyt) {
     const wlasne = definicja.zrodlo === 'wlasne'
     const dane = wlasne ? odczytajKwoteFormularza(wartosc) : { kwota: wartosc, waluta: waluta ?? 'PLN' }
@@ -137,7 +150,7 @@ export function EdytorPolaRejestru({ pole, wartosc, zmien, waluta, zmienWalute }
   return (
     <label className={definicja.typ === 'textarea' ? 'pole pole--pelne' : 'pole'}>
       <span>{definicja.etykieta}{pole.wymagane && ' *'}</span>
-      {tylkoOdczyt ? <output>{wartosc || '—'}</output> : definicja.typ === 'textarea' ? (
+      {tylkoOdczyt ? <output>{wartosc || '—'}{wartosc && definicja.typ === 'liczba' && jednostka && !czyJednostkaWEtykiecie(definicja.etykieta, jednostka) ? ` ${jednostka}` : ''}</output> : definicja.typ === 'textarea' ? (
         <textarea {...wspolne} value={wartosc} onChange={(zdarzenie) => zmien(zdarzenie.target.value)} />
       ) : definicja.typ === 'checkbox' ? (
         <input type="checkbox" checked={wartosc === 'true'} onChange={(zdarzenie) => zmien(String(zdarzenie.target.checked))} />

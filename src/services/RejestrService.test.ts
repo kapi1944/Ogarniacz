@@ -29,6 +29,20 @@ describe.sequential('trwałe definicje i widoki Rejestru', () => {
     await Dexie.delete('ogarniacz-v1')
   })
 
+  it('zachowuje jednostkę i ograniczenia liczbowe przy zmianie nazwy, synchronizacji i backupie', async () => {
+    const definicja = await utworzWlasnePoleRejestru({ rejestrId: 'pojazdy', etykieta: 'Przebieg', typ: 'liczba', jednostka: 'km', min: 0, max: 1000000, krok: 0.1 })
+    await zmienDefinicjeWlasnegoPolaRejestru(definicja.id, { etykieta: 'Dystans' })
+    const oczekiwana = { id: definicja.id, etykieta: 'Dystans', jednostka: 'km', min: 0, max: 1000000, krok: 0.1 }
+    const zdalne = new RepozytoriumZdalneInMemory()
+    const silnik = new SyncEngine({ czyOnline: () => true, installationId: () => 'instalacja-liczby' })
+    await silnik.synchronizuj(zdalne)
+    expect((await zdalne.pobierzWszystkie()).find((zmiana) => zmiana.tabela === 'definicjeWlasnychPolRejestru')?.rekord).toMatchObject(oczekiwana)
+    const backup = await przygotujBackupDoPrzywracania(JSON.stringify(await utworzBackup(['rejestr'])))
+    await baza.tabela('definicjeWlasnychPolRejestru').delete(definicja.id)
+    await przywrocBackup(backup)
+    expect(await pobierzRepozytorium('definicjeWlasnychPolRejestru').pobierz(definicja.id)).toMatchObject(oczekiwana)
+  })
+
   it('tworzy, zmienia i archiwizuje definicję bez zmiany jej stabilnego ID ani wartości rekordu', async () => {
     const definicja = await utworzWlasnePoleRejestru({ rejestrId: 'wydatki', etykieta: 'Producent', typ: 'tekst' })
     const zadanie = { ...utworzZadanie({ tytul: 'Stare dane', opis: '', priorytet: 'normalny' }), polaWlasne: { [definicja.id]: 'Zachowana wartość' } }

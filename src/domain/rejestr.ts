@@ -1,5 +1,6 @@
 import type { EncjaBazowa } from './typy'
 import type { KwotaZWaluta } from './kwoty'
+import type { OgraniczeniaPolaLiczbowego } from './liczby'
 
 export type TypPolaRejestru =
   | 'tekst'
@@ -59,7 +60,7 @@ type RolaSemantycznaDlaTypu<Typ extends TypPolaRejestru> =
       : never
     : never
 
-interface WspolnaDefinicjaPolaRejestru<Typ extends TypPolaRejestru> {
+interface WspolnaDefinicjaPolaRejestru<Typ extends TypPolaRejestru> extends OgraniczeniaPolaLiczbowego {
   id: IdPolaRejestru
   etykieta: string
   typ: Typ
@@ -88,7 +89,7 @@ export interface DefinicjaWidokuRejestru extends EncjaBazowa {
   widocznePolaIds: IdPolaRejestru[]
 }
 
-export interface DefinicjaWlasnegoPolaRejestru<Typ extends TypPolaRejestru = TypPolaRejestru> extends EncjaBazowa {
+export interface DefinicjaWlasnegoPolaRejestru<Typ extends TypPolaRejestru = TypPolaRejestru> extends EncjaBazowa, OgraniczeniaPolaLiczbowego {
   id: IdPolaWlasnego
   rejestrId: DefinicjaRejestru['id']
   etykieta: string
