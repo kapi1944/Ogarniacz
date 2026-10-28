@@ -22,12 +22,12 @@ export const POLA_SYSTEMOWE_SUBSKRYPCJI: DefinicjaPolaRejestru[] = [
 ]
 const typy: { wartosc: TypPolaRejestru; etykieta: string }[] = [{ wartosc: 'tekst', etykieta: 'Tekst' }, { wartosc: 'textarea', etykieta: 'Długi tekst' }, { wartosc: 'liczba', etykieta: 'Liczba' }, { wartosc: 'kwota', etykieta: 'Kwota' }, { wartosc: 'data', etykieta: 'Data' }, { wartosc: 'czas', etykieta: 'Czas' }, { wartosc: 'checkbox', etykieta: 'Checkbox' }, { wartosc: 'select', etykieta: 'Wybór' }, { wartosc: 'multiselect', etykieta: 'Tagi' }, { wartosc: 'url', etykieta: 'URL' }]
 
-function wartosc(encja: PlatnoscStala, pole: DefinicjaPolaRejestru): string {
+function wartosc(encja: PlatnoscStala, pole: DefinicjaPolaRejestru, doFormularza = false): string {
   if (pole.zrodlo === 'systemowe' && pole.trybObslugi === 'tylko_odczyt') {
     const wynik = rejestrResolverowPolSystemowych.odczytaj(pole, { encja, daneZrodlowe: {} })
     return wynik.stan === 'gotowe' ? String(wynik.wartosc ?? '') : wynik.komunikat
   }
-  return wartoscFormularzaPola(encja, { definicja: pole })
+  return wartoscFormularzaPola(encja, { definicja: pole }, !doFormularza)
 }
 function polaEdycji(pola: DefinicjaPolaRejestru[]): PoleDoEdycjiRejestru[] { return pola.map((definicja) => ({ definicja })) }
 function domyslnyWidok(pola: DefinicjaPolaRejestru[]): Omit<DefinicjaWidokuRejestru, 'createdAt' | 'updatedAt' | 'usunietoAt'> { return { id: 'widok:subskrypcje:domyslny', rejestrId: ID_REJESTRU, nazwa: 'Domyślny', widocznePolaIds: pola.map((pole) => pole.id) } }
@@ -49,7 +49,7 @@ export function RejestrSubskrypcji({ dane, repozytorium, zbuduj }: { dane: Platn
   useEffect(() => { if (!widok) void zapiszWidokRejestru(domyslnyWidok(wszystkie), repoWidokow) }, [repoWidokow, wszystkie, widok])
   const widoczneIds = widok?.widocznePolaIds ?? wszystkie.map((pole) => pole.id)
   const kolumny = [...widoczneIds, ...wszystkie.map((pole) => pole.id).filter((id) => !widoczneIds.includes(id))].map((id) => wszystkie.find((pole) => pole.id === id)).filter((pole): pole is DefinicjaPolaRejestru => Boolean(pole && widoczneIds.includes(pole.id)))
-  const otworz = (element: PlatnoscStala) => { ustawEdytowana(element); ustawFormularz(Object.fromEntries(wszystkie.map((pole) => [pole.id, wartosc(element, pole)]))) }
+  const otworz = (element: PlatnoscStala) => { ustawEdytowana(element); ustawFormularz(Object.fromEntries(wszystkie.map((pole) => [pole.id, wartosc(element, pole, true)]))) }
   const zapisz = async (zdarzenie: FormEvent) => { zdarzenie.preventDefault(); if (!edytowana) return; const systemowe = Object.fromEntries(wszystkie.filter((pole) => pole.zrodlo === 'systemowe' && pole.trybObslugi === 'bezposrednie').map((pole) => [pole.kluczWlasciwosci, formularz[pole.id] ?? ''])); const wlasne = wszystkie.filter((pole) => pole.zrodlo === 'wlasne').reduce((wynik, pole) => ({ ...wynik, [pole.id]: skonwertujWartoscPolaWlasnego(pole, formularz[pole.id] ?? '') }), edytowana.polaWlasne ?? {}); await repozytorium.zapisz({ ...zbuduj(systemowe, edytowana), polaWlasne: wlasne }); ustawEdytowana(undefined) }
   const zapiszWidok = async (ids: DefinicjaWidokuRejestru['widocznePolaIds']) => { await zapiszWidokRejestru({ ...(widok ?? domyslnyWidok(wszystkie)), widocznePolaIds: ids }, repoWidokow) }
   const utworzPole = async (zdarzenie: FormEvent) => { zdarzenie.preventDefault(); if (!nazwaPola.trim()) return; await utworzWlasnePoleRejestru({ rejestrId: ID_REJESTRU, etykieta: nazwaPola.trim(), typ: typPola, opcje: ['select', 'multiselect'].includes(typPola) ? opcje.split('\n').map((wartosc) => wartosc.trim()).filter(Boolean).map((wartosc) => ({ wartosc, etykieta: wartosc })) : undefined, rolaSemantyczna: rola || undefined } as never, repoDefinicji); ustawNowePole(false); ustawNazwePola(''); ustawOpcje(''); ustawRole('') }

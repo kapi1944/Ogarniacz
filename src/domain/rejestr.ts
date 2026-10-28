@@ -1,4 +1,5 @@
 import type { EncjaBazowa } from './typy'
+import type { KwotaZWaluta } from './kwoty'
 
 export type TypPolaRejestru =
   | 'tekst'
@@ -12,7 +13,7 @@ export type TypPolaRejestru =
   | 'multiselect'
   | 'url'
 
-export type WartoscPolaWlasnego = string | number | boolean | string[] | null
+export type WartoscPolaWlasnego = string | number | boolean | string[] | KwotaZWaluta | null
 export type WartoscPolaRejestru = WartoscPolaWlasnego
 export type IdPolaSystemowego = `system:${string}`
 export type IdPolaWlasnego = `custom:${string}`
@@ -62,6 +63,7 @@ interface WspolnaDefinicjaPolaRejestru<Typ extends TypPolaRejestru> {
   id: IdPolaRejestru
   etykieta: string
   typ: Typ
+  kluczWaluty?: string
   opcje?: { wartosc: string; etykieta: string }[]
   rolaSemantyczna?: RolaSemantycznaDlaTypu<Typ>
 }

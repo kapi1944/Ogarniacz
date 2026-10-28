@@ -6,6 +6,7 @@ import type { EncjaBazowa } from '../domain/typy'
 import { EdytorPolaRejestru, normalizujPolaRejestru, normalizujStarePolaRejestru, skonwertujWartoscPolaWlasnego, wartoscFormularzaPola, type DefinicjaPola, type PoleDoEdycjiRejestru } from './EdytorPolaRejestru'
 import { Komunikat, Modal, ModalPotwierdzenia, NaglowekWidoku, PustyStan } from './Interfejs'
 import { useWlasciwosciRejestru } from './useWlasciwosciRejestru'
+import { kwotaDoModelu } from '../domain/kwoty'
 
 export type { DefinicjaPola } from './EdytorPolaRejestru'
 
@@ -47,6 +48,9 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
   const otworz = useCallback((element?: T) => {
     ustawEdytowany(element)
     const wartosciPoczatkowe = Object.fromEntries(polaDoEdycji.map((pole) => [pole.definicja.id, wartoscFormularzaPola(element, pole)]))
+    const waluty = Object.fromEntries(polaDoEdycji.filter((pole) => pole.definicja.typ === 'kwota' && pole.definicja.kluczWaluty).map((pole) => [
+      `${pole.definicja.id}:waluta`, String((element as unknown as Record<string, unknown> | undefined)?.[pole.definicja.kluczWaluty!] ?? 'PLN'),
+    ]))
     const uzupelnienia = element ? wlasciwosci.uzupelnijFormularz?.(element) : undefined
     const formularzZUzupelnieniem = Object.fromEntries(polaDoEdycji.map((pole) => {
       const kluczUzupelnienia = pole.definicja.zrodlo === 'systemowe' && pole.definicja.trybObslugi === 'bezposrednie'
@@ -54,7 +58,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
         : pole.definicja.id
       return [pole.definicja.id, uzupelnienia?.[kluczUzupelnienia ?? pole.definicja.id] ?? wartosciPoczatkowe[pole.definicja.id]]
     }))
-    ustawFormularz(formularzZUzupelnieniem)
+    ustawFormularz({ ...formularzZUzupelnieniem, ...waluty })
     ustawBlad('')
     ustawFormularzOtwarty(true)
   }, [polaDoEdycji, wlasciwosci])
@@ -74,6 +78,12 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
       const formularzSystemowy = polaDoEdycji.reduce<Record<string, string>>((wynik, pole) => {
         if (pole.definicja.zrodlo === 'systemowe' && pole.definicja.trybObslugi === 'bezposrednie') {
           wynik[pole.definicja.kluczWlasciwosci] = formularz[pole.definicja.id] ?? ''
+          if (pole.definicja.typ === 'kwota') {
+            const waluta = formularz[`${pole.definicja.id}:waluta`] ?? 'PLN'
+            const kwota = wynik[pole.definicja.kluczWlasciwosci]
+            if (kwota) wynik[pole.definicja.kluczWlasciwosci] = String(kwotaDoModelu(kwota, waluta))
+            if (pole.definicja.kluczWaluty) wynik[pole.definicja.kluczWaluty] = waluta
+          }
         }
         return wynik
       }, {})
@@ -122,7 +132,8 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
           <form className="formularz" onSubmit={zapisz}>
             {blad && <Komunikat typ="blad">{blad}</Komunikat>}
             {polaDoEdycji.filter((pole) => pole.widoczne?.(formularz) ?? true).map((pole) => (
-              <EdytorPolaRejestru key={pole.definicja.id} pole={pole} wartosc={formularz[pole.definicja.id] ?? ''} zmien={(wartosc) => ustawFormularz({ ...formularz, [pole.definicja.id]: wartosc })} />
+              <EdytorPolaRejestru key={pole.definicja.id} pole={pole} wartosc={formularz[pole.definicja.id] ?? ''} zmien={(wartosc) => ustawFormularz({ ...formularz, [pole.definicja.id]: wartosc })}
+                waluta={formularz[`${pole.definicja.id}:waluta`]} zmienWalute={pole.definicja.kluczWaluty ? (waluta) => ustawFormularz({ ...formularz, [`${pole.definicja.id}:waluta`]: waluta }) : undefined} />
             ))}
             <div className="akcje-formularza pole--pelne">
               <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => ustawFormularzOtwarty(false)}>Anuluj</button>

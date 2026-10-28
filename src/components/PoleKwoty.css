@@ -1,0 +1,6 @@
+.pole-kwoty { min-width: 0; }
+.pole-kwoty__wiersz { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pole-kwoty__wiersz input { flex: 1 1 90px; min-width: 0; width: 90px; }
+.pole-kwoty__wiersz select { flex: 1 1 130px; min-width: 0; width: 130px; min-height: 44px; }
+.pole-kwoty__wiersz button { min-width: 44px; min-height: 44px; }
+.pole-kwoty [role="alert"] { color: var(--blad); }

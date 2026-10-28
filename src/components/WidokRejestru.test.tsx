@@ -99,7 +99,7 @@ describe('WidokRejestru z kontraktem Rejestru 2.0', () => {
 
   it('konwertuje liczbę, kwotę, checkbox i multiselect do właściwych wartości', () => {
     expect(skonwertujWartoscPolaWlasnego({ id: 'custom:liczba', zrodlo: 'wlasne', etykieta: 'Liczba', typ: 'liczba' }, '12.5')).toBe(12.5)
-    expect(skonwertujWartoscPolaWlasnego({ id: 'custom:kwota', zrodlo: 'wlasne', etykieta: 'Kwota', typ: 'kwota' }, '34.20')).toBe(34.2)
+    expect(skonwertujWartoscPolaWlasnego({ id: 'custom:kwota', zrodlo: 'wlasne', etykieta: 'Kwota', typ: 'kwota' }, '34.20')).toEqual({ kwota: '34.20', waluta: 'PLN' })
     expect(skonwertujWartoscPolaWlasnego({ id: 'custom:tak', zrodlo: 'wlasne', etykieta: 'Tak', typ: 'checkbox' }, 'true')).toBe(true)
     expect(skonwertujWartoscPolaWlasnego({ id: 'custom:tagi', zrodlo: 'wlasne', etykieta: 'Tagi', typ: 'multiselect' }, 'dom,pilne')).toEqual(['dom', 'pilne'])
   })
@@ -132,6 +132,6 @@ describe('WidokRejestru z kontraktem Rejestru 2.0', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
 
     await waitFor(() => expect(repozytorium.zapisz).toHaveBeenCalledTimes(1))
-    expect(repozytorium.zapisz).toHaveBeenCalledWith(expect.objectContaining({ polaWlasne: { 'custom:cena': 10 } }))
+    expect(repozytorium.zapisz).toHaveBeenCalledWith(expect.objectContaining({ polaWlasne: { 'custom:cena': { kwota: '10.00', waluta: 'PLN' } } }))
   })
 })

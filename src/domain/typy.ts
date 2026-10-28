@@ -462,6 +462,7 @@ export interface Dokument extends EncjaBazowa {
 
 export interface Wydatek extends EncjaBazowa {
   kwota: number
+  waluta?: string
   data: string
   kategoria: string
   opis: string

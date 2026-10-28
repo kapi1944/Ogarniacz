@@ -24,12 +24,12 @@ export const POLA_SYSTEMOWE_POCZEKALNI: DefinicjaPolaRejestru[] = [
   POLE_AKCJI_PRZEKSZTALCENIA_POCZEKALNI,
 ]
 
-function wartoscPola(element: ElementPoczekalni, pole: DefinicjaPolaRejestru): string {
+function wartoscPola(element: ElementPoczekalni, pole: DefinicjaPolaRejestru, doFormularza = false): string {
   if (pole.zrodlo === 'systemowe' && pole.trybObslugi === 'tylko_odczyt') {
     const wynik = rejestrResolverowPolSystemowych.odczytaj(pole, { encja: element, daneZrodlowe: {} })
     return wynik.stan === 'gotowe' ? String(wynik.wartosc ?? '—') : wynik.komunikat
   }
-  return wartoscFormularzaPola(element, { definicja: pole }) || '—'
+  return wartoscFormularzaPola(element, { definicja: pole }, !doFormularza) || '—'
 }
 
 export function RejestrPoczekalni() {
@@ -46,7 +46,7 @@ export function RejestrPoczekalni() {
   const czyAkcja = (pole: DefinicjaPolaRejestru) => pole.zrodlo === 'systemowe' && pole.trybObslugi === 'akcja_domenowa'
   const otworz = (element: ElementPoczekalni) => {
     ustawEdytowany(element)
-    ustawFormularz(Object.fromEntries(wszystkiePola.filter((pole) => !czyAkcja(pole)).map((pole) => [pole.id, wartoscPola(element, pole)])))
+    ustawFormularz(Object.fromEntries(wszystkiePola.filter((pole) => !czyAkcja(pole)).map((pole) => [pole.id, wartoscPola(element, pole, true)])))
   }
   const zapisz = async (zdarzenie: FormEvent) => {
     zdarzenie.preventDefault()
