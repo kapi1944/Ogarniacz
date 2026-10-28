@@ -1,6 +1,7 @@
 import { utworzDefinicjePolaRejestru, type DefinicjaPolaRejestru, type TypPolaRejestru, type WartoscPolaWlasnego } from '../domain/rejestr'
 import type { EncjaBazowa } from '../domain/typy'
 import { PoleDaty } from './PoleDaty'
+import { PoleCzasu } from './PoleCzasu'
 
 export interface DefinicjaPola {
   klucz: string
@@ -112,6 +113,7 @@ export function EdytorPolaRejestru({ pole, wartosc, zmien }: Wlasciwosci) {
   const tylkoOdczyt = definicja.zrodlo === 'systemowe' && definicja.trybObslugi === 'tylko_odczyt'
 
   if (definicja.typ === 'data' && !tylkoOdczyt) return <PoleDaty etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={pole.max} krok={pole.krok} />
+  if (definicja.typ === 'czas' && !tylkoOdczyt) return <PoleCzasu etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={pole.max} krok={pole.krok} />
 
   return (
     <label className={definicja.typ === 'textarea' ? 'pole pole--pelne' : 'pole'}>

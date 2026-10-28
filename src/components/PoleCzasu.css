@@ -1,0 +1,10 @@
+.pole-czasu { min-width: 0; }
+.pole-czasu__wiersz { display: flex; align-items: center; gap: 4px; }
+.pole-czasu__wiersz input { min-width: 0; flex: 1; }
+.pole-czasu__wiersz button { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.pole-czasu__wybor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 8px; background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: var(--promien-pola); }
+.pole-czasu__wybor label { min-width: 0; }
+.pole-czasu__wybor select { width: 100%; min-height: 44px; }
+.pole-czasu__wybor button { grid-column: 1 / -1; }
+.pole-czasu :is(button, input, select):focus-visible { outline: 2px solid var(--akcent); outline-offset: 1px; }
+.pole-czasu [role="alert"] { color: var(--blad); }
