@@ -3,9 +3,9 @@ import { noweId } from '../domain/fabryki'
 import type { Dokument, EncjaBazowa, NazwaTabeli, ZmianaKolejkiSynchronizacji } from '../domain/typy'
 import { baza, nazwyTabel } from './BazaOgarniacza'
 import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
+import { czyTabelaFinansowWspolnych, czyDostepFinansowWspolnych } from '../services/UprawnieniaService'
 
 const TABELE_LOKALNE = new Set<NazwaTabeli>([
-  'wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen',
   'wpisyTerapii',
   'wazneInformacjeZdrowotne',
   'wynikiBadan',
@@ -71,6 +71,7 @@ export async function dodajDoKolejkiSynchronizacji(
   poprzedni?: EncjaBazowa,
 ): Promise<void> {
   if (!czyTabelaSynchronizowana(tabela) || czyPrywatnaPsychoterapia(tabela, rekord)) return
+  if (czyTabelaFinansowWspolnych(tabela) && !czyDostepFinansowWspolnych('edycja')) throw new Error('Brak dostępu właściciela do kolejki finansowej.')
   const kolejka = tabelaKolejki()
   const poprzedniaZmiana = await kolejka.where('[tabela+rekordId]').equals([tabela, rekord.id]).first()
   if (poprzedniaZmiana) await kolejka.delete(poprzedniaZmiana.id)
@@ -83,7 +84,7 @@ export async function dodajDoKolejkiSynchronizacji(
     rekordId: rekord.id,
     operacja: rekord.usunietoAt ? 'usuniecie' : poprzedni ? 'aktualizacja' : 'utworzenie',
     rekord: rekordDoSynchronizacji(tabela, rekord),
-    bazowyUpdatedAt: poprzedniaZmiana?.bazowyUpdatedAt ?? poprzedni?.updatedAt,
+    bazowyUpdatedAt: czyTabelaFinansowWspolnych(tabela) && poprzedniaZmiana ? poprzedniaZmiana.bazowyUpdatedAt : poprzedniaZmiana?.bazowyUpdatedAt ?? poprzedni?.updatedAt,
     liczbaProb: 0,
   })
 }
@@ -104,6 +105,7 @@ async function pobierzDozwoloneZmianyKolejki(): Promise<ZmianaKolejkiSynchroniza
   for (const zmiana of zmiany) {
     const tabela = zmiana.tabela as NazwaTabeli
     if (!nazwyTabel.includes(tabela) || !czyTabelaSynchronizowana(tabela)) continue
+    if (czyTabelaFinansowWspolnych(tabela) && !czyDostepFinansowWspolnych('odczyt')) continue
     if (czyPrywatnaPsychoterapia(tabela, zmiana.rekord) || czyPrywatnaPsychoterapia(tabela, await baza.tabela(tabela).get(zmiana.rekordId))) continue
     bezpieczne.push({ ...zmiana, rekord: zachowajLokalneSamopoczucie(tabela, zmiana.rekord, await baza.tabela(tabela).get(zmiana.rekordId)) })
   }

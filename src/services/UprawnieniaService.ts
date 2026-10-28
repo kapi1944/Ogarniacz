@@ -2,8 +2,9 @@ import { czyKontoZgodneZDanymiLokalnymi, pobierzKontoOffline } from './KontaServ
 import type { EncjaBazowa, NazwaModulu, NazwaTabeli, Uprawnienie } from '../domain/typy'
 import { baza } from '../data/BazaOgarniacza'
 import { pobierzAktywnyProfil } from '../data/ProfileLokalne'
+import { TABELE_FINANSOW_WSPOLNYCH } from '../../server/wspolne/ZapisFinansowy.ts'
 
-export const TABELE_FINANSOW_WSPOLNYCH = ['wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen'] as const
+export { TABELE_FINANSOW_WSPOLNYCH }
 
 export function czyDostepFinansowWspolnych(operacja: 'odczyt' | 'edycja'): boolean {
   if (!czyKontoZgodneZDanymiLokalnymi()) return false

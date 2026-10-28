@@ -13,7 +13,7 @@ describe('trwałe wspólne finanse', () => {
     const schemat = Object.fromEntries(wzor.tables.filter((tabela) => !tabele.some((nazwa) => nazwa === tabela.name)).map((tabela) => [tabela.name, [tabela.schema.primKey.src, ...tabela.schema.indexes.map((indeks) => indeks.src)].join(', ')]))
     for (const nazwa of tabele) {
       expect(wzor.table(nazwa).schema.primKey.name).toBe('id')
-      expect(czyTabelaSynchronizowana(nazwa)).toBe(false)
+      expect(czyTabelaSynchronizowana(nazwa)).toBe(true)
     }
     const stara = new Dexie('migracja-f72a')
     stara.version(19).stores(schemat)

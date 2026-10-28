@@ -1,41 +1,21 @@
 import { z } from 'zod'
 import Dexie from 'dexie'
+import { dodajDoKolejkiSynchronizacji } from '../data/KolejkaSynchronizacji'
 import { baza } from '../data/BazaOgarniacza'
 import { pobierzAktywnyProfil, pobierzSygnalProfilu } from '../data/ProfileLokalne'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
-import { schematWspolnejKasy, schematOperacjiKasy, schematRozliczenia, schematWydatkuGrupowego, schematZwrotuRozliczenia, type schematWersjiFinansowej } from '../domain/modeleFinansowWspolnych'
+import { type schematWersjiFinansowej } from '../domain/modeleFinansowWspolnych'
 import type { MapaTabel } from '../domain/typy'
 import { zbudujWpisHistorii } from './HistoriaZmianService'
 import { TABELE_FINANSOW_WSPOLNYCH, sprawdzDostepFinansowWspolnych } from './UprawnieniaService'
 
 // Wyłącznie lokalny zapis pięciu tabel F7; nie jest zamiennikiem repozytoriów aplikacji.
-export const schematyFinansowe = {
-  wspolneKasy: schematWspolnejKasy, operacjeKas: schematOperacjiKasy, rozliczenia: schematRozliczenia,
-  wydatkiGrupowe: schematWydatkuGrupowego, zwrotyRozliczen: schematZwrotuRozliczenia,
-}
-const metadane = { id: true, createdAt: true, updatedAt: true, usunietoAt: true, rewizja: true, historiaWersji: true } as const
-export const schematDanychKasy = schematWspolnejKasy.omit(metadane).strict()
-export const schematDanychOperacji = schematOperacjiKasy.omit(metadane).strict()
-export const schematDanychRozliczenia = schematRozliczenia.omit(metadane).strict()
-export const schematDanychWydatku = schematWydatkuGrupowego.omit(metadane).strict()
-export const schematDanychZwrotu = schematZwrotuRozliczenia.omit(metadane).strict()
-const schematyDanych = { wspolneKasy: schematDanychKasy, operacjeKas: schematDanychOperacji, rozliczenia: schematDanychRozliczenia, wydatkiGrupowe: schematDanychWydatku, zwrotyRozliczen: schematDanychZwrotu }
-export type TabelaFinansowa = typeof TABELE_FINANSOW_WSPOLNYCH[number]
+import { daneBiznesowe, kanonicznyZapis, schematyFinansowe, type TabelaFinansowa } from '../../server/wspolne/ZapisFinansowy.ts'
+export { daneBiznesowe, kanonicznyZapis, schematyFinansowe, schematDanychKasy, schematDanychOperacji, schematDanychRozliczenia, schematDanychWydatku, schematDanychZwrotu, type TabelaFinansowa } from '../../server/wspolne/ZapisFinansowy.ts'
 type WersjaFinansowa = z.infer<typeof schematWersjiFinansowej>
 type WartoscFinansowa = z.infer<ReturnType<typeof z.json>>
 export interface PolecenieZapisuFinansowego { idZapisu: string; oczekiwanaRewizja: number }
 export class KonfliktZapisuFinansowego extends Error {}
-
-export function kanonicznyZapis(wartosc: unknown): string {
-  if (Array.isArray(wartosc)) return `[${wartosc.map(kanonicznyZapis).join(',')}]`
-  if (wartosc && typeof wartosc === 'object') return `{${Object.entries(wartosc).filter(([, element]) => element !== undefined).sort(([pierwszy], [drugi]) => pierwszy < drugi ? -1 : pierwszy > drugi ? 1 : 0).map(([klucz, element]) => `${JSON.stringify(klucz)}:${kanonicznyZapis(element)}`).join(',')}}`
-  return JSON.stringify(wartosc) ?? 'null'
-}
-
-export function daneBiznesowe<K extends TabelaFinansowa>(tabela: K, rekord: MapaTabel[K]): Record<string, WartoscFinansowa> {
-  const dane = Object.fromEntries(Object.entries(rekord).filter(([klucz]) => !(klucz in metadane)))
-  return JSON.parse(kanonicznyZapis(schematyDanych[tabela].parse(dane))) as Record<string, WartoscFinansowa>
-}
 
 function stanBiznesowy<K extends TabelaFinansowa>(tabela: K, rekord: MapaTabel[K]): Record<string, WartoscFinansowa> {
   return { ...daneBiznesowe(tabela, rekord), ...(rekord.usunietoAt ? { usunietoAt: rekord.usunietoAt } : {}) }
@@ -51,7 +31,7 @@ export async function wTransakcjiFinansowej<T>(operacja: 'odczyt' | 'edycja', wy
     if (sygnal.aborted || biezacaBaza !== baza || profilId !== pobierzAktywnyProfil()?.id) throw new Error('Profil zmienił się podczas operacji finansowej.')
     sprawdzDostepFinansowWspolnych(operacja)
   }
-  const wynik = await biezacaBaza.transaction(operacja === 'odczyt' ? 'r' : 'rw', [...TABELE_FINANSOW_WSPOLNYCH, 'historiaZmian'].map((nazwa) => biezacaBaza.table(nazwa)), async () => {
+  const wynik = await biezacaBaza.transaction(operacja === 'odczyt' ? 'r' : 'rw', [...TABELE_FINANSOW_WSPOLNYCH, 'historiaZmian', 'kolejkaSynchronizacji', 'stanSynchronizacji', 'konfliktySynchronizacji'].map((nazwa) => biezacaBaza.table(nazwa)), async () => {
     sprawdz()
     const wynik = await wykonaj()
     sprawdz()
@@ -64,7 +44,7 @@ export async function wTransakcjiFinansowej<T>(operacja: 'odczyt' | 'edycja', wy
 /** Wywoływane wewnątrz transakcji serwisu, po walidacji powiązań i wyniku całej grupy. */
 export async function zapiszRekordFinansowy<K extends TabelaFinansowa>(
   tabela: K, id: string, polecenie: PolecenieZapisuFinansowego,
-  operacja: WersjaFinansowa['operacja'], tresc: unknown,
+  operacja: Exclude<WersjaFinansowa['operacja'], 'rozstrzygniecie'>, tresc: unknown,
   przygotuj: (przed: MapaTabel[K] | undefined) => Promise<MapaTabel[K]>,
 ): Promise<MapaTabel[K]> {
   sprawdzDostepFinansowWspolnych('edycja')
@@ -91,6 +71,7 @@ export async function zapiszRekordFinansowy<K extends TabelaFinansowa>(
   const zapisany = { ...po, id, createdAt: przed?.createdAt ?? teraz, updatedAt: teraz, rewizja, historiaWersji: [...przed?.historiaWersji ?? [], wersja] } as MapaTabel[K]
   schematyFinansowe[tabela].parse(zapisany)
   await repozytorium.put(zapisany)
+  await dodajDoKolejkiSynchronizacji(tabela, zapisany, przed)
   const wpis = zbudujWpisHistorii(tabela, przed, zapisany, operacja === 'przywrocenie' ? 'aktualizacja' : operacja, teraz)
   if (wpis) await baza.tabela('historiaZmian').add(wpis)
   return zapisany

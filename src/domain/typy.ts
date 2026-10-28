@@ -625,6 +625,9 @@ export interface StanSynchronizacji extends EncjaBazowa {
   liczbaKonfliktow: number
   liczbaOczekujacych: number
   kolejkaZmigrowana?: boolean
+  finanseWspolneZmigrowane?: boolean
+  ograniczenieFinansowWspolnych?: string
+  finanseWspolneNiekompletne?: boolean
 }
 
 export interface ZmianaKolejkiSynchronizacji extends EncjaBazowa {

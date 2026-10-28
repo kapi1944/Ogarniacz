@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { baza } from '../data/BazaOgarniacza'
 import type { Rozliczenie, WydatekGrupowy, ZwrotRozliczenia } from '../domain/modeleFinansowWspolnych'
-import { groszeNaKwote, obliczWydatekWspolny, obliczRozliczenieWspolne } from './ObliczeniaFinansowWspolnych'
-import { daneBiznesowe, kanonicznyZapis, wymagajRekordu, wTransakcjiFinansowej, zapiszRekordFinansowy, powiadomOZapisieFinansowym, schematDanychRozliczenia, schematDanychWydatku, schematDanychZwrotu, type PolecenieZapisuFinansowego } from './ZapisFinansowWspolnych'
+import { obliczWydatekWspolny } from './ObliczeniaFinansowWspolnych'
+import { sprawdzKompletnoscFinansow } from './SyncEngine'
+import { daneBiznesowe, wymagajRekordu, wTransakcjiFinansowej, zapiszRekordFinansowy, powiadomOZapisieFinansowym, schematDanychRozliczenia, schematDanychWydatku, schematDanychZwrotu, type PolecenieZapisuFinansowego } from './ZapisFinansowWspolnych'
 
 export type DaneRozliczenia = z.infer<typeof schematDanychRozliczenia>
 const schematNowegoWydatku = schematDanychWydatku.omit({ metodaPodzialu: true, podzialKosztu: true })
@@ -10,36 +11,8 @@ export type DaneWydatkuGrupowego = z.infer<typeof schematNowegoWydatku>
 export type DaneZwrotuRozliczenia = z.infer<typeof schematDanychZwrotu>
 const schematUczestnika = z.object({ id: z.string().trim().min(1), nazwa: z.string().trim().min(1), nieaktywny: z.boolean().optional() }).strict()
 
-export function walidujRozliczenie(rozliczenie: DaneRozliczenia): void {
-  groszeNaKwote(0, rozliczenie.waluta)
-  const identyfikatory = new Set<string>()
-  for (const uczestnik of rozliczenie.uczestnicy) {
-    schematUczestnika.parse(uczestnik)
-    if (identyfikatory.has(uczestnik.id)) throw new Error('Powtórzony identyfikator uczestnika.')
-    identyfikatory.add(uczestnik.id)
-  }
-}
-
-function doObliczen(wydatek: WydatekGrupowy) {
-  return { ...wydatek, podzial: wydatek.parametryPodzialu }
-}
-
-export function walidujZapisanyWydatek(rozliczenie: Rozliczenie, wydatek: WydatekGrupowy): void {
-  if (wydatek.rozliczenieId !== rozliczenie.id || wydatek.waluta !== rozliczenie.waluta) throw new Error('Wydatek musi należeć do rozliczenia i mieć jego walutę.')
-  const wynik = obliczWydatekWspolny(rozliczenie.uczestnicy.map(({ id }) => id), doObliczen(wydatek))
-  if (wydatek.metodaPodzialu !== wydatek.parametryPodzialu.metoda || kanonicznyZapis(wynik.podzialKosztu) !== kanonicznyZapis([...wydatek.podzialKosztu].sort((pierwsza, druga) => pierwsza.uczestnikId < druga.uczestnikId ? -1 : pierwsza.uczestnikId > druga.uczestnikId ? 1 : 0))) throw new Error('Zapisany podział kosztu jest niezgodny z parametrami.')
-}
-
-export function obliczBilansZRekordow(rozliczenie: Rozliczenie, wydatki: readonly WydatekGrupowy[], zwroty: readonly ZwrotRozliczenia[]) {
-  walidujRozliczenie(rozliczenie)
-  for (const wydatek of wydatki) walidujZapisanyWydatek(rozliczenie, wydatek)
-  for (const zwrot of zwroty) {
-    if (zwrot.rozliczenieId !== rozliczenie.id) throw new Error('Zwrot nie należy do rozliczenia.')
-    // Walidujemy również zachowaną historię usuniętych zwrotów.
-    obliczRozliczenieWspolne(rozliczenie.uczestnicy.map(({ id }) => id), rozliczenie.waluta, [], [zwrot])
-  }
-  return obliczRozliczenieWspolne(rozliczenie.uczestnicy.map(({ id }) => id), rozliczenie.waluta, wydatki.filter((wydatek) => !wydatek.usunietoAt).map(doObliczen), zwroty.filter((zwrot) => !zwrot.usunietoAt))
-}
+export { walidujRozliczenie, walidujZapisanyWydatek, obliczBilansZRekordow } from '../../server/wspolne/WalidacjaFinansowa.ts'
+import { walidujRozliczenie, obliczBilansZRekordow } from '../../server/wspolne/WalidacjaFinansowa.ts'
 
 function wymagajAktywnegoRozliczenia(rozliczenie: Rozliczenie | undefined): Rozliczenie {
   const istniejace = wymagajRekordu(rozliczenie)
@@ -152,6 +125,7 @@ export async function pobierzOperacjeRozliczenia(id: string, zUsunietymi = false
 }
 export async function pobierzBilansRozliczenia(id: string) {
   return wTransakcjiFinansowej('odczyt', async () => {
+    await sprawdzKompletnoscFinansow()
     const rozliczenie = wymagajRekordu(await baza.tabela('rozliczenia').get(id))
     const rekordy = await rekordyRozliczenia(id)
     return obliczBilansZRekordow(rozliczenie, rekordy.wydatki, rekordy.zwroty)

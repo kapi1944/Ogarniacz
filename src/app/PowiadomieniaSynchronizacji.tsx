@@ -17,7 +17,7 @@ export function PowiadomieniaSynchronizacji() {
       ? `Konflikty danych: ${stan?.liczbaKonfliktow}. Wybierz rozwiązanie w Ustawieniach.`
       : stan?.stan === 'blad' || stan?.polaczenie === 'niedostepne'
         ? komunikatyBledowSynchronizacji[stan.kodOstatniegoBledu ?? 'blad_synchronizacji']
-        : ''
+        : stan?.ograniczenieFinansowWspolnych ?? ''
 
   useEffect(() => {
     ustawPokazPostep(false)

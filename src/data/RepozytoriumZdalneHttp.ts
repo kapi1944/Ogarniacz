@@ -5,10 +5,14 @@ import { odtworzWartoscZTransportu, przygotujWartoscDoTransportu } from '../serv
 import { pobierzInstallationId } from '../services/InstallationService'
 import { BladKonta, pobierzCsrfKonta, pobierzKontoOffline, pobierzSesjeKonta } from '../services/KontaService'
 import { pobierzAktywnyProfil, pobierzSygnalProfilu, czyProfileUruchomione } from './ProfileLokalne'
+import { czyDostepFinansowWspolnych, sprawdzDostepFinansowWspolnych } from '../services/UprawnieniaService'
+import { BladDanychFinansowych, czyTabelaFinansowa, TABELE_FINANSOW_WSPOLNYCH, walidujObrazFinansowy } from '../../server/wspolne/SynchronizacjaFinansow.ts'
 
 interface OdpowiedzZmian {
   zmiany: ZmianaSynchronizacji[]
   synchronizowanoDo?: string
+  obslugiwaneTabeleFinansowe?: string[]
+  liczbaRekordowFinansowych?: number
 }
 
 export type RodzajBleduSynchronizacji = 'brak_sesji' | 'sesja_wygasla' | 'csrf' | 'brak_polaczenia' | 'blad_synchronizacji'
@@ -27,6 +31,7 @@ function polaczAdres(baza: string, sciezka: string): string {
 export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   readonly trwale = true
   private kursor?: string
+  private tabeleFinansowe: readonly string[] = []
   private readonly profil = pobierzAktywnyProfil()
   private readonly sygnal = pobierzSygnalProfilu()
 
@@ -44,13 +49,20 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   async pobierzZmiany(od: string): Promise<ZmianaSynchronizacji[]> {
     await this.zapewnijSesje()
     const odpowiedz = await this.wykonajZadanie(() => CapacitorHttp.get({
-      url: polaczAdres(this.adresApi, `/api/sync/changes?od=${encodeURIComponent(od)}`),
+      url: polaczAdres(this.adresApi, `/api/sync/changes?od=${encodeURIComponent(od)}${czyDostepFinansowWspolnych('odczyt') ? '&finanseWspolne=1' : ''}`),
       headers: this.naglowki(false),
       connectTimeout: 15_000,
       readTimeout: 15_000,
       webFetchExtra: { credentials: 'include' },
     }))
     const dane = await this.odczytajOdpowiedz(odpowiedz) as OdpowiedzZmian
+    this.tabeleFinansowe = TABELE_FINANSOW_WSPOLNYCH.every((tabela) => dane.obslugiwaneTabeleFinansowe?.includes(tabela)) ? TABELE_FINANSOW_WSPOLNYCH : []
+    const finansowe = dane.zmiany.filter((zmiana) => czyTabelaFinansowa(zmiana.tabela))
+    if (finansowe.length) sprawdzDostepFinansowWspolnych('odczyt')
+    if (this.tabeleFinansowe.length && dane.liczbaRekordowFinansowych !== finansowe.length) throw new BladDanychFinansowych('Niepełna paczka wspólnych finansów.')
+    if (finansowe.length && !this.tabeleFinansowe.length) throw new BladDanychFinansowych('Serwer nie potwierdził obsługi wspólnych finansów.')
+    try { walidujObrazFinansowy(finansowe) }
+    catch { throw new BladDanychFinansowych('Niepoprawne lub niepełne dane wspólnych finansów.') }
     this.kursor = dane.synchronizowanoDo
     return odtworzWartoscZTransportu(dane.zmiany) as ZmianaSynchronizacji[]
   }
@@ -59,23 +71,33 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
     return this.kursor
   }
 
+  pobierzObslugiwaneTabeleFinansowe(): readonly string[] { return this.tabeleFinansowe }
+
   async wyslijZmiany(zmiany: ZmianaSynchronizacji[], od = '1970-01-01T00:00:00.000Z'): Promise<void> {
     await this.zapewnijSesje()
+    if (zmiany.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) {
+      sprawdzDostepFinansowWspolnych('edycja')
+      if (!TABELE_FINANSOW_WSPOLNYCH.every((tabela) => this.tabeleFinansowe.includes(tabela))) throw new Error('Backend nie obsługuje wspólnych finansów. Zmiany pozostają lokalne.')
+    }
     const dane = await przygotujWartoscDoTransportu({ od, installationId: this.installationId(), zmiany })
-    const wyslij = () => this.wykonajZadanie(async () => CapacitorHttp.post({
-      url: polaczAdres(this.adresApi, '/api/sync/changes'),
-      headers: { ...this.naglowki(true), 'content-type': 'application/json' },
-      data: dane,
-      connectTimeout: 15_000,
-      readTimeout: 15_000,
-      webFetchExtra: { credentials: 'include' },
-    }))
+    const wyslij = () => this.wykonajZadanie(async () => {
+      if (zmiany.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) sprawdzDostepFinansowWspolnych('edycja')
+      return CapacitorHttp.post({
+        url: polaczAdres(this.adresApi, '/api/sync/changes'),
+        headers: { ...this.naglowki(true), 'content-type': 'application/json' },
+        data: dane,
+        connectTimeout: 15_000,
+        readTimeout: 15_000,
+        webFetchExtra: { credentials: 'include' },
+      })
+    })
     let odpowiedz = await wyslij()
     if (this.czyBladCsrf(odpowiedz)) {
       await this.odswiezSesjePoBledzieCsrf()
       odpowiedz = await wyslij()
     }
-    await this.odczytajOdpowiedz(odpowiedz)
+    const potwierdzenie = await this.odczytajOdpowiedz(odpowiedz) as { pominiete?: { tabela: string }[] }
+    if (potwierdzenie.pominiete?.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) throw new Error('Serwer pominął dane finansowe; zachowano kolejkę.')
   }
 
   private naglowki(czyZapis: boolean): Record<string, string> {

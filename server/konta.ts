@@ -249,6 +249,7 @@ export function czyDozwolonaTabela(
   operacja: 'odczyt' | 'edycja',
   rekord?: Record<string, unknown>,
 ): boolean {
+  if (['wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen'].includes(tabela)) return kontekst.rola === 'wlasciciel' && kontekst.uzytkownikId === kontekst.wlascicielId
   if (kontekst.rola === 'wlasciciel') return true
   const modul = MODUL_TABELI[tabela]
   if (!modul || modul === 'ustawienia' || modul === 'echo') return false

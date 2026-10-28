@@ -1,5 +1,7 @@
 import type { IncomingMessage } from 'node:http'
 import type { DatabaseSync } from 'node:sqlite'
+import { czyTabelaFinansowa, TABELE_FINANSOW_WSPOLNYCH, walidujObrazFinansowy, sprawdzKontynuacjeHistorii } from './wspolne/SynchronizacjaFinansow.ts'
+import { kanonicznyZapis } from './wspolne/ZapisFinansowy.ts'
 
 const MAKSYMALNY_ROZMIAR_PACZKI = 25 * 1024 * 1024
 const POCZATEK_SYNCHRONIZACJI = '1970-01-01T00:00:00.000Z'
@@ -10,6 +12,7 @@ const TABELE_SYNCHRONIZOWANE = new Set([
   'kontakty', 'dokumenty', 'wydatki', 'budzety', 'kontaFinansowe', 'miejsca', 'pojazdy', 'terminyWaznosci', 'uprawnienia',
   'edytorzy', 'ustawienia', 'skierowania', 'recepty', 'terapie', 'wpisyTerapii',
   'platnosciStale', 'planyRat', 'raty',
+  ...TABELE_FINANSOW_WSPOLNYCH,
 ])
 
 interface RekordSynchronizacji {
@@ -88,14 +91,15 @@ export function zapewnijProfilSynchronizacji(baza: DatabaseSync, userId: string,
   `).run(installationId, userId, teraz, teraz)
 }
 
-export function pobierzZmianySynchronizacji(baza: DatabaseSync, userId: string, od: string): ZmianaSynchronizacjiApi[] {
+export function pobierzZmianySynchronizacji(baza: DatabaseSync, userId: string, od: string, tylkoFinanse = false): ZmianaSynchronizacjiApi[] {
   if (!poprawnyIso(od)) throw new Error('Niepoprawny kursor synchronizacji.')
   return baza.prepare(`
     SELECT tabela, dane_json, ostatnia_instalacja_id
     FROM rekordy_synchronizacji
     WHERE uzytkownik_id = ? AND COALESCE(server_updated_at, updated_at) > ?
+      ${tylkoFinanse ? `AND tabela IN (${TABELE_FINANSOW_WSPOLNYCH.map(() => '?').join(', ')})` : ''}
     ORDER BY COALESCE(server_updated_at, updated_at), tabela, rekord_id
-  `).all(userId, od).map((wiersz) => ({
+  `).all(userId, od, ...(tylkoFinanse ? TABELE_FINANSOW_WSPOLNYCH : [])).map((wiersz) => ({
     tabela: String(wiersz.tabela),
     rekord: JSON.parse(String(wiersz.dane_json)) as RekordSynchronizacji,
     installationId: String(wiersz.ostatnia_instalacja_id ?? 'serwer'),
@@ -105,6 +109,7 @@ export function pobierzZmianySynchronizacji(baza: DatabaseSync, userId: string, 
 export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, paczka: PaczkaSynchronizacji): number {
   // Historyczne notatki pozostają w bazie, ale żaden klient nie może ich ponownie zapisać.
   const zmiany = paczka.zmiany.filter((zmiana) => zmiana.tabela !== 'wpisyTerapii')
+  for (const zmiana of zmiany) walidujZmiane(zmiana, paczka.installationId)
   const czyPrzetworzona = baza.prepare(`
     SELECT 1 FROM przetworzone_zmiany_synchronizacji WHERE uzytkownik_id = ? AND zmiana_id = ?
   `)
@@ -132,14 +137,31 @@ export function zapiszZmianySynchronizacji(baza: DatabaseSync, userId: string, p
     }
     if (
       istniejacy
-      && (zmiana.bazowyUpdatedAt
+      && (czyTabelaFinansowa(zmiana.tabela) && !zmiana.bazowyUpdatedAt
+        ? true : zmiana.bazowyUpdatedAt
         ? String(istniejacy.updated_at) !== zmiana.bazowyUpdatedAt
         : String(istniejacy.updated_at) > paczka.od)
-      && String(istniejacy.ostatnia_instalacja_id) !== paczka.installationId
-      && String(istniejacy.dane_json) !== JSON.stringify(zmiana.rekord)
+      && (czyTabelaFinansowa(zmiana.tabela) || String(istniejacy.ostatnia_instalacja_id) !== paczka.installationId)
+      && (czyTabelaFinansowa(zmiana.tabela) ? kanonicznyZapis(JSON.parse(String(istniejacy.dane_json))) !== kanonicznyZapis(zmiana.rekord) : String(istniejacy.dane_json) !== JSON.stringify(zmiana.rekord))
     ) konflikty.push(`${zmiana.tabela}:${zmiana.rekord.id}`)
   }
   if (konflikty.length > 0) throw new Error(`KONFLIKT_SYNC:${konflikty.join(',')}`)
+
+  if (zmiany.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) {
+    const obraz = new Map(pobierzZmianySynchronizacji(baza, userId, POCZATEK_SYNCHRONIZACJI, true)
+      .filter((zmiana) => czyTabelaFinansowa(zmiana.tabela)).map((zmiana) => [`${zmiana.tabela}:${zmiana.rekord.id}`, zmiana]))
+    const kluczePaczki = new Set<string>()
+    for (const zmiana of zmiany.filter((zmiana) => czyTabelaFinansowa(zmiana.tabela))) {
+      const klucz = `${zmiana.tabela}:${zmiana.rekord.id}`
+      if (kluczePaczki.has(klucz)) throw new Error('Powtórzony rekord finansowy.')
+      kluczePaczki.add(klucz)
+      if (zmiana.zmianaId && czyPrzetworzona.get(userId, zmiana.zmianaId)) continue
+      const przed = obraz.get(klucz)
+      if (przed && czyTabelaFinansowa(zmiana.tabela)) sprawdzKontynuacjeHistorii(zmiana.tabela, przed.rekord, zmiana.rekord)
+      obraz.set(klucz, zmiana)
+    }
+    walidujObrazFinansowy([...obraz.values()])
+  }
 
   const zapisz = baza.prepare(`
     INSERT INTO rekordy_synchronizacji (

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { EncjaBazowa, KonfliktSynchronizacji, NazwaTabeli } from '../../domain/typy'
 import type { RozstrzygniecieKonfliktu, WyborWartosciKonfliktu } from '../../services/SyncEngine'
+import { czyTabelaFinansowWspolnych } from '../../services/UprawnieniaService'
 
 const NAZWY_RODZAJOW_DANYCH: Partial<Record<NazwaTabeli, string>> = {
+  wspolneKasy: 'Wspólna kasa', operacjeKas: 'Operacja kasy', rozliczenia: 'Rozliczenie', wydatkiGrupowe: 'Wydatek grupowy', zwrotyRozliczen: 'Zwrot rozliczenia',
   zadania: 'Zadanie',
   projekty: 'Projekt',
   skrzynka: 'Element Poczekalni',
@@ -63,7 +65,7 @@ const ETYKIETY_POL: Record<string, string> = {
 }
 
 const POLA_NAZWY_REKORDU = ['tytul', 'nazwa', 'tresc', 'opis', 'nazwaPliku', 'numerRejestracyjny']
-const POLA_TECHNICZNE = new Set(['id', 'createdAt', 'updatedAt', 'installationId', 'revision'])
+const POLA_TECHNICZNE = new Set(['id', 'createdAt', 'updatedAt', 'installationId', 'revision', 'rewizja', 'historiaWersji'])
 
 interface RoznicaKonfliktu {
   pole: string
@@ -175,7 +177,7 @@ export function KartaKonfliktuSynchronizacji({ konflikt, rozstrzygnij }: Konflik
   const [wybranePola, ustawWybranePola] = useState<Record<string, WyborWartosciKonfliktu>>({})
   const [rozstrzyganie, ustawRozstrzyganie] = useState(false)
   const [bladRozstrzygania, ustawBladRozstrzygania] = useState('')
-  const moznaPolaczycRecznie = !konflikt.lokalny.usunietoAt
+  const moznaPolaczycRecznie = !czyTabelaFinansowWspolnych(konflikt.tabela) && !konflikt.lokalny.usunietoAt
     && !konflikt.zdalny.usunietoAt
     && prezentacja.roznice.length > 0
     && prezentacja.roznice.every(({ moznaPolaczyc }) => moznaPolaczyc)

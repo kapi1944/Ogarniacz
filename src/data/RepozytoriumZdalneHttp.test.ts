@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CapacitorHttp } from '@capacitor/core'
 import { BladKonta, pobierzCsrfKonta, pobierzKontoOffline, pobierzSesjeKonta } from '../services/KontaService'
 import { RepozytoriumZdalneHttp } from './RepozytoriumZdalneHttp'
+import { TABELE_FINANSOW_WSPOLNYCH, ustawBiezacyDostep } from '../services/UprawnieniaService'
+
+const kasa = { id: 'k', createdAt: '2026-10-29T12:00:00.000Z', updatedAt: '2026-10-29T12:00:00.000Z', nazwa: 'Test', opis: '', ikona: '', kolor: '', waluta: 'PLN', saldoPoczatkoweGrosze: 0, status: 'aktywna' }
+const zmianaFinansowa = { tabela: 'wspolneKasy' as const, rekord: kasa, installationId: 'instalacja-testowa' }
 
 vi.mock('@capacitor/core', async (oryginal) => ({
   ...await oryginal<typeof import('@capacitor/core')>(),
@@ -27,6 +31,42 @@ afterEach(() => {
 })
 
 describe('RepozytoriumZdalneHttp przez sesję', () => {
+  it('odmawia wysyłki finansów przed negocjacją oraz po odpowiedzi starego backendu', async () => {
+    const repo = new RepozytoriumZdalneHttp('https://example.test', () => 'instalacja-testowa')
+    await expect(repo.wyslijZmiany([zmianaFinansowa])).rejects.toThrow('nie obsługuje')
+    vi.mocked(CapacitorHttp.get).mockResolvedValue(odpowiedz(200, { zmiany: [] }))
+    await repo.pobierzZmiany('1970-01-01')
+    await expect(repo.wyslijZmiany([zmianaFinansowa])).rejects.toThrow('nie obsługuje')
+    expect(CapacitorHttp.post).not.toHaveBeenCalled()
+  })
+
+  it('wysyła nowe tabele dopiero po potwierdzeniu całego kontraktu i odmawia pominiętych rekordów', async () => {
+    const repo = new RepozytoriumZdalneHttp('https://example.test', () => 'instalacja-testowa')
+    vi.mocked(CapacitorHttp.get).mockResolvedValue(odpowiedz(200, { zmiany: [], obslugiwaneTabeleFinansowe: TABELE_FINANSOW_WSPOLNYCH, liczbaRekordowFinansowych: 0 }))
+    await repo.pobierzZmiany('1970-01-01')
+    vi.mocked(CapacitorHttp.post).mockResolvedValue(odpowiedz(200, { zapisano: 1 }))
+    await repo.wyslijZmiany([zmianaFinansowa])
+    expect(CapacitorHttp.post).toHaveBeenCalledTimes(1)
+    vi.mocked(CapacitorHttp.post).mockResolvedValue(odpowiedz(200, { zapisano: 0, pominiete: [{ tabela: 'wspolneKasy' }] }))
+    await expect(repo.wyslijZmiany([zmianaFinansowa])).rejects.toThrow('pominął')
+  })
+
+  it('nie przyjmuje niepełnego obrazu finansów ani nie przesuwa jego kursora', async () => {
+    const repo = new RepozytoriumZdalneHttp('https://example.test', () => 'instalacja-testowa')
+    vi.mocked(CapacitorHttp.get).mockResolvedValue(odpowiedz(200, { zmiany: [zmianaFinansowa], obslugiwaneTabeleFinansowe: TABELE_FINANSOW_WSPOLNYCH, liczbaRekordowFinansowych: 2, synchronizowanoDo: '2026-10-29T13:00:00.000Z' }))
+    await expect(repo.pobierzZmiany('1970-01-01')).rejects.toThrow('Niepełna')
+    expect(repo.pobierzKursor()).toBeUndefined()
+  })
+
+  it('blokuje finansowy odczyt i zapis Edytora także przy bezpośrednim wywołaniu transportu', async () => {
+    ustawBiezacyDostep((modul) => modul === 'finanse')
+    vi.mocked(pobierzKontoOffline).mockReturnValue({ rola: 'edytor', granty: [{ modul: 'finanse', odczyt: true, edycja: true, status: 'aktywne' }] } as never)
+    const repo = new RepozytoriumZdalneHttp('https://example.test', () => 'instalacja-testowa')
+    vi.mocked(CapacitorHttp.get).mockResolvedValue(odpowiedz(200, { zmiany: [zmianaFinansowa], obslugiwaneTabeleFinansowe: TABELE_FINANSOW_WSPOLNYCH, liczbaRekordowFinansowych: 1 }))
+    await expect(repo.pobierzZmiany('1970-01-01')).rejects.toThrow('właściciela')
+    await expect(repo.wyslijZmiany([zmianaFinansowa])).rejects.toThrow('właściciela')
+    expect(CapacitorHttp.post).not.toHaveBeenCalled()
+  })
   it('wykonuje sync GET przez cookie bez Bearera i z credentials', async () => {
     vi.mocked(CapacitorHttp.get).mockResolvedValue(odpowiedz(200, { zmiany: [], synchronizowanoDo: '2026-09-16T00:00:00Z' }))
     const repo = new RepozytoriumZdalneHttp('https://raspberrypi.tailb0bcf2.ts.net', () => 'instalacja-testowa')
@@ -34,7 +74,7 @@ describe('RepozytoriumZdalneHttp przez sesję', () => {
     await expect(repo.pobierzZmiany('1970-01-01')).resolves.toEqual([])
 
     expect(CapacitorHttp.get).toHaveBeenCalledWith(expect.objectContaining({
-      url: 'https://raspberrypi.tailb0bcf2.ts.net/api/sync/changes?od=1970-01-01',
+      url: 'https://raspberrypi.tailb0bcf2.ts.net/api/sync/changes?od=1970-01-01&finanseWspolne=1',
       connectTimeout: 15000,
       readTimeout: 15000,
       webFetchExtra: { credentials: 'include' },

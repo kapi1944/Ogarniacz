@@ -10,6 +10,7 @@ import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, sprawdzCsrf } 
 import { utworzAktualizacjeRpi, type AktualizacjeRpi } from './aktualizacje-rpi.ts'
 import { utworzDostawceSmartHome, type DostawcaSmartHome } from './smart-home.ts'
 import { odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
+import { czyTabelaFinansowa, TABELE_FINANSOW_WSPOLNYCH } from './wspolne/SynchronizacjaFinansow.ts'
 
 const METODY_SYNCHRONIZACJI = 'GET, POST, PUT, OPTIONS'
 const NAGLOWKI_SYNCHRONIZACJI = 'Content-Type, X-Ogarniacz-Installation-Id, X-Ogarniacz-CSRF, X-Ogarniacz-User-Id, X-Ogarniacz-Owner-Id'
@@ -241,9 +242,12 @@ export function utworzSerwer(
         if (zadanie.method === 'GET' && zadanie.url.startsWith('/api/sync/changes')) {
           const od = new URL(zadanie.url, 'http://localhost').searchParams.get('od') ?? ''
           const synchronizowanoDo = new Date().toISOString()
-          const zmiany = pobierzZmianySynchronizacji(baza, kontekst.wlascicielId, od)
+          const finanse = new URL(zadanie.url, 'http://localhost').searchParams.get('finanseWspolne') === '1'
+          const zwykle = pobierzZmianySynchronizacji(baza, kontekst.wlascicielId, od).filter((zmiana) => !czyTabelaFinansowa(zmiana.tabela))
+          const finansowe = finanse ? pobierzZmianySynchronizacji(baza, kontekst.wlascicielId, '1970-01-01T00:00:00.000Z', true) : []
+          const zmiany = [...zwykle, ...finansowe]
             .filter((zmiana) => czyDozwolonaTabela(baza, kontekst, zmiana.tabela, 'odczyt', zmiana.rekord))
-          odpowiedzJson(odpowiedz, 200, { zmiany, synchronizowanoDo })
+          odpowiedzJson(odpowiedz, 200, { zmiany, synchronizowanoDo, obslugiwaneTabeleFinansowe: TABELE_FINANSOW_WSPOLNYCH, liczbaRekordowFinansowych: zmiany.filter((zmiana) => czyTabelaFinansowa(zmiana.tabela)).length })
           return
         }
         if (zadanie.method === 'POST' && zadanie.url === '/api/sync/changes') {

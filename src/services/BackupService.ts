@@ -985,7 +985,9 @@ export async function przywrocBackup(
     }
   }
 
-  await baza.transaction('rw', tabele.map((tabela) => baza.table(tabela)), async () => {
+  const przywracaFinanse = tabele.some(czyTabelaFinansowWspolnych)
+  const tabeleTransakcji = [...new Set([...tabele, ...(przywracaFinanse ? ['kolejkaSynchronizacji', 'stanSynchronizacji'] as const : [])])]
+  await baza.transaction('rw', tabeleTransakcji.map((tabela) => baza.table(tabela)), async () => {
     sprawdzProfil()
     sprawdzBiezacyDostep('ustawienia', 'edycja')
     sprawdzFinanse()
@@ -996,7 +998,9 @@ export async function przywrocBackup(
       const rekordy = daneDoZapisu.get(tabela) ?? []
       if (tabela === 'ustawienia' && prywatneUstawienia) for (const rekord of rekordy) if (rekord.id === 'glowne' && !('samopoczucie' in rekord)) rekord.samopoczucie = prywatneUstawienia
       if (rekordy.length > 0) await repozytorium.bulkPut(rekordy)
+      if (czyTabelaFinansowWspolnych(tabela)) await baza.tabela('kolejkaSynchronizacji').where('tabela').equals(tabela).delete()
     }
+    if (przywracaFinanse) await baza.tabela('stanSynchronizacji').update('glowny', { finanseWspolneZmigrowane: false })
   })
   for (const tabela of tabele) powiadomOZmianieDanych(tabela)
 

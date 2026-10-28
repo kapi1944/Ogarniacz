@@ -1,7 +1,6 @@
 import type { EncjaBazowa, NazwaTabeli } from '../domain/typy'
 
 export type NazwaTabeliSynchronizowanej = Exclude<NazwaTabeli,
-  | 'wspolneKasy' | 'operacjeKas' | 'rozliczenia' | 'wydatkiGrupowe' | 'zwrotyRozliczen'
   | 'wazneInformacjeZdrowotne'
   | 'wynikiBadan'
   | 'wpisySamopoczucia'
@@ -37,6 +36,7 @@ export interface WynikSynchronizacji {
 
 export interface RepozytoriumZdalne {
   trwale?: boolean
+  pobierzObslugiwaneTabeleFinansowe?(): readonly string[]
   pobierzZmiany(od: string): Promise<ZmianaSynchronizacji[]>
   pobierzKursor?(): string | undefined
   wyslijZmiany(zmiany: ZmianaSynchronizacji[], od?: string): Promise<void>

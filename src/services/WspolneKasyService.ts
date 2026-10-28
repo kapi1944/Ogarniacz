@@ -2,33 +2,14 @@ import type { z } from 'zod'
 import { baza } from '../data/BazaOgarniacza'
 import type { OperacjaKasy, WspolnaKasa } from '../domain/modeleFinansowWspolnych'
 import { groszeNaKwote } from './ObliczeniaFinansowWspolnych'
+import { sprawdzKompletnoscFinansow } from './SyncEngine'
 import { daneBiznesowe, wymagajRekordu, wTransakcjiFinansowej, zapiszRekordFinansowy, powiadomOZapisieFinansowym, schematDanychKasy, schematDanychOperacji, type PolecenieZapisuFinansowego } from './ZapisFinansowWspolnych'
 
 export type DaneWspolnejKasy = z.infer<typeof schematDanychKasy>
 export type DaneOperacjiKasy = z.infer<typeof schematDanychOperacji>
 
-export function obliczSaldoZOperacji(kasa: WspolnaKasa, operacje: readonly OperacjaKasy[]): number {
-  groszeNaKwote(kasa.saldoPoczatkoweGrosze, kasa.waluta)
-  let saldo = BigInt(kasa.saldoPoczatkoweGrosze)
-  for (const operacja of operacje) {
-    if (operacja.kasaId !== kasa.id || operacja.waluta !== kasa.waluta) throw new Error('Operacja musi należeć do kasy i mieć jej walutę.')
-    walidujOperacjeKasy(operacja)
-    if (!operacja.usunietoAt) saldo += BigInt(operacja.kwotaGrosze) * (operacja.typ === 'wydatek' ? -1n : 1n)
-  }
-  if (saldo > BigInt(Number.MAX_SAFE_INTEGER) || saldo < -BigInt(Number.MAX_SAFE_INTEGER)) throw new Error('Saldo przekracza bezpieczny zakres.')
-  return Number(saldo)
-}
-
-export function walidujOperacjeKasy(operacja: DaneOperacjiKasy): void {
-  groszeNaKwote(operacja.kwotaGrosze, operacja.waluta)
-  if (operacja.typ === 'korekta' ? operacja.kwotaGrosze === 0 : operacja.kwotaGrosze <= 0) throw new Error('Wpływ i wydatek muszą być dodatnie, a korekta różna od zera.')
-  if (operacja.typ === 'korekta' && !operacja.opis.trim()) throw new Error('Korekta wymaga uzasadnienia w opisie.')
-  if (operacja.kaucja) {
-    const kaucja = operacja.kaucja
-    const suma = kaucja.pozycje.reduce((wynik, pozycja) => wynik + BigInt(pozycja.liczbaSztuk) * BigInt(pozycja.stawkaGrosze), 0n)
-    if (operacja.typ !== 'wplyw' || suma !== BigInt(kaucja.sumaGrosze) || operacja.kwotaGrosze !== (kaucja.zatwierdzonaKwotaGrosze ?? kaucja.sumaGrosze) || operacja.kwotaGrosze !== kaucja.sumaGrosze && !kaucja.uzasadnienie?.trim()) throw new Error('Niepoprawne kwoty lub uzasadnienie kaucji.')
-  }
-}
+export { obliczSaldoZOperacji, walidujOperacjeKasy } from '../../server/wspolne/WalidacjaFinansowa.ts'
+import { obliczSaldoZOperacji } from '../../server/wspolne/WalidacjaFinansowa.ts'
 
 async function operacjeKasy(id: string): Promise<OperacjaKasy[]> {
   return baza.tabela('operacjeKas').where('kasaId').equals(id).toArray()
@@ -110,5 +91,8 @@ export async function listaOperacjiKasy(id: string, zUsunietymi = false): Promis
   })
 }
 export async function pobierzSaldoKasy(id: string): Promise<number> {
-  return wTransakcjiFinansowej('odczyt', async () => obliczSaldoZOperacji(wymagajRekordu(await baza.tabela('wspolneKasy').get(id)), await operacjeKasy(id)))
+  return wTransakcjiFinansowej('odczyt', async () => {
+    await sprawdzKompletnoscFinansow()
+    return obliczSaldoZOperacji(wymagajRekordu(await baza.tabela('wspolneKasy').get(id)), await operacjeKasy(id))
+  })
 }

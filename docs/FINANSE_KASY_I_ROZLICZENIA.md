@@ -2,7 +2,7 @@
 
 Data przeglądu: 27.10.2026. Punkt odniesienia: commit `21ce6f9`.
 
-Dokument przekłada specyfikację funkcjonalną na zakres wdrożenia zgodny z obecną implementacją. Powstał po celowanym przeglądzie Finansów, zapisu, profili, synchronizacji, historii i załączników. Nie jest pełnym audytem aplikacji. Opisane nowe modele i ekrany są propozycją; nie zostały jeszcze zaimplementowane.
+Dokument przekłada specyfikację funkcjonalną na zakres wdrożenia zgodny z obecną implementacją. Powstał po celowanym przeglądzie Finansów, zapisu, profili, synchronizacji, historii i załączników. Nie jest pełnym audytem aplikacji. Pierwotny przegląd opisuje stan z 27.10.2026. Modele, obliczenia i serwisy F7.1–F7.3 są już zaimplementowane; poniższy rozdział F7.4 opisuje aktualny kontrakt synchronizacji. Ekrany kolejnych etapów pozostają poza zakresem.
 
 ## 1. Co rzeczywiście istnieje
 
@@ -150,35 +150,88 @@ Backup zachowuje format 3 i schemat Dexie 20. Odtwarzanie waliduje kwoty,
 waluty, relacje, finansowanie, podziały i ciągłość historii, także dla usuniętych
 rekordów. Starsze sekcje bez danych F7 nie czyszczą nowych tabel.
 
-#### Pierwsza synchronizacja — wymaganie dla późniejszego etapu
+### Zrealizowany zakres F7.4 — synchronizacja i ochrona danych
 
-W F7.3 wszystkie pięć tabel **nadal jest lokalnych i niesynchronizowanych**.
-Serwisy nie dodają ich do kolejki i nie wywołują API. Nie ma nowych ekranów.
-Historia w rekordach przygotowuje trwałość lokalną; nie potwierdza gotowości
-kontraktu sieciowego ani rozstrzygania konfliktów między urządzeniami.
+Pięć tabel `wspolneKasy`, `operacjeKas`, `rozliczenia`, `wydatkiGrupowe`
+i `zwrotyRozliczen` korzysta z istniejących `SyncEngine`, endpointu
+`/api/sync/changes`, outboxu, `zmianaId`, `bazowyUpdatedAt`, ponowień i soft-delete.
+Nie zmieniono modelu osobistych Finansów, wersji Dexie 20 ani schematu SQLite.
+Tryb lokalny bez konta nadal działa. W tej zmianie nie wdrożono backendu ani APK.
 
-Przed przyszłym uruchomieniem wysyłki należy najpierw wdrożyć zgodny kontrakt
-backendu, walidację i ochronę właściciela. Następnie w jednej transakcji
-**aktywnego profilu** obejmującej pięć tabel, obecną kolejkę i
-`stanSynchronizacji` trzeba przeskanować **wszystkie** rekordy, również
-`usunietoAt`, bez filtra `ostatniSync` i bez zmiany ID/rewizji/historii. Dla
-każdego `[tabela, rekordId]` należy idempotentnie przygotować bieżący pełny
-rekord lub znacznik usunięcia, zachowując istniejące oczekujące zmiany.
-Osobny wersjonowany znacznik przygotowania F7 w istniejącym stanie profilu
-wolno zatwierdzić dopiero razem z kompletną kolejką. Błąd wycofuje kolejkę
-i znacznik; ponowienie musi być bezpieczne. Kolejne lokalne zapisy muszą odtąd
-aktualizować tę kolejkę w tej samej transakcji co rekord i historia.
+**Pierwsze przygotowanie:** transakcja aktywnej bazy obejmuje pięć tabel,
+kolejkę i `stanSynchronizacji`. Skanuje wszystkie rekordy, także usunięte
+oraz starsze od `ostatniSync`. Nie zmienia ich ID, rewizji ani historii;
+zachowuje istniejące oczekujące zmiany. Dopiero z kompletną kolejką zapisuje
+`finanseWspolneZmigrowane`. Ten znacznik oznacza przygotowanie outboxu,
+nie potwierdzenie wysłania. Kolejne zapisy finansowe zapisują rekord, historię
+i kolejkę atomowo. Import kopii usuwa nieaktualne oczekujące migawki zastąpionych
+tabel i unieważnia znacznik w tej samej transakcji; następna synchronizacja
+przygotowuje pełne przywrócone dane. Zgodność z serwerem jest sprawdzana niezależnie.
 
-Samo usunięcie tabel z `TABELE_LOKALNE` lub zresetowanie `kolejkaZmigrowana`
-nie wystarczy: obecna migracja kolejki filtruje po `ostatniSync` i mogłaby
-pominąć dawne dane F7. Import kopii F7 po przygotowaniu musi ponownie objąć
-importowane rekordy kolejką albo unieważnić znacznik przygotowania. Dopiero po
-takiej implementacji i jej testach można dopuścić wysyłkę. F7.3 dokumentuje
-ten mechanizm; nie implementuje ani nie aktywuje go sieciowo.
+**Negocjacja:** nowy klient prosi w GET o `finanseWspolne=1`. Odpowiedź nowego
+backendu zawiera `obslugiwaneTabeleFinansowe` i `liczbaRekordowFinansowych`.
+Wysyłka pięciu tabel wymaga potwierdzenia obsługi wszystkich pięciu.
+Brak deklaracji (stary backend) zatrzymuje wyłącznie te zmiany: pozostają
+w kolejce, pozostałe moduły synchronizują się normalnie, a istniejący komunikat
+synchronizacji informuje o ograniczeniu. Dane pominięte przez serwer nie są
+uznawane za wysłane. Starszy klient bez parametru GET nie otrzymuje nowych tabel.
 
-### Historia zmian między urządzeniami — wymagania późniejszego etapu
+**Odbiór i walidacja:** backend zwraca pełny obraz nowych tabel właściciela
+niezależnie od kursora, z liczbą rekordów, łącznie ze znacznikami usunięcia.
+Pozostałe tabele zachowują dotychczasowy kursor. Klient sprawdza kompletność
+odpowiedzi i zapisuje finansową część atomowo. Walidacja na obu końcach składa
+najpierw cały obraz (istniejące dane i paczkę), więc dziecko może poprzedzać
+rodzica. Sprawdza schemat, identyfikatory, daty, bezpieczne całkowite kwoty,
+waluty, relacje, finansowanie, deterministyczny podział, zwroty, ciągłość i stany
+historii, także warianty konfliktów. Niepełny lub niespójny obraz nie jest
+zapisywany. Odczyt salda/bilansu odmawia zwrócenia wyniku po wykryciu niepełnej
+paczki oraz przy nierozstrzygniętym konflikcie finansowym. Identyczne migawki
+nie wywołują kolejnych zapisów i powiadomień. Zmiana lokalnych danych podczas
+pobierania nie może ich nadpisać.
 
-Samo obecne `historiaZmian` nie spełnia tego wymagania. F7.3 wdraża lokalne `rewizja` i `historiaWersji` w tym samym rekordzie co dane finansowe. Historia zawiera poprzednie wartości biznesowe, rodzaj zmiany i czas; nie zagnieżdża ponownie całej historii ani Blobów. Po przyszłym wdrożeniu kontraktu transport będzie musiał przenosić rekord i jego historię razem, również gdy urządzenie ominęło kilka kolejnych edycji.
+Czyste schematy i dotychczasowe obliczenia są współdzielone w `server/wspolne/`;
+publiczne ścieżki importów klienta pozostają dostępne. Serwer nie importuje
+Dexie, React ani kodu przeglądarki. `rootDir` i start `dist-server/main.js`
+pozostają bez zmian. Obowiązuje dotychczasowy limit POST 25 MiB; odrzucenie
+paczki pozostawia dane lokalne i oczekujące zmiany.
+
+**Konflikty:** serwer wymaga zgodnej wersji bazowej również dla tego samego
+`installationId` i nie pozwala zastąpić zatwierdzonej historii. Klient rozpoznaje
+kontynuację znanej historii po pominiętej odpowiedzi. Rozbieżne gałęzie wymagają
+wyboru pełnego rekordu; ręczne łączenie pól finansowych jest zabronione.
+Rozstrzygnięcie dopisuje rewizję `rozstrzygniecie` do historii wersji serwera,
+przechowując pełne `wariantyKonfliktu.lokalny` i `.zdalny` oraz `wybrano`.
+Odrzucona gałąź nie wpływa na saldo. Także wybór wersji zdalnej trafia do kolejki,
+żeby archiwum obu wariantów dotarło na inne urządzenia. Zwykła historia zmian
+jest odtwarzana z nowych wersji przy odbiorze, bez synchronizowania całej tabeli
+`historiaZmian`. Różne ID rzeczywistych zwrotów pozostają różnymi operacjami,
+niezależnie od czasu nadejścia i ewentualnej nadpłaty.
+
+**Dostęp:** sesja serwera wyznacza właściciela; pola rekordu i nagłówki klienta
+nie nadają własności. Właściciel musi być użytkownikiem aktywnego kontekstu.
+Edytor z grantem `finanse` nie odczytuje i nie zapisuje tych tabel. Reguła działa
+w serwerowej kontroli tabel, GET/POST, transporcie klienta, kolejce, serwisach
+i odczycie/rozstrzyganiu konfliktów. Zmiana profilu zatrzymuje operację przed
+zapisem do innej bazy lub usunięciem jej kolejki. Nie dodano nowego systemu kont.
+
+**Kolejność uruchomienia produkcyjnego (osobny etap):**
+
+1. Utworzyć kopię backendu i danych urządzeń. Wdrożyć zgodny backend F7.4
+   dotychczasową autoryzowaną ścieżką, z zachowaniem `dist-server/main.js`.
+2. Na syntetycznym profilu potwierdzić deklarację pięciu tabel, pełny GET,
+   walidację POST, izolację właścicieli i odmowę Edytorowi. Starsze klienty
+   mogą nadal działać obok nowego backendu.
+3. Dopiero potem aktualizować urządzenia istniejącym mechanizmem publikacji.
+   Wysyłka nowych tabel nastąpi tylko po pozytywnej negocjacji i przy świadomie
+   włączonej istniejącej synchronizacji. Wcześniej zaktualizowane urządzenie
+   zachowa oczekujące dane do chwili uzyskania zgodnego backendu.
+4. Potwierdzić na dwóch urządzeniach tego samego właściciela pierwszy upload,
+   powtórzenie po utracie odpowiedzi, historię i konflikt. Testy lokalne nie
+   zastępują tej próby ani testu Androida/Raspberry Pi.
+
+### Historia zmian między urządzeniami — kontrakt
+
+Samo obecne `historiaZmian` nie spełnia tego wymagania. F7.3 wdraża lokalne `rewizja` i `historiaWersji` w tym samym rekordzie co dane finansowe. Historia zawiera poprzednie wartości biznesowe, rodzaj zmiany i czas; nie zagnieżdża ponownie całej historii ani Blobów. F7.4 przenosi rekord i jego historię razem, również gdy urządzenie ominęło kilka kolejnych edycji.
 
 Serwis finansowy porównuje oczekiwaną rewizję z rekordem odczytanym w transakcji, dopisuje poprzednią wersję i nadaje nowszy `updatedAt`. Ponowienie identycznego zapisu nie tworzy kolejnej rewizji ani wpisu historii. Zapis obejmuje rekord, lokalną historię i istniejącą kolejkę w jednej transakcji. Ochrona musi obejmować także przywrócenie i usunięcie.
 

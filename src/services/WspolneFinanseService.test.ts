@@ -261,7 +261,7 @@ describe('offline, kopie i granice dostępu F7.3', () => {
     expect(siec).not.toHaveBeenCalled()
   })
 
-  it('nie dodaje ani nie wysyła nowych danych i znaczników usunięcia przez istniejący sync', async () => {
+  it('zachowuje dane i znaczniki usunięcia w kolejce, gdy provider nie potwierdza obsługi F7.4', async () => {
     await utworzKase('k', kasa, polecenie())
     await dodajOperacjeKasy('o', operacja(), polecenie())
     await usunOperacjeKasy('o', polecenie(1))
@@ -269,15 +269,16 @@ describe('offline, kopie i granice dostępu F7.3', () => {
     await dodajWydatekGrupowy('w', wydatek(), polecenie())
     await dodajZwrot('z', zwrot(), polecenie())
     for (const tabela of TABELE_FINANSOW_WSPOLNYCH) {
-      expect(czyTabelaSynchronizowana(tabela)).toBe(false)
-      expect(nazwyTabelSynchronizowanych).not.toContain(tabela)
+      expect(czyTabelaSynchronizowana(tabela)).toBe(true)
+      expect(nazwyTabelSynchronizowanych).toContain(tabela)
       for (const rekord of await baza.tabela(tabela).toArray()) await dodajDoKolejkiSynchronizacji(tabela, rekord)
     }
-    expect(await pobierzKolejkeSynchronizacji()).toEqual([])
+    expect(await pobierzKolejkeSynchronizacji()).toHaveLength(5)
     const zdalne = new RepozytoriumZdalneInMemory()
     const wyslij = vi.spyOn(zdalne, 'wyslijZmiany')
     await new SyncEngine({ czyOnline: () => true }).synchronizuj(zdalne)
     expect(wyslij).not.toHaveBeenCalled()
+    expect(await pobierzKolejkeSynchronizacji()).toHaveLength(5)
   })
 
   it('eksportuje i przywraca rewizje, historię i idempotencję, a starsza kopia nie usuwa danych', async () => {
