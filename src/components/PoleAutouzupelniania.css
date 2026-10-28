@@ -1,0 +1,8 @@
+.pole-autouzupelniania { min-width: 0; }
+.pole-autouzupelniania__wiersz { display: flex; align-items: center; gap: 4px; }
+.pole-autouzupelniania__wiersz input { min-width: 0; flex: 1; }
+.pole-autouzupelniania__wiersz button { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.pole-autouzupelniania__lista { display: flex; flex-direction: column; min-width: 0; max-height: min(15rem, 35dvh); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; padding: 4px; border: 1px solid var(--obramowanie-mocne); border-radius: var(--promien-pola); background: var(--panel); }
+.pole-autouzupelniania__lista [role="option"] { flex-shrink: 0; min-height: 44px; padding: 8px; text-align: start; overflow-wrap: anywhere; border: 1px solid transparent; border-radius: var(--promien-pola); background: var(--panel); color: var(--tekst); font: inherit; cursor: pointer; }
+.pole-autouzupelniania__lista [aria-selected="true"], .pole-autouzupelniania__lista [role="option"]:hover { background: var(--akcent-jasny); border-color: var(--akcent); }
+.pole-autouzupelniania :is(input, button):focus-visible { outline: 2px solid var(--akcent); outline-offset: 1px; }

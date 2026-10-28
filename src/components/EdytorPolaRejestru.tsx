@@ -6,6 +6,13 @@ import { PoleKwoty } from './PoleKwoty'
 import { normalizujKwote, odczytajKwoteFormularza } from '../domain/kwoty'
 import { PoleLiczbowe } from './PoleLiczbowe'
 import { bladLiczby, czyJednostkaWEtykiecie, liczbaDoModelu, liczbaDoTekstu } from '../domain/liczby'
+import { PoleAutouzupelniania } from './PoleAutouzupelniania'
+
+type PodpowiedziPola = readonly string[] | ((formularz: Record<string, string>) => readonly string[])
+
+function formularzDomenowy(formularz: Record<string, string>) {
+  return Object.fromEntries(Object.entries(formularz).map(([klucz, wartosc]) => [klucz.startsWith('system:') ? klucz.slice(7) : klucz, wartosc]))
+}
 
 export interface DefinicjaPola {
   klucz: string
@@ -21,6 +28,8 @@ export interface DefinicjaPola {
   opcje?: { wartosc: string; etykieta: string }[]
   widoczne?: (formularz: Record<string, string>) => boolean
   domyslnaWartosc?: string
+  podpowiedzi?: PodpowiedziPola
+  opisPodpowiedzi?: string
 }
 
 export interface PoleDoEdycjiRejestru {
@@ -34,6 +43,8 @@ export interface PoleDoEdycjiRejestru {
   typHtml?: 'email'
   widoczne?: (formularz: Record<string, string>) => boolean
   domyslnaWartosc?: string
+  podpowiedzi?: PodpowiedziPola
+  opisPodpowiedzi?: string
 }
 
 const typyStarychPol: Record<NonNullable<DefinicjaPola['typ']>, TypPolaRejestru> = {
@@ -71,10 +82,10 @@ export function normalizujStarePolaRejestru(pola: DefinicjaPola[]): PoleDoEdycji
     krok: pole.krok ?? (pole.typ === 'number' ? 1 : undefined),
     jednostka: pole.jednostka,
     typHtml: pole.typ === 'email' ? 'email' : undefined,
-    widoczne: pole.widoczne ? (formularz) => pole.widoczne!(Object.fromEntries(
-      Object.entries(formularz).map(([klucz, wartosc]) => [klucz.startsWith('system:') ? klucz.slice(7) : klucz, wartosc]),
-    )) : undefined,
+    widoczne: pole.widoczne ? (formularz) => pole.widoczne!(formularzDomenowy(formularz)) : undefined,
     domyslnaWartosc: pole.domyslnaWartosc,
+    podpowiedzi: typeof pole.podpowiedzi === 'function' ? (formularz) => (pole.podpowiedzi as (formularz: Record<string, string>) => readonly string[])(formularzDomenowy(formularz)) : pole.podpowiedzi,
+    opisPodpowiedzi: pole.opisPodpowiedzi,
   }))
 }
 
@@ -127,13 +138,17 @@ interface Wlasciwosci {
   zmien: (wartosc: string) => void
   waluta?: string
   zmienWalute?: (waluta: string) => void
+  formularz?: Record<string, string>
 }
 
-export function EdytorPolaRejestru({ pole, wartosc, zmien, waluta, zmienWalute }: Wlasciwosci) {
+export function EdytorPolaRejestru({ pole, wartosc, zmien, waluta, zmienWalute, formularz = {} }: Wlasciwosci) {
   const { definicja } = pole
   const wspolne = { required: pole.wymagane, placeholder: pole.podpowiedz }
   const tylkoOdczyt = definicja.zrodlo === 'systemowe' && definicja.trybObslugi === 'tylko_odczyt'
   const jednostka = pole.jednostka ?? definicja.jednostka
+
+  if (definicja.typ === 'tekst' && !tylkoOdczyt && pole.podpowiedzi) return <PoleAutouzupelniania etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien}
+    propozycje={typeof pole.podpowiedzi === 'function' ? pole.podpowiedzi(formularz) : pole.podpowiedzi} wymagane={pole.wymagane} podpowiedz={pole.podpowiedz} opis={pole.opisPodpowiedzi} />
 
   if (definicja.typ === 'data' && !tylkoOdczyt) return <PoleDaty etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={typeof pole.max === 'string' ? pole.max : undefined} krok={pole.krok} />
   if (definicja.typ === 'czas' && !tylkoOdczyt) return <PoleCzasu etykieta={definicja.etykieta} wartosc={wartosc} zmien={zmien} wymagane={pole.wymagane} min={typeof pole.min === 'string' ? pole.min : undefined} max={typeof pole.max === 'string' ? pole.max : undefined} krok={pole.krok} />

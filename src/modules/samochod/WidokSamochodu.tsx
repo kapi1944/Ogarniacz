@@ -7,6 +7,7 @@ import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { zapiszPowiazanePrzypomnienie } from '../../services/PrzypomnieniaService'
 import { statystykaPaliwa } from '../../services/MotoryzacjaService'
 import { przygotujWydatekZeZrodla } from '../../services/FinanseService'
+import { podpowiedzMarki, podpowiedzModele } from './katalogPojazdow'
 
 export function WidokSamochodu() {
   const [parametry] = useSearchParams()
@@ -29,8 +30,8 @@ export function WidokSamochodu() {
     wybranyElementId={parametry.get('element') ?? undefined}
     pola={[
       { klucz: 'nazwa', etykieta: 'Pojazd', wymagane: true },
-      { klucz: 'marka', etykieta: 'Marka' },
-      { klucz: 'model', etykieta: 'Model' },
+      { klucz: 'marka', etykieta: 'Marka', podpowiedzi: podpowiedzMarki(pojazdy), opisPodpowiedzi: 'Niepełny katalog offline i nazwy zapisanych pojazdów. Możesz wpisać własną markę.' },
+      { klucz: 'model', etykieta: 'Model', podpowiedzi: (formularz) => podpowiedzModele(formularz.marka ?? '', pojazdy), opisPodpowiedzi: 'Podpowiedzi zależą od marki. Zmiana marki zachowuje wpisany model. Możesz go edytować lub wybrać inny.' },
       { klucz: 'rok', etykieta: 'Rok', typ: 'number', min: 1886 },
       { klucz: 'numerRejestracyjny', etykieta: 'Numer rejestracyjny' },
       { klucz: 'vin', etykieta: 'VIN' },

@@ -134,7 +134,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
           <form className="formularz" onSubmit={zapisz}>
             {blad && <Komunikat typ="blad">{blad}</Komunikat>}
             {polaDoEdycji.filter((pole) => pole.widoczne?.(formularz) ?? true).map((pole) => (
-              <EdytorPolaRejestru key={pole.definicja.id} pole={pole} wartosc={formularz[pole.definicja.id] ?? ''} zmien={(wartosc) => ustawFormularz({ ...formularz, [pole.definicja.id]: wartosc })}
+              <EdytorPolaRejestru key={pole.definicja.id} pole={pole} formularz={formularz} wartosc={formularz[pole.definicja.id] ?? ''} zmien={(wartosc) => ustawFormularz({ ...formularz, [pole.definicja.id]: wartosc })}
                 waluta={formularz[`${pole.definicja.id}:waluta`]} zmienWalute={pole.definicja.kluczWaluty ? (waluta) => ustawFormularz({ ...formularz, [`${pole.definicja.id}:waluta`]: waluta }) : undefined} />
             ))}
             <div className="akcje-formularza pole--pelne">
