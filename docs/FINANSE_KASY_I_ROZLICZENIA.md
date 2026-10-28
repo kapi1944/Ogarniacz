@@ -55,6 +55,38 @@ Nazwy są propozycją, nie poleceniem tworzenia pustych plików. Nie powstaje un
 
 ## 3. Proponowany kontrakt danych
 
+### Zrealizowany zakres F7.1 — sam silnik offline
+
+`src/domain/finanseWspolne.ts` definiuje wyłącznie wejścia i wyniki obliczeń,
+a `src/services/ObliczeniaFinansowWspolnych.ts` udostępnia czyste funkcje:
+`kwotaNaGrosze`, `groszeNaKwote`, `obliczPodzialKosztu`,
+`obliczWydatekWspolny` i `obliczRozliczenieWspolne`.
+Nie utworzono encji trwałych, tabel, zapisu ani interfejsu.
+
+- `kwotaGrosze` to bezpieczna całkowita liczba najmniejszych jednostek waluty;
+  stare `kwota` nadal oznacza jednostki główne. Konwersja tekstu używa
+  normalizatora F3 i wewnętrznego `BigInt`, bez mnożenia liczb zmiennoprzecinkowych.
+- Silnik obsługuje obecną listę `WALUTY` z F3 (wszystkie mają dwie cyfry ułamka),
+  zamiast osobnej listy PLN/EUR proponowanej niżej. Jedno wywołanie rozliczenia
+  dotyczy jednej waluty; inna waluta operacji powoduje błąd.
+- Podział wskazuje osoby obciążone konkretnym wydatkiem. Pominięcie ID wyklucza
+  osobę z kosztu, ale nie blokuje finansowania. Dodanie osoby do grupy nie zmienia
+  list podziału wcześniejszych zakupów. Procenty są całkowitymi setnymi procenta.
+- Podział stosuje największe reszty z remisami według kodów znaków ID.
+  Bilanse uwzględniają osobno finansowanie, koszt i rzeczywiste zwroty.
+  Propozycje łączą każdorazowo największy pozostały dług z największą należnością
+  (remisy według ID), bez obietnicy globalnego minimum liczby przelewów.
+- Rozliczenie przyjmuje pełny zestaw bieżących, nieusuniętych wydatków i zwrotów
+  jednej grupy. Powtórzone ID w obrębie każdej listy są błędem, a nie kolejną
+  operacją. Idempotencja zapisu i filtrowanie usuniętych danych należą do późniejszej
+  warstwy zapisu, której F7.1 nie implementuje.
+- Zwroty są jawnym wejściem, propozycje jedynie wynikiem. Częściowy zwrot
+  zmniejsza dług, nadpłata lub zmiana/usunięcie zakupu może odwrócić należność.
+  Silnik odzwierciedla także faktyczny przelew w złym kierunku; przyszły formularz
+  powinien ostrzegać przed nadpłatą. Zwroty nie zwiększają sumy wydatków.
+- Wszystkie wyniki i sumy muszą mieścić się w bezpiecznym zakresie całkowitym.
+  Silnik nie modyfikuje wejść i nie wyznacza trwałego statusu rozliczenia.
+
 Wszystkie nowe encje zachowują istniejące `EncjaBazowa`, UUID i metadane dat. Dziedziczone nazwy `createdAt` i `updatedAt` pozostają zgodne z repozytorium; nowe pola mają nazwy polskie. Własność wynika z bazy profilu oraz zakresu sesji na serwerze. Nie dodajemy wymaganego identyfikatora konta do lokalnych rekordów bez konta.
 
 | Tabela | Najważniejsze nowe pola |
