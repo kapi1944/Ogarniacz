@@ -1,5 +1,5 @@
 import { baza, nazwyTabel } from '../data/BazaOgarniacza'
-import { czyBiezacyDostep, zakresDanychZdrowotnych } from './UprawnieniaService'
+import { czyBiezacyDostep, zakresDanychZdrowotnych, czyTabelaFinansowWspolnych, czyDostepFinansowWspolnych } from './UprawnieniaService'
 import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 import { noweId } from '../domain/fabryki'
 import type { EncjaBazowa, ModulHistorii, NazwaTabeli, OperacjaHistorii, WpisHistoriiZmian } from '../domain/typy'
@@ -16,6 +16,11 @@ const konfiguracjaHistorii: Partial<Record<NazwaTabeli, {
   platnosciRachunkow: { modul: 'finanse', pola: ['rachunekId', 'kwota', 'zaplaconoAt', 'usunietoAt'] },
   wydatki: { modul: 'finanse', pola: ['kwota', 'data', 'kategoria', 'opis', 'usunietoAt'] },
   budzety: { modul: 'finanse', pola: ['nazwa', 'kategoria', 'okres', 'limit', 'usunietoAt'] },
+  wspolneKasy: { modul: 'finanse', pola: ['nazwa', 'opis', 'ikona', 'kolor', 'waluta', 'saldoPoczatkoweGrosze', 'status', 'usunietoAt', 'rewizja'] },
+  operacjeKas: { modul: 'finanse', pola: ['kasaId', 'typ', 'kwotaGrosze', 'waluta', 'dataOperacji', 'kategoria', 'zrodlo', 'opis', 'kaucja', 'usunietoAt', 'rewizja'] },
+  rozliczenia: { modul: 'finanse', pola: ['nazwa', 'opis', 'waluta', 'uczestnicy', 'domyslnyPodzial', 'etap', 'dataRozpoczecia', 'dataZakonczenia', 'zarchiwizowanoAt', 'usunietoAt', 'rewizja'] },
+  wydatkiGrupowe: { modul: 'finanse', pola: ['rozliczenieId', 'nazwa', 'kwotaGrosze', 'waluta', 'dataOperacji', 'finansujacy', 'metodaPodzialu', 'parametryPodzialu', 'podzialKosztu', 'opis', 'usunietoAt', 'rewizja'] },
+  zwrotyRozliczen: { modul: 'finanse', pola: ['rozliczenieId', 'odUczestnikaId', 'doUczestnikaId', 'kwotaGrosze', 'waluta', 'dataOperacji', 'opis', 'usunietoAt', 'rewizja'] },
   definicjeWlasnychPolRejestru: { modul: 'rejestr', pola: ['rejestrId', 'etykieta', 'typ', 'opcje', 'rolaSemantyczna', 'aktywne', 'revision', 'usunietoAt'] },
   pojazdy: { modul: 'samochod', pola: ['nazwa', 'marka', 'model', 'rok', 'numerRejestracyjny', 'vin', 'przebieg', 'historiaPrzebiegu', 'historiaSerwisowa', 'ocDo', 'ubezpieczyciel', 'numerPolisy', 'przegladDo', 'wymianaOlejuDo', 'wymianaOlejuPrzebieg', 'planowanySerwisData', 'planowanySerwisGodzina', 'usunietoAt'] },
 }
@@ -98,6 +103,7 @@ export async function pobierzNajnowszaHistorie(limit = 50): Promise<WpisHistorii
   const widoczne = await Promise.all(wpisy.map(async (wpis) => {
     if (!nazwyTabel.includes(wpis.typEncji as NazwaTabeli)) return undefined
     const tabela = wpis.typEncji as NazwaTabeli
+    if (czyTabelaFinansowWspolnych(tabela) && !czyDostepFinansowWspolnych('odczyt')) return undefined
     const rekord = await baza.table(wpis.typEncji).get(wpis.encjaId) as EncjaBazowa | undefined
     if (czyPrywatnaPsychoterapia(tabela, rekord)) return undefined
     const zakres = zakresDanychZdrowotnych(tabela, rekord)

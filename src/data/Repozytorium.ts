@@ -8,7 +8,7 @@ import { czyHistoriaWlaczona, zbudujWpisHistorii } from '../services/HistoriaZmi
 import { powiadomOZmianieDanych } from './ZdarzeniaDanych'
 import { dodajDoKolejkiSynchronizacji, tabelaKolejki, uzgodnijPrywatnoscDokumentow } from './KolejkaSynchronizacji'
 import { czyPrywatnaPsychoterapia, schematSzczegolowPsychoterapii } from '../domain/psychoterapia'
-import { czyBiezacyDostep, zakresDanychZdrowotnych } from '../services/UprawnieniaService'
+import { czyBiezacyDostep, zakresDanychZdrowotnych, czyTabelaFinansowWspolnych, czyDostepFinansowWspolnych } from '../services/UprawnieniaService'
 
 const modulyZrodelPrzypomnien: Partial<Record<NazwaTabeli, NazwaModulu>> = {
   wizyty: 'wizyty',
@@ -122,6 +122,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   }
 
   private czyDostep(encja: T | undefined, operacja: 'odczyt' | 'edycja'): boolean {
+    if (this.nazwa === 'historiaZmian' && encja && 'typEncji' in encja && czyTabelaFinansowWspolnych(String(encja.typEncji))) return czyDostepFinansowWspolnych(operacja)
     if (this.nazwa === 'dokumenty' && !czyBiezacyDostep('dokumenty', operacja)) return false
     const zakres = zakresDanychZdrowotnych(this.nazwa, encja)
     if (!zakres) return true
@@ -352,6 +353,6 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
 }
 
 export function pobierzRepozytorium<K extends NazwaTabeli>(nazwa: K, dostepDoDanychPrywatnych?: (operacja: 'odczyt' | 'edycja') => boolean): Repozytorium<MapaTabel[K]> {
-  if (['wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen'].includes(nazwa)) throw new Error('Repozytorium wspólnych finansów nie jest jeszcze dostępne.')
+  if (czyTabelaFinansowWspolnych(nazwa)) throw new Error('Wspólne finanse wymagają dedykowanego serwisu finansowego.')
   return new RepozytoriumDexie<MapaTabel[K]>(nazwa, dostepDoDanychPrywatnych)
 }

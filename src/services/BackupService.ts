@@ -1,5 +1,6 @@
 import { schematWspolnejKasy, schematOperacjiKasy, schematRozliczenia, schematWydatkuGrupowego, schematZwrotuRozliczenia } from '../domain/modeleFinansowWspolnych'
-import { sprawdzBiezacyDostep } from './UprawnieniaService'
+import { sprawdzBiezacyDostep, sprawdzDostepFinansowWspolnych, czyTabelaFinansowWspolnych } from './UprawnieniaService'
+import { walidujSekcjeFinansowe } from './WalidacjaKopiiFinansowWspolnych'
 import { pobierzAktywnyProfil, pobierzSygnalProfilu } from '../data/ProfileLokalne'
 import { z } from 'zod'
 import { schematWaznejInformacjiZdrowotnej } from '../domain/historiaZdrowia'
@@ -520,13 +521,16 @@ async function obliczSha256(tresc: string): Promise<string> {
 }
 
 function zrodloRepozytoriow(nazwa: NazwaSekcjiBackupu, tabele: NazwaTabeli[]): DefinicjaSekcji {
+  const odczytaj = async () => Object.fromEntries(
+    await Promise.all(tabele.map(async (tabela) => [tabela, await baza.tabela(tabela).toArray()])),
+  ) as DaneSekcji
   return {
     nazwa,
     wersjaSchematu: 1,
     tabele,
-    pobierz: async () => Object.fromEntries(
-      await Promise.all(tabele.map(async (tabela) => [tabela, await baza.tabela(tabela).toArray()])),
-    ) as DaneSekcji,
+    pobierz: () => tabele.some(czyTabelaFinansowWspolnych)
+      ? baza.transaction('r', tabele.map((tabela) => baza.table(tabela)), odczytaj)
+      : odczytaj(),
   }
 }
 
@@ -602,6 +606,13 @@ export async function checksumJestPoprawny(backup: OgarniaczBackup): Promise<boo
   return checksum === await obliczChecksum({ manifest, payload: backup.payload })
 }
 
+function czySekcjaZawieraWspolneFinanse(dane: DaneSekcji): boolean {
+  return Object.entries(dane).some(([tabela, rekordy]) =>
+    czyTabelaFinansowWspolnych(tabela) && rekordy.length > 0
+    || tabela === 'historiaZmian' && rekordy.some((rekord) => czyTabelaFinansowWspolnych(String(rekord.typEncji))),
+  )
+}
+
 export async function utworzBackup(
   wybraneSekcje: readonly NazwaSekcjiBackupu[] = PODSTAWOWE_SEKCJE_BACKUPU,
   teraz: () => string = () => new Date().toISOString(),
@@ -622,6 +633,7 @@ export async function utworzBackup(
     const zrodlo = definicjeSekcji.find((element) => element.nazwa === nazwa)!
     try {
       const dane = await przygotujWartoscDoTransportu(await zrodlo.pobierz()) as DaneSekcji
+      if (czySekcjaZawieraWspolneFinanse(dane)) sprawdzDostepFinansowWspolnych('odczyt')
       payload[nazwa] = dane
       recordCounts[nazwa] = Object.values(dane).reduce((suma, rekordy) => suma + rekordy.length, 0)
       schemaVersions[nazwa] = zrodlo.wersjaSchematu
@@ -645,6 +657,7 @@ export async function utworzBackup(
   const checksum = await obliczChecksum({ manifest: manifestBezChecksum, payload })
   if (sygnal.aborted || baza !== bazaPoczatkowa || pobierzAktywnyProfil()?.id !== profilPoczatkowy?.id) throw new BladBackupu('Profil zmienił się podczas eksportu.', 'KONTEKST_PROFILU')
   sprawdzBiezacyDostep('ustawienia', 'odczyt')
+  if (Object.values(payload).some((sekcja) => czySekcjaZawieraWspolneFinanse(sekcja ?? {}))) sprawdzDostepFinansowWspolnych('odczyt')
   return { manifest: { ...manifestBezChecksum, checksum }, payload }
 }
 
@@ -775,6 +788,8 @@ function walidujCaloscBackupu(backup: SurowyBackup): OgarniaczBackup {
     throw new BladBackupu('Sekcje payloadu nie zgadzają się z manifestem.', 'STRUKTURA_MANIFESTU')
   }
   walidujSekcje(backup, sekcje)
+  try { walidujSekcjeFinansowe(backup.payload) }
+  catch (blad) { throw new BladBackupu('Niepoprawne relacje, kwoty lub historia wspólnych finansów.', 'MODEL_DANYCH', blad) }
   return backup as OgarniaczBackup
 }
 
@@ -929,6 +944,11 @@ export async function przywrocBackup(
   sprawdzKompatybilnosc(backup as unknown as SurowyBackup)
   walidujCaloscBackupu(backup as unknown as SurowyBackup)
   const wybraneSekcje = sprawdzWyborSekcji(backup, sekcje)
+  const sprawdzFinanse = () => {
+    const historia = backup.payload.historia?.historiaZmian ?? []
+    if (wybraneSekcje.some((sekcja) => sekcja === 'wspolneKasy' || sekcja === 'rozliczenia') || wybraneSekcje.includes('historia') && historia.some((rekord) => czyTabelaFinansowWspolnych(String(rekord.typEncji)))) sprawdzDostepFinansowWspolnych('edycja')
+  }
+  sprawdzFinanse()
   const utworzKopie = opcje.utworzKopiePrzedPrzywracaniem
     ?? (() => utworzBackup(undefined, () => new Date().toISOString(), 'before-restore'))
   const backupPrzedPrzywracaniem = await utworzKopie()
@@ -968,6 +988,7 @@ export async function przywrocBackup(
   await baza.transaction('rw', tabele.map((tabela) => baza.table(tabela)), async () => {
     sprawdzProfil()
     sprawdzBiezacyDostep('ustawienia', 'edycja')
+    sprawdzFinanse()
     for (const tabela of tabele) {
       const repozytorium = baza.table(tabela)
       const prywatneUstawienia = tabela === 'ustawienia' ? (await baza.tabela('ustawienia').get('glowne'))?.samopoczucie : undefined

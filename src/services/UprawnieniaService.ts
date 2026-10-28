@@ -1,5 +1,26 @@
 import { czyKontoZgodneZDanymiLokalnymi, pobierzKontoOffline } from './KontaService'
 import type { EncjaBazowa, NazwaModulu, NazwaTabeli, Uprawnienie } from '../domain/typy'
+import { baza } from '../data/BazaOgarniacza'
+import { pobierzAktywnyProfil } from '../data/ProfileLokalne'
+
+export const TABELE_FINANSOW_WSPOLNYCH = ['wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen'] as const
+
+export function czyDostepFinansowWspolnych(operacja: 'odczyt' | 'edycja'): boolean {
+  if (!czyKontoZgodneZDanymiLokalnymi()) return false
+  const profil = pobierzAktywnyProfil()
+  const konto = pobierzKontoOffline()
+  if (konto && (!profil || konto.rola !== 'wlasciciel' || konto.uzytkownikId !== konto.wlascicielId || konto.statusKonta && konto.statusKonta !== 'aktywne' || konto.wymaganaZmianaHasla)) return false
+  if (profil ? baza.name !== profil.nazwaBazy : baza.name.startsWith('ogarniacz-profil-')) return false
+  return czyBiezacyDostep('finanse', operacja) && czyBiezacyDostep('ustawienia', operacja)
+}
+
+export function sprawdzDostepFinansowWspolnych(operacja: 'odczyt' | 'edycja'): void {
+  if (!czyDostepFinansowWspolnych(operacja)) throw new Error('Brak dostępu właściciela do wspólnych finansów aktywnego profilu.')
+}
+
+export function czyTabelaFinansowWspolnych(tabela: string): boolean {
+  return (TABELE_FINANSOW_WSPOLNYCH as readonly string[]).includes(tabela)
+}
 
 export const PRYWATNE_SEKCJE_ZDROWIA = { samopoczucie: 'Dziennik psychiatryczny i samopoczucie', psychoterapia: 'Notatki i sesje psychoterapii', dokumentacja: 'Dokumentacja medyczna', badania: 'Wyniki badań', wazne_informacje: 'Ważne informacje zdrowotne', nagrania: 'Nagrania i transkrypcje (jeszcze niedostępne)' } as const
 

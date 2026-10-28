@@ -103,9 +103,82 @@ Pozycja finansowania i pozycja wynikowego podziału mają `uczestnikId` i `kwota
 
 `kaucja` zachowuje pozycje z nazwą opakowania, liczbą sztuk i stawką w groszach, sumę obliczoną oraz ewentualną kwotę ręcznie zatwierdzoną i uzasadnienie różnicy. Wpływem jest wyłącznie `kwotaGrosze` operacji. Nie zapisujemy dodatkowego przychodu dla obliczonej sumy. Ustawienia ostatniego źródła i stawek są lokalne dla konkretnej kasy/profilu, nie globalne dla wszystkich kont.
 
-### Historia zmian między urządzeniami
+### Zrealizowany zakres F7.3 — lokalny zapis
 
-Samo obecne `historiaZmian` nie spełnia tego wymagania. Proponowane minimalne rozszerzenie lokalne dla nowych encji to `rewizja` i `historiaWersji` przechowywane w tym samym rekordzie co dane finansowe. Historia zawiera poprzednie wartości biznesowe, rodzaj zmiany i czas; nie zagnieżdża ponownie całej historii ani Blobów. Dzięki temu rekord i jego historia przechodzą przez istniejący transport razem, również gdy urządzenie ominęło kilka kolejnych edycji.
+`WspolneKasyService` obsługuje tworzenie, odczyt, ustawienia i archiwizację kas
+oraz wpływy, wydatki, korekty z uzasadnieniem, edycję, miękkie usunięcie i przywrócenie
+operacji. Saldo jest wyliczane z operacji przy odczycie; może być ujemne.
+Waluty nie można zmienić po pierwszej operacji, również usuniętej.
+
+`RozliczeniaService` obsługuje grupy, uczestników bez konta, zmianę nazwy
+i wyłączenie uczestnika, wielu finansujących, cztery podziały F7.1, edycję,
+usunięcie i przywrócenie wydatku oraz rzeczywistych zwrotów. Nie udostępnia
+usuwania uczestników. Wyłączenie blokuje nowe przypisania kosztu/finansowania,
+ale zachowuje istniejące przypisania w edycji historii. Dodanie osoby nie zmienia
+historycznych podziałów. Zwroty pozostają zapisane po zmianie/usunięciu wydatku,
+więc bilans może wskazać odwrotną należność. Nadpłata jest dopuszczalna;
+ostrzeżenie w formularzu należy do przyszłego etapu interfejsu.
+
+Każdy zapis otrzymuje od wywołującego stabilne ID rekordu oraz
+`{ idZapisu, oczekiwanaRewizja }`. Wywołujący losuje UUID `idZapisu` **przed**
+pierwszą próbą i zachowuje oba ID oraz treść przy ponowieniu po błędzie.
+Utworzenie oczekuje rewizji 0; dalsze zmiany oczekują rewizji odczytanego rekordu.
+Historia przechowuje kanoniczną treść polecenia, jego ID oraz stany biznesowe
+`przed`/`po`. Ponowienie identycznego polecenia zwraca bieżący rekord bez zapisu,
+także gdy później wykonano inne zmiany. Nie odtwarza wtedy dawnego stanu.
+Inna treść tego samego polecenia, zajęte ID rekordu i nieaktualna rewizja
+powodują `KonfliktZapisuFinansowego`. Nowe polecenie bez zmiany wartości nie
+zwiększa rewizji; po późniejszej zmianie jego starej rewizji nie można użyć.
+
+Transakcja Dexie obejmuje pięć tabel F7 i istniejącą `historiaZmian`, dzięki
+czemu walidacja powiązań i pełnego bilansu jest spójna także przy równoczesnych
+zapisach. Każda rzeczywista zmiana dopisuje jedną rewizję. `historiaWersji` nie
+zagnieżdża historii ani metadanych uwierzytelniania. Globalny podgląd nadal
+korzysta z `HistoriaZmianService`; przywrócenie ma tam zgodny typ `aktualizacja`,
+a w historii rekordu jawny typ `przywrocenie`. Stary rekord F7.2A bez rewizji
+otrzymuje przy pierwszej zmianie rewizję 1 i zapis poprzednich wartości.
+
+Dostęp wymaga istniejącego kontekstu właściciela i zgodności bazy z aktywnym
+profilem. Konto musi używać bazy profilu; nie zapisujemy nowych finansów konta
+w bazie globalnej. Lokalna praca bez konta korzysta z dotychczasowej kontroli
+dostępu właściciela. Edytor (także podgląd lokalny z grantem Finansów) nie ma
+dostępu do serwisów, historii finansowej ani jej eksportu/przywracania. Ogólny
+CRUD pięciu tabel pozostaje zablokowany. Zmiana/zamknięcie profilu podczas
+operacji przerywa transakcję. Nie powstaje drugi system kont.
+
+Backup zachowuje format 3 i schemat Dexie 20. Odtwarzanie waliduje kwoty,
+waluty, relacje, finansowanie, podziały i ciągłość historii, także dla usuniętych
+rekordów. Starsze sekcje bez danych F7 nie czyszczą nowych tabel.
+
+#### Pierwsza synchronizacja — wymaganie dla późniejszego etapu
+
+W F7.3 wszystkie pięć tabel **nadal jest lokalnych i niesynchronizowanych**.
+Serwisy nie dodają ich do kolejki i nie wywołują API. Nie ma nowych ekranów.
+Historia w rekordach przygotowuje trwałość lokalną; nie potwierdza gotowości
+kontraktu sieciowego ani rozstrzygania konfliktów między urządzeniami.
+
+Przed przyszłym uruchomieniem wysyłki należy najpierw wdrożyć zgodny kontrakt
+backendu, walidację i ochronę właściciela. Następnie w jednej transakcji
+**aktywnego profilu** obejmującej pięć tabel, obecną kolejkę i
+`stanSynchronizacji` trzeba przeskanować **wszystkie** rekordy, również
+`usunietoAt`, bez filtra `ostatniSync` i bez zmiany ID/rewizji/historii. Dla
+każdego `[tabela, rekordId]` należy idempotentnie przygotować bieżący pełny
+rekord lub znacznik usunięcia, zachowując istniejące oczekujące zmiany.
+Osobny wersjonowany znacznik przygotowania F7 w istniejącym stanie profilu
+wolno zatwierdzić dopiero razem z kompletną kolejką. Błąd wycofuje kolejkę
+i znacznik; ponowienie musi być bezpieczne. Kolejne lokalne zapisy muszą odtąd
+aktualizować tę kolejkę w tej samej transakcji co rekord i historia.
+
+Samo usunięcie tabel z `TABELE_LOKALNE` lub zresetowanie `kolejkaZmigrowana`
+nie wystarczy: obecna migracja kolejki filtruje po `ostatniSync` i mogłaby
+pominąć dawne dane F7. Import kopii F7 po przygotowaniu musi ponownie objąć
+importowane rekordy kolejką albo unieważnić znacznik przygotowania. Dopiero po
+takiej implementacji i jej testach można dopuścić wysyłkę. F7.3 dokumentuje
+ten mechanizm; nie implementuje ani nie aktywuje go sieciowo.
+
+### Historia zmian między urządzeniami — wymagania późniejszego etapu
+
+Samo obecne `historiaZmian` nie spełnia tego wymagania. F7.3 wdraża lokalne `rewizja` i `historiaWersji` w tym samym rekordzie co dane finansowe. Historia zawiera poprzednie wartości biznesowe, rodzaj zmiany i czas; nie zagnieżdża ponownie całej historii ani Blobów. Po przyszłym wdrożeniu kontraktu transport będzie musiał przenosić rekord i jego historię razem, również gdy urządzenie ominęło kilka kolejnych edycji.
 
 Serwis finansowy porównuje oczekiwaną rewizję z rekordem odczytanym w transakcji, dopisuje poprzednią wersję i nadaje nowszy `updatedAt`. Ponowienie identycznego zapisu nie tworzy kolejnej rewizji ani wpisu historii. Zapis obejmuje rekord, lokalną historię i istniejącą kolejkę w jednej transakcji. Ochrona musi obejmować także przywrócenie i usunięcie.
 

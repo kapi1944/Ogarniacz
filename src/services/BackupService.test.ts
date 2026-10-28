@@ -914,7 +914,7 @@ it('zachowuje wspólne finanse w kopii i podczas odtwarzania starszej kopii', as
   const metadane = { createdAt: STALA_DATA, updatedAt: STALA_DATA }
   const kasa = { ...metadane, id: 'kasa', nazwa: 'Kasa', opis: '', ikona: '', kolor: '', waluta: 'PLN', saldoPoczatkoweGrosze: 0, status: 'aktywna' as const }
   const operacja = { ...metadane, id: 'operacja', kasaId: 'kasa', typ: 'wplyw' as const, kwotaGrosze: 100, waluta: 'PLN', dataOperacji: '2026-10-28', kategoria: '', zrodlo: '', opis: '' }
-  const rozliczenie = { ...metadane, id: 'grupa', nazwa: 'Grupa', opis: '', waluta: 'PLN', uczestnicy: [{ id: 'osoba', nazwa: 'Osoba' }], domyslnyPodzial: 'po_rowno' as const, etap: 'aktywne' as const, dataRozpoczecia: '2026-10-28' }
+  const rozliczenie = { ...metadane, id: 'grupa', nazwa: 'Grupa', opis: '', waluta: 'PLN', uczestnicy: [{ id: 'osoba', nazwa: 'Osoba' }, { id: 'inna', nazwa: 'Inna osoba' }], domyslnyPodzial: 'po_rowno' as const, etap: 'aktywne' as const, dataRozpoczecia: '2026-10-28' }
   const wydatek = { ...metadane, id: 'zakup', rozliczenieId: 'grupa', nazwa: 'Zakup', kwotaGrosze: 100, waluta: 'PLN', dataOperacji: '2026-10-28', finansujacy: [{ uczestnikId: 'osoba', kwotaGrosze: 100 }], metodaPodzialu: 'po_rowno' as const, parametryPodzialu: { metoda: 'po_rowno' as const, uczestnicyIds: ['osoba'] }, podzialKosztu: [{ uczestnikId: 'osoba', kwotaGrosze: 100 }], opis: '' }
   const zwrot = { ...metadane, id: 'zwrot', rozliczenieId: 'grupa', odUczestnikaId: 'osoba', doUczestnikaId: 'inna', kwotaGrosze: 1, waluta: 'PLN', dataOperacji: '2026-10-28', opis: '' }
   await baza.tabela('wspolneKasy').put(kasa)

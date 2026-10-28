@@ -10,7 +10,13 @@ const podzial = z.discriminatedUnion('metoda', [
   z.object({ metoda: z.literal('procentowo'), pozycje: z.array(z.object({ uczestnikId: identyfikator, procentSetne: kwota.nonnegative() })) }),
   z.object({ metoda: z.literal('udzialy'), pozycje: z.array(z.object({ uczestnikId: identyfikator, udzialy: kwota.nonnegative() })) }),
 ])
-const encja = z.object({ id: identyfikator, createdAt: z.string().min(1), updatedAt: z.string().min(1), usunietoAt: z.string().min(1).optional() }).passthrough()
+export const schematWersjiFinansowej = z.object({
+  rewizja: kwota.positive(), idZapisu: z.string().uuid(), oczekiwanaRewizja: kwota.nonnegative(),
+  operacja: z.enum(['utworzenie', 'aktualizacja', 'usuniecie', 'przywrocenie']),
+  znacznikCzasu: z.string().min(1), podpisPolecenia: z.string(),
+  przed: z.record(z.string(), z.json()).optional(), po: z.record(z.string(), z.json()),
+}).strict()
+const encja = z.object({ id: identyfikator, createdAt: z.string().min(1), updatedAt: z.string().min(1), usunietoAt: z.string().min(1).optional(), rewizja: kwota.positive().optional(), historiaWersji: z.array(schematWersjiFinansowej).optional() }).passthrough()
 const data = z.iso.date()
 const waluta = z.string().min(1)
 export const schematWspolnejKasy = encja.extend({ nazwa: z.string(), opis: z.string(), ikona: z.string(), kolor: z.string(), waluta, saldoPoczatkoweGrosze: kwota, status: z.enum(['aktywna', 'zarchiwizowana']) })
