@@ -5,6 +5,7 @@ import { baza, nazwyTabel } from './BazaOgarniacza'
 import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 
 const TABELE_LOKALNE = new Set<NazwaTabeli>([
+  'wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen',
   'wpisyTerapii',
   'wazneInformacjeZdrowotne',
   'wynikiBadan',

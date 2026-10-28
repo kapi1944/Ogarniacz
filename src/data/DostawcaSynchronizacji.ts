@@ -1,6 +1,7 @@
 import type { EncjaBazowa, NazwaTabeli } from '../domain/typy'
 
 export type NazwaTabeliSynchronizowanej = Exclude<NazwaTabeli,
+  | 'wspolneKasy' | 'operacjeKas' | 'rozliczenia' | 'wydatkiGrupowe' | 'zwrotyRozliczen'
   | 'wazneInformacjeZdrowotne'
   | 'wynikiBadan'
   | 'wpisySamopoczucia'

@@ -790,6 +790,11 @@ export type NazwaModulu =
   | 'ustawienia'
 
 export interface MapaTabel {
+  wspolneKasy: import('./modeleFinansowWspolnych').WspolnaKasa
+  operacjeKas: import('./modeleFinansowWspolnych').OperacjaKasy
+  rozliczenia: import('./modeleFinansowWspolnych').Rozliczenie
+  wydatkiGrupowe: import('./modeleFinansowWspolnych').WydatekGrupowy
+  zwrotyRozliczen: import('./modeleFinansowWspolnych').ZwrotRozliczenia
   wazneInformacjeZdrowotne: import('./historiaZdrowia').WaznaInformacjaZdrowotna
   wynikiBadan: import('./badania').WynikBadania
   wpisySamopoczucia: import('./samopoczucie').WpisSamopoczucia

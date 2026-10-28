@@ -1,3 +1,4 @@
+import { schematWspolnejKasy, schematOperacjiKasy, schematRozliczenia, schematWydatkuGrupowego, schematZwrotuRozliczenia } from '../domain/modeleFinansowWspolnych'
 import { sprawdzBiezacyDostep } from './UprawnieniaService'
 import { pobierzAktywnyProfil, pobierzSygnalProfilu } from '../data/ProfileLokalne'
 import { z } from 'zod'
@@ -15,7 +16,7 @@ import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 
 export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
-const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, 17, 18, WERSJA_SCHEMATU_BAZY]
+const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, 17, 18, 19, WERSJA_SCHEMATU_BAZY]
 
 export const SEKCJE_BACKUPU = [
   { nazwa: 'ustawienia', etykieta: 'Ustawienia' },
@@ -29,6 +30,8 @@ export const SEKCJE_BACKUPU = [
   { nazwa: 'badania', etykieta: 'Prywatne wyniki badań' },
   { nazwa: 'samopoczucie', etykieta: 'Prywatny dziennik samopoczucia' },
   { nazwa: 'finanse', etykieta: 'Finanse i rachunki' },
+  { nazwa: 'wspolneKasy', etykieta: 'Wspólne kasy' },
+  { nazwa: 'rozliczenia', etykieta: 'Rozliczenia' },
   { nazwa: 'samochod', etykieta: 'Samochód' },
   { nazwa: 'zakupy', etykieta: 'Zakupy' },
   { nazwa: 'dokumenty', etykieta: 'Dokumenty i pliki' },
@@ -153,6 +156,7 @@ const schematTransportowegoBlobu = z.object({
 }).strict()
 
 const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
+  wspolneKasy: schematWspolnejKasy, operacjeKas: schematOperacjiKasy, rozliczenia: schematRozliczenia, wydatkiGrupowe: schematWydatkuGrupowego, zwrotyRozliczen: schematZwrotuRozliczenia,
   wazneInformacjeZdrowotne: schematWaznejInformacjiZdrowotnej,
   wynikiBadan: schematWynikuBadania,
   wpisySamopoczucia: schematWpisuSamopoczucia,
@@ -543,6 +547,8 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('badania', ['wynikiBadan']),
   zrodloRepozytoriow('samopoczucie', ['wpisySamopoczucia']),
   zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'platnosciStale', 'planyRat', 'raty', 'budzety', 'kontaFinansowe']),
+  zrodloRepozytoriow('wspolneKasy', ['wspolneKasy', 'operacjeKas']),
+  zrodloRepozytoriow('rozliczenia', ['rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen']),
   zrodloRepozytoriow('samochod', ['pojazdy']),
   zrodloRepozytoriow('zakupy', ['listyZakupow', 'pozycjeZakupow']),
   zrodloRepozytoriow('dokumenty', ['dokumenty']),

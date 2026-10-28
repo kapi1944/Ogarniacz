@@ -352,5 +352,6 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
 }
 
 export function pobierzRepozytorium<K extends NazwaTabeli>(nazwa: K, dostepDoDanychPrywatnych?: (operacja: 'odczyt' | 'edycja') => boolean): Repozytorium<MapaTabel[K]> {
+  if (['wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen'].includes(nazwa)) throw new Error('Repozytorium wspólnych finansów nie jest jeszcze dostępne.')
   return new RepozytoriumDexie<MapaTabel[K]>(nazwa, dostepDoDanychPrywatnych)
 }

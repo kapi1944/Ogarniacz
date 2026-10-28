@@ -906,3 +906,38 @@ it('zachowuje checksum backupu bez secure context i Web Crypto', async () => {
   try { expect(await obliczChecksum(dane as never)).toBe(oczekiwany) }
   finally { vi.unstubAllGlobals() }
 })
+
+it('zachowuje wspólne finanse w kopii i podczas odtwarzania starszej kopii', async () => {
+  baza.close()
+  await Dexie.delete('ogarniacz-v1')
+  await inicjalizujBaze()
+  const metadane = { createdAt: STALA_DATA, updatedAt: STALA_DATA }
+  const kasa = { ...metadane, id: 'kasa', nazwa: 'Kasa', opis: '', ikona: '', kolor: '', waluta: 'PLN', saldoPoczatkoweGrosze: 0, status: 'aktywna' as const }
+  const operacja = { ...metadane, id: 'operacja', kasaId: 'kasa', typ: 'wplyw' as const, kwotaGrosze: 100, waluta: 'PLN', dataOperacji: '2026-10-28', kategoria: '', zrodlo: '', opis: '' }
+  const rozliczenie = { ...metadane, id: 'grupa', nazwa: 'Grupa', opis: '', waluta: 'PLN', uczestnicy: [{ id: 'osoba', nazwa: 'Osoba' }], domyslnyPodzial: 'po_rowno' as const, etap: 'aktywne' as const, dataRozpoczecia: '2026-10-28' }
+  const wydatek = { ...metadane, id: 'zakup', rozliczenieId: 'grupa', nazwa: 'Zakup', kwotaGrosze: 100, waluta: 'PLN', dataOperacji: '2026-10-28', finansujacy: [{ uczestnikId: 'osoba', kwotaGrosze: 100 }], metodaPodzialu: 'po_rowno' as const, parametryPodzialu: { metoda: 'po_rowno' as const, uczestnicyIds: ['osoba'] }, podzialKosztu: [{ uczestnikId: 'osoba', kwotaGrosze: 100 }], opis: '' }
+  const zwrot = { ...metadane, id: 'zwrot', rozliczenieId: 'grupa', odUczestnikaId: 'osoba', doUczestnikaId: 'inna', kwotaGrosze: 1, waluta: 'PLN', dataOperacji: '2026-10-28', opis: '' }
+  await baza.tabela('wspolneKasy').put(kasa)
+  await baza.tabela('operacjeKas').put(operacja)
+  await baza.tabela('rozliczenia').put(rozliczenie)
+  await baza.tabela('wydatkiGrupowe').put(wydatek)
+  await baza.tabela('zwrotyRozliczen').put(zwrot)
+  const kopia = await przygotuj(await utworzBackup(['wspolneKasy', 'rozliczenia']))
+  await baza.tabela('wspolneKasy').clear()
+  await baza.tabela('operacjeKas').clear()
+  await baza.tabela('rozliczenia').clear()
+  await baza.tabela('wydatkiGrupowe').clear()
+  await baza.tabela('zwrotyRozliczen').clear()
+  await przywrocBackup(kopia)
+  expect(await baza.tabela('wspolneKasy').get('kasa')).toEqual(kasa)
+  expect(await baza.tabela('operacjeKas').get('operacja')).toEqual(operacja)
+  expect(await baza.tabela('rozliczenia').get('grupa')).toEqual(rozliczenie)
+  expect(await baza.tabela('wydatkiGrupowe').get('zakup')).toEqual(wydatek)
+  expect(await baza.tabela('zwrotyRozliczen').get('zwrot')).toEqual(zwrot)
+  const stara = await utworzBackup(['finanse'])
+  stara.manifest.dexieSchemaVersion = 19
+  await przeliczChecksum(stara)
+  await przywrocBackup(await przygotuj(stara))
+  expect(await baza.tabela('operacjeKas').get('operacja')).toEqual(operacja)
+  expect(await baza.tabela('wydatkiGrupowe').get('zakup')).toEqual(wydatek)
+})

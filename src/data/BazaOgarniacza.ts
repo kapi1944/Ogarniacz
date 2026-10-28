@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 19
+export const WERSJA_SCHEMATU_BAZY = 20
 
 const POSTAC_Z_HISTORYCZNEJ_WARTOSCI: Record<string, string> = {
   tabletka: 'tabletka',
@@ -62,6 +62,7 @@ export const nazwyTabel: NazwaTabeli[] = [
   'cele',
   'kontakty',
   'dokumenty',
+  'wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen',
   'wydatki',
   'platnosciStale',
   'planyRat',
@@ -218,6 +219,13 @@ export class BazaOgarniacza extends Dexie {
     this.version(17).stores({ wpisySamopoczucia: 'id, dataObserwacji, czasObserwacji, updatedAt, usunietoAt' })
     this.version(18).stores({ wynikiBadan: 'id, dataPobrania, parametr, dokumentId, grupaId, updatedAt, usunietoAt' })
     this.version(19).stores({ wazneInformacjeZdrowotne: 'id, kategoria, updatedAt, usunietoAt' })
+    this.version(20).stores({
+      wspolneKasy: 'id, status, updatedAt, usunietoAt',
+      operacjeKas: 'id, kasaId, dataOperacji, updatedAt, usunietoAt',
+      rozliczenia: 'id, etap, updatedAt, usunietoAt',
+      wydatkiGrupowe: 'id, rozliczenieId, dataOperacji, updatedAt, usunietoAt',
+      zwrotyRozliczen: 'id, rozliczenieId, dataOperacji, updatedAt, usunietoAt',
+    })
   }
 
   tabela<K extends NazwaTabeli>(nazwa: K): Table<MapaTabel[K], string> {
