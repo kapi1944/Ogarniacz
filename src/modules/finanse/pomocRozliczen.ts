@@ -28,6 +28,7 @@ export function useZapisRozliczenia(rewizja = 0) {
       const tresc = JSON.stringify(dane)
       if (proba.current?.tresc !== tresc) proba.current = { tresc, polecenie: { idZapisu: crypto.randomUUID(), oczekiwanaRewizja: rewizja } }
       await zapisz(proba.current.polecenie)
+      proba.current = undefined
       poZapisie()
     } catch (przyczyna) {
       ustawBlad(przyczyna instanceof z.ZodError ? przyczyna.issues[0].message : (przyczyna as Error).message)

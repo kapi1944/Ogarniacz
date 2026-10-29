@@ -88,7 +88,7 @@ export const edytujWydatekGrupowy = (id: string, dane: DaneWydatkuGrupowego, pol
 export const usunWydatekGrupowy = (id: string, polecenie: PolecenieZapisuFinansowego) => zapiszWydatek(id, undefined, polecenie, 'usuniecie')
 export const przywrocWydatekGrupowy = (id: string, polecenie: PolecenieZapisuFinansowego) => zapiszWydatek(id, undefined, polecenie, 'przywrocenie')
 
-async function zapiszZwrot(id: string, dane: DaneZwrotuRozliczenia | undefined, polecenie: PolecenieZapisuFinansowego, rodzaj: 'utworzenie' | 'aktualizacja' | 'usuniecie' | 'przywrocenie'): Promise<ZwrotRozliczenia> {
+async function zapiszZwrot(id: string, dane: DaneZwrotuRozliczenia | undefined, polecenie: PolecenieZapisuFinansowego, rodzaj: 'utworzenie' | 'aktualizacja' | 'usuniecie' | 'przywrocenie', potwierdzonaNadplata?: boolean): Promise<ZwrotRozliczenia> {
   const poprawne = dane ? schematDanychZwrotu.parse(dane) : undefined
   const wynik = await wTransakcjiFinansowej('edycja', () => zapiszRekordFinansowy('zwrotyRozliczen', id, polecenie, rodzaj, poprawne ?? null, async (przed) => {
     if (rodzaj === 'aktualizacja') wymagajRekordu(przed)
@@ -99,6 +99,11 @@ async function zapiszZwrot(id: string, dane: DaneZwrotuRozliczenia | undefined, 
     if (rodzaj === 'usuniecie') po.usunietoAt = przed?.usunietoAt ?? new Date().toISOString()
     if (rodzaj === 'przywrocenie') delete po.usunietoAt
     const rekordy = await rekordyRozliczenia(rozliczenie.id)
+    if (potwierdzonaNadplata !== undefined) {
+      await sprawdzKompletnoscFinansow()
+      const bilans = obliczBilansZRekordow(rozliczenie, rekordy.wydatki, rekordy.zwroty)
+      if (!potwierdzonaNadplata && po.kwotaGrosze > limitZwrotu(bilans, po.odUczestnikaId, po.doUczestnikaId)) throw new Error('Kwota przekracza bieżącą należność. Potwierdź rzeczywistą nadpłatę lub zwrot w przeciwnym kierunku.')
+    }
     obliczBilansZRekordow(rozliczenie, rekordy.wydatki, [...rekordy.zwroty.filter((zwrot) => zwrot.id !== id), po])
     return po
   }))
@@ -106,6 +111,8 @@ async function zapiszZwrot(id: string, dane: DaneZwrotuRozliczenia | undefined, 
   return wynik
 }
 export const dodajZwrot = (id: string, dane: DaneZwrotuRozliczenia, polecenie: PolecenieZapisuFinansowego) => zapiszZwrot(id, dane, polecenie, 'utworzenie')
+/** Formularz wymaga potwierdzenia nadpłaty; sprawdzenie dotyczy tej samej transakcji co zapis. */
+export const zarejestrujZwrot = (id: string, dane: DaneZwrotuRozliczenia, polecenie: PolecenieZapisuFinansowego, potwierdzonaNadplata: boolean) => zapiszZwrot(id, dane, polecenie, 'utworzenie', potwierdzonaNadplata)
 export const edytujZwrot = (id: string, dane: DaneZwrotuRozliczenia, polecenie: PolecenieZapisuFinansowego) => zapiszZwrot(id, dane, polecenie, 'aktualizacja')
 export const usunZwrot = (id: string, polecenie: PolecenieZapisuFinansowego) => zapiszZwrot(id, undefined, polecenie, 'usuniecie')
 export const przywrocZwrot = (id: string, polecenie: PolecenieZapisuFinansowego) => zapiszZwrot(id, undefined, polecenie, 'przywrocenie')
@@ -139,9 +146,51 @@ export async function pobierzWidokRozliczenia(id: string) {
     const rekordy = await rekordyRozliczenia(id)
     try {
       await sprawdzKompletnoscFinansow()
-      return { rozliczenie, ...rekordy, bilans: obliczBilansZRekordow(rozliczenie, rekordy.wydatki, rekordy.zwroty), ograniczenie: '' }
+      const bilans = obliczBilansZRekordow(rozliczenie, rekordy.wydatki, rekordy.zwroty)
+      return { rozliczenie, ...rekordy, bilans, bilansPrzedZwrotami: obliczBilansZRekordow(rozliczenie, rekordy.wydatki, []), status: statusRozliczenia(rozliczenie, bilans), ograniczenie: '' }
     } catch (blad) {
-      return { rozliczenie, ...rekordy, bilans: undefined, ograniczenie: (blad as Error).message }
+      return { rozliczenie, ...rekordy, bilans: undefined, bilansPrzedZwrotami: undefined, status: statusRozliczenia(rozliczenie), ograniczenie: (blad as Error).message }
     }
   })
 }
+
+type BilansRozliczenia = ReturnType<typeof obliczBilansZRekordow>
+export function limitZwrotu(bilans: BilansRozliczenia, odId: string, doId: string): number {
+  return Math.min(bilans.bilanse.find((osoba) => osoba.uczestnikId === odId)?.doOddaniaGrosze ?? 0, bilans.bilanse.find((osoba) => osoba.uczestnikId === doId)?.doOtrzymaniaGrosze ?? 0)
+}
+
+export function statusRozliczenia(rozliczenie: Rozliczenie, bilans?: BilansRozliczenia): string {
+  if (rozliczenie.zarchiwizowanoAt) return 'Zarchiwizowane'
+  if (rozliczenie.etap === 'aktywne') return 'Aktywne'
+  return bilans && bilans.bilanse.every((osoba) => osoba.bilansGrosze === 0) ? 'Rozliczone' : 'Oczekuje na rozliczenie'
+}
+
+export async function listaPodsumowanRozliczen() {
+  return wTransakcjiFinansowej('odczyt', async () => {
+    const rozliczenia = await baza.tabela('rozliczenia').toArray()
+    return Promise.all(rozliczenia.filter((grupa) => !grupa.usunietoAt).map(async (grupa) => {
+      const widok = await pobierzWidokRozliczenia(grupa.id)
+      return { ...grupa, statusWyliczony: widok.status, ograniczenie: widok.ograniczenie }
+    }))
+  })
+}
+
+export async function zmienEtapRozliczenia(id: string, etap: Rozliczenie['etap'], polecenie: PolecenieZapisuFinansowego) {
+  z.enum(['aktywne', 'oczekuje']).parse(etap)
+  const wynik = await wTransakcjiFinansowej('edycja', () => zapiszRekordFinansowy('rozliczenia', id, polecenie, 'aktualizacja', { etap }, async (przed) => ({ ...wymagajAktywnegoRozliczenia(przed), etap })))
+  powiadomOZapisieFinansowym('rozliczenia')
+  return wynik
+}
+
+async function zmienArchiwizacjeRozliczenia(id: string, archiwum: boolean, polecenie: PolecenieZapisuFinansowego) {
+  const wynik = await wTransakcjiFinansowej('edycja', () => zapiszRekordFinansowy('rozliczenia', id, polecenie, 'aktualizacja', { archiwum }, async (przed) => {
+    const po = { ...wymagajRekordu(przed) }
+    if (archiwum) po.zarchiwizowanoAt ??= new Date().toISOString()
+    else delete po.zarchiwizowanoAt
+    return po
+  }))
+  powiadomOZapisieFinansowym('rozliczenia')
+  return wynik
+}
+export const archiwizujRozliczenie = (id: string, polecenie: PolecenieZapisuFinansowego) => zmienArchiwizacjeRozliczenia(id, true, polecenie)
+export const przywrocRozliczenie = (id: string, polecenie: PolecenieZapisuFinansowego) => zmienArchiwizacjeRozliczenia(id, false, polecenie)

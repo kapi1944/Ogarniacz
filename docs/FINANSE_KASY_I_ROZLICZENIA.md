@@ -28,6 +28,50 @@ na 320/390/768/1280 px, zapis offline i odświeżenie szczegółów. Test handle
 Wstecz nie zastępuje próby na fizycznym Androidzie. F7.7 nie publikuje APK,
 nie wdraża serwera i nie udostępnia jeszcze rejestrowania zwrotów.
 
+### Zrealizowany zakres F7.8 — rzeczywiste zwroty i archiwum
+
+Szczegóły rozliczenia mają formularz „Zarejestruj zwrot”: dwie osoby, dodatnia
+kwota w walucie grupy, data i opis. Formularz nie przepisuje propozycji do rekordów.
+Każdy wykonany zwrot otrzymuje własne UUID; ponowienie tego samego zapisu zachowuje
+UUID i polecenie F7.3, a podwójne kliknięcie blokuje trwająca operacja.
+Nieaktywna osoba nadal może oddać lub otrzymać pieniądze.
+
+Nadpłata lub przeciwny kierunek wymagają ostrzeżenia i zaznaczenia potwierdzenia.
+`zarejestrujZwrot` ponownie sprawdza bieżący bilans i kompletność w tej samej
+transakcji co zapis, więc nie ufa podglądowi otwartego formularza. Niskopoziomowy
+zapis oraz synchronizacja F7.4 zachowują wszystkie poprawne rzeczywiste zwroty,
+również niezależne operacje offline przekraczające późniejszy bilans.
+
+Wyświetlane są bilanse przed zwrotami (według aktualnych wydatków), kwoty oddane,
+otrzymane i pozostałe. Przykład: koszt grupy 200 PLN finansowany przez Kacpra,
+podział po równo oznacza dług Julki 100 PLN. Zwroty 60 i 40 pozostawiają kolejno
+40 i 0 PLN. Zwrot 120 zamiast 100 odwraca należność: Kacper oddaje Julce 20 PLN.
+Suma wydatków nadal wynosi 200 PLN. Edycja, usunięcie i przywrócenie wydatku
+przeliczają wynik bez usuwania zwrotów. UI udostępnia też korektę błędnego zwrotu
+przez miękkie usunięcie i przywrócenie, z historią.
+
+`etap` nadal opisuje zbieranie kosztów: `aktywne` lub `oczekuje`. Użytkownik jawnie
+kończy lub wznawia zbieranie wydatków. „Rozliczone” jest wyłącznie projekcją:
+zbieranie zakończone i wszystkie bilanse zerowe w kompletnym odczycie. Pusta aktywna
+grupa nie staje się rozliczona. Późne zwroty i wydatki automatycznie zmieniają wynik.
+Przy niekompletności lub konflikcie UI nie potwierdza statusu „Rozliczone”.
+
+Lista ma filtry aktywnych/oczekujących, rozliczonych, archiwalnych i wszystkich.
+Archiwizacja jest osobnym, potwierdzanym zapisem istniejącego `zarchiwizowanoAt`;
+może zachować także nierozliczone zobowiązania. Nie oznacza spłaty ani nie usuwa
+historii. Blokuje zwykłe zapisy w istniejących serwisach do jawnego przywrócenia.
+Przywrócenie zachowuje poprzedni etap. Status i bilans nie są utrwalanym saldem.
+Bez nowych tabel, migracji, protokołu synchronizacji lub zmian algorytmów F7.1.
+
+Kontrole F7.8: 156 testów celowanych i regresji Finansów (w tym dwa urządzenia,
+niezależne zwroty offline, późna edycja, historia, Edytor i handler Android Wstecz),
+lint/typecheck/build oraz headless Chrome: cztery szerokości 320–1280 px,
+Classic/Flat/Luxury w obu motywach, przyciski min. 44 px, spłaty offline 60+40,
+archiwizacja, odświeżenie podstrony i przywrócenie. Brak testu na fizycznym
+Androidzie/Raspberry i weryfikacji wdrożenia. F7.8 nie publikuje APK ani nie wdraża.
+Rozliczenia mają podstawowy interfejs; interfejs kas i kaucji F7.5–F7.6 nie jest
+częścią tego zadania i nie istnieje jeszcze w tym punkcie `main`.
+
 ## 1. Co rzeczywiście istnieje
 
 | Obszar | Ustalenie z kodu | Wykorzystanie przy rozbudowie |

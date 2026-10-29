@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { baza, BazaOgarniacza, ustawBazePrzedUruchomieniem } from '../../data/BazaOgarniacza'
 import { ustawBiezacyDostep } from '../../services/UprawnieniaService'
-import { utworzRozliczenie, dodajWydatekGrupowy, pobierzBilansRozliczenia, type DaneRozliczenia } from '../../services/RozliczeniaService'
+import { utworzRozliczenie, dodajWydatekGrupowy, pobierzBilansRozliczenia, archiwizujRozliczenie, type DaneRozliczenia } from '../../services/RozliczeniaService'
 import { obsluzWstecz, zarejestrujObslugeWstecz } from '../../platform/obslugaWstecz'
 import { parsujDeepLink } from '../../platform/trasy'
 import WidokRozliczen from './WidokRozliczen'
@@ -123,4 +123,61 @@ it('dopuszcza bezpieczne odnośniki platformowe listy i szczegółów', () => {
   expect(parsujDeepLink('ogarniacz://finanse/rozliczenia')).toBe('/finanse/rozliczenia')
   expect(parsujDeepLink('ogarniacz://finanse/rozliczenia/r')).toBe('/finanse/rozliczenia/r')
   expect(parsujDeepLink('ogarniacz://finanse/rozliczenia/r/inna')).toBeNull()
+})
+
+async function przygotujDlug() {
+  await utworzRozliczenie('r', grupa, polecenie())
+  await dodajWydatekGrupowy('w', { rozliczenieId: 'r', nazwa: 'Hotel', opis: '', waluta: 'PLN', dataOperacji: '2026-10-29', kwotaGrosze: 20000, finansujacy: [{ uczestnikId: 'a', kwotaGrosze: 20000 }], parametryPodzialu: { metoda: 'po_rowno', uczestnicyIds: ['a', 'b'] } }, polecenie())
+  pokaz(); await screen.findByRole('heading', { name: grupa.nazwa })
+}
+async function wypelnijZwrot(kwota: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Zarejestruj zwrot' }))
+  fireEvent.change(screen.getByLabelText('Kto oddaje'), { target: { value: 'b' } })
+  fireEvent.change(screen.getByLabelText('Komu oddaje'), { target: { value: 'a' } })
+  wpisz('Kwota zwrotu', kwota)
+}
+it('zapisuje częściowy zwrot, pokazuje pozostałe 40 i nie zapisuje propozycji jako spłat', async () => {
+  await przygotujDlug()
+  expect(await baza.tabela('zwrotyRozliczen').count()).toBe(0)
+  await wypelnijZwrot('60')
+  fireEvent.click(screen.getByRole('button', { name: 'Zapisz wykonany zwrot' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Zapisz wykonany zwrot' }))
+  await screen.findByText('Julka (osoba 2) → Kacper (osoba 1): 40,00 PLN')
+  const zwroty = await baza.tabela('zwrotyRozliczen').toArray()
+  expect(zwroty).toHaveLength(1); expect(zwroty[0].kwotaGrosze).toBe(6000)
+  expect((await pobierzBilansRozliczenia('r')).sumaWydatkowGrosze).toBe(20000)
+})
+it('wymaga świadomego potwierdzenia nadpłaty i pokazuje przeciwną należność', async () => {
+  await przygotujDlug(); await wypelnijZwrot('120')
+  expect(screen.getByText(/Kwota przekracza bieżącą należność/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Zapisz wykonany zwrot' }))
+  expect(await baza.tabela('zwrotyRozliczen').count()).toBe(0)
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Potwierdzam rzeczywisty zwrot mimo nadpłaty' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Zapisz wykonany zwrot' }))
+  await screen.findByText('Kacper (osoba 1) → Julka (osoba 2): 20,00 PLN')
+})
+it('potwierdza zakończenie zbierania, archiwizację i przywrócenie, zachowując historię', async () => {
+  await przygotujDlug()
+  fireEvent.click(screen.getByRole('button', { name: 'Zakończ zbieranie wydatków' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Potwierdz' }))
+  await screen.findByText('Oczekuje na rozliczenie', { exact: true })
+  fireEvent.click(screen.getByRole('button', { name: 'Archiwizuj rozliczenie' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Potwierdz' }))
+  await screen.findByText('Zarchiwizowane', { exact: true })
+  expect(screen.queryByRole('button', { name: 'Dodaj wydatek' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Zarejestruj zwrot' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Przywróć z archiwum' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Potwierdz' }))
+  await screen.findByRole('button', { name: 'Dodaj wydatek' })
+  expect((await baza.tabela('rozliczenia').get('r'))?.historiaWersji).toHaveLength(4)
+})
+it('filtruje archiwum i udostępnia szczegóły tylko do odczytu', async () => {
+  await utworzRozliczenie('r', grupa, polecenie())
+  await archiwizujRozliczenie('r', { idZapisu: crypto.randomUUID(), oczekiwanaRewizja: 1 })
+  pokaz('/finanse/rozliczenia')
+  await screen.findByLabelText('Pokaż rozliczenia')
+  expect(screen.queryByRole('link', { name: grupa.nazwa })).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Pokaż rozliczenia'), { target: { value: 'archiwum' } })
+  fireEvent.click(screen.getByRole('link', { name: grupa.nazwa }))
+  await screen.findByText('Archiwum jest tylko do odczytu. Przywróć rozliczenie przed edycją.')
 })

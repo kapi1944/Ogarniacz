@@ -6,7 +6,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { SyncEngine, pobierzStanSynchronizacji, pobierzKonfliktySynchronizacji } from './SyncEngine'
 import { TABELE_FINANSOW_WSPOLNYCH, ustawBiezacyDostep } from './UprawnieniaService'
 import { utworzKase, edytujKase, dodajOperacjeKasy, edytujOperacjeKasy, usunOperacjeKasy, przywrocOperacjeKasy, pobierzSaldoKasy } from './WspolneKasyService'
-import { utworzRozliczenie, dodajWydatekGrupowy, edytujWydatekGrupowy, dodajZwrot, pobierzBilansRozliczenia } from './RozliczeniaService'
+import { utworzRozliczenie, dodajWydatekGrupowy, edytujWydatekGrupowy, dodajZwrot, pobierzBilansRozliczenia, pobierzWidokRozliczenia, zmienEtapRozliczenia } from './RozliczeniaService'
 import { walidujObrazFinansowy } from '../../server/wspolne/SynchronizacjaFinansow.ts'
 import { utworzBackup, przygotujBackupDoPrzywracania, przywrocBackup } from './BackupService'
 import { RejestrProfili, zarejestrujProfilSesji, otworzBazeProfilu, aktywujProfil } from '../data/ProfileLokalne'
@@ -166,6 +166,32 @@ it('zachowuje dwa rzeczywiste zwroty offline o różnych ID', async () => {
   expect(await baza.tabela('zwrotyRozliczen').count()).toBe(2)
   expect((await pobierzBilansRozliczenia('r')).propozycjePrzelewow[0].kwotaGrosze).toBe(3000)
   expect((await pobierzBilansRozliczenia('r')).sumaWydatkowGrosze).toBe(10000)
+})
+
+it('późne zwroty offline zamykają dług, a późna edycja wydatku ponownie otwiera należność', async () => {
+  const a = baza
+  const serwer = new AtrapaFinansow()
+  await utworzRozliczenie('r', grupa, polecenie())
+  await dodajWydatekGrupowy('w', wydatek(), polecenie())
+  await zmienEtapRozliczenia('r', 'oczekuje', polecenie(1))
+  await silnik('A').synchronizuj(serwer)
+  const b = await urzadzenie()
+  await silnik('B').synchronizuj(serwer)
+  await dodajZwrot('zwrot-B', { ...zwrot, kwotaGrosze: 3000 }, polecenie())
+  ustawBazePrzedUruchomieniem(a); await a.open()
+  await dodajZwrot('zwrot-A', { ...zwrot, kwotaGrosze: 2000 }, polecenie())
+  await silnik('A').synchronizuj(serwer)
+  ustawBazePrzedUruchomieniem(b); await b.open()
+  await silnik('B').synchronizuj(serwer)
+  expect((await pobierzWidokRozliczenia('r')).status).toBe('Rozliczone')
+  await edytujWydatekGrupowy('w', wydatek(12000), polecenie(1))
+  await silnik('B').synchronizuj(serwer)
+  ustawBazePrzedUruchomieniem(a); await a.open()
+  await silnik('A').synchronizuj(serwer)
+  const widok = await pobierzWidokRozliczenia('r')
+  expect(widok.status).toBe('Oczekuje na rozliczenie')
+  expect(widok.bilans!.propozycjePrzelewow[0].kwotaGrosze).toBe(1000)
+  expect(widok.zwroty).toHaveLength(2)
 })
 
 it('przyjmuje dziecko przed rodzicem, a niepełnej paczki nie zapisuje i blokuje saldo', async () => {
