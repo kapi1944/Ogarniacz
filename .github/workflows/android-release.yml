@@ -25,6 +25,8 @@ concurrency:
 jobs:
   release:
     name: Zatwierdź kanały runtime
+    outputs:
+      release_tag: ${{ steps.published_tag.outputs.value }}
     runs-on: ubuntu-latest
     environment: android-production
     if: github.ref == 'refs/heads/main'
@@ -204,6 +206,104 @@ jobs:
         shell: bash
         run: npm run android:release -- --publish-existing
 
+      - name: Zapamiętaj tag wydanego Androida dla pozostałych platform
+        id: published_tag
+        if: steps.kanaly.outputs.android == 'true'
+        run: echo "value=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
       - name: Zatwierdź Raspberry dopiero po sukcesie wymaganych kanałów
         if: steps.kanaly.outputs.raspberry == 'true'
         run: bash scripts/publikacja-rpi-stable.sh "$(git rev-parse HEAD)"
+
+  windows-release:
+    name: Dołącz instalator Windows do tego samego release
+    needs: release
+    if: needs.release.outputs.release_tag != ''
+    runs-on: windows-latest
+    timeout-minutes: 35
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.release_tag }}
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Publikuj instalator z dokładnego tagu Androida
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = $env:RELEASE_TAG.TrimStart('v')
+          if ((node -p "require('./package.json').version") -ne $version) { throw 'Tag nie zgadza się z package.json' }
+          dotnet publish windows/Ogarniacz.Desktop/Ogarniacz.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$version -o artifacts/windows/app
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish nie powiódł się' }
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Nie udało się zainstalować Inno Setup' }
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          & $iscc "/DAppVersion=$version" 'windows/installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Instalator Windows nie powstał' }
+          $installer = "artifacts/windows/Ogarniacz-$version-Setup.exe"
+          if (-not (Test-Path $installer)) { throw 'Brak EXE' }
+          $sha = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  Ogarniacz-$version-Setup.exe" | Set-Content -Encoding ascii "$installer.sha256"
+          gh release upload $env:RELEASE_TAG $installer "$installer.sha256" --repo $env:GITHUB_REPOSITORY
+          if ($LASTEXITCODE -ne 0) { throw 'Publikacja instalatora Windows nie powiodła się' }
+
+  web-rpi-release:
+    name: Dołącz paczki Web/PWA i Raspberry do tego samego release
+    needs: release
+    if: needs.release.outputs.release_tag != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.release_tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Buduj zweryfikowane Web, PWA i backend Raspberry
+        run: |
+          npm run build:production
+          npm run pwa:smoke
+      - name: Spakuj i dołącz artefakty tego samego tagu
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          wersja="${RELEASE_TAG#v}"
+          [[ "$(node -p "require('./package.json').version")" == "$wersja" ]]
+          mkdir -p artifacts/platform
+          tar -czf "artifacts/platform/Ogarniacz-$wersja-Web.tar.gz" -C dist .
+          tar -czf "artifacts/platform/Ogarniacz-$wersja-RaspberryPi.tar.gz" dist dist-server package.json package-lock.json deploy/rpi scripts/aktualizuj-rpi.sh
+          (cd artifacts/platform && sha256sum -- *.tar.gz > SHA256SUMS.txt)
+          gh release upload "$RELEASE_TAG" artifacts/platform/*.tar.gz artifacts/platform/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY"
+
+  verify-platform-release:
+    name: Zakończ wydanie tylko z kompletem artefaktów
+    needs: [release, windows-release, web-rpi-release]
+    if: needs.release.outputs.release_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Sprawdź komplet plików opublikowanego tagu
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          wersja="${RELEASE_TAG#v}"
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' > /tmp/ogarniacz-assets.txt
+          for wymagany in "Ogarniacz-$wersja-release.apk" "Ogarniacz-$wersja-release.apk.sha256" latest.json             "Ogarniacz-$wersja-Setup.exe" "Ogarniacz-$wersja-Setup.exe.sha256"             "Ogarniacz-$wersja-Web.tar.gz" "Ogarniacz-$wersja-RaspberryPi.tar.gz" SHA256SUMS.txt; do
+            grep -Fxq "$wymagany" /tmp/ogarniacz-assets.txt || { echo "Brak $wymagany" >&2; exit 1; }
+          done

@@ -109,3 +109,8 @@ Wykonaj dopiero po osobno zatwierdzonym i opublikowanym wyższym APK. Brak nowsz
 Systemowe zgody, ekran instalatora, skutki zabicia procesu, blokady One UI/Auto Blocker, rzeczywisty brak miejsca, zachowanie danych po aktualizacji, synchronizacja i przypomnienia wymagają fizycznego telefonu. Testy automatyczne nie dowodzą tych zachowań. Uszkodzony APK, inny podpis i downgrade testuj wyłącznie na kontrolowanym urządzeniu z kopią danych, bez wyłączania zabezpieczeń produkcyjnych.
 
 Zapisz osobno wynik każdego kroku: **PASS / FAIL / NIETESTOWANE**, rzeczywistą wersję źródłową/docelową i użycie obejścia. Przy błędzie zachowaj zrzut komunikatu, godzinę, wolne miejsce, zgody źródła/Auto Blocker oraz status/sessionId i log PackageInstaller (bez sekretów i danych użytkownika).
+
+
+## Automatyzacja platform (2026-10)
+
+Nowy proces i wymagania instalatora Windows są opisane w [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md). Produkcyjna publikacja po zielonym CI `main` uruchamia ten sam workflow, z niezmienionymi zasadami podpisu APK i zatwierdzania `rpi-stable`.
