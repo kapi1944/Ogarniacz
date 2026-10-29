@@ -80,6 +80,7 @@ body { min-height: 100vh; background: var(--tlo); color: var(--tekst); }
 :root[data-platforma="android"] .zawartosc { padding-bottom: max(clamp(16px, 2.4vw, 30px), var(--bezpieczny-obszar-dol)); }
 :root[data-platforma="android"] .modal-tlo { padding-top: max(20px, var(--bezpieczny-obszar-gora)); padding-bottom: max(20px, var(--bezpieczny-obszar-dol)); }
 button, input, select, textarea { font: inherit; color-scheme: inherit; }
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]), textarea) { color: var(--tekst); background-color: var(--panel); }
 select, option, optgroup { color: var(--tekst); background-color: var(--panel); }
 button, a, input, select, textarea { outline-color: var(--akcent); }
 button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid color-mix(in srgb, var(--akcent) 38%, transparent); outline-offset: 2px; }
