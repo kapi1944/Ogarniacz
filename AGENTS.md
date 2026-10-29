@@ -35,3 +35,14 @@ Zasada nadrzędna: dobieraj najlepsze rozwiązanie techniczne. Minimalizuj zakre
 - Testuj najpierw zmieniony obszar. Pełną regresję uruchamiaj tylko przy zmianach przekrojowych, release albo gdy wąskie testy ujawnią problem.
 - Nie dodawaj testów, które tylko odtwarzają implementację.
 - Przy jednoznacznym i odwracalnym zadaniu działaj autonomicznie do kompletnego wyniku zamiast zatrzymywać się po planie.
+
+## Skille Codex
+
+Skille projektu znajdują się w `.agents/skills/`. Dobieraj je do zadania na podstawie `description` lub jawnego wskazania `$nazwa-skilla`. Wczytuj tylko pasujące `SKILL.md` i potrzebne odwołania. Skille uzupełniają powyższe dokumenty i nie zmieniają ich hierarchii ani zakresu zgody użytkownika.
+
+- [ogarniacz-test-selector](.agents/skills/ogarniacz-test-selector/SKILL.md) — dobór i wykonanie weryfikacji.
+- [ogarniacz-github-workflow](.agents/skills/ogarniacz-github-workflow/SKILL.md) — Git, commit, push, PR i odczyt CI.
+- [ogarniacz-smart-forms](.agents/skills/ogarniacz-smart-forms/SKILL.md) — wspólne pola i zachowanie formularzy.
+- [ogarniacz-ui-design-system](.agents/skills/ogarniacz-ui-design-system/SKILL.md) — spójność komponentów, stylów i motywów.
+- [ogarniacz-module-builder](.agents/skills/ogarniacz-module-builder/SKILL.md) — rozwój modułów w istniejących warstwach.
+- [ogarniacz-debugger](.agents/skills/ogarniacz-debugger/SKILL.md) — odtworzenie błędu, diagnoza i naprawa przyczyny.
