@@ -165,7 +165,7 @@ jobs:
           $wersja = (ConvertFrom-Json $env:STAN_WYDANIA).wersja
           dotnet publish windows/Ogarniacz.Desktop/Ogarniacz.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$wersja -o artifacts/windows/app
           if ($LASTEXITCODE -ne 0) { throw 'dotnet publish nie powiódł się' }
-          $produkt = (Get-Item artifacts/windows/app/Ogarniacz.Desktop.exe).VersionInfo.ProductVersion.Split('+')[0]
+          $produkt = (Get-Item artifacts/windows/app/Ogarniacz.Desktop.exe).VersionInfo.ProductVersion.Split('+')[0].Trim()
           if ($produkt -ne $wersja) { throw 'Niezgodna wersja aplikacji Windows' }
           node scripts/platform-release.mjs metadane artifacts/windows/app
           if ($LASTEXITCODE -ne 0) { throw 'Brak metadanych Windows' }
@@ -176,7 +176,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Instalator Windows nie powstał' }
           $instalator = "artifacts/windows/Ogarniacz-$wersja-Setup.exe"
           if (-not (Test-Path $instalator)) { throw 'Brak instalatora Windows' }
-          if ((Get-Item $instalator).VersionInfo.ProductVersion -ne $wersja) { throw 'Niezgodna wersja instalatora Windows' }
+          if ((Get-Item $instalator).VersionInfo.ProductVersion.Trim() -ne $wersja) { throw 'Niezgodna wersja instalatora Windows' }
           New-Item -ItemType Directory -Force artifacts/wydanie | Out-Null
           Copy-Item $instalator artifacts/wydanie/
           $suma = (Get-FileHash $instalator -Algorithm SHA256).Hash.ToLowerInvariant()
