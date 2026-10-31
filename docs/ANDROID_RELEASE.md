@@ -1,75 +1,31 @@
 # Publikuj Ogarniacza
 
-Dwa kanały produkcyjne: podpisany Android APK oraz Raspberry (frontend i backend
-razem). Web OTA jest wycofany; PWA/service worker pozostają dla przeglądarki.
+Android APK jest częścią wspólnego wydania Android / Windows / Web/PWA / Raspberry Pi.
+Aktualny proces, bramki i wznowienie opisuje [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md).
+Web OTA pozostaje wycofany; PWA/service worker pozostają dla przeglądarki.
 
-Lokalne `npm run android:release` służy testom i nie publikuje. Ręczne
-`--publish`, `--publish-existing` oraz uruchomienie skryptu wznowienia poza
-właściwym workflow na `main` są blokowane przed budowaniem, tagowaniem i zapisem
-release. Nie ma fallbacku do poświadczeń Git. Zachowany workflow wznowienia
-obsługuje wyłącznie oryginalne artefakty częściowego wydania.
+Lokalne `npm run android:release` wyłącznie buduje i weryfikuje APK.
+`--publish`, `--publish-existing` i historyczny skrypt wznowienia samego APK
+nie mogą upublicznić niekompletnego zestawu. Nie ma zamiennika debug APK ani
+nowego klucza podpisującego.
 
-## Jeden workflow normalnego wydania
-
-**Actions → Publikuj Ogarniacza → Run workflow**, gałąź `main`.
-Wejścia: `version_bump` (patch domyślnie, minor lub major) i opcjonalne `release_notes`.
-Po produkcyjnym `1.0.23` domyślne patch przechodzi do `1.1.0`, następnie do
-`1.1.1`. Reguła znajduje się w istniejącym skrypcie przygotowania wydania.
-Kanał testowy jest rozwijany osobno: [Aktualizacje testowe — Etap A](AKTUALIZACJE_TESTOWE.md).
-Nie ma `new_release`. Workflow sprawdza dokładny SHA checkoutu, aktualny main oraz
-zakończone sukcesem CI typu push lub workflow_dispatch dla tego samego SHA. Brak zielonego CI zatrzymuje
-publikację przed przygotowaniem wersji i artefaktów.
-
-Klasyfikator `scripts/publikacja-klasyfikacja.mjs` porównuje historię osobno:
-Android od tagu ostatniego publicznego APK, Raspberry od `rpi-stable`.
-Testy, dokumentacja i jawne metadane developerskie nie wymagają publikacji;
-nieznane pliki runtime wymagają obu kanałów. Brak punktu odniesienia wymaga
-pierwszego zatwierdzenia. Rozbieżna historia zatrzymuje publikację.
-
-Jeżeli Android=false, package/lock nie zmieniają wersji i nie powstaje APK.
-Jeżeli Android=true, istniejące skrypty przygotowują wersję, budują i weryfikują
-APK (stały signing/fingerprint, metadane Androida, versionCode, SHA-256,
-latest.json). Artefakty są archiwizowane przed commitem i tagiem. Dopiero po
-udanym buildzie powstaje commit wersji na main, a następnie tag i publiczny release.
-Nie są wymagane manifest, klucz ani minNativeVersionCode Web OTA.
-
-Jeżeli Raspberry=true, workflow buduje frontend i backend. Po powodzeniu
-wszystkich wymaganych kroków, w tym weryfikacji publicznego APK, przesuwa
-`rpi-stable` do dokładnego finalnego commita (również commita wersji APK).
-Jeżeli Raspberry=false, gałąź pozostaje bez zmian. Pierwsze zatwierdzenie może
-utworzyć `rpi-stable`; kolejne muszą być fast-forward, bez force-pusha.
-Równoległe przesunięcie main podczas przygotowania wersji blokuje zapis wersji.
-
-## Konfiguracja GitHub
+## Konfiguracja Androida
 
 Environment `android-production`:
 - Secrets: `ANDROID_RELEASE_KEYSTORE_BASE64`, `ANDROID_RELEASE_STORE_PASSWORD`,
   `ANDROID_RELEASE_KEY_PASSWORD`, `ANDROID_RELEASE_KEY_ALIAS` — istniejący klucz.
 - Variables: `ANDROID_SYNC_API_URL`, `ANDROID_UPDATE_MANIFEST_URL` — pełne HTTPS.
 
-Workflow potrzebuje `contents: write` i `actions: read`. Ochrona main musi dopuszczać
-zapis commita wersji przez workflow; ochrona rpi-stable musi dopuszczać wyłącznie
-zatwierdzający workflow. Nie dopuszczaj force-pusha tego kanału.
+Fingerprint musi odpowiadać `config/android-release.json`. Każdy build i wznowienie
+sprawdzają `apksigner verify`, applicationId, versionName, versionCode, rozmiar APK,
+SHA-256 i `latest.json`. Wersja pochodzi z centralnego `package.json`, a versionCode
+z istniejącego `obliczKodWersji`. Dotychczasowa reguła patch 1.0.23 → 1.1.0 pozostaje.
+Kanał testowy jest odrębny: [Aktualizacje testowe — Etap A](AKTUALIZACJE_TESTOWE.md).
 
-## Jawne wznowienie częściowego APK
-
-**Actions → Wznów częściowe wydanie Android APK**: podaj `resume_version` X.Y.Z
-oraz opcjonalnie `resume_run_id` z oryginalnymi artefaktami `android-release`.
-Ten workflow nie buduje APK ani nie podbija wersji. Wyszukuje commit wersji na
-origin/main, weryfikuje tag, signing, metadane, SHA-256 i istniejące assety.
-Nie nadpisuje niezgodnych artefaktów. Brak oryginalnego APK zatrzymuje wznowienie.
-Archiwum Actions jest zachowane przez 30 dni.
-
-Wznowienie naprawia wyłącznie publikację APK i nie zatwierdza arbitralnego main
-na Raspberry. Zatwierdzenie Raspberry wykonuje normalny workflow po zielonym CI
-aktualnego main. Jeśli commit wersji zapisany tokenem workflow nie ma CI, uruchom
-Actions → CI → Run workflow na main, a po sukcesie normalny workflow publikacji.
-Opublikowany już APK nie otrzyma wtedy ponownego bumpa. Nie używaj Re-run
-do tworzenia nowej wersji.
-
-Weryfikacja publiczna używa przypiętych URL `/releases/download/vX.Y.Z/` oraz
-ograniczonych ponowień ruchomego `latest.json`. Testy lokalne nie publikują release,
-nie tworzą produkcyjnych tagów i nie zastępują testu na fizycznym Samsungu.
+Weryfikacja po publikacji korzysta z URL przypiętego do `vX.Y.Z` oraz ograniczonych
+ponowień ruchomego `latest.json`. Błąd po upublicznieniu jest jawny; nie usuwa release.
+Wznowienie uruchamia się dla tej samej wersji przez **Wznów częściowe wydanie wszystkich platform**
+lub wejście `resume_version` workflow **Publikuj Ogarniacza**.
 
 ## Przygotowanie telefonu
 

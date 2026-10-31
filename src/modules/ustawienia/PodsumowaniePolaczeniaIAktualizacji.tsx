@@ -41,7 +41,8 @@ export function ustalPodsumowaniePolaczeniaIAktualizacji(
   if (stan.bladApk) {
     return { tytul: 'Nie udało się sprawdzić aktualizacji', opis: stan.bladApk ?? 'Sprawdź połączenie z serwerem.', wariant: 'blad' as const }
   }
-  return { tytul: 'Ogarniacz jest aktualny', opis: 'Synchronizacja i aktualizacje są sprawdzane w tle.', wariant: 'sukces' as const }
+  if (stan.wynikApk) return { tytul: 'Aktualna wersja Android APK', opis: 'Ostatnia kontrola nie wykazała nowszego APK. Stan serwera i frontendu sprawdzaj osobno.', wariant: 'sukces' as const }
+  return { tytul: 'Aktualność aplikacji niepotwierdzona', opis: 'Sprawdź kanał swojej platformy poniżej. Brak błędu nie potwierdza najnowszej wersji.', wariant: 'informacja' as const }
 }
 
 export function PodsumowaniePolaczeniaIAktualizacji({ synchronizacjaSkonfigurowana, diagnostyka, stan: stanWejsciowy }: PodsumowaniePolaczeniaIAktualizacjiProps) {

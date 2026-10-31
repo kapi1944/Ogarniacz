@@ -1,14 +1,17 @@
 import { createHash } from 'node:crypto'
-import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { czyToSamArtefaktAktualizacji, pobierzPublicznyManifestPoPublikacji, utworzManifestAktualizacji, walidujManifestAktualizacji, wymagajOficjalnejPublikacji } from './android-wspolne.mjs'
+import { pobierzPublicznyManifestPoPublikacji, walidujManifestAktualizacji, wymagajOficjalnejPublikacji } from './android-wspolne.mjs'
+import { sprawdzZestaw, znajdzWydanie } from './platform-release-wspolne.mjs'
 
 const skrot = (dane) => createHash('sha256').update(dane).digest('hex')
 
-export async function zapewnijRelease({ repozytorium, token, manifest, pliki, pobierz = fetch }) {
+export async function zapewnijRelease({ repozytorium, token, manifest, pliki, stan, weryfikatory, potwierdzMain, pobierz = fetch }) {
+  await sprawdzZestaw(stan, new Map(pliki), weryfikatory)
+  if (!potwierdzMain) throw new Error('Brak bramki aktualności main.')
+  await potwierdzMain()
   walidujManifestAktualizacji(manifest)
+  if (JSON.stringify(manifest) !== JSON.stringify(JSON.parse(new Map(pliki).get('latest.json')))) throw new Error('Manifest publikacji nie odpowiada zestawowi artefaktów.')
   if (manifest.apkUrl !== `Ogarniacz-${manifest.versionName}-release.apk` || !Number.isInteger(manifest.size)) throw new Error('Manifest musi wskazywać asset APK tej wersji i jego rozmiar.')
   const api = `https://api.github.com/repos/${repozytorium}`
   const tag = `v${manifest.versionName}`
@@ -18,29 +21,37 @@ export async function zapewnijRelease({ repozytorium, token, manifest, pliki, po
     if (!odpowiedz.ok) throw new Error(`GitHub API HTTP ${odpowiedz.status}: ${adres}`)
     return odpowiedz
   }
-  const odpowiedz = await pobierz(`${api}/releases/tags/${tag}`, { headers: naglowki, signal: AbortSignal.timeout(30_000) })
-  let wydanie
-  if (odpowiedz.status === 404) {
-    wydanie = await (await zadanie(`${api}/releases`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag_name: tag, name: tag, body: manifest.releaseNotes || `Ogarniacz ${manifest.versionName}`, draft: true, prerelease: false }) })).json()
-  } else {
-    if (!odpowiedz.ok) throw new Error(`GitHub release HTTP ${odpowiedz.status}`)
-    wydanie = await odpowiedz.json()
+  let wydanie = await znajdzWydanie(tag, async (sciezka) => (await zadanie(`${api}/${sciezka}`)).json())
+  if (!wydanie) {
+    wydanie = await (await zadanie(`${api}/releases`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag_name: tag, target_commitish: stan.sha, name: tag, body: manifest.releaseNotes || `Ogarniacz ${manifest.versionName}`, draft: true, prerelease: false }) })).json()
   }
   if (wydanie.prerelease) throw new Error('Istniejące wydanie jest prerelease; wymagana ręczna diagnostyka.')
+  if (wydanie.tag_name !== tag) throw new Error('Niezgodny tag istniejącego wydania.')
   for (const [nazwa, dane] of pliki) {
     const asset = wydanie.assets?.find((wpis) => wpis.name === nazwa)
     if (asset) {
       const zdalne = Buffer.from(await (await zadanie(asset.url, { headers: { Accept: 'application/octet-stream' } })).arrayBuffer())
-      const zgodny = nazwa === 'latest.json'
-        ? czyToSamArtefaktAktualizacji(walidujManifestAktualizacji(JSON.parse(zdalne)), manifest)
-        : asset.size === dane.length && skrot(zdalne) === skrot(dane)
+      const zgodny = asset.size === dane.length && skrot(zdalne) === skrot(dane)
       if (!zgodny) throw new Error(`Rzeczywista niespójność istniejącego assetu ${nazwa}; niczego nie nadpisano.`)
       continue
     }
+    if (!wydanie.draft) throw new Error(`Niekompletne publiczne wydanie: brak ${nazwa}; wymagana ręczna diagnostyka.`)
     const wysylka = wydanie.upload_url.replace(/\{\?name,label\}$/, '')
     await zadanie(`${wysylka}?name=${encodeURIComponent(nazwa)}`, { method: 'POST', headers: { 'Content-Type': nazwa.endsWith('.json') ? 'application/json' : 'application/octet-stream' }, body: dane })
   }
-  if (wydanie.draft) await zadanie(`${api}/releases/${wydanie.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft: false }) })
+  // Ponowny odczyt bajtów z GitHub, dopiero potem upublicznienie.
+  const zapisane = await (await zadanie(`${api}/releases/${wydanie.id}`)).json()
+  const zdalnePliki = new Map()
+  for (const [nazwa, dane] of pliki) {
+    const asset = zapisane.assets?.find((wpis) => wpis.name === nazwa)
+    if (!asset) throw new Error(`Niekompletny draft: brak ${nazwa}.`)
+    const zdalne = Buffer.from(await (await zadanie(asset.url, { headers: { Accept: 'application/octet-stream' } })).arrayBuffer())
+    if (asset.size !== dane.length || skrot(zdalne) !== skrot(dane)) throw new Error(`Błędna suma SHA-256 zdalnego ${nazwa}.`)
+    zdalnePliki.set(nazwa, zdalne)
+  }
+  await sprawdzZestaw(stan, zdalnePliki, weryfikatory)
+  await potwierdzMain()
+  if (wydanie.draft) await zadanie(`${api}/releases/${wydanie.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ draft: false, make_latest: 'true' }) })
   return wydanie
 }
 
@@ -75,54 +86,9 @@ export function ustalPunktWznowienia(wersja, git) {
   return { commit, tag, tagi }
 }
 
-export async function wznowWydanie(wersja, katalog = 'android/app/build/outputs/apk/release') {
+export async function wznowWydanie() {
   wymagajOficjalnejPublikacji(process.env, 'android-release-resume.yml')
-  const git = (...argumenty) => execFileSync('git', argumenty, { encoding: 'utf8' }).trim()
-  const repozytorium = process.env.GITHUB_REPOSITORY
-  const token = process.env.GITHUB_TOKEN
-  if (!repozytorium || !token) throw new Error('Brak konfiguracji GitHub wznowienia.')
-  const { commit, tag, tagi } = ustalPunktWznowienia(wersja, git)
-  await mkdir(katalog, { recursive: true })
-  const api = `https://api.github.com/repos/${repozytorium}/releases/tags/${tag}`
-  const odpowiedz = await fetch(api, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) })
-  if (!odpowiedz.ok && odpowiedz.status !== 404) throw new Error(`Odczyt release HTTP ${odpowiedz.status}`)
-  const wydanie = odpowiedz.ok ? await odpowiedz.json() : undefined
-  for (const asset of wydanie?.assets ?? []) {
-    if (![ `Ogarniacz-${wersja}-release.apk`, `Ogarniacz-${wersja}-release.apk.sha256`, 'latest.json' ].includes(asset.name)) continue
-    const dane = await fetch(asset.url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/octet-stream' }, signal: AbortSignal.timeout(60_000) })
-    if (!dane.ok) throw new Error(`Pobranie assetu HTTP ${dane.status}`)
-    await writeFile(resolve(katalog, asset.name), Buffer.from(await dane.arrayBuffer()))
-  }
-  const nazwaApk = `Ogarniacz-${wersja}-release.apk`
-  const sciezkaApk = resolve(katalog, nazwaApk)
-  let apk
-  try { apk = await readFile(sciezkaApk) } catch { throw new Error('Brak oryginalnego APK. Wskaż run z zachowanymi artefaktami; wznowienie nie buduje ani nie podbija wersji.') }
-  const wygenerowany = await utworzManifestAktualizacji({ wersja, sciezkaApk })
-  let manifest
-  try { manifest = JSON.parse(await readFile(resolve(katalog, 'latest.json'), 'utf8')) }
-  catch (blad) { if (blad.code !== 'ENOENT') throw blad; manifest = wygenerowany }
-  walidujManifestAktualizacji(manifest)
-  if (!czyToSamArtefaktAktualizacji(manifest, wygenerowany)) throw new Error('Manifest wznowienia nie odpowiada oryginalnemu APK.')
-  const sdk = process.env.ANDROID_HOME || process.env.ANDROID_SDK_ROOT
-  if (!sdk) throw new Error('Brak Android SDK do weryfikacji oryginalnego APK.')
-  const narzedzia = resolve(sdk, 'build-tools', (await readdir(resolve(sdk, 'build-tools'))).sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0])
-  const metadane = execFileSync(resolve(narzedzia, 'aapt'), ['dump', 'badging', sciezkaApk], { encoding: 'utf8' })
-  if (!metadane.includes(`package: name='pl.ogarniacz.app' versionCode='${manifest.versionCode}' versionName='${wersja}'`)) throw new Error('APK ma niezgodne metadane Androida.')
-  const podpis = execFileSync(resolve(narzedzia, 'apksigner'), ['verify', '--print-certs', sciezkaApk], { encoding: 'utf8' })
-  const konfiguracja = JSON.parse(await readFile('config/android-release.json', 'utf8'))
-  if (!podpis.toLowerCase().includes(konfiguracja.sha256Certyfikatu.replace(/[:\s]/g, '').toLowerCase())) throw new Error('Nieprawidłowy certyfikat oryginalnego APK.')
-  const suma = Buffer.from(`${manifest.sha256}  ${nazwaApk}\n`)
-  try { if (!(await readFile(resolve(katalog, `${nazwaApk}.sha256`))).equals(suma)) throw new Error('Niezgodny plik SHA-256.') }
-  catch (blad) { if (blad.code !== 'ENOENT') throw blad }
-  if (!tagi) {
-    let lokalny
-    try { lokalny = git('rev-parse', '--verify', `refs/tags/${tag}^{commit}`) } catch { /* Brak lokalnego tagu. */ }
-    if (lokalny && lokalny !== commit) throw new Error('Lokalny tag wskazuje inny commit.')
-    if (!lokalny) execFileSync('git', ['tag', tag, commit])
-    execFileSync('git', ['push', 'origin', `refs/tags/${tag}`])
-  }
-  await zapewnijRelease({ repozytorium, token, manifest, pliki: [[nazwaApk, apk], [`${nazwaApk}.sha256`, suma], ['latest.json', Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`)]] })
-  await sprawdzPublikacje({ repozytorium, manifest, adresManifestu: process.env.VITE_ANDROID_UPDATE_MANIFEST_URL })
+  throw new Error('Wznawiaj kompletny zestaw przez android-release.yml z resume_version; publikacja samego APK jest zablokowana.')
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

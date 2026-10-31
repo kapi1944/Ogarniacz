@@ -2,7 +2,7 @@ import { platforma } from '../../platform/platforma'
 import { act, cleanup as wyczysc, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { komunikatBleduAktualizacji, PanelAktualizacji } from './PanelAktualizacji'
-import { PodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
+import { PodsumowaniePolaczeniaIAktualizacji, ustalPodsumowaniePolaczeniaIAktualizacji } from './PodsumowaniePolaczeniaIAktualizacji'
 import { SekcjaPolaczeniaIAktualizacji } from './SekcjaPolaczeniaIAktualizacji'
 import { utworzDiagnostykeSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
 import { utworzMetadane } from '../../domain/fabryki'
@@ -25,6 +25,12 @@ const dostepnaAktualizacja = {
 }
 
 let stanKontroli = { sprawdzono: true, wynikApk: dostepnaAktualizacja, czestotliwoscGodzin: 4 }
+
+it('brak wyniku kontroli nie potwierdza aktualności produktu', () => {
+  const wynik = ustalPodsumowaniePolaczeniaIAktualizacji(true, { sprawdzono: false, czestotliwoscGodzin: 4 })
+  expect(wynik.tytul).toBe('Aktualność aplikacji niepotwierdzona')
+  expect(wynik.wariant).not.toBe('sukces')
+})
 
 vi.mock('../../platform/platforma', () => ({
   platforma: {
@@ -281,9 +287,9 @@ it('błędny SHA blokuje instalator i pozwala ponowić pobranie', async () => {
 })
 
 it.each([
-  { code: 'BLAD_SIECI', data: { rodzaj: 'TIMEOUT' }, etykieta: 'błąd sieci', opis: 'Przekroczono czas oczekiwania' },
-  { code: 'BLAD_SIECI', data: { rodzaj: 'DNS' }, etykieta: 'błąd sieci', opis: 'Nie udało się odnaleźć serwera' },
-  { code: 'BLAD_SIECI', data: { rodzaj: 'TLS' }, etykieta: 'błąd sieci', opis: 'bezpiecznego połączenia HTTPS' },
+  { code: 'BLAD_SIECI', data: { rodzaj: 'TIMEOUT' }, etykieta: 'brak połączenia', opis: 'Przekroczono czas oczekiwania' },
+  { code: 'BLAD_SIECI', data: { rodzaj: 'DNS' }, etykieta: 'brak połączenia', opis: 'Nie udało się odnaleźć serwera' },
+  { code: 'BLAD_SIECI', data: { rodzaj: 'TLS' }, etykieta: 'brak połączenia', opis: 'bezpiecznego połączenia HTTPS' },
   { code: 'BLAD_HTTP', data: { http: 406 }, etykieta: 'błąd HTTP', opis: 'HTTP 406' },
   { code: 'BLAD_ZAPISU', data: {}, etykieta: 'błąd zapisu APK', opis: 'prywatnej pamięci' },
   { code: 'BLAD_ROZMIARU', data: {}, etykieta: 'niezgodny rozmiar APK', opis: 'Rozmiar APK nie zgadza się' },

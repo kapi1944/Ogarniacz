@@ -1,209 +1,317 @@
 name: Publikuj Ogarniacza
-
 on:
   workflow_dispatch:
     inputs:
+      verify_only:
+        description: Tylko kontrola bramek i wersji, bez zapisu i publikacji
+        type: boolean
+        default: true
       version_bump:
-        description: Rodzaj kolejnej wersji (patch po 1.0.23 przechodzi do 1.1.0)
-        required: true
+        description: Rodzaj wspólnej wersji wszystkich platform
         type: choice
         options: [patch, minor, major]
         default: patch
       release_notes:
-        description: Opcjonalne informacje o wydaniu
-        required: false
+        description: Informacje o wydaniu
         type: string
-
+      source_sha:
+        description: SHA zielonego CI (puste oznacza SHA uruchomienia)
+        type: string
+      automatyczna:
+        description: Wywołanie przez auto-publish
+        type: boolean
+        default: false
+      resume_version:
+        description: Wznów zapisaną wersję X.Y.Z bez kolejnego numeru
+        type: string
 permissions:
   contents: write
   actions: read
-
 concurrency:
   group: android-production-release
   cancel-in-progress: false
-
+env:
+  GITHUB_TOKEN: ${{ github.token }}
+  GH_TOKEN: ${{ github.token }}
 jobs:
-  release:
-    name: Zatwierdź kanały runtime
+  przygotowanie:
+    timeout-minutes: 10
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: android-production
-    if: github.ref == 'refs/heads/main'
-    env:
-      VITE_SYNC_API_URL: ${{ vars.ANDROID_SYNC_API_URL }}
-      VITE_ANDROID_UPDATE_MANIFEST_URL: ${{ vars.ANDROID_UPDATE_MANIFEST_URL }}
-      ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-      ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
-      ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
-      ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
-      GITHUB_TOKEN: ${{ github.token }}
+    outputs:
+      aktywne: ${{ steps.stan.outputs.aktywne }}
+      stan: ${{ steps.stan.outputs.stan }}
+      sha: ${{ steps.stan.outputs.sha }}
     steps:
-      - name: Zablokuj ponowne uruchomienie wydania
-        if: github.run_attempt > 1
-        run: |
-          echo 'Uruchom nowy workflow z main; częściowe APK wznawiaj osobnym workflow.' >&2
-          exit 1
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: npm
-
+      - name: Potwierdź zielone CI i zapisz wspólną wersję
+        id: stan
+        env:
+          VERSION_BUMP: ${{ inputs.version_bump }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          AUTOMATYCZNA: ${{ inputs.automatyczna }}
+          AUTO_PUBLISH_ENABLED: ${{ vars.AUTO_PUBLISH_ENABLED }}
+          RESUME_VERSION: ${{ inputs.resume_version }}
+          VERIFY_ONLY: ${{ inputs.verify_only }}
+        run: node scripts/platform-release.mjs przygotuj
+  android:
+    needs: przygotowanie
+    if: needs.przygotowanie.outputs.aktywne == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: android-production
+    env:
+      STAN_WYDANIA: ${{ needs.przygotowanie.outputs.stan }}
+      VITE_SYNC_API_URL: ${{ vars.ANDROID_SYNC_API_URL }}
+      VITE_ANDROID_UPDATE_MANIFEST_URL: ${{ vars.ANDROID_UPDATE_MANIFEST_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.przygotowanie.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-
-      - name: Potwierdź dokładny main i zielone CI
+      - name: Odtwórz zweryfikowany etap android
+        id: zapis
+        run: node scripts/platform-release.mjs odtworz android
+      - name: Odtwórz istniejący klucz podpisu
+        if: steps.zapis.outputs.gotowe != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]]
-          [[ "$(git ls-remote origin refs/heads/main | cut -f1)" == "$GITHUB_SHA" ]] || { echo 'main zmienił się; uruchom publikację ponownie.' >&2; exit 1; }
-          wynik="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&status=completed" --jq ".workflow_runs | any(.[]; .head_sha == \"$GITHUB_SHA\" and .head_branch == \"main\" and (.event == \"push\" or .event == \"workflow_dispatch\") and .conclusion == \"success\")")"
-          [[ "$wynik" == true ]] || { echo 'Brak zielonego CI dla dokładnego main SHA.' >&2; exit 1; }
-
-      - name: Odczytaj punkty zatwierdzenia kanałów
-        id: baza
-        run: |
-          set -euo pipefail
-          tag="$(node --input-type=module -e "const r=await fetch('https://api.github.com/repos/'+process.env.GITHUB_REPOSITORY+'/releases/latest',{signal:AbortSignal.timeout(10000),headers:{Accept:'application/vnd.github+json',Authorization:'Bearer '+process.env.GITHUB_TOKEN}}); if(r.status===404) process.exit(0); if(!r.ok) throw new Error('Odczyt wydania HTTP '+r.status); const m=await r.json(); if(!/^v\d+\.\d+\.\d+$/.test(m.tag_name??'')) throw new Error('Nieprawidlowy tag APK'); process.stdout.write(m.tag_name)")"
-          stable="$(git ls-remote origin refs/heads/rpi-stable | cut -f1)"
-          if [[ -n "$stable" ]]; then git fetch --no-tags origin rpi-stable:refs/remotes/origin/rpi-stable; fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "stable=$stable" >> "$GITHUB_OUTPUT"
-          echo "wersja=${tag#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Sklasyfikuj zmiany od ostatnich zatwierdzeń
-        id: kanaly
-        env:
-          BAZA_ANDROID: ${{ steps.baza.outputs.tag }}
-          BAZA_RPI: ${{ steps.baza.outputs.stable }}
-        run: node scripts/publikacja-klasyfikacja.mjs "$GITHUB_SHA" "$BAZA_ANDROID" "$BAZA_RPI" >> "$GITHUB_OUTPUT"
-
-      - name: Sprawdź jednorazową konfigurację środowiska
-        if: steps.kanaly.outputs.android == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          brak=()
-          [[ "$GITHUB_REF" == refs/heads/main ]] || { echo 'Release wolno uruchomić wyłącznie z main.' >&2; exit 1; }
-          [[ "$(git rev-parse HEAD)" == "$GITHUB_SHA" ]] || { echo 'Checkout nie odpowiada github.sha.' >&2; exit 1; }
-          for wpis in VITE_SYNC_API_URL:ANDROID_SYNC_API_URL VITE_ANDROID_UPDATE_MANIFEST_URL:ANDROID_UPDATE_MANIFEST_URL ANDROID_RELEASE_KEYSTORE_BASE64:ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_STORE_PASSWORD:ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_KEY_PASSWORD:ANDROID_RELEASE_KEY_PASSWORD ANDROID_RELEASE_KEY_ALIAS:ANDROID_RELEASE_KEY_ALIAS; do
-            zmienna="${wpis%%:*}"
-            nazwa="${wpis#*:}"
-            [[ -n "${!zmienna:-}" ]] || brak+=("$nazwa")
-          done
-          if ((${#brak[@]})); then
-            echo "Brak konfiguracji Environment android-production: ${brak[*]}" >&2
-            exit 1
-          fi
-          [[ "$VITE_ANDROID_UPDATE_MANIFEST_URL" == https://* ]] || { echo 'ANDROID_UPDATE_MANIFEST_URL musi używać HTTPS.' >&2; exit 1; }
-          [[ "$VITE_SYNC_API_URL" == https://* ]] || { echo 'ANDROID_SYNC_API_URL musi używać prywatnego HTTPS.' >&2; exit 1; }
-
-      - name: Odtwórz stały klucz i konfigurację signing
-        if: steps.kanaly.outputs.android == 'true'
-        shell: bash
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_STORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_STORE_PASSWORD }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_RELEASE_KEY_ALIAS }}
         run: |
           set -euo pipefail
           umask 077
+          for zmienna in VITE_SYNC_API_URL VITE_ANDROID_UPDATE_MANIFEST_URL ANDROID_RELEASE_KEYSTORE_BASE64 ANDROID_RELEASE_STORE_PASSWORD ANDROID_RELEASE_KEY_PASSWORD ANDROID_RELEASE_KEY_ALIAS; do
+            [[ -n "${!zmienna:-}" ]] || { echo "Brak konfiguracji $zmienna" >&2; exit 1; }
+          done
+          [[ "$VITE_SYNC_API_URL" == https://* && "$VITE_ANDROID_UPDATE_MANIFEST_URL" == https://* ]]
           klucz="$RUNNER_TEMP/ogarniacz-release.jks"
           printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$klucz"
-          test -s "$klucz" || { echo 'Nie udało się odtworzyć ANDROID_RELEASE_KEYSTORE_BASE64.' >&2; exit 1; }
+          test -s "$klucz"
           cat > android/keystore.properties <<EOF
           storeFile=$klucz
           storePassword=$ANDROID_RELEASE_STORE_PASSWORD
           keyAlias=$ANDROID_RELEASE_KEY_ALIAS
           keyPassword=$ANDROID_RELEASE_KEY_PASSWORD
           EOF
-          oczekiwany="$(node -p "require('./config/android-release.json').sha256Certyfikatu" | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
+          oczekiwany="$(node -p "require('./config/android-release.json').sha256Certyfikatu")"
           faktyczny="$(keytool -list -v -keystore "$klucz" -alias "$ANDROID_RELEASE_KEY_ALIAS" -storepass "$ANDROID_RELEASE_STORE_PASSWORD" | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d '[:space:]:' | tr '[:upper:]' '[:lower:]')"
-          [[ "$faktyczny" == "$oczekiwany" ]] || { echo 'Fingerprint produkcyjnego keystore nie zgadza się z config/android-release.json.' >&2; exit 1; }
-
-      - name: Przygotuj wersję Android APK
-        if: steps.kanaly.outputs.android == 'true'
-        env:
-          RODZAJ_WERSJI: ${{ inputs.version_bump }}
-          WERSJA_OPUBLIKOWANA: ${{ steps.baza.outputs.wersja }}
-        run: node scripts/android-release-przygotowanie.mjs --version-bump "$RODZAJ_WERSJI" --published-version "$WERSJA_OPUBLIKOWANA"
-
-      - name: Zainstaluj zależności
+          [[ "$faktyczny" == "$oczekiwany" ]]
+      - if: steps.zapis.outputs.gotowe != 'true'
         run: npm ci
-
-      - name: Sprawdź reguły release
-        run: npm run android:release:test
-
-      - name: Zapisz opcjonalne release notes
-        if: steps.kanaly.outputs.android == 'true' && inputs.release_notes != ''
-        shell: bash
+      - name: Zbuduj, podpisz i zweryfikuj APK
+        if: steps.zapis.outputs.gotowe != 'true'
         env:
           RELEASE_NOTES: ${{ inputs.release_notes }}
-        run: printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
-
-      - name: Zbuduj, podpisz i zweryfikuj artefakty przed commitem wersji
-        if: steps.kanaly.outputs.android == 'true'
-        shell: bash
         run: |
           set -euo pipefail
-          argumenty=()
-          if [[ -f "$RUNNER_TEMP/release-notes.md" ]]; then
-            argumenty+=(--release-notes-file "$RUNNER_TEMP/release-notes.md")
-          fi
-          npm run android:release -- "${argumenty[@]}"
-
-      - name: Sprawdź natywny updater przed zapisaniem wersji
-        if: steps.kanaly.outputs.android == 'true'
-        working-directory: android
-        run: bash ./gradlew :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.PobieranieApkTest' --tests 'pl.ogarniacz.app.MigracjaPozostalosciWebOtaTest' --no-daemon
-
-      - name: Zachowaj zweryfikowane artefakty przed commitem i tagiem
-        if: steps.kanaly.outputs.android == 'true'
-        uses: actions/upload-artifact@v4
+          printf '%s' "$RELEASE_NOTES" > "$RUNNER_TEMP/release-notes.md"
+          npm run android:release -- --release-notes-file "$RUNNER_TEMP/release-notes.md"
+          bash android/gradlew -p android :app:testDebugUnitTest --tests 'pl.ogarniacz.app.AktualizacjePluginTest' --tests 'pl.ogarniacz.app.PobieranieApkTest' --tests 'pl.ogarniacz.app.MigracjaPozostalosciWebOtaTest' --no-daemon
+          mkdir -p artifacts/wydanie
+          cp android/app/build/outputs/apk/release/Ogarniacz-*-release.apk* android/app/build/outputs/apk/release/latest.json artifacts/wydanie/
+          node scripts/platform-release.mjs potwierdz android
+      - uses: actions/upload-artifact@v4
+        if: steps.zapis.outputs.gotowe != 'true'
         with:
-          name: android-release
-          path: |
-            android/app/build/outputs/apk/release/Ogarniacz-*-release.apk
-            android/app/build/outputs/apk/release/Ogarniacz-*-release.apk.sha256
-            android/app/build/outputs/apk/release/latest.json
+          name: wydanie-${{ fromJSON(env.STAN_WYDANIA).wersja }}-${{ needs.przygotowanie.outputs.sha }}-android
+          path: artifacts/wydanie/*
           if-no-files-found: error
-          retention-days: 30
-
-      - name: Zbuduj frontend i backend Raspberry
-        if: steps.kanaly.outputs.raspberry == 'true'
-        run: npm run build:production
-
-      - name: Zapisz wersję dopiero po udanym buildzie
-        if: steps.kanaly.outputs.android == 'true'
-        shell: bash
+          retention-days: 90
+      - name: Usuń tymczasowy klucz
+        if: always()
+        run: rm -f android/keystore.properties "$RUNNER_TEMP/ogarniacz-release.jks"
+  windows:
+    needs: [przygotowanie, android]
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      STAN_WYDANIA: ${{ needs.przygotowanie.outputs.stan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.przygotowanie.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Odtwórz zweryfikowany etap windows
+        id: zapis
+        run: node scripts/platform-release.mjs odtworz windows
+      - uses: actions/setup-dotnet@v4
+        if: steps.zapis.outputs.gotowe != 'true'
+        with:
+          dotnet-version: '8.0.x'
+      - name: Zbuduj i sprawdź wersję instalatora Windows
+        if: steps.zapis.outputs.gotowe != 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $wersja = (ConvertFrom-Json $env:STAN_WYDANIA).wersja
+          dotnet publish windows/Ogarniacz.Desktop/Ogarniacz.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$wersja -o artifacts/windows/app
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish nie powiódł się' }
+          $produkt = (Get-Item artifacts/windows/app/Ogarniacz.Desktop.exe).VersionInfo.ProductVersion.Split('+')[0].Trim()
+          if ($produkt -ne $wersja) { throw 'Niezgodna wersja aplikacji Windows' }
+          node scripts/platform-release.mjs metadane artifacts/windows/app
+          if ($LASTEXITCODE -ne 0) { throw 'Brak metadanych Windows' }
+          choco install innosetup --yes --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Brak Inno Setup' }
+          $kompilator = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6/ISCC.exe'
+          & $kompilator "/DAppVersion=$wersja" 'windows/installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Instalator Windows nie powstał' }
+          $instalator = "artifacts/windows/Ogarniacz-$wersja-Setup.exe"
+          if (-not (Test-Path $instalator)) { throw 'Brak instalatora Windows' }
+          if ((Get-Item $instalator).VersionInfo.ProductVersion.Trim() -ne $wersja) { throw 'Niezgodna wersja instalatora Windows' }
+          New-Item -ItemType Directory -Force artifacts/wydanie | Out-Null
+          Copy-Item $instalator artifacts/wydanie/
+          $suma = (Get-FileHash $instalator -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$suma  Ogarniacz-$wersja-Setup.exe" | Set-Content -Encoding ascii "artifacts/wydanie/Ogarniacz-$wersja-Setup.exe.sha256"
+          node scripts/platform-release.mjs potwierdz windows
+          if ($LASTEXITCODE -ne 0) { throw 'Weryfikacja Windows nie powiodła się' }
+      - uses: actions/upload-artifact@v4
+        if: steps.zapis.outputs.gotowe != 'true'
+        with:
+          name: wydanie-${{ fromJSON(env.STAN_WYDANIA).wersja }}-${{ needs.przygotowanie.outputs.sha }}-windows
+          path: artifacts/wydanie/*
+          if-no-files-found: error
+          retention-days: 90
+  web:
+    needs: [przygotowanie, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      STAN_WYDANIA: ${{ needs.przygotowanie.outputs.stan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.przygotowanie.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Odtwórz zweryfikowany Web/PWA
+        id: zapis
+        run: node scripts/platform-release.mjs odtworz web
+      - if: steps.zapis.outputs.gotowe != 'true'
+        run: npm ci
+      - name: Zbuduj i zweryfikuj Web/PWA
+        if: steps.zapis.outputs.gotowe != 'true'
         run: |
           set -euo pipefail
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add package.json package-lock.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Przygotuj wydanie Androida $(node -p "require('./package.json').version")"
-            [[ "$(git ls-remote origin refs/heads/main | cut -f1)" == "$GITHUB_SHA" ]] || { echo 'origin/main przesunął się podczas builda.' >&2; exit 1; }
-            git push origin HEAD:main
-          fi
-
-      - name: Zapewnij wykonywalność Gradle Wrappera
-        if: steps.kanaly.outputs.android == 'true'
-        shell: bash
+          npm run build
+          npm run pwa:smoke
+          node scripts/platform-release.mjs metadane dist
+          wersja="$(node -p "require('./package.json').version")"
+          mkdir -p artifacts/wydanie
+          tar -czf "artifacts/wydanie/Ogarniacz-$wersja-Web.tar.gz" -C dist .
+          node scripts/platform-release.mjs potwierdz web
+      - uses: actions/upload-artifact@v4
+        if: steps.zapis.outputs.gotowe != 'true'
+        with:
+          name: wydanie-${{ fromJSON(env.STAN_WYDANIA).wersja }}-${{ needs.przygotowanie.outputs.sha }}-web
+          path: artifacts/wydanie/*
+          if-no-files-found: error
+          retention-days: 90
+  raspberry:
+    needs: [przygotowanie, web]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      STAN_WYDANIA: ${{ needs.przygotowanie.outputs.stan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.przygotowanie.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Odtwórz zweryfikowany Raspberry
+        id: zapis
+        run: node scripts/platform-release.mjs odtworz raspberry
+      - if: steps.zapis.outputs.gotowe != 'true'
+        run: npm ci
+      - name: Odtwórz gotowy frontend bez powtarzania buildu
+        if: steps.zapis.outputs.gotowe != 'true'
         run: |
           set -euo pipefail
-          test -x android/gradlew || chmod +x android/gradlew
-          test -x android/gradlew
-
-      - name: Opublikuj tylko po przygotowaniu artefaktów
-        if: steps.kanaly.outputs.android == 'true'
-        shell: bash
-        run: npm run android:release -- --publish-existing
-
-      - name: Zatwierdź Raspberry dopiero po sukcesie wymaganych kanałów
-        if: steps.kanaly.outputs.raspberry == 'true'
-        run: bash scripts/publikacja-rpi-stable.sh "$(git rev-parse HEAD)"
+          node scripts/platform-release.mjs odtworz web
+          mkdir -p dist
+          tar -xzf "artifacts/wydanie/Ogarniacz-$(node -p "require('./package.json').version")-Web.tar.gz" -C dist
+      - name: Zbuduj backend i paczkę Raspberry
+        if: steps.zapis.outputs.gotowe != 'true'
+        run: |
+          set -euo pipefail
+          npm run server:build
+          wersja="$(node -p "require('./package.json').version")"
+          mkdir -p artifacts/wydanie
+          tar -czf "artifacts/wydanie/Ogarniacz-$wersja-RaspberryPi.tar.gz" dist dist-server package.json package-lock.json deploy/rpi scripts/aktualizuj-rpi.sh
+          node scripts/platform-release.mjs potwierdz raspberry
+      - uses: actions/upload-artifact@v4
+        if: steps.zapis.outputs.gotowe != 'true'
+        with:
+          name: wydanie-${{ fromJSON(env.STAN_WYDANIA).wersja }}-${{ needs.przygotowanie.outputs.sha }}-raspberry
+          path: |
+            artifacts/wydanie/Ogarniacz-*-RaspberryPi.tar.gz
+            artifacts/wydanie/raspberry.json
+          if-no-files-found: error
+          retention-days: 90
+  publikacja:
+    needs: [przygotowanie, android, windows, web, raspberry]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: android-production
+    env:
+      STAN_WYDANIA: ${{ needs.przygotowanie.outputs.stan }}
+      VITE_ANDROID_UPDATE_MANIFEST_URL: ${{ vars.ANDROID_UPDATE_MANIFEST_URL }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.przygotowanie.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Pobierz i ponownie zweryfikuj wszystkie ukończone etapy
+        run: |
+          set -euo pipefail
+          node scripts/platform-release.mjs odtworz android
+          node scripts/platform-release.mjs odtworz windows
+          node scripts/platform-release.mjs odtworz web
+          node scripts/platform-release.mjs odtworz raspberry
+      - name: Draft, integralność zdalnych plików, dopiero potem publiczne wydanie
+        run: node scripts/platform-release.mjs publikuj
+  kanal:
+    name: Zatwierdź rpi-stable po wydaniu (osobna operacja)
+    needs: [przygotowanie, publikacja]
+    runs-on: ubuntu-latest
+    env:
+      STAN_WYDANIA: ${{ needs.przygotowanie.outputs.stan }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.przygotowanie.outputs.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node scripts/platform-release.mjs kanal

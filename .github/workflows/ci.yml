@@ -56,6 +56,65 @@ jobs:
       - name: Build
         run: node --test scripts/metadane-buildu.test.mjs scripts/test-build.test.mjs scripts/android-beta.test.mjs && npm run build
 
+      - name: Spakuj frontend Web i runtime Raspberry Pi
+        run: |
+          npm run server:build
+          npm run pwa:smoke
+          mkdir -p artifacts/platform
+          tar -czf "artifacts/platform/Ogarniacz-Web-${GITHUB_SHA}.tar.gz" -C dist .
+          tar -czf "artifacts/platform/Ogarniacz-RaspberryPi-${GITHUB_SHA}.tar.gz" dist dist-server package.json package-lock.json deploy/rpi scripts/aktualizuj-rpi.sh
+          (cd artifacts/platform && sha256sum -- *.tar.gz > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-raspberry-${{ github.sha }}
+          path: artifacts/platform/*
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows (WebView2 / installer / SHA-256)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Testy diagnostyki aktualizacji Windows
+        # Testy uruchamiają tę samą logikę, którą wykorzystuje okno aktualizatora.
+        run: dotnet run --project windows/TestyAktualizacji/TestyAktualizacji.csproj -c Release
+      - name: Zbuduj natywną aplikację Windows
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = node -p "require('./package.json').version"
+          dotnet publish windows/Ogarniacz.Desktop/Ogarniacz.Desktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:Version=$version -o artifacts/windows/app
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish nie powiódł się' }
+      - name: Zainstaluj narzędzie Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+      - name: Zbuduj i sprawdź instalator EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = node -p "require('./package.json').version"
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) { throw 'Brak ISCC.exe po instalacji Inno Setup' }
+          & $iscc "/DAppVersion=$version" 'windows/installer.iss'
+          if ($LASTEXITCODE -ne 0) { throw 'Budowanie instalatora nie powiodło się' }
+          $installer = "artifacts/windows/Ogarniacz-$version-Setup.exe"
+          if (-not (Test-Path $installer)) { throw 'Brak instalatora Windows' }
+          $sha = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha  Ogarniacz-$version-Setup.exe" | Set-Content -Encoding ascii "$installer.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ github.sha }}
+          path: |
+            artifacts/windows/Ogarniacz-*-Setup.exe
+            artifacts/windows/Ogarniacz-*-Setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 30
+
   android:
     name: Android (JDK 21 / updater / build)
     runs-on: ubuntu-latest
@@ -89,3 +148,11 @@ jobs:
       - name: Regresja wariantu Beta bez klucza produkcyjnego
         working-directory: android
         run: bash ./gradlew :app:testBetaUnitTest :app:processBetaMainManifest --no-daemon
+
+      - name: Zachowaj nieprodukcyjny APK Debug każdego commita
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-${{ github.sha }}
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30

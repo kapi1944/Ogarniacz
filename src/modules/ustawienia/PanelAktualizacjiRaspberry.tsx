@@ -5,14 +5,14 @@ import { useKonto } from '../../app/DostawcaKonta'
 import { BladKonta, pobierzStatusAktualizacjiRaspberry, uruchomAktualizacjeRaspberry, type StatusAktualizacjiRaspberry } from '../../services/KontaService'
 
 const ETYKIETY_STANOW: Record<StatusAktualizacjiRaspberry['stan'], string> = {
-  idle: 'aktualna',
+  idle: 'oczekiwanie',
   checking: 'sprawdzanie',
   'downloading/fetching': 'pobieranie',
   installing: 'instalowanie',
   building: 'budowanie',
   restarting: 'restart',
-  success: 'sukces',
-  rollback: 'rollback',
+  success: 'zakończono',
+  rollback: 'przywracanie poprzedniej wersji',
   error: 'błąd',
 }
 
@@ -27,7 +27,7 @@ function opisBledu(blad: unknown, kontoDostepne: boolean): string {
 }
 
 function wariantStatusu(stan: StatusAktualizacjiRaspberry['stan']): 'neutralny' | 'sukces' | 'ostrzezenie' | 'blad' | 'informacja' {
-  if (stan === 'success' || stan === 'idle') return 'sukces'
+  if (stan === 'success') return 'sukces'
   if (stan === 'error') return 'blad'
   if (STANY_W_TRAKCIE.has(stan)) return 'informacja'
   return 'neutralny'
@@ -121,11 +121,14 @@ export function PanelAktualizacjiRaspberry() {
   const wlasciciel = konto?.rola === 'wlasciciel'
   const moznaPrzywrocic = status?.moznaPrzywrocic === true
   const akcjeZablokowane = trwaOperacja || !wlasciciel
+  const etykieta = status?.stan === 'idle'
+    ? ({ aktualna: 'aktualna wersja', dostepna: 'dostępna aktualizacja', nieznana: 'nie sprawdzono', blad: 'błąd' }[status.dostepnosc])
+    : status ? ETYKIETY_STANOW[status.stan] : 'nie sprawdzono'
   return <Karta>
-    <div className="naglowek-karty"><div><h2><ServerCog aria-hidden="true" /> Raspberry / serwer</h2><p>Frontend i backend z zatwierdzonego kanału rpi-stable.</p></div>{status && <Znacznik wariant={wariantStatusu(status.stan)}>{ETYKIETY_STANOW[status.stan]}</Znacznik>}</div>
+    <div className="naglowek-karty"><div><h2><ServerCog aria-hidden="true" /> Raspberry / serwer</h2><p>Frontend i backend z zatwierdzonego kanału rpi-stable.</p></div>{status && <Znacznik wariant={wariantStatusu(status.stan)}>{etykieta}</Znacznik>}</div>
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
     {backendNiedostepny && <button type="button" className="przycisk przycisk--drugorzedny" onClick={() => void odswiezStatus()}>Ponów połączenie</button>}
-    {status && <><div className="lista-kompaktowa"><div><span>Commit wdrożenia</span><strong>{status.commit.slice(0, 8)}</strong></div><div><span>Wersja informacyjna</span><strong>{status.wersja}</strong></div><div><span>Dostępność</span><strong>{status.dostepnosc}</strong></div><div><span>Stan</span><strong>{ETYKIETY_STANOW[status.stan]}</strong></div></div>{status.komunikat && <p className="tekst-pomocniczy">{status.komunikat}</p>}</>}
+    {status && <><div className="lista-kompaktowa"><div><span>Commit wdrożenia</span><strong>{status.commit.slice(0, 8)}</strong></div><div><span>Zainstalowana wersja serwera</span><strong>{status.wersja}</strong></div><div><span>Cel ostatniej kontroli rpi-stable (commit)</span><strong>{status.originStable?.slice(0, 8) ?? 'nie sprawdzono'}</strong></div><div><span>Stan</span><strong>{etykieta}</strong></div></div>{status.komunikat && <p className="tekst-pomocniczy" role="status">{status.komunikat}</p>}</>}
     {!wlasciciel && <p className="tekst-pomocniczy">{konto ? 'Edytor nie może uruchamiać aktualizacji Raspberry.' : 'Zaloguj się jako Właściciel, aby uruchamiać aktualizacje Raspberry.'}</p>}
     {wlasciciel && <div className="akcje-formularza"><button type="button" className="przycisk przycisk--drugorzedny" disabled={akcjeZablokowane || backendNiedostepny} onClick={() => void uruchom('check')}><RefreshCw aria-hidden="true" />Sprawdź aktualizacje</button><button type="button" className="przycisk przycisk--glowny" disabled={akcjeZablokowane || backendNiedostepny || status?.dostepnosc !== 'dostepna'} onClick={() => void uruchom('start')}>Zainstaluj aktualizację</button>{moznaPrzywrocic && <button type="button" className="przycisk przycisk--niebezpieczny" disabled={akcjeZablokowane || backendNiedostepny} onClick={() => void uruchom('rollback')}><RotateCcw aria-hidden="true" />Przywróć poprzednią wersję</button>}</div>}
   </Karta>

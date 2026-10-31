@@ -536,6 +536,7 @@ async function sprawdzMonotonicznoscWydania(adresManifestu, wznowienie = false) 
 async function wykonajRelease(opcje) {
   const czyPublikacja = opcje.publish !== undefined || opcje['publish-existing'] !== undefined
   if (czyPublikacja) wymagajOficjalnejPublikacji()
+  if (czyPublikacja) throw new Error('Publikacja wymaga kompletnego zestawu platform przez workflow Publikuj Ogarniacza.')
   const podpisWstepny = sprawdzKonfiguracjePodpisu()
   const adresManifestu = wymagajAdresuHttps('VITE_ANDROID_UPDATE_MANIFEST_URL', odczytajZmiennaBudowania('VITE_ANDROID_UPDATE_MANIFEST_URL'))
   const konfiguracjaSynchronizacji = pobierzProdukcyjnaKonfiguracjeSynchronizacji()
