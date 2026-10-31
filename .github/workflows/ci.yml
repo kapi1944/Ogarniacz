@@ -80,6 +80,9 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+      - name: Testy diagnostyki aktualizacji Windows
+        # Testy uruchamiają tę samą logikę, którą wykorzystuje okno aktualizatora.
+        run: dotnet run --project windows/TestyAktualizacji/TestyAktualizacji.csproj -c Release
       - name: Zbuduj natywną aplikację Windows
         shell: pwsh
         run: |

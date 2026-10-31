@@ -27,6 +27,15 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); cleanup(); vi.clearAllMocks() })
 
 describe('PanelAktualizacjiRaspberry', () => {
+  it('wykryta aktualizacja nie pokazuje aktualności, nieznany cel nie ogłasza sukcesu', async () => {
+    render(<PanelAktualizacjiRaspberry />)
+    expect(await screen.findAllByText('dostępna aktualizacja')).toHaveLength(2)
+    expect(screen.queryByText('aktualna wersja')).not.toBeInTheDocument()
+    cleanup()
+    pobierzStatus.mockResolvedValueOnce({ ...dostepnyStatus, originStable: null, dostepnosc: 'nieznana' })
+    render(<PanelAktualizacjiRaspberry />)
+    expect((await screen.findAllByText('nie sprawdzono')).length).toBeGreaterThan(0)
+  })
   it('pokazuje panel po potwierdzeniu endpointu, a brak funkcji odróżnia od awarii połączenia', async () => {
     render(<PanelAktualizacjiRaspberry />)
     expect(await screen.findByText('Raspberry / serwer')).toBeInTheDocument()
@@ -85,7 +94,7 @@ describe('PanelAktualizacjiRaspberry', () => {
     await screen.findByText('Raspberry / serwer')
     fireEvent.click(screen.getByRole('button', { name: 'Zainstaluj aktualizację' }))
     await waitFor(() => expect(screen.getAllByText('restart')).not.toHaveLength(0))
-    await waitFor(() => expect(screen.getAllByText('sukces')).not.toHaveLength(0), { timeout: 7_000 })
+    await waitFor(() => expect(screen.getAllByText('zakończono')).not.toHaveLength(0), { timeout: 7_000 })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     const liczbaOdczytow = pobierzStatus.mock.calls.length
     await new Promise((rozwiaz) => setTimeout(rozwiaz, 3_200))
@@ -100,7 +109,7 @@ describe('PanelAktualizacjiRaspberry', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Zainstaluj aktualizację' }))
     await waitFor(() => expect(uruchomAktualizacje).toHaveBeenCalledTimes(1))
     expect(screen.getByRole('button', { name: 'Sprawdź aktualizacje' })).toBeDisabled()
-    await waitFor(() => expect(screen.getAllByText('sukces')).not.toHaveLength(0), { timeout: 7_000 })
+    await waitFor(() => expect(screen.getAllByText('zakończono')).not.toHaveLength(0), { timeout: 7_000 })
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   }, 9_000)
 

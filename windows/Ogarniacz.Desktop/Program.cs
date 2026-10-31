@@ -154,6 +154,9 @@ internal sealed class OgarniaczWindow : Form
 
     private async Task CheckUpdateAsync(bool showUpToDate)
     {
+        if (!updateMenu.Enabled) return;
+        updateMenu.Enabled = false;
+        updateMenu.Text = "Sprawdzanie aktualizacji…";
         try
         {
             using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(12) };
@@ -161,32 +164,21 @@ internal sealed class OgarniaczWindow : Form
             using var response = await client.GetAsync("https://api.github.com/repos/kapi1944/Ogarniacz/releases/latest");
             response.EnsureSuccessStatusCode();
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            var tag = document.RootElement.GetProperty("tag_name").GetString()?.TrimStart('v');
-            if (!Version.TryParse(tag, out var newest)) return;
-            var numer = typeof(OgarniaczWindow).Assembly.GetName().Version ?? new Version(0, 0);
-            var current = new Version(numer.Major, numer.Minor, numer.Build);
-            if (newest <= current)
+            var obecna = typeof(OgarniaczWindow).Assembly.GetName().Version ?? new Version(0, 0);
+            var wynik = DiagnostykaAktualizacji.Odczytaj(document.RootElement, obecna);
+            if (wynik.Adres is not null)
             {
-                if (showUpToDate) MessageBox.Show(this, "Masz aktualny instalator Windows.", "Ogarniacz");
-                return;
+                if (MessageBox.Show(this, wynik.Komunikat, "Aktualizacja Ogarniacza", MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information) == DialogResult.Yes) OpenExternal(wynik.Adres);
             }
-            foreach (var asset in document.RootElement.GetProperty("assets").EnumerateArray())
-            {
-                var name = asset.GetProperty("name").GetString();
-                if (name != $"Ogarniacz-{tag}-Setup.exe") continue;
-                var url = asset.GetProperty("browser_download_url").GetString();
-                if (url != $"https://github.com/kapi1944/Ogarniacz/releases/download/v{tag}/{name}") return;
-                if (MessageBox.Show(this,
-                    $"Dostępny jest nowy instalator Windows {newest} (obecnie {current}). Otworzyć stronę pobierania?",
-                    "Aktualizacja Ogarniacza", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
-                    OpenExternal(url);
-                return;
-            }
+            else if (showUpToDate) MessageBox.Show(this, wynik.Komunikat, "Aktualizacja Ogarniacza");
         }
+
         catch (Exception error)
         {
-            if (showUpToDate) MessageBox.Show(this, "Nie udało się sprawdzić aktualizacji: " + error.Message,
+            if (showUpToDate) MessageBox.Show(this, DiagnostykaAktualizacji.OpiszBlad(error),
                 "Ogarniacz", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+        finally { updateMenu.Enabled = true; updateMenu.Text = "Sprawdź nową wersję instalatora"; }
     }
 }

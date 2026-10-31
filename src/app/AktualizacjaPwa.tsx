@@ -46,7 +46,7 @@ export function AktualizacjaPwa() {
   }, [gotoweOffline])
 
   if (!nowaWersja && !gotoweOffline && !blad) return null
-  if (nowaWersja) return <PowiadomienieAktualizacji opis={blad || 'Aktualizacja odświeży okno aplikacji.'}
+  if (nowaWersja) return <PowiadomienieAktualizacji opis={blad || `Web/PWA · zainstalowany frontend ${__WERSJA_APLIKACJI__} · kanał Service Worker. Dostępna aktualizacja odświeży okno po Twojej zgodzie. Numer nowej wersji będzie widoczny po odświeżeniu.`}
     odloz={() => { if (oczekujacyRef.current) odlozoneRef.current.add(oczekujacyRef.current); ustawNowaWersje(false); ustawGotoweOffline(false) }}
     aktualizuj={() => { void aktualizujRef.current?.(true).catch(() => ustawBlad('Nie udało się zastosować aktualizacji. Spróbuj ponownie.')) }}
   />
