@@ -276,6 +276,18 @@ test('rzeczywisty Git: wyłączona automatyzacja nie zapisuje wersji', async () 
   })
 })
 
+test('tryb kontroli wyznacza wspólną wersję bez commita, tagu i publikacji', async () => {
+  await wRepozytorium(async ({ git, zrodlo, wyjscie }) => {
+    process.env.VERIFY_ONLY = 'true'
+    await uruchom(['przygotuj'])
+    assert.equal(git('rev-parse', 'HEAD'), zrodlo)
+    assert.equal(git('rev-parse', 'origin/main'), zrodlo)
+    assert.equal(JSON.parse(readFileSync('package.json')).version, '1.1.1')
+    assert.ok(readFileSync(wyjscie, 'utf8').trim().endsWith('aktywne=false'))
+    assert.equal(git('tag', '--list', 'v1.1.2'), '')
+  })
+})
+
 test('workflow łączy wszystkie platformy przed publikacją i osobno zatwierdza kanał', () => {
   const workflow = readFileSync('.github/workflows/android-release.yml', 'utf8')
   assert.match(workflow, /needs: \[przygotowanie, android, windows, web, raspberry\]/)

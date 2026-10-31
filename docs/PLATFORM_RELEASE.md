@@ -116,3 +116,32 @@ Dla developerów pozostaje `npm run desktop:dev`: start lokalnego Vite i osobne 
 - **Android:** Pobierz podpisany `Ogarniacz-X.Y.Z-release.apk`. Wbudowany updater nadal sprawdza podpis i nie instaluję APK bez zgody użytkownika.
 - **Raspberry Pi:** Używaj istniejącego aktualizatora `rpi-stable`, ustawionego timerem lub wywołanego ręcznie.
 - **Web/PWA:** Otwórz produkcyjny adres HTTPS i zainstaluj PWA przez Edge/Chrome; service worker oferuje aktualizację po wdrożeniu serwera.
+
+## Aktywacja R1.3 i kontrola Windows
+
+1. W PR poczekaj na zielone joby CI: web, android, windows. Pobierz artefakty i sprawdź sumy.
+2. Po świadomym scaleniu przez właściciela sprawdź zielone CI aktualnego main.
+3. Actions → Publikuj Ogarniacza → Run workflow → main: pozostaw zaznaczone verify_only.
+   Tryb sprawdza CI, klasyfikację i wybór wersji, ale nie zapisuje commita/tagu, nie buduje
+   produkcyjnego APK, nie tworzy release i nie przesuwa rpi-stable.
+   Lokalna kontrola gotowych plików: STAN_WYDANIA + node scripts/platform-release.mjs kontrola
+   (wymaga SDK do weryfikacji podpisu, plików potwierdzeń i wspólnych sum).
+4. Settings → Secrets and variables → Actions → Variables → New repository variable:
+   AUTO_PUBLISH_ENABLED = true. Tylko właściciel włącza tę zmienną po akceptacji instalacji.
+5. Wyłączenie: ustaw false albo usuń zmienną. Już uruchomiony proces należy także anulować
+   w Actions; wyłączenie nie cofa wcześniej publicznego wydania.
+6. Ręczna publikacja: ten sam workflow na main, świadomie odznacz verify_only.
+   Automatyzacja oraz jawne wznowienie przekazują verify_only=false za istniejącą bramką.
+
+Kontrola Windows: .NET 8, win-x64, self-contained, WebView2 ze stałym prywatnym profilem
+LOCALAPPDATA/Ogarniacz/Desktop/WebView2. HTTPS wymaga samego origin bez hasła i parametrów.
+Nawigacja do innego origin jest anulowana w WebView i otwierana systemowo tylko dla HTTP(S).
+Updater otwiera wyłącznie dokładny asset oficjalnego wydania po zgodzie; nie uruchamia instalatora.
+Brak sieci jest obsługiwany komunikatem przy ręcznym sprawdzaniu; cache PWA zależy od wcześniejszej
+wizyty. Brak WebView2 kończy start czytelnym komunikatem, bez pobierania runtime w tle.
+
+Akceptacja na komputerze Windows: zainstaluj EXE, sprawdź ikonę, HTTPS, przekierowanie zewnętrzne,
+restart i offline po zapisaniu PWA. Na danych testowych utwórz wpis, wykonaj kopię i aktualizację
+instalatora bez odinstalowania. Potwierdź zachowanie IndexedDB i niezależność danych Edge/PWA.
+Sprawdź brak WebView2 na maszynie testowej oraz SmartScreen bez wyłączania ochrony.
+Wynik CI potwierdza kompilację i paczki; nie potwierdza tych testów interaktywnych.

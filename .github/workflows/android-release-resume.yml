@@ -21,4 +21,4 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$WERSJA" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f resume_version="$WERSJA"
+          gh workflow run android-release.yml --repo "$GITHUB_REPOSITORY" --ref main -f resume_version="$WERSJA" -f verify_only=false

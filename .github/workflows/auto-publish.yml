@@ -44,5 +44,6 @@ jobs:
           gh workflow run android-release.yml --ref main \
             -f source_sha="$ODBIORCA_SHA" \
             -f automatyczna=true \
+            -f verify_only=false \
             -f version_bump=patch \
             -f release_notes="Automatyczna publikacja po zielonym CI: ${ODBIORCA_SHA:0:12}"

@@ -28,6 +28,7 @@ internal sealed class OgarniaczWindow : Form
     public OgarniaczWindow()
     {
         Text = "Ogarniacz";
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Width = 1340;
         Height = 860;
         MinimumSize = new Size(400, 480);
@@ -147,7 +148,8 @@ internal sealed class OgarniaczWindow : Form
     {
         if (!Uri.TryCreate(address, UriKind.Absolute, out var uri)
             || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)) return;
-        Process.Start(new ProcessStartInfo { FileName = uri.ToString(), UseShellExecute = true });
+        try { Process.Start(new ProcessStartInfo { FileName = uri.ToString(), UseShellExecute = true }); }
+        catch (Exception blad) { MessageBox.Show("Nie udało się otworzyć adresu: " + blad.Message, "Ogarniacz"); }
     }
 
     private async Task CheckUpdateAsync(bool showUpToDate)
@@ -161,7 +163,8 @@ internal sealed class OgarniaczWindow : Form
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var tag = document.RootElement.GetProperty("tag_name").GetString()?.TrimStart('v');
             if (!Version.TryParse(tag, out var newest)) return;
-            var current = typeof(OgarniaczWindow).Assembly.GetName().Version ?? new Version(0, 0);
+            var numer = typeof(OgarniaczWindow).Assembly.GetName().Version ?? new Version(0, 0);
+            var current = new Version(numer.Major, numer.Minor, numer.Build);
             if (newest <= current)
             {
                 if (showUpToDate) MessageBox.Show(this, "Masz aktualny instalator Windows.", "Ogarniacz");
@@ -170,9 +173,9 @@ internal sealed class OgarniaczWindow : Form
             foreach (var asset in document.RootElement.GetProperty("assets").EnumerateArray())
             {
                 var name = asset.GetProperty("name").GetString();
-                if (name is null || !name.EndsWith("-Setup.exe", StringComparison.OrdinalIgnoreCase)) continue;
+                if (name != $"Ogarniacz-{tag}-Setup.exe") continue;
                 var url = asset.GetProperty("browser_download_url").GetString();
-                if (url is null) return;
+                if (url != $"https://github.com/kapi1944/Ogarniacz/releases/download/v{tag}/{name}") return;
                 if (MessageBox.Show(this,
                     $"Dostępny jest nowy instalator Windows {newest} (obecnie {current}). Otworzyć stronę pobierania?",
                     "Aktualizacja Ogarniacza", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)

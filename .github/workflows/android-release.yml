@@ -2,6 +2,10 @@ name: Publikuj Ogarniacza
 on:
   workflow_dispatch:
     inputs:
+      verify_only:
+        description: Tylko kontrola bramek i wersji, bez zapisu i publikacji
+        type: boolean
+        default: true
       version_bump:
         description: Rodzaj wspólnej wersji wszystkich platform
         type: choice
@@ -55,6 +59,7 @@ jobs:
           AUTOMATYCZNA: ${{ inputs.automatyczna }}
           AUTO_PUBLISH_ENABLED: ${{ vars.AUTO_PUBLISH_ENABLED }}
           RESUME_VERSION: ${{ inputs.resume_version }}
+          VERIFY_ONLY: ${{ inputs.verify_only }}
         run: node scripts/platform-release.mjs przygotuj
   android:
     needs: przygotowanie

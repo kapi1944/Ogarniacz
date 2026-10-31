@@ -63,6 +63,7 @@ async function przygotuj() {
   const zrodlo = process.env.SOURCE_SHA || process.env.GITHUB_SHA
   if (!/^[a-f0-9]{40}$/.test(zrodlo)) throw new Error('Nieprawidłowy SHA źródłowy.')
   const automatyczna = process.env.AUTOMATYCZNA === 'true'
+  const tylkoKontrola = process.env.VERIFY_ONLY === 'true'
   if (automatyczna && process.env.AUTO_PUBLISH_ENABLED !== 'true') throw new Error('Automatyczna publikacja jest wyłączona.')
   let stan
   if (wznowienie) {
@@ -96,6 +97,10 @@ async function przygotuj() {
     const nowe = przygotujWydanie({ pakiet, lock, rodzajWersji: process.env.VERSION_BUMP || 'patch', wersjaOpublikowana: tag.slice(1) })
     if (await wydanieDlaTagu(`v${nowe.wersja}`)) throw new Error('Wersja ma już release; użyj wznowienia.')
     if (git('ls-remote', '--tags', 'origin', `refs/tags/v${nowe.wersja}`)) throw new Error('Wersja ma już tag; przerwano.')
+    if (tylkoKontrola) {
+      console.log(JSON.stringify({ tryb: 'kontrola bez publikacji', zrodlo, ci: ci.id, wersja: nowe.wersja, kanaly, platformy: etapy, zapis: false }))
+      wynik('aktywne', 'false'); return
+    }
     zapiszJson('package.json', nowe.pakiet); zapiszJson('package-lock.json', nowe.lock)
     git('config', 'user.name', 'github-actions[bot]')
     git('config', 'user.email', '41898282+github-actions[bot]@users.noreply.github.com')
@@ -106,6 +111,10 @@ async function przygotuj() {
     stan = stanZCommita(git('rev-parse', 'HEAD'))
   }
   await potwierdzCi(stan, automatyczna)
+  if (tylkoKontrola) {
+    console.log(JSON.stringify({ tryb: 'kontrola istniejącej wersji', ...stan, zapis: false }))
+    wynik('aktywne', 'false'); return
+  }
   const publiczne = await wydanieDlaTagu(`v${stan.wersja}`)
   // Publiczne wydanie można tylko sprawdzić i ponowić zatwierdzenie kanału.
   if (!publiczne || publiczne.draft) potwierdzMain(stan)
@@ -209,6 +218,14 @@ export async function uruchom(argumenty = process.argv.slice(2)) {
     return sprawdzEtap(stan, etap, plikiEtapu(stan, etap, katalog), weryfikatory(katalog))
   }
   if (polecenie === 'publikuj') return publikuj(stan, katalog)
+  if (polecenie === 'kontrola') {
+    const pliki = new Map(etapy.flatMap((etap) => [...plikiEtapu(stan, etap, katalog)]))
+    pliki.set('SHA256SUMS.txt', readFileSync(join(katalog, 'SHA256SUMS.txt')))
+    pliki.set('wydanie.json', readFileSync(join(katalog, 'wydanie.json')))
+    await sprawdzZestaw(stan, pliki, weryfikatory(katalog))
+    console.log('Komplet artefaktów zweryfikowany; bez publikacji i zmiany kanału.')
+    return
+  }
   if (polecenie === 'kanal') {
     const wydanie = await wydanieDlaTagu(`v${stan.wersja}`)
     if (!wydanie || wydanie.draft || wydanie.prerelease) throw new Error('Kanał wymaga publicznego wydania.')
