@@ -18,6 +18,7 @@ jobs:
   dispatch:
     name: Uruchom istniejącą bezpieczną publikację
     if: >-
+      vars.AUTO_PUBLISH_ENABLED == 'true' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
@@ -39,6 +40,9 @@ jobs:
           fi
           wynik="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID" --jq '.conclusion')"
           [[ "$wynik" == success ]] || { echo 'CI nie jest zielone.' >&2; exit 1; }
+          # SHA jest przenoszony jako wejście; zmiana main po dispatch też zostanie wykryta.
           gh workflow run android-release.yml --ref main \
+            -f source_sha="$ODBIORCA_SHA" \
+            -f automatyczna=true \
             -f version_bump=patch \
             -f release_notes="Automatyczna publikacja po zielonym CI: ${ODBIORCA_SHA:0:12}"

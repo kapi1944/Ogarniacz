@@ -1,11 +1,13 @@
 #ifndef AppVersion
-  #define AppVersion "0.0.0"
+  #error Brak wspolnej wersji produktu AppVersion
 #endif
 #define MyAppName "Ogarniacz"
 [Setup]
 AppId={{5C14B35A-38BC-461F-8798-507EA25A4496}
 AppName={#MyAppName}
 AppVersion={#AppVersion}
+VersionInfoVersion={#AppVersion}
+VersionInfoProductVersion={#AppVersion}
 AppPublisher=Ogarniacz
 SetupIconFile=..\public\favicon.ico
 DefaultDirName={localappdata}\Programs\Ogarniacz

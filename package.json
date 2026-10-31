@@ -19,7 +19,7 @@
     "android:build": "node scripts/android.mjs build",
     "android:deploy": "node scripts/android.mjs deploy",
     "android:release": "node scripts/android.mjs release",
-    "android:release:test": "node --test scripts/android-release-przygotowanie.test.mjs scripts/android-release-workflow.test.mjs",
+    "android:release:test": "node --test scripts/android-release-przygotowanie.test.mjs scripts/android-release-workflow.test.mjs scripts/platform-release.test.mjs",
     "web-ota:test": "node --test scripts/web-ota-runtime-config.test.mjs",
     "android:keystore:create": "node scripts/android.mjs keystore",
     "android:test": "node --test scripts/android.test.mjs",

@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 import { createHash } from 'node:crypto'
-import { zapewnijRelease, sprawdzPublikacje, ustalPunktWznowienia } from './android-release-publikacja.mjs'
+import { sprawdzPublikacje, ustalPunktWznowienia } from './android-release-publikacja.mjs'
 import { pobierzPublicznyManifestPoPublikacji } from './android-wspolne.mjs'
 
 const staryManifest = {
@@ -160,69 +159,4 @@ test('retry respektuje limit czasu niezależnie od liczby prób', async () => {
   }), /Limit 7000 ms/)
   assert.equal(czas, 7000)
   assert.equal(proby, 2)
-})
-
-for (const stan of ['brak release', 'brak assetu', 'kompletne publiczne', 'kompletne draft']) {
-  test(`idempotencja publikacji: ${stan}`, async () => {
-    const pliki = [[nowyManifest.apkUrl, Buffer.from('APK')], [`${nowyManifest.apkUrl}.sha256`, Buffer.from('SHA')], ['latest.json', Buffer.from(JSON.stringify(nowyManifest))]]
-    const assety = pliki.map(([name, dane], indeks) => ({ name, size: dane.length, url: `https://api.test/assets/${indeks}` }))
-    const wydanie = { id: 123, draft: stan !== 'kompletne publiczne', prerelease: false, upload_url: 'https://upload.test/{?name,label}', assets: stan === 'brak release' ? [] : stan === 'brak assetu' ? assety.slice(0, 2) : assety }
-    const mutacje = []
-    const pobierz = async (adres, opcje = {}) => {
-      if (opcje.method) { mutacje.push([opcje.method, adres]); return { ok: true, json: async () => wydanie } }
-      if (adres.includes('/assets/')) return { ok: true, arrayBuffer: async () => pliki[Number(adres.split('/').at(-1))][1] }
-      return { ok: stan !== 'brak release', status: stan === 'brak release' ? 404 : 200, json: async () => wydanie }
-    }
-    await zapewnijRelease({ repozytorium: 'test/Ogarniacz', token: 'test', manifest: nowyManifest, pliki, pobierz })
-    assert.equal(mutacje.filter(([metoda]) => metoda === 'POST').length, stan === 'brak release' ? 4 : stan === 'brak assetu' ? 1 : 0)
-    assert.equal(mutacje.filter(([metoda]) => metoda === 'PATCH').length, stan === 'kompletne publiczne' ? 0 : 1)
-  })
-}
-
-test('istniejący niezgodny asset blokuje publikację bez nadpisania lub usuwania', async () => {
-  const mutacje = []
-  await assert.rejects(zapewnijRelease({ repozytorium: 'test/Ogarniacz', token: 'test', manifest: nowyManifest,
-    pliki: [[nowyManifest.apkUrl, Buffer.from('APK')]],
-    pobierz: async (adres, opcje = {}) => {
-      if (opcje.method) mutacje.push(opcje.method)
-      return adres.includes('/assets/')
-        ? { ok: true, arrayBuffer: async () => Buffer.from('inne') }
-        : { ok: true, json: async () => ({ assets: [{ name: nowyManifest.apkUrl, size: 4, url: 'https://api.test/assets/0' }] }) }
-    },
-  }), /Rzeczywista niespójność istniejącego assetu/)
-  assert.deepEqual(mutacje, [])
-})
-
-test('workflow zatwierdza dokładny SHA po CI, a APK i Raspberry są warunkowe', async () => {
-  const workflow = await readFile('.github/workflows/android-release.yml', 'utf8')
-  assert.match(workflow, /name: Publikuj Ogarniacza/)
-  assert.match(workflow, /workflow_dispatch:/)
-  assert.match(workflow, /default: patch/)
-  assert.doesNotMatch(workflow, /new_release|resume_version|WEB_OTA|web-ota/)
-  assert.match(workflow, /ref: \$\{\{ github.sha \}\}/)
-  assert.match(workflow, /head_sha=\$GITHUB_SHA/)
-  assert.match(workflow, /conclusion.*success/)
-  assert.match(workflow, /environment: android-production/)
-  assert.match(workflow, /ANDROID_RELEASE_KEYSTORE_BASE64: \$\{\{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 \}\}/)
-  const kroki = workflow.split('      - ')
-  for (const krok of kroki.filter((krok) => /android-release-przygotowanie|git add package.json|npm run android:release --|actions\/upload-artifact/.test(krok))) {
-    assert.match(krok, /if: steps.kanaly.outputs.android == 'true'/)
-  }
-  const zatwierdzenie = kroki.find((krok) => krok.includes('publikacja-rpi-stable.sh'))
-  assert.match(zatwierdzenie, /if: steps.kanaly.outputs.raspberry == 'true'/)
-  assert.doesNotMatch(zatwierdzenie, /always\(\)|continue-on-error/)
-  assert.ok(workflow.indexOf('Potwierdź dokładny main') < workflow.indexOf('Sklasyfikuj zmiany'))
-  assert.ok(workflow.indexOf('Sklasyfikuj zmiany') < workflow.indexOf('Przygotuj wersję Android'))
-  assert.ok(workflow.indexOf('Zbuduj frontend i backend') < workflow.indexOf('Zapisz wersję dopiero'))
-  assert.ok(workflow.indexOf('Opublikuj tylko') < workflow.indexOf('Zatwierdź Raspberry'))
-  assert.match(workflow, /publikacja-rpi-stable.sh "\$\(git rev-parse HEAD\)"/)
-  const skrypt = await readFile('scripts/android.mjs', 'utf8')
-  assert.match(skrypt, /verify', '--print-certs'/)
-  assert.match(skrypt, /sha256Certyfikatu/)
-  assert.match(skrypt, /sprawdzArtefaktRelease/)
-  assert.doesNotMatch(skrypt.slice(skrypt.indexOf('async function wykonajRelease')), /adresManifestuWeb/)
-  const wznowienie = await readFile('.github/workflows/android-release-resume.yml', 'utf8')
-  assert.match(wznowienie, /resume_version:/)
-  assert.match(wznowienie, /android-release-publikacja.mjs/)
-  assert.doesNotMatch(wznowienie, /version_bump|publikacja-rpi-stable/)
 })
