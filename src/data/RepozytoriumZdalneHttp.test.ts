@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CapacitorHttp } from '@capacitor/core'
 import { BladKonta, pobierzCsrfKonta, pobierzKontoOffline, pobierzSesjeKonta } from '../services/KontaService'
-import { RepozytoriumZdalneHttp } from './RepozytoriumZdalneHttp'
+import { BladSynchronizacjiHttp, RepozytoriumZdalneHttp } from './RepozytoriumZdalneHttp'
 import { TABELE_FINANSOW_WSPOLNYCH, ustawBiezacyDostep } from '../services/UprawnieniaService'
 
 const kasa = { id: 'k', createdAt: '2026-10-29T12:00:00.000Z', updatedAt: '2026-10-29T12:00:00.000Z', nazwa: 'Test', opis: '', ikona: '', kolor: '', waluta: 'PLN', saldoPoczatkoweGrosze: 0, status: 'aktywna' }
@@ -31,6 +31,38 @@ afterEach(() => {
 })
 
 describe('RepozytoriumZdalneHttp przez sesję', () => {
+  it.each([403, 503])('nie myli odpowiedzi HTTP %s podczas odtwarzania sesji z błędem sieci', async (status) => {
+    vi.mocked(pobierzCsrfKonta).mockReturnValue(undefined)
+    vi.mocked(pobierzSesjeKonta).mockRejectedValue(new BladKonta(status, 'Network error po stronie serwera'))
+    const siec = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false)
+    try {
+      const repo = new RepozytoriumZdalneHttp('https://serwer.example.test')
+      await expect(repo.pobierzZmiany('1970-01-01')).rejects.toMatchObject({ rodzaj: 'blad_synchronizacji' })
+      expect(CapacitorHttp.get).not.toHaveBeenCalled()
+    } finally { siec.mockRestore() }
+  })
+
+  it('zachowuje rozpoznany błąd transportu zamiast ponownie go klasyfikować', async () => {
+    const blad = new BladSynchronizacjiHttp('brak_polaczenia', 'Serwer jest niedostępny.')
+    vi.mocked(CapacitorHttp.get).mockRejectedValue(blad)
+    const repo = new RepozytoriumZdalneHttp('https://serwer.example.test')
+    await expect(repo.pobierzZmiany('1970-01-01')).rejects.toBe(blad)
+  })
+
+  it.each(['java.net.SocketException: Connection reset', 'java.net.SocketException: Socket closed', 'java.net.UnknownHostException: serwer.example.test'])('rozpoznaje natywny błąd Androida: %s', async (message) => {
+    vi.mocked(CapacitorHttp.get).mockRejectedValue({ message })
+    const repo = new RepozytoriumZdalneHttp('https://serwer.example.test')
+    await expect(repo.pobierzZmiany('1970-01-01')).rejects.toMatchObject({ rodzaj: 'brak_polaczenia' })
+  })
+
+  it('zachowuje błąd serwera podczas odświeżania CSRF', async () => {
+    vi.mocked(CapacitorHttp.post).mockResolvedValue(odpowiedz(403, { error: 'Sesja wymaga odświeżenia.' }))
+    vi.mocked(pobierzSesjeKonta).mockRejectedValue(new BladKonta(503, 'Network error'))
+    const repo = new RepozytoriumZdalneHttp('https://serwer.example.test')
+    await expect(repo.wyslijZmiany([])).rejects.toMatchObject({ rodzaj: 'blad_synchronizacji' })
+    expect(CapacitorHttp.post).toHaveBeenCalledTimes(1)
+  })
+
   it('odmawia wysyłki finansów przed negocjacją oraz po odpowiedzi starego backendu', async () => {
     const repo = new RepozytoriumZdalneHttp('https://example.test', () => 'instalacja-testowa')
     await expect(repo.wyslijZmiany([zmianaFinansowa])).rejects.toThrow('nie obsługuje')

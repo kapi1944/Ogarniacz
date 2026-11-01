@@ -450,6 +450,19 @@ describe.sequential('SyncEngine', () => {
     expect(pobierzZmiany).toHaveBeenCalledTimes(2)
   })
 
+  it.each(['brak_sesji', 'sesja_wygasla', 'csrf'] as const)('nie ponawia %s bez poprawienia sesji i zachowuje kolejkę', async (rodzaj) => {
+    const rekord = zadanie('oczekujace', 'Oczekujące', CZAS_SYNCHRONIZACJI)
+    await pobierzRepozytorium('zadania').zapisz(rekord)
+    const zapisany = await baza.tabela('zadania').get(rekord.id)
+    const pobierzZmiany = vi.fn().mockRejectedValue(new BladSynchronizacjiHttp(rodzaj, 'Sesja wymaga działania.'))
+    const wyslijZmiany = vi.fn()
+    await expect(utworzSilnik().synchronizuj({ pobierzZmiany, wyslijZmiany })).rejects.toMatchObject({ rodzaj })
+    expect(pobierzZmiany).toHaveBeenCalledTimes(1)
+    expect(wyslijZmiany).not.toHaveBeenCalled()
+    expect(await baza.tabela('zadania').get(rekord.id)).toEqual(zapisany)
+    expect(await pobierzKolejkeSynchronizacji()).toMatchObject([{ rekordId: rekord.id, rekord: zapisany }])
+  })
+
   it('przenosi aktualny rekord z urządzenia A na urządzenie B', async () => {
     const zdalne = new RepozytoriumZdalneInMemory()
     await baza.tabela('zadania').put(zadanie('wspolne-a-b', 'Z urządzenia A', '2026-08-26T10:00:00.000Z'))

@@ -6,7 +6,7 @@ import { utworzZadanie } from './ZadaniaService'
 
 const { pobierzZmiany, wyslijZmiany, nasluchujCyklu, pokazSystemowe } = vi.hoisted(() => ({
   pobierzZmiany: vi.fn<() => Promise<ZmianaSynchronizacji[]>>(),
-  wyslijZmiany: vi.fn<() => Promise<void>>(),
+  wyslijZmiany: vi.fn<(zmiany: ZmianaSynchronizacji[]) => Promise<void>>(),
   nasluchujCyklu: vi.fn(),
   pokazSystemowe: vi.fn().mockResolvedValue(true),
 }))
@@ -111,12 +111,22 @@ it('powtarzany błąd połączenia nie spamuje i nie usuwa oczekujących zmian',
 
 it('ponawia po niedostępności Raspberry bez nowego zdarzenia online, a po sukcesie kończy ponawianie', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+  for (let numer = 0; numer < 9; numer += 1) await zapiszLokalnie(`oczekujace-${numer}`)
+  const rekordy = await baza.tabela('zadania').toArray()
+  const kolejka = await baza.tabela('kolejkaSynchronizacji').toArray()
   pobierzZmiany.mockRejectedValue(new BladSynchronizacjiHttp('brak_polaczenia', 'brak'))
   zatrzymaj = await synchronizacja.inicjalizujSynchronizacjeAplikacji()
   await vi.waitFor(() => expect(powiadomienia.pobierzPowiadomieniaSynchronizacji().komunikat?.typ).toBe('ostrzezenie'))
+  expect(await baza.tabela('zadania').toArray()).toEqual(rekordy)
+  expect((await baza.tabela('kolejkaSynchronizacji').toArray()).map(({ id, rekord }) => ({ id, rekord })))
+    .toEqual(kolejka.map(({ id, rekord }) => ({ id, rekord })))
   pobierzZmiany.mockResolvedValue([])
   await vi.advanceTimersByTimeAsync(60_000)
   await vi.waitFor(async () => expect((await baza.tabela('stanSynchronizacji').get('glowny'))?.stan).toBe('zsynchronizowano'))
+  expect(await baza.tabela('kolejkaSynchronizacji').count()).toBe(0)
+  expect(await baza.tabela('zadania').toArray()).toEqual(rekordy)
+  expect(wyslijZmiany).toHaveBeenCalledTimes(1)
+  expect(wyslijZmiany.mock.calls[0][0]).toHaveLength(9)
   const liczbaProb = pobierzZmiany.mock.calls.length
   await vi.advanceTimersByTimeAsync(60_000)
   expect(pobierzZmiany).toHaveBeenCalledTimes(liczbaProb)

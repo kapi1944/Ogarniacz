@@ -623,6 +623,8 @@ export class SyncEngine implements DostawcaSynchronizacji {
       try {
         return await operacja()
       } catch (blad) {
+        const kod = sklasyfikujBladSynchronizacji(blad)
+        if (kod === 'brak_sesji' || kod === 'sesja_wygasla' || kod === 'csrf') throw blad
         ostatniBlad = blad
         if (proba < this.liczbaProb && this.opoznieniePonowieniaMs > 0) {
           await new Promise((rozwiaz) => setTimeout(rozwiaz, this.opoznieniePonowieniaMs * proba))

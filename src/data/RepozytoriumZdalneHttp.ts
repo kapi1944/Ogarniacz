@@ -139,9 +139,7 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
       if (blad instanceof BladKonta && blad.status === 401) {
         throw new BladSynchronizacjiHttp('sesja_wygasla', 'Sesja wygasła. Zaloguj się ponownie.')
       }
-      const bladPolaczenia = this.mapujBladPolaczenia(blad)
-      if (bladPolaczenia.rodzaj === 'brak_polaczenia') throw bladPolaczenia
-      throw new BladSynchronizacjiHttp('csrf', 'Nie udało się odświeżyć sesji po błędzie CSRF.')
+      throw this.mapujBladPolaczenia(blad)
     }
   }
 
@@ -171,6 +169,10 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   }
 
   private mapujBladPolaczenia(blad: unknown): BladSynchronizacjiHttp {
+    if (blad instanceof BladSynchronizacjiHttp) return blad
+    if (blad instanceof BladKonta) {
+      return new BladSynchronizacjiHttp('blad_synchronizacji', `Serwer kont zwrócił HTTP ${blad.status}.`)
+    }
     const komunikat = blad instanceof Error ? blad.message
       : typeof blad === 'object' && blad !== null && 'message' in blad ? String(blad.message) : ''
     const wskazowkaSieci = new URL(this.adresApi).hostname.endsWith('.ts.net')
@@ -182,7 +184,7 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
     if (/timeout|timed out/i.test(komunikat)) {
       return new BladSynchronizacjiHttp('brak_polaczenia', `Przekroczono czas połączenia z serwerem synchronizacji. ${wskazowkaSieci}`)
     }
-    if (/failed to fetch|network error|unable to resolve host|connection refused|failed to connect|unreachable/i.test(komunikat)) {
+    if (/failed to fetch|network error|unable to resolve host|UnknownHostException|connection refused|failed to connect|unreachable|connection reset|socket closed/i.test(komunikat)) {
       return new BladSynchronizacjiHttp('brak_polaczenia', `Serwer synchronizacji jest niedostępny. ${wskazowkaSieci}`)
     }
     return new BladSynchronizacjiHttp('blad_synchronizacji', komunikat || 'Nie udało się połączyć z serwerem synchronizacji.')
