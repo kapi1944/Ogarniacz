@@ -23,6 +23,8 @@ export interface PrzedzialHarmonogramuDnia {
   od: string
   do: string
   dostepnosc?: DostepnoscPlanistyczna
+  /** Pełny koniec przedziału; etykiety osi pozostają ograniczone do doby. */
+  koniecAt?: string
 }
 
 export interface HarmonogramDnia {
@@ -182,6 +184,9 @@ export function utworzHarmonogramDnia(
   const dostepnoscDojazdu = wyjatek?.dostepnoscDojazdu ?? ustawienia.dostepnoscDojazdu
   const poczatekDojazdu = godzinaZMinut(minutyDnia(odPracy) - dojazdDoPracyMinuty)
   const koniecPowrotu = godzinaZMinut(minutyDnia(doPracy) + powrotZPracyMinuty)
+  const koniecPracyAt = new Date(`${data}T${doPracy}:00`)
+  if (minutyDnia(doPracy) < minutyDnia(odPracy)) koniecPracyAt.setDate(koniecPracyAt.getDate() + 1)
+  const koniecPowrotuAt = new Date(koniecPracyAt.getTime() + powrotZPracyMinuty * 60_000)
   const przedzialy: PrzedzialHarmonogramuDnia[] = pracuje
     ? [
         ...(dojazdDoPracyMinuty > 0
@@ -200,6 +205,7 @@ export function utworzHarmonogramDnia(
               etykieta: 'Powrót',
               od: doPracy,
               do: koniecPowrotu,
+              ...(Number.isFinite(koniecPowrotuAt.getTime()) ? { koniecAt: koniecPowrotuAt.toISOString() } : {}),
               dostepnosc: dostepnoscDojazdu,
             }]
           : []),

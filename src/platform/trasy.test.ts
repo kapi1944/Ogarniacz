@@ -9,6 +9,10 @@ describe('parser deep linków Ogarniacza', () => {
   it('obsługuje trasę Dzisiaj', () => {
     expect(parsujDeepLink('ogarniacz://dzisiaj')).toBe('/dzisiaj')
   })
+  it('waliduje datę podsumowania wyłącznie dla Dzisiaj', () => {
+    expect(parsujDeepLink('ogarniacz://dzisiaj?poPracy=2026-11-02')).toBe('/dzisiaj?poPracy=2026-11-02')
+    for (const adres of ['ogarniacz://zadania?poPracy=2026-11-02', 'ogarniacz://dzisiaj?poPracy=abc', 'ogarniacz://dzisiaj?poPracy=2026-11-02&poPracy=2026-11-03']) expect(parsujDeepLink(adres)).toBeNull()
+  })
 
   it('odrzuca nieobsługiwany schemat', () => {
     expect(parsujDeepLink('https://zadania')).toBeNull()

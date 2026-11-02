@@ -361,6 +361,8 @@ svg { width: 19px; height: 19px; flex: 0 0 auto; }
 .lista-kompaktowa > div > div { display: flex; flex: 1; min-width: 0; flex-direction: column; }
 .lista-kompaktowa strong { font-size: .82rem; overflow-wrap: anywhere; }
 .lista-kompaktowa small { color: var(--tekst-2); font-size: .7rem; }
+.podsumowanie-po-pracy .lista-kompaktowa > div { flex-wrap: wrap; }
+.podsumowanie-po-pracy a { overflow-wrap: anywhere; }
 .przycisk-check { display: grid; width: 28px; height: 28px; place-items: center; color: var(--sukces); background: var(--panel); border: 1px solid var(--obramowanie-mocne); border-radius: 7px; cursor: pointer; }
 .przycisk-check:hover { color: #fff; background: var(--sukces); border-color: var(--sukces); }
 .przycisk-check svg { width: 15px; }

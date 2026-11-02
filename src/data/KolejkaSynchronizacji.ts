@@ -1,6 +1,6 @@
 import type { Table } from 'dexie'
 import { noweId } from '../domain/fabryki'
-import type { Dokument, EncjaBazowa, NazwaTabeli, ZmianaKolejkiSynchronizacji } from '../domain/typy'
+import type { Dokument, EncjaBazowa, NazwaTabeli, Przypomnienie, ZmianaKolejkiSynchronizacji } from '../domain/typy'
 import { baza, nazwyTabel } from './BazaOgarniacza'
 import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 import { czyTabelaFinansowWspolnych, czyDostepFinansowWspolnych } from '../services/UprawnieniaService'
@@ -26,6 +26,7 @@ export function czyTabelaSynchronizowana(tabela: NazwaTabeli): boolean {
 export function rekordDoSynchronizacji(tabela: NazwaTabeli, rekord: EncjaBazowa): EncjaBazowa {
   const kopia = structuredClone(rekord) as EncjaBazowa & { samopoczucie?: unknown }
   if (tabela === 'ustawienia') delete kopia.samopoczucie
+  if (tabela === 'przypomnienia') delete (kopia as Przypomnienie).echoPoPracy?.zaplanowanoNa
   return kopia
 }
 
@@ -36,6 +37,17 @@ export function zachowajLokalneSamopoczucie(tabela: NazwaTabeli, rekord: EncjaBa
     if (sekcje.length) (kopia as Dokument).sekcjePrywatnosci = sekcje
   }
   if (tabela === 'ustawienia' && lokalny && 'samopoczucie' in lokalny) Object.assign(kopia, { samopoczucie: structuredClone(lokalny.samopoczucie) })
+  if (tabela === 'przypomnienia') {
+    const przypomnienie = kopia as Przypomnienie
+    const poprzednie = lokalny as Przypomnienie | undefined
+    if (!przypomnienie.echoPoPracy && poprzednie?.echoPoPracy && przypomnienie.id === poprzednie.id) przypomnienie.echoPoPracy = structuredClone(poprzednie.echoPoPracy)
+    if (przypomnienie.echoPoPracy && poprzednie?.echoPoPracy?.profilId === przypomnienie.echoPoPracy.profilId) {
+      przypomnienie.echoPoPracy = { ...przypomnienie.echoPoPracy,
+        zaplanowanoNa: poprzednie.echoPoPracy.zaplanowanoNa,
+        dostarczonoAt: przypomnienie.echoPoPracy.dostarczonoAt ?? poprzednie.echoPoPracy.dostarczonoAt,
+        zamknietoOknoAt: przypomnienie.echoPoPracy.zamknietoOknoAt ?? poprzednie.echoPoPracy.zamknietoOknoAt }
+    }
+  }
   return kopia
 }
 

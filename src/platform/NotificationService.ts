@@ -12,6 +12,7 @@ import {
 } from './HarmonogramPrzypomnienAndroid'
 import { normalizujSciezkePowiadomienia, poprawnePowiazanieEncji, sciezkaDlaSourceRef } from './trasy'
 import { sciezkaAlarmuDawki } from '../services/PrzypomnieniaLekow'
+import { czyDostepPodsumowaniaPoPracy, czyZakonczonePodsumowanie, profilPodsumowaniaPoPracy, sciezkaPodsumowaniaPoPracy } from '../services/PodsumowaniePoPracyService'
 import type {
   AkcjaPowiadomienia,
   DanePowiadomienia,
@@ -56,6 +57,9 @@ function kanalDlaPrzypomnienia(przypomnienie: Przypomnienie): KanalPowiadomienia
 
 export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, ukrywajSzczegolyZdrowotne = false): PowiadomieniePlatformowe | undefined {
   if (przypomnienie.usunietoAt) return undefined
+  if (przypomnienie.echoPoPracy && (czyZakonczonePodsumowanie(przypomnienie)
+    || przypomnienie.stan !== 'nowe' || !czyDostepPodsumowaniaPoPracy()
+    || przypomnienie.echoPoPracy.profilId !== profilPodsumowaniaPoPracy())) return undefined
   const zakres = zakresDanychZdrowotnych('przypomnienia', przypomnienie)
   if (zakres && !czyBiezacyDostep(zakres.modul, 'odczyt', zakres.sekcja)) return undefined
   if (przypomnienie.dawkaLeku && !czyBiezacyDostep('leki', 'odczyt')) return undefined
@@ -64,14 +68,14 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
   if (!termin || Number.isNaN(termin.getTime())) return undefined
   const kanal = kanalDlaPrzypomnienia(przypomnienie)
   if (przypomnienie.dawkaLeku?.nieaktualne) return undefined
-  const sciezka = przypomnienie.dawkaLeku ? sciezkaAlarmuDawki(przypomnienie) : sciezkaDlaSourceRef(przypomnienie.zrodlo, przypomnienie.id)
+  const sciezka = przypomnienie.echoPoPracy ? sciezkaPodsumowaniaPoPracy(przypomnienie.echoPoPracy.data) : przypomnienie.dawkaLeku ? sciezkaAlarmuDawki(przypomnienie) : sciezkaDlaSourceRef(przypomnienie.zrodlo, przypomnienie.id)
   const wymagaDokladnosci = (Boolean(przypomnienie.dawkaLeku) || przypomnienie.priorytet === 'krytyczny') && przypomnienie.typ === 'absolutne'
   const tresc = ukrywajSzczegolyZdrowotne && czyZdrowotne(przypomnienie) ? 'Przypomnienie dotyczące zdrowia' : przypomnienie.tytul
   const wersja = wersjaNatywnegoPowiadomienia([termin.toISOString(), tresc, kanal, sciezka, String(wymagaDokladnosci), przypomnienie.dawkaLeku?.wersjaStanu ?? ''])
   return {
     id: identyfikatorNatywnyWystapienia('przypomnienie', przypomnienie.id),
     przypomnienieId: przypomnienie.id,
-    tytul: 'Ogarniacz',
+    tytul: przypomnienie.echoPoPracy ? '🏠 Pomagier — podsumowanie po pracy' : 'Ogarniacz',
     tresc,
     termin: termin.toISOString(),
     kanal,
@@ -79,6 +83,7 @@ export function mapujPrzypomnienieNaPowiadomienie(przypomnienie: Przypomnienie, 
     sciezka,
     wymagaDokladnosci,
     wersja,
+    ...(przypomnienie.echoPoPracy ? { echoPoPracy: przypomnienie.echoPoPracy } : {}),
     ...(przypomnienie.dawkaLeku ? { dawkaLeku: przypomnienie.dawkaLeku } : {}),
   }
 }
@@ -302,6 +307,11 @@ export function utworzUslugePowiadomien(czyAndroid: boolean) {
     poprosOUprawnienie,
     sprawdzStan,
     pokaz,
+    async odczytajDostarczenia() {
+      if (!czyAndroid) return []
+      return (await harmonogram.pobierzDostarczone()).filter(czyOgarniacza)
+        .flatMap((element) => typeof element.extra?.przypomnienieId === 'string' ? [element.extra.przypomnienieId] : [])
+    },
     zaplanuj: harmonogram.zaplanuj,
     anuluj: harmonogram.anuluj,
     przeplanuj: harmonogram.przeplanuj,

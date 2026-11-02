@@ -17,6 +17,7 @@ import { HoryzontTygodniowy } from './HoryzontTygodniowy'
 import { zakresHoryzontu } from './logikaHoryzontu'
 import { czyElementOtwarty, etykietaStatusuElementu, stanCzasuElementu, wybierzElementTeraz } from '../pulpit/logikaDniaPulpitu'
 import { useSzybkieDzialaniaDnia } from './useSzybkieDzialaniaDnia'
+import { PodsumowaniePoPracy } from './PodsumowaniePoPracy'
 
 function etykietaTypu(element: ElementOgarniacza): string {
   const etykiety = { zadanie: 'Zadanie', lek: 'Lek', wizyta: 'Wizyta', platnosc: 'Płatność', samochod: 'Samochód', zakupy: 'Zakupy', notatka: 'Notatka', wydarzenie: 'Wydarzenie', planer: 'Blok planera' }
@@ -80,6 +81,7 @@ export function WidokDzisiaj() {
     {dane.ladowanie && <p role="status">Ładowanie planu dnia…</p>}
     {(dane.blad || zaleglosci?.blad) && <Komunikat typ="blad">Nie udało się pobrać części danych. Plan i liczba zaległości mogą być niepełne.</Komunikat>}
 
+    <PodsumowaniePoPracy teraz={teraz} />
     <section className="plan-dnia__wprowadzenie" aria-label="Najważniejsze teraz" aria-busy={dane.ladowanie}>
       <div className="plan-dnia__najblizszy"><small>{elementTeraz?.stan === 'trwa' ? 'Teraz' : 'Najbliższy krok'}</small><strong>{dane.ladowanie ? 'Pobieranie bieżących spraw…' : elementTeraz ? `${elementTeraz.element.godzina ? `${elementTeraz.element.godzina} · ` : ''}${elementTeraz.element.tytul}` : minione.length ? 'Sprawdź minione terminy' : 'Dzień jest spokojny'}</strong>{elementTeraz && <>{elementTeraz.element.referencjaZrodla && <Link to={adresReferencjiZrodla(elementTeraz.element.referencjaZrodla, elementTeraz.element.data)}>Otwórz szczegóły</Link>}{akcje(elementTeraz.element)}</>}{elementTeraz?.stan === 'trwa' && <small>Następnie: {nastepnyElement ? `${nastepnyElement.element.godzina ? `${nastepnyElement.element.godzina} · ` : ''}${nastepnyElement.element.tytul}` : 'brak kolejnych spraw'}</small>}</div>
       <div><time className="plan-dnia__zegar" dateTime={format(teraz, "yyyy-MM-dd'T'HH:mm")}>{format(teraz, 'HH:mm')}</time><span className="plan-dnia__etykieta"><CalendarDays aria-hidden="true" />{format(teraz, 'EEEE, d MMMM', { locale: pl })}</span><strong>{charakterDnia}{harmonogram.jestWyjatkiem ? ' · wyjątek grafiku' : ''}</strong>{!dane.ladowanie && <p className="tekst-pomocniczy">{rytmDnia}</p>}</div>

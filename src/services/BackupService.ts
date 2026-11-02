@@ -497,6 +497,7 @@ function normalizujDefinicjePolaRejestruZBackupu(rekord: RekordBackupu): RekordB
 
 function normalizujRekordDoPrzywrocenia(tabela: NazwaTabeli, rekord: RekordBackupu): RekordBackupu {
   const odtworzony = odtworzWartoscZTransportu(rekord) as RekordBackupu
+  if (tabela === 'przypomnienia' && odtworzony.echoPoPracy && typeof odtworzony.echoPoPracy === 'object') delete (odtworzony.echoPoPracy as Record<string, unknown>).zaplanowanoNa
   if (tabela === 'leki') return normalizujLekZBackupu(odtworzony)
   if (tabela === 'definicjeWlasnychPolRejestru') return normalizujDefinicjePolaRejestruZBackupu(odtworzony)
   return odtworzony
@@ -994,10 +995,13 @@ export async function przywrocBackup(
     for (const tabela of tabele) {
       const repozytorium = baza.table(tabela)
       const prywatneUstawienia = tabela === 'ustawienia' ? (await baza.tabela('ustawienia').get('glowne'))?.samopoczucie : undefined
+      const historiaPodsumowan = tabela === 'przypomnienia' ? (await baza.tabela('przypomnienia').toArray())
+        .filter((element) => element.echoPoPracy && (element.echoPoPracy.dostarczonoAt || element.echoPoPracy.zamknietoOknoAt || element.echoPoPracy.zaplanowanoNa && Date.parse(element.echoPoPracy.zaplanowanoNa) <= Date.now())) : []
       await repozytorium.clear()
       const rekordy = daneDoZapisu.get(tabela) ?? []
       if (tabela === 'ustawienia' && prywatneUstawienia) for (const rekord of rekordy) if (rekord.id === 'glowne' && !('samopoczucie' in rekord)) rekord.samopoczucie = prywatneUstawienia
       if (rekordy.length > 0) await repozytorium.bulkPut(rekordy)
+      if (historiaPodsumowan.length > 0) await repozytorium.bulkPut(historiaPodsumowan)
       if (czyTabelaFinansowWspolnych(tabela)) await baza.tabela('kolejkaSynchronizacji').where('tabela').equals(tabela).delete()
     }
     if (przywracaFinanse) await baza.tabela('stanSynchronizacji').update('glowny', { finanseWspolneZmigrowane: false })

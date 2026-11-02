@@ -319,6 +319,14 @@ export interface WpisTerapii extends EncjaBazowa {
 }
 
 export interface Przypomnienie extends EncjaBazowa {
+  echoPoPracy?: {
+    profilId: string
+    data: string
+    dostarczonoAt?: string
+    /** Zamknięte okno natywnego alarmu bez potwierdzenia odbioru. */
+    zamknietoOknoAt?: string
+    zaplanowanoNa?: string
+  }
   /** Odniesienie do generatora; nie jest osobnym schematem dawkowania. */
   dawkaLeku?: {
     lekId: Id
@@ -740,6 +748,13 @@ export interface UstawieniaDostepnosci {
 }
 
 export interface Ustawienia extends EncjaBazowa {
+  podsumowaniePoPracy: {
+    wlaczone: boolean
+    opoznienieMinuty: number
+    zalegle: boolean
+    dzisiaj: boolean
+    priorytety: boolean
+  }
   samopoczucie?: import('./samopoczucie').UstawieniaSamopoczucia
   wersja: 1
   wyglad: UstawieniaWygladu

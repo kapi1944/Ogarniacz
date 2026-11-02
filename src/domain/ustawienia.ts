@@ -85,6 +85,7 @@ export const DOMYSLNE_USTAWIENIA: Ustawienia = {
   powiadomienia: false,
   ukrywajSzczegolyZdrowotneWPowiadomieniach: true,
   proaktywnoscEcho: true,
+  podsumowaniePoPracy: { wlaczone: true, opoznienieMinuty: 30, zalegle: true, dzisiaj: true, priorytety: true },
   echoWyciszone: false,
   glosEcho: true,
   hejEcho: false,
@@ -189,6 +190,7 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
   const nawigacja = jakoRekord(zrodlo.nawigacja)
   const pulpit = jakoRekord(zrodlo.pulpit)
   const harmonogram = jakoRekord(zrodlo.harmonogram)
+  const podsumowanie = jakoRekord(zrodlo.podsumowaniePoPracy)
   const zadania = jakoRekord(zrodlo.zadania)
   const szybkieDodawanie = jakoRekord(zrodlo.szybkieDodawanie)
   const dostepnosc = jakoRekord(zrodlo.dostepnosc)
@@ -284,6 +286,13 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
     powiadomienia: logiczna(zrodlo.powiadomienia, domyslne.powiadomienia),
     ukrywajSzczegolyZdrowotneWPowiadomieniach: logiczna(zrodlo.ukrywajSzczegolyZdrowotneWPowiadomieniach, domyslne.ukrywajSzczegolyZdrowotneWPowiadomieniach),
     proaktywnoscEcho: logiczna(zrodlo.proaktywnoscEcho, domyslne.proaktywnoscEcho),
+    podsumowaniePoPracy: {
+      wlaczone: logiczna(podsumowanie.wlaczone, domyslne.podsumowaniePoPracy.wlaczone),
+      opoznienieMinuty: liczba(podsumowanie.opoznienieMinuty, 0, 180, 30),
+      zalegle: logiczna(podsumowanie.zalegle, true),
+      dzisiaj: logiczna(podsumowanie.dzisiaj, true),
+      priorytety: logiczna(podsumowanie.priorytety, true),
+    },
     echoWyciszone: logiczna(zrodlo.echoWyciszone, domyslne.echoWyciszone),
     glosEcho: logiczna(zrodlo.glosEcho, domyslne.glosEcho),
     hejEcho: logiczna(zrodlo.hejEcho, domyslne.hejEcho),

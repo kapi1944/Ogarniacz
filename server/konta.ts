@@ -251,6 +251,7 @@ export function czyDozwolonaTabela(
 ): boolean {
   if (['wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen'].includes(tabela)) return kontekst.rola === 'wlasciciel' && kontekst.uzytkownikId === kontekst.wlascicielId
   if (kontekst.rola === 'wlasciciel') return true
+  if (tabela === 'przypomnienia' && (rekord?.echoPoPracy || typeof rekord?.id === 'string' && rekord.id.startsWith('echo-po-pracy:'))) return false
   const modul = MODUL_TABELI[tabela]
   if (!modul || modul === 'ustawienia' || modul === 'echo') return false
   const sekcja = tabela === 'wpisyTerapii' || tabela === 'zadania' && rekord && 'sesjaTerapiiId' in rekord ? 'psychoterapia'

@@ -5,6 +5,7 @@ import { odroczPrzypomnienie, zakonczPrzypomnienie } from '../services/Przypomni
 import { mapujPrzypomnienieNaPowiadomienie, utworzUslugePowiadomien } from './NotificationService'
 import { sciezkaDlaSourceRef } from './trasy'
 import { ustawBiezacyDostep } from '../services/UprawnieniaService'
+import { profilPodsumowaniaPoPracy } from '../services/PodsumowaniePoPracyService'
 
 const lokalnePowiadomienia = vi.hoisted(() => ({
   addListener: vi.fn(),
@@ -61,6 +62,48 @@ const przypomnienie = (zmiany: Partial<Przypomnienie> = {}): Przypomnienie => ({
   stan: 'nowe',
   eskalacja: false,
   ...zmiany,
+})
+
+describe('Echo po pracy na Androidzie', () => {
+  const echo = () => przypomnienie({ id: 'echo-po-pracy:test:2026-09-01', tytul: 'Sprawdź zadania pozostałe po pracy', echoPoPracy: { profilId: profilPodsumowaniaPoPracy(), data: '2026-09-01' } })
+
+  it('planuje neutralną treść, zwykły kanał i otwarcie podsumowania bez akcji wykonania zadań', async () => {
+    const element = echo()
+    const usluga = utworzUslugePowiadomien(true)
+    await usluga.synchronizuj([element], true)
+    const natywne = lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0]
+    expect(natywne).toMatchObject({ title: '🏠 Pomagier — podsumowanie po pracy', body: 'Sprawdź zadania pozostałe po pracy', channelId: 'ogarniacz-zwykle', isExactNotification: false, actionTypeId: 'ogarniacz-echo-po-pracy' })
+    expect(mapujPrzypomnienieNaPowiadomienie(element)?.sciezka).toBe('/dzisiaj?poPracy=2026-09-01')
+    expect(lokalnePowiadomienia.requestPermissions).not.toHaveBeenCalled()
+    expect(element.stan).toBe('nowe')
+  })
+
+  it('przeplanowuje jedno ID i usuwa wyłącznie anulowany alarm Echo', async () => {
+    const element = echo()
+    const inne = przypomnienie()
+    const poprzednie = mapujPrzypomnienieNaPowiadomienie(element)!
+    const zwykle = mapujPrzypomnienieNaPowiadomienie(inne)!
+    lokalnePowiadomienia.getPending.mockResolvedValue({ notifications: [poprzednie, zwykle].map((pozycja) => ({ id: pozycja.id, extra: { ogarniacz: true, wersja: pozycja.wersja } })) })
+    const usluga = utworzUslugePowiadomien(true)
+    await usluga.synchronizuj([{ ...element, czas: '2026-09-01T11:00:00Z' }, inne], true)
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: poprzednie.id }] })
+    expect(lokalnePowiadomienia.schedule.mock.calls[0][0].notifications).toHaveLength(1)
+    expect(lokalnePowiadomienia.schedule.mock.calls[0][0].notifications[0].id).toBe(poprzednie.id)
+    lokalnePowiadomienia.cancel.mockClear()
+    await usluga.synchronizuj([{ ...element, stan: 'pominiete' }, inne], true)
+    expect(lokalnePowiadomienia.cancel).toHaveBeenCalledWith({ notifications: [{ id: poprzednie.id }] })
+  })
+
+  it('nie mapuje obcego profilu ani ponownie dostarczonego wystąpienia', () => {
+    const element = echo()
+    expect(mapujPrzypomnienieNaPowiadomienie({ ...element, echoPoPracy: { ...element.echoPoPracy!, profilId: 'obcy' } })).toBeUndefined()
+    expect(mapujPrzypomnienieNaPowiadomienie({ ...element, echoPoPracy: { ...element.echoPoPracy!, dostarczonoAt: '2026-09-01T10:00:00Z' } })).toBeUndefined()
+  })
+
+  it('odczytuje faktyczne dostarczenia oddzielnie od zaplanowania', async () => {
+    lokalnePowiadomienia.getAll.mockResolvedValue({ notifications: [{ id: 1, extra: { ogarniacz: true, przypomnienieId: 'echo' } }] })
+    expect(await utworzUslugePowiadomien(true).odczytajDostarczenia()).toEqual(['echo'])
+  })
 })
 
 describe('kanały alarmów lekowych', () => {

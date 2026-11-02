@@ -26,6 +26,7 @@ export interface DanePowiadomienia {
 }
 
 export interface PowiadomieniePlatformowe {
+  echoPoPracy?: Przypomnienie['echoPoPracy']
   dawkaLeku?: Przypomnienie['dawkaLeku']
   id: number
   przypomnienieId: string
@@ -118,6 +119,7 @@ export interface PlatformaOgarniacza {
     nasluchuj: (obsluga: (stan: StanCykluZycia) => void) => Promise<() => void>
   }
   powiadomienia: {
+    odczytajDostarczenia?: () => Promise<string[]>
     dostepne: () => boolean
     poprosOUprawnienie: () => Promise<boolean>
     sprawdzStan: () => Promise<StanPowiadomienPlatformy>

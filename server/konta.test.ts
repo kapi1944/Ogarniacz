@@ -6,6 +6,19 @@ import { utworzKonfiguracjeSerwera } from './config.ts'
 import { uruchomMigracje } from './migracje.ts'
 import { utworzSerwer } from './serwer.ts'
 import { wskazPierwszegoAdministratora } from './administracja-kont.ts'
+import { czyDozwolonaTabela } from './konta.ts'
+
+test('Echo po pracy pozostaje prywatne mimo grantu Edytora do przypomnień', () => {
+  const baza = new DatabaseSync(':memory:')
+  try {
+    const edytor = { uzytkownikId: 'edytor', wlascicielId: 'wlasciciel', rola: 'edytor' as const }
+    for (const operacja of ['odczyt', 'edycja'] as const) {
+      assert.equal(czyDozwolonaTabela(baza, edytor, 'przypomnienia', operacja, { id: 'echo-po-pracy:wlasciciel:2026-11-02' }), false)
+      assert.equal(czyDozwolonaTabela(baza, edytor, 'przypomnienia', operacja, { id: 'inne', echoPoPracy: { data: '2026-11-02' } }), false)
+    }
+    assert.equal(czyDozwolonaTabela(baza, { ...edytor, rola: 'wlasciciel' }, 'przypomnienia', 'odczyt', { echoPoPracy: {} }), true)
+  } finally { baza.close() }
+})
 
 test('pierwszy administrator wymaga jawnego aktywnego konta i nie zmienia danych ani grantów', () => {
   const baza = new DatabaseSync(':memory:')

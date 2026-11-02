@@ -26,6 +26,7 @@ export const KATEGORIE_USTAWIEN = [
     opcje: [
       'Tryb rozmowy', 'Głos', 'Hej Echo', 'Stan silnika', 'Testuj „Hej Echo”',
       'Czytaj odpowiedzi Echo na głos', 'Proaktywność', 'Wyciszenie', 'Pamięć preferencji',
+      'Podsumowanie po pracy: opóźnienie po powrocie, zaległe zadania, dzisiejsze zadania, priorytety',
       'Dostęp do internetu', 'Uprawnienia do modułów', 'Pamięć Echo: fakty, preferencje, reguły',
     ],
     slowaKluczowe: 'asystent mikrofon wake word sugestie mowa sztuczna inteligencja',

@@ -1,5 +1,9 @@
 import { PoleCzasu } from '../../components/PoleCzasu'
 import { PoleLiczbowe } from '../../components/PoleLiczbowe'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { format } from 'date-fns'
+import { pobierzRepozytorium } from '../../data/Repozytorium'
+import { czyZakonczonePodsumowanie, planPodsumowanPoPracy, pobierzDanePodsumowaniaPoPracy, profilPodsumowaniaPoPracy } from '../../services/PodsumowaniePoPracyService'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { Palette, Save, Undo2 } from 'lucide-react'
@@ -58,9 +62,19 @@ export function PanelUstawienAplikacji() {
   const [komunikat, ustawKomunikat] = useState('')
   const [wynikTestuWakeWord, ustawWynikTestuWakeWord] = useState('')
   const [testWakeWordTrwa, ustawTestWakeWordTrwa] = useState(false)
+  const [opoznieniePoPracy, ustawOpoznieniePoPracy] = useState(String(szkic.podsumowaniePoPracy.opoznienieMinuty))
+  const najblizszePodsumowanie = useLiveQuery(async () => {
+    const dane = await pobierzDanePodsumowaniaPoPracy(szkic)
+    if (!dane) return undefined
+    const teraz = new Date()
+    const historia = await pobierzRepozytorium('przypomnienia').lista()
+    return planPodsumowanPoPracy(dane, teraz).find((podsumowanie) => Date.parse(podsumowanie.termin) > teraz.getTime()
+      && !historia.some((element) => element.echoPoPracy?.profilId === profilPodsumowaniaPoPracy() && element.echoPoPracy.data === podsumowanie.data && czyZakonczonePodsumowanie(element)))?.termin
+  }, [szkic])
 
   useEffect(() => {
     ustawSzkic(normalizujUstawienia(zapisaneUstawienia))
+    ustawOpoznieniePoPracy(String(normalizujUstawienia(zapisaneUstawienia).podsumowaniePoPracy.opoznienieMinuty))
   }, [zapisaneUstawienia])
 
   useEffect(() => () => wyczyscPodgladUstawien(), [wyczyscPodgladUstawien])
@@ -84,6 +98,7 @@ export function PanelUstawienAplikacji() {
   }
 
   const resetujWszystko = () => {
+    ustawOpoznieniePoPracy('30')
     aktualizujSzkic({
       ...DOMYSLNE_USTAWIENIA,
       id: zapisaneUstawienia.id,
@@ -93,9 +108,10 @@ export function PanelUstawienAplikacji() {
     ustawKomunikat('Przywrócono domyślne wartości w szkicu. Użyj „Zapisz ustawienia”, aby je utrwalić.')
   }
 
-  const resetujEcho = () => aktualizujSzkic({
+  const resetujEcho = () => { ustawOpoznieniePoPracy('30'); aktualizujSzkic({
     ...szkic,
     proaktywnoscEcho: DOMYSLNE_USTAWIENIA.proaktywnoscEcho,
+    podsumowaniePoPracy: DOMYSLNE_USTAWIENIA.podsumowaniePoPracy,
     echoWyciszone: DOMYSLNE_USTAWIENIA.echoWyciszone,
     glosEcho: DOMYSLNE_USTAWIENIA.glosEcho,
     hejEcho: DOMYSLNE_USTAWIENIA.hejEcho,
@@ -104,7 +120,7 @@ export function PanelUstawienAplikacji() {
     pamiecPreferencjiEcho: DOMYSLNE_USTAWIENIA.pamiecPreferencjiEcho,
     internetEcho: DOMYSLNE_USTAWIENIA.internetEcho,
     modulyEcho: DOMYSLNE_USTAWIENIA.modulyEcho,
-  })
+  }) }
 
   const zmienDostepEcho = (modul: NazwaModulu, dostepny: boolean) => aktualizujSzkic({
     ...szkic,
@@ -214,6 +230,15 @@ export function PanelUstawienAplikacji() {
         <div className="pole pole--pelne"><span>Stan silnika</span><strong>{stanWakeWord === 'aktywny' ? 'Aktywny' : stanWakeWord === 'niedostepny' ? 'Niedostępny' : stanWakeWord === 'brakKonfiguracji' ? 'Brak konfiguracji' : stanWakeWord === 'uruchamianie' ? 'Uruchamianie' : stanWakeWord === 'blad' ? 'Błąd' : 'Wyłączony'}</strong>{komunikatWakeWord && <small>{komunikatWakeWord}</small>}<button type="button" className="przycisk przycisk--drugorzedny" disabled={testWakeWordTrwa || stanWakeWord === 'niedostepny' || stanWakeWord === 'brakKonfiguracji'} onClick={() => void testujHejEcho()}>{testWakeWordTrwa ? 'Nasłuchuję…' : 'Testuj „Hej Echo”'}</button>{wynikTestuWakeWord && <small>{wynikTestuWakeWord}</small>}</div>
         <Przelacznik etykieta="Czytaj odpowiedzi Echo na głos" opis="W rozmowie tekstowej odczytuje odpowiedzi Echo na obsługiwanym urządzeniu." zaznaczony={szkic.automatycznyOdczytEcho} zmien={(automatycznyOdczytEcho) => aktualizujSzkic({ ...szkic, automatycznyOdczytEcho })} />
         <Przelacznik etykieta="Proaktywność" opis="Pozwala Echo pokazywać lokalne sugestie." zaznaczony={szkic.proaktywnoscEcho && !szkic.echoWyciszone} zmien={(wartosc) => aktualizujSzkic({ ...szkic, proaktywnoscEcho: wartosc, echoWyciszone: !wartosc })} />
+        <fieldset className="pole--pelne"><legend>🏠 Podsumowanie po pracy</legend>
+          <Przelacznik etykieta="Włącz podsumowanie po pracy" opis="Jedno przypomnienie o pozostałych zadaniach po zaplanowanym powrocie." zaznaczony={szkic.podsumowaniePoPracy.wlaczone} zmien={(wlaczone) => aktualizujSzkic({ ...szkic, podsumowaniePoPracy: { ...szkic.podsumowaniePoPracy, wlaczone } })} />
+          <PoleLiczbowe etykieta="Opóźnienie po powrocie (min)" wymagane min={0} max={180} krok={1} wartosc={opoznieniePoPracy} zmien={(wartosc) => { ustawOpoznieniePoPracy(wartosc); ustawKomunikat(''); if (wartosc && Number.isInteger(Number(wartosc)) && Number(wartosc) >= 0 && Number(wartosc) <= 180) aktualizujSzkic({ ...szkic, podsumowaniePoPracy: { ...szkic.podsumowaniePoPracy, opoznienieMinuty: Number(wartosc) } }) }} />
+          <Przelacznik etykieta="Uwzględniaj zaległe zadania" opis="Niewykonane zadania z poprzednich dni." zaznaczony={szkic.podsumowaniePoPracy.zalegle} zmien={(zalegle) => aktualizujSzkic({ ...szkic, podsumowaniePoPracy: { ...szkic.podsumowaniePoPracy, zalegle } })} />
+          <Przelacznik etykieta="Uwzględniaj zadania na dzisiaj" opis="Zadania przypisane do dnia pracy, również bez godziny." zaznaczony={szkic.podsumowaniePoPracy.dzisiaj} zmien={(dzisiaj) => aktualizujSzkic({ ...szkic, podsumowaniePoPracy: { ...szkic.podsumowaniePoPracy, dzisiaj } })} />
+          <Przelacznik etykieta="Uwzględniaj priorytety" opis="Najpierw krytyczne i wysokie; po wyłączeniu według terminu." zaznaczony={szkic.podsumowaniePoPracy.priorytety} zmien={(priorytety) => aktualizujSzkic({ ...szkic, podsumowaniePoPracy: { ...szkic.podsumowaniePoPracy, priorytety } })} />
+          <p aria-live="polite">{najblizszePodsumowanie ? `Najbliższe podsumowanie: ${format(new Date(najblizszePodsumowanie), 'dd.MM.yyyy, HH:mm')}` : 'Brak zaplanowanego podsumowania. Potrzebny jest powrót z pracy, pozostałe zadania i włączona proaktywność.'}</p>
+          <small>Web/PWA przypomina podczas działania aplikacji lub do 60 minut po terminie. Android planuje lokalne powiadomienia; oszczędzanie baterii może je opóźnić. Po zamknięciu aplikacji alarm opiera się na ostatnio odebranych danych.</small>
+        </fieldset>
         <Przelacznik etykieta="Pamięć preferencji" opis="Przechowuje osobno jawne preferencje rozmowy, bez kopiowania danych domenowych." zaznaczony={szkic.pamiecPreferencjiEcho} zmien={(pamiecPreferencjiEcho) => aktualizujSzkic({ ...szkic, pamiecPreferencjiEcho })} />
         <Przelacznik etykieta="Dostęp do internetu" opis="Pozwala użyć skonfigurowanego providera danych bieżących; sam przełącznik nie wykonuje requestów." zaznaczony={szkic.internetEcho} zmien={(internetEcho) => aktualizujSzkic({ ...szkic, internetEcho })} />
         <div className="pole pole--pelne"><span>Uprawnienia do modułów</span><div className="lista-typow-szybkich">{modulyEcho.map((modul) => <label key={modul.wartosc}><input type="checkbox" checked={szkic.modulyEcho.includes(modul.wartosc)} onChange={(e) => zmienDostepEcho(modul.wartosc, e.target.checked)} />{modul.etykieta}</label>)}</div></div>

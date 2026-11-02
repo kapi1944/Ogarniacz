@@ -11,6 +11,7 @@ import { Komunikat } from '../components/Interfejs'
 import { utworzObslugeCelowPlatformy } from './ObslugaCelowPlatformy'
 import { sciezkaAlarmuDawki, sprawdzAlarmDawki } from '../services/PrzypomnieniaLekow'
 import { mapujPrzypomnienieNaPowiadomienie } from './NotificationService'
+import { czyDostepPodsumowaniaPoPracy, oznaczStanPodsumowaniaPoPracy, profilPodsumowaniaPoPracy, sciezkaPodsumowaniaPoPracy } from '../services/PodsumowaniePoPracyService'
 
 export function NawigacjaPlatformy() {
   const polozenie = useLocation()
@@ -43,6 +44,12 @@ export function NawigacjaPlatformy() {
         const repozytorium = pobierzRepozytorium('przypomnienia')
         if (akcja.wersjaPowiadomienia !== undefined && akcja.przypomnienieId) {
           const przypomnienie = await repozytorium.pobierz(akcja.przypomnienieId)
+          if (przypomnienie?.echoPoPracy) {
+            if (!czyDostepPodsumowaniaPoPracy() || przypomnienie.echoPoPracy.profilId !== profilPodsumowaniaPoPracy()) throw new Error('To podsumowanie nie jest dostępne w bieżącym profilu.')
+            await oznaczStanPodsumowaniaPoPracy(przypomnienie.id, 'dostarczone')
+            nawiguj(sciezkaPodsumowaniaPoPracy(przypomnienie.echoPoPracy.data))
+            return
+          }
           const powiadomienie = przypomnienie && mapujPrzypomnienieNaPowiadomienie(przypomnienie, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach)
           if (!przypomnienie || !powiadomienie || powiadomienie.wersja !== akcja.wersjaPowiadomienia) throw new Error('Ten alarm jest niedostępny lub nieaktualny. Sprawdź aktualne przypomnienia.')
           akcja = { ...akcja, sciezka: powiadomienie.sciezka, sourceRef: przypomnienie.zrodlo, wersjaStanuDawki: przypomnienie.dawkaLeku?.wersjaStanu }

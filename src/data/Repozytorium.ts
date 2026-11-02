@@ -122,6 +122,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   }
 
   private czyDostep(encja: T | undefined, operacja: 'odczyt' | 'edycja'): boolean {
+    if (this.nazwa === 'przypomnienia' && encja && ('echoPoPracy' in encja || encja.id.startsWith('echo-po-pracy:')) && !czyBiezacyDostep('echo', operacja)) return false
     if (this.nazwa === 'historiaZmian' && encja && 'typEncji' in encja && czyTabelaFinansowWspolnych(String(encja.typEncji))) return czyDostepFinansowWspolnych(operacja)
     if (this.nazwa === 'dokumenty' && !czyBiezacyDostep('dokumenty', operacja)) return false
     const zakres = zakresDanychZdrowotnych(this.nazwa, encja)

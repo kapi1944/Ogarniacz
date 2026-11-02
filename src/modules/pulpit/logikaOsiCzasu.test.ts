@@ -10,7 +10,7 @@ describe('oś czasu Pulpitu', () => {
     expect(harmonogram.przedzialy).toEqual([
       { id: 'dojazd-do-pracy', etykieta: 'Dojazd', od: '07:05', do: '07:45', dostepnosc: 'czesciowa' },
       { id: 'praca', etykieta: 'Praca', od: '07:45', do: '16:00' },
-      { id: 'powrot', etykieta: 'Powrót', od: '16:00', do: '16:40', dostepnosc: 'czesciowa' },
+      { id: 'powrot', etykieta: 'Powrót', od: '16:00', do: '16:40', dostepnosc: 'czesciowa', koniecAt: new Date('2026-08-26T16:40:00').toISOString() },
     ])
   })
 

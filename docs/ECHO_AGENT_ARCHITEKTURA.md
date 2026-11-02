@@ -163,3 +163,68 @@ Rejestr, walidator, polityka i narzędzia działają bez LLM i mogą być testow
 9. **Rozszerzanie narzędzi:** małymi pionowymi wycinkami dla notatek, kalendarza, pracy, kontaktów, finansów, zdrowia i samochodu, każdorazowo z minimalizacją danych oraz polityką ryzyka.
 
 Warunkiem przejścia do trybu pełnego jest to, by użytkownik nie musiał znać nazw narzędzi ani poprawnych komend. Model interpretuje rozmowę; deterministyczny system wyłącznie bezpiecznie realizuje jej wynik.
+
+## Echo P1 — podsumowanie po pracy
+
+Lokalny `PodsumowaniePoPracyService` wybiera istniejące niewykonane zadania bez
+LLM, sieci i backendu. Termin pochodzi z pełnego `koniecAt` bloku `powrot`
+Harmonogramu + domyślne 30 minut. Obliczenia zachowują lokalną strefę, rzeczywiste
+minuty przejazdu/opóźnienia, północ i datę dnia pracy. Dotychczasowe etykiety osi
+pozostają bez zmian. Obowiązują istniejące reguły świąt, urlopów i wyjątków
+(jawny wyjątek ma pierwszeństwo). Brak bloku powrotu, także przy zerowym czasie
+przejazdu, oznacza brak przypomnienia.
+
+Repozytorium i adapter terminów dostarczają zadania wcześniejsze i przypisane
+do dnia pracy; widoczność na Pulpicie nie jest kryterium. Data kanoniczna ma
+pierwszeństwo przed legacy; samodzielny termin graniczny także przypisuje zadanie
+do dnia. Zadania bez daty, przyszłe, usunięte i zakończone są pomijane. Prywatne
+ćwiczenia terapii pozostają na własnym chronionym ekranie. Deduplikacja używa ID,
+bez generowania wystąpień cyklicznych. Osobne grupy Zaległe i Na dzisiaj są
+sortowane według czterech priorytetów, terminu i ID; po wyłączeniu priorytetów
+obowiązuje chronologia. Odczyt, szczegóły i wykonanie wymagają uprawnień.
+
+Ustawienia → Echo AI → Proaktywność zawierają włączenie, całkowite opóźnienie
+0–180 minut i wybór zaległych, dzisiejszych oraz priorytetów. Normalizacja nadaje
+starym ustawieniom wartości domyślne bez zmiany schematu Dexie. Podgląd korzysta
+z tego samego planu co silnik i wymaga znanych zadań. Funkcja respektuje
+wyciszenie, proaktywność i dostęp Echo do Zadań. Wyłączenie powiadomień OS
+pozostawia komunikat w aktywnej aplikacji.
+
+Istniejący `SilnikPrzypomnien` uzgadnia zmiany zadań, ustawień, wyjątków i urlopów,
+co minutę i po wznowieniu. Nie ma osobnego zegara powiadomień. W dotychczasowej
+tabeli przypomnień wystąpienie otrzymuje stabilne ID
+`echo-po-pracy:{wlascicielLubProfilLokalny}:{dataDniaPracy}`. Opcjonalne metadane
+`echoPoPracy` rozdzielają planowanie, potwierdzone dostarczenie i zamknięcie
+niepotwierdzonego okna natywnego. Transakcja chroni równoległe próby i ponownie
+sprawdza aktualne zadania bezpośrednio przed dostarczeniem w aktywnej aplikacji.
+Zmiana grafiku zastępuje termin o tym samym ID; ukończenie zadań lub wyłączenie
+funkcji anuluje alarmy. Historia nie jest usuwana przy wyłączeniu ani odtworzeniu
+starszej kopii. Stan dostarczenia przechodzi przez istniejącą synchronizację;
+lokalne `zaplanowanoNa` nie opuszcza urządzenia w synchronizacji i nie jest
+odtwarzane z importowanego backupu. Starszy rekord nie usuwa lokalnego znacznika
+dostarczenia. Brak gwarancji globalnego dokładnie raz dla urządzeń offline.
+
+Android planuje do 14 przyszłych dni przez istniejące Local Notifications,
+na zwykłym kanale, bez wymuszania dokładnych alarmów i próśb o uprawnienia.
+Treść jest neutralna: „Sprawdź zadania pozostałe po pracy”; liczników i nazw
+zadań nie utrwala się w alarmie. Odczyt natywnych dostarczeń potwierdza odbiór.
+Upływ zaplanowanego terminu bez potwierdzenia zamyka okno jako niepotwierdzone,
+aby usunięta notyfikacja nie została ponowiona; samo planowanie nie jest odbiorem.
+Zamknięta aplikacja nie reaguje na zmiany, których jeszcze nie odebrała.
+Oszczędzanie baterii, force-stop i ograniczenia systemu mogą blokować alarm.
+
+Web/PWA działa podczas aktywności i dopuszcza jedno nadrobienie do 60 minut.
+Zamknięta przeglądarka nie gwarantuje alarmu. Raspberry Pi jako host nie wykonuje
+mechanizmu za urządzenie. Kliknięcie otwiera walidowaną trasę
+`/dzisiaj?poPracy=YYYY-MM-DD`. Sekcja przelicza lokalne dane i korzysta z istniejącej
+akcji wykonania zadania; obserwacja repozytorium odświeża listę i liczniki.
+Istniejący lifecycle profilu anuluje natywne alarmy przy zmianie konta.
+Zaktualizowany backend wyklucza te rekordy z grantów Edytora; ta dodatkowa
+kontrola serwerowa wymaga osobnego wdrożenia tej wersji backendu.
+
+Testy `PodsumowaniePoPracyService.test.ts` obejmują P1-01–40, stare ustawienia,
+backup i restart bazy. Test sekcji Dzisiaj sprawdza wykonanie i aktualizację
+liczników. Testy platformy sprawdzają neutralny alarm, przeplanowanie, anulowanie
+i walidację tras. Bramka: lint, typecheck, test, build, pwa:smoke; dodatkowo
+server:test i android:test. Testy automatyczne nie potwierdzają alarmów na
+fizycznym telefonie, restartu Androida ani wyglądu we wszystkich motywach.
