@@ -93,6 +93,8 @@ export async function listaOperacjiKasy(id: string, zUsunietymi = false): Promis
 export async function pobierzSaldoKasy(id: string): Promise<number> {
   return wTransakcjiFinansowej('odczyt', async () => {
     await sprawdzKompletnoscFinansow()
-    return obliczSaldoZOperacji(wymagajRekordu(await baza.tabela('wspolneKasy').get(id)), await operacjeKasy(id))
+    const kasa = wymagajRekordu(await baza.tabela('wspolneKasy').get(id))
+    if (kasa.pula) throw new Error('Pula wymaga kompletnej projekcji FZ uwzględniającej zobowiązania.')
+    return obliczSaldoZOperacji(kasa, await operacjeKasy(id))
   })
 }

@@ -126,13 +126,13 @@ describe('bezpieczny zapis wspólnych kas', () => {
     expect((await listaOperacjiKasy('k')).every((operacja) => operacja.waluta === zapisana.waluta)).toBe(true)
   })
 
-  it('zapisuje poprzedni stan rekordu F7.2A bez zmiany schematu bazy', async () => {
+  it('zapisuje poprzedni stan rekordu F7.2A w aktualnym schemacie', async () => {
     await baza.tabela('wspolneKasy').put({ ...kasa, id: 'k', createdAt: '2026-10-28T10:00:00.000Z', updatedAt: '2026-10-28T10:00:00.000Z' })
     const zmieniona = await edytujKase('k', { ...kasa, nazwa: 'Zmieniona' }, polecenie())
     expect(zmieniona.rewizja).toBe(1)
     expect(zmieniona.historiaWersji?.[0].przed?.nazwa).toBe(kasa.nazwa)
     await expect(przygotujBackupDoPrzywracania(JSON.stringify(await utworzBackup(['wspolneKasy'])))).resolves.toHaveProperty('payload')
-    expect(baza.verno).toBe(20)
+    expect(baza.verno).toBe(21)
   })
 
   it('edytuje ustawienia, blokuje walutę po operacji, archiwizuje i przywraca kasę', async () => {

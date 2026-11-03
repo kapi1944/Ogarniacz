@@ -455,6 +455,7 @@ export interface Kontakt extends EncjaBazowa {
 }
 
 export interface Dokument extends EncjaBazowa {
+  finansowe?: { wersja: 1; tylkoWlasciciel: true }
   /** Trwała klasyfikacja uprawnień; bez treści i identyfikatorów prywatnych źródeł. */
   sekcjePrywatnosci?: ('dokumentacja' | 'psychoterapia')[]
   medyczne?: import('./badania').MetadaneMedyczne
@@ -748,6 +749,7 @@ export interface UstawieniaDostepnosci {
 }
 
 export interface Ustawienia extends EncjaBazowa {
+  finanseFz?: import('zod').infer<typeof import('../../server/wspolne/modelePulZobowiazan.ts').schematUstawienFz>
   podsumowaniePoPracy: {
     wlaczone: boolean
     opoznienieMinuty: number
@@ -808,6 +810,11 @@ export type NazwaModulu =
   | 'ustawienia'
 
 export interface MapaTabel {
+  zakupyPul: import('../../server/wspolne/modelePulZobowiazan.ts').ZakupPuli
+  sprzedazePul: import('../../server/wspolne/modelePulZobowiazan.ts').SprzedazPuli
+  osobyFinansowe: import('../../server/wspolne/modelePulZobowiazan.ts').OsobaFinansowa
+  zobowiazania: import('../../server/wspolne/modelePulZobowiazan.ts').Zobowiazanie
+  operacjeZobowiazan: import('../../server/wspolne/modelePulZobowiazan.ts').OperacjaZobowiazania
   wspolneKasy: import('./modeleFinansowWspolnych').WspolnaKasa
   operacjeKas: import('./modeleFinansowWspolnych').OperacjaKasy
   rozliczenia: import('./modeleFinansowWspolnych').Rozliczenie

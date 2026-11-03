@@ -1,3 +1,5 @@
+import { czyRekordFz } from '../../server/wspolne/WalidacjaPulZobowiazan.ts'
+import { czyWstrzymanyTransportFz } from './OchronaTransportuFz'
 import type { Table } from 'dexie'
 import { noweId } from '../domain/fabryki'
 import type { Dokument, EncjaBazowa, NazwaTabeli, Przypomnienie, ZmianaKolejkiSynchronizacji } from '../domain/typy'
@@ -98,6 +100,7 @@ export async function dodajDoKolejkiSynchronizacji(
     rekord: rekordDoSynchronizacji(tabela, rekord),
     bazowyUpdatedAt: czyTabelaFinansowWspolnych(tabela) && poprzedniaZmiana ? poprzedniaZmiana.bazowyUpdatedAt : poprzedniaZmiana?.bazowyUpdatedAt ?? poprzedni?.updatedAt,
     liczbaProb: 0,
+    ...(await czyWstrzymanyTransportFz(tabela, rekord) ? { ostatniBlad: 'FZ: dane lokalne, transport wstrzymany do FZ-7.' } : {}),
   })
 }
 
@@ -116,9 +119,11 @@ async function pobierzDozwoloneZmianyKolejki(): Promise<ZmianaKolejkiSynchroniza
   const bezpieczne: ZmianaKolejkiSynchronizacji[] = []
   for (const zmiana of zmiany) {
     const tabela = zmiana.tabela as NazwaTabeli
+    if (czyRekordFz(tabela, zmiana.rekord)) continue
     if (!nazwyTabel.includes(tabela) || !czyTabelaSynchronizowana(tabela)) continue
     if (czyTabelaFinansowWspolnych(tabela) && !czyDostepFinansowWspolnych('odczyt')) continue
     if (czyPrywatnaPsychoterapia(tabela, zmiana.rekord) || czyPrywatnaPsychoterapia(tabela, await baza.tabela(tabela).get(zmiana.rekordId))) continue
+    if (await czyWstrzymanyTransportFz(tabela, zmiana.rekord) || await czyWstrzymanyTransportFz(tabela, await baza.tabela(tabela).get(zmiana.rekordId))) continue
     bezpieczne.push({ ...zmiana, rekord: zachowajLokalneSamopoczucie(tabela, zmiana.rekord, await baza.tabela(tabela).get(zmiana.rekordId)) })
   }
   return bezpieczne

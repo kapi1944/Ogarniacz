@@ -1,3 +1,6 @@
+import { czyRekordFz } from '../../server/wspolne/WalidacjaPulZobowiazan.ts'
+import { czyWstrzymanyTransportFz } from '../data/OchronaTransportuFz'
+import { TABELE_FZ } from '../../server/wspolne/modelePulZobowiazan.ts'
 import { czyKontoZgodneZDanymiLokalnymi } from './KontaService'
 import type { Table } from 'dexie'
 import { baza, nazwyTabel } from '../data/BazaOgarniacza'
@@ -28,7 +31,7 @@ export type EtapOperacjiSynchronizacji = 'pobieranie' | 'wysylanie'
 
 const POCZATEK_SYNCHRONIZACJI = '1970-01-01T00:00:00.000Z'
 export const nazwyTabelSynchronizowanych = nazwyTabel.filter(
-  (nazwa): nazwa is NazwaTabeliSynchronizowanej => czyTabelaSynchronizowana(nazwa),
+  (nazwa): nazwa is NazwaTabeliSynchronizowanej => !(TABELE_FZ as readonly string[]).includes(nazwa) && czyTabelaSynchronizowana(nazwa),
 )
 
 interface OpcjeSyncEngine {
@@ -276,6 +279,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
         await this.walidujLokalnyObraz([{ tabela, rekord, installationId: this.installationId() }])
       }
       if (czyPrywatnaPsychoterapia(tabela, await tabelaLokalna(tabela).get(rekord.id)) || czyPrywatnaPsychoterapia(tabela, rekord)) throw new Error('Prywatna sesja lub ćwiczenie nie podlega synchronizacji.')
+      if (await czyWstrzymanyTransportFz(tabela, rekord) || await czyWstrzymanyTransportFz(tabela, await tabelaLokalna(tabela).get(rekord.id))) throw new Error('Konflikt FZ wymaga zgodnego protokołu.')
       const zabezpieczony = zachowajLokalneSamopoczucie(tabela, rekord, await tabelaLokalna(tabela).get(rekord.id))
       await tabelaLokalna(tabela).put(zabezpieczony)
       if (finansowy) await this.zapiszHistorieFinansowa(tabela, rekord, konflikt.lokalny)
@@ -381,7 +385,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       // Ochrona istniejącego dokumentu dociera na serwer także przed rozstrzygnięciem konfliktu treści.
       const klasyfikacje: ZmianaSynchronizacji[] = []
       for (const zmiana of wszystkieZdalne) {
-        if (zmiana.tabela !== 'dokumenty') continue
+        if (zmiana.tabela !== 'dokumenty' || await czyWstrzymanyTransportFz(zmiana.tabela, zmiana.rekord) || await czyWstrzymanyTransportFz(zmiana.tabela, await baza.tabela('dokumenty').get(zmiana.rekord.id))) continue
         const lokalny = await baza.tabela('dokumenty').get(zmiana.rekord.id)
         const zabezpieczony = zachowajLokalneSamopoczucie('dokumenty', zmiana.rekord, lokalny)
         if (takieSame(zabezpieczony, zmiana.rekord)) continue
@@ -396,6 +400,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       const zdalne: ZmianaSynchronizacji[] = []
       const oczekujaceKlucze = new Set(dozwoloneLokalne.map(kluczZmiany))
       for (const zmiana of wszystkieZdalne) {
+        if (await czyWstrzymanyTransportFz(zmiana.tabela, zmiana.rekord) || await czyWstrzymanyTransportFz(zmiana.tabela, await tabelaLokalna(zmiana.tabela).get(zmiana.rekord.id))) continue
         if (!czyTabelaSynchronizowana(zmiana.tabela) || zmiana.installationId === installationId && !czyTabelaFinansowa(zmiana.tabela) || czyPrywatnaPsychoterapia(zmiana.tabela, zmiana.rekord)
           || czyPrywatnaPsychoterapia(zmiana.tabela, await tabelaLokalna(zmiana.tabela).get(zmiana.rekord.id))) continue
         if (czyTabelaFinansowa(zmiana.tabela) && !oczekujaceKlucze.has(kluczZmiany(zmiana)) && finansowePrzed.get(kluczZmiany(zmiana)) === kanonicznyZapis(zmiana.rekord)) continue
@@ -496,6 +501,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       for (const zmiana of finansowe) {
         const obecny = await tabelaLokalna(zmiana.tabela).get(zmiana.rekord.id)
         if ((obecny ? kanonicznyZapis(obecny) : undefined) !== finansowePrzed.get(kluczZmiany(zmiana))) throw new Error('Dane finansowe zmieniły się podczas pobierania. Ponów synchronizację.')
+        if (await czyWstrzymanyTransportFz(zmiana.tabela, obecny) || await czyWstrzymanyTransportFz(zmiana.tabela, zmiana.rekord)) throw new Error('Transport nie może nadpisać danych FZ.')
         await tabelaLokalna(zmiana.tabela).put(structuredClone(zmiana.rekord))
         await this.zapiszHistorieFinansowa(zmiana.tabela, zmiana.rekord, obecny)
       }
@@ -510,7 +516,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       await baza.transaction('rw', tabelaLokalna(tabela), async () => {
         if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto zmieniło się przed zapisem danych.')
         const lokalne = await tabelaLokalna(tabela).bulkGet(rekordy.map((rekord) => rekord.id))
-        await tabelaLokalna(tabela).bulkPut(rekordy.flatMap((rekord, indeks) => czyPrywatnaPsychoterapia(tabela, lokalne[indeks]) || czyPrywatnaPsychoterapia(tabela, rekord) ? [] : [zachowajLokalneSamopoczucie(tabela, rekord, lokalne[indeks])]))
+        await tabelaLokalna(tabela).bulkPut(rekordy.flatMap((rekord, indeks) => czyRekordFz(tabela, lokalne[indeks]) || czyRekordFz(tabela, rekord) || czyPrywatnaPsychoterapia(tabela, lokalne[indeks]) || czyPrywatnaPsychoterapia(tabela, rekord) ? [] : [zachowajLokalneSamopoczucie(tabela, rekord, lokalne[indeks])]))
       })
       powiadomOZmianieDanych(tabela)
     }
@@ -531,7 +537,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
   private async walidujLokalnyObraz(zmiany: ZmianaSynchronizacji[]): Promise<void> {
     if (!zmiany.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) return
     const obraz = new Map<string, { tabela: string; rekord: EncjaBazowa }>()
-    for (const tabela of TABELE_FINANSOW_WSPOLNYCH) for (const rekord of await baza.tabela(tabela).toArray()) obraz.set(`${tabela}:${rekord.id}`, { tabela, rekord })
+    for (const tabela of TABELE_FINANSOW_WSPOLNYCH) for (const rekord of await baza.tabela(tabela).toArray()) if (!await czyWstrzymanyTransportFz(tabela, rekord)) obraz.set(`${tabela}:${rekord.id}`, { tabela, rekord })
     for (const zmiana of zmiany.filter((zmiana) => czyTabelaFinansowa(zmiana.tabela))) obraz.set(kluczZmiany(zmiana), zmiana)
     walidujObrazFinansowy([...obraz.values()])
   }

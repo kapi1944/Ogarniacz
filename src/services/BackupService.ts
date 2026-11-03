@@ -1,3 +1,6 @@
+import { TABELE_BACKUPU_FZ, pobierzSekcjeFz, walidujKopieFz, czyZakresFz, schematUstawienFz, sprawdzWyborDokumentowFz } from './BackupPulZobowiazan'
+import { schematyFz } from '../../server/wspolne/modelePulZobowiazan.ts'
+import { dodajDoKolejkiSynchronizacji } from '../data/KolejkaSynchronizacji'
 import { schematWspolnejKasy, schematOperacjiKasy, schematRozliczenia, schematWydatkuGrupowego, schematZwrotuRozliczenia } from '../domain/modeleFinansowWspolnych'
 import { sprawdzBiezacyDostep, sprawdzDostepFinansowWspolnych, czyTabelaFinansowWspolnych } from './UprawnieniaService'
 import { walidujSekcjeFinansowe } from './WalidacjaKopiiFinansowWspolnych'
@@ -17,7 +20,7 @@ import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
 
 export const WERSJA_FORMATU_BACKUPU = 3
 const NAJNIZSZA_WERSJA_FORMATU_BACKUPU = 1
-const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, 17, 18, 19, WERSJA_SCHEMATU_BAZY]
+const WSPARTE_WERSJE_SCHEMATU_BACKUPU = [4, 5, 14, 15, 16, 17, 18, 19, 20, WERSJA_SCHEMATU_BAZY]
 
 export const SEKCJE_BACKUPU = [
   { nazwa: 'ustawienia', etykieta: 'Ustawienia' },
@@ -32,6 +35,7 @@ export const SEKCJE_BACKUPU = [
   { nazwa: 'samopoczucie', etykieta: 'Prywatny dziennik samopoczucia' },
   { nazwa: 'finanse', etykieta: 'Finanse i rachunki' },
   { nazwa: 'wspolneKasy', etykieta: 'Wspólne kasy' },
+  { nazwa: 'puleZobowiazania', etykieta: 'Pule i Zobowiązania — wymagany klient FZ' },
   { nazwa: 'rozliczenia', etykieta: 'Rozliczenia' },
   { nazwa: 'samochod', etykieta: 'Samochód' },
   { nazwa: 'zakupy', etykieta: 'Zakupy' },
@@ -157,6 +161,7 @@ const schematTransportowegoBlobu = z.object({
 }).strict()
 
 const schematyTabel: Partial<Record<NazwaTabeli, z.ZodTypeAny>> = {
+  ...schematyFz,
   wspolneKasy: schematWspolnejKasy, operacjeKas: schematOperacjiKasy, rozliczenia: schematRozliczenia, wydatkiGrupowe: schematWydatkuGrupowego, zwrotyRozliczen: schematZwrotuRozliczenia,
   wazneInformacjeZdrowotne: schematWaznejInformacjiZdrowotnej,
   wynikiBadan: schematWynikuBadania,
@@ -527,20 +532,30 @@ function zrodloRepozytoriow(nazwa: NazwaSekcjiBackupu, tabele: NazwaTabeli[]): D
   ) as DaneSekcji
   return {
     nazwa,
-    wersjaSchematu: 1,
+    wersjaSchematu: ['wspolneKasy', 'dokumenty'].includes(nazwa) ? 2 : 1,
     tabele,
-    pobierz: () => tabele.some(czyTabelaFinansowWspolnych)
-      ? baza.transaction('r', tabele.map((tabela) => baza.table(tabela)), odczytaj)
-      : odczytaj(),
+    pobierz: () => baza.transaction('r', [...new Set([...tabele, ...TABELE_BACKUPU_FZ])].map((tabela) => baza.table(tabela)), async () => {
+      const dane = await odczytaj()
+      if (!tabele.some((tabela) => ['wspolneKasy', 'operacjeKas', 'dokumenty', 'historiaZmian', 'przypomnienia'].includes(tabela))) return dane
+      const fz = await pobierzSekcjeFz()
+      const pule = new Set(fz.wspolneKasy.map((rekord) => String(rekord.id)))
+      const dokumenty = new Set(fz.dokumenty.map((rekord) => String(rekord.id)))
+      for (const tabela of TABELE_BACKUPU_FZ) for (const rekord of fz[tabela]) dokumenty.add(`${tabela}:${rekord.id}`)
+      for (const tabela of tabele) dane[tabela] = dane[tabela].filter((rekord) => !czyZakresFz(tabela, rekord, pule, dokumenty))
+      return dane
+    }),
   }
 }
 
 const definicjeSekcji: DefinicjaSekcji[] = [
   {
     nazwa: 'ustawienia',
-    wersjaSchematu: WERSJA_USTAWIEN,
+    wersjaSchematu: 2,
     tabele: ['ustawienia'],
-    pobierz: async () => ({ ustawienia: [await repozytoriumUstawien.wczytaj() as unknown as RekordBackupu] }),
+    pobierz: async () => {
+      const { finanseFz: _finanseFz, ...ustawienia } = await repozytoriumUstawien.wczytaj()
+      return { ustawienia: [ustawienia as unknown as RekordBackupu] }
+    },
   },
   zrodloRepozytoriow('zadania', ['zadania']),
   zrodloRepozytoriow('notatki', ['notatki']),
@@ -552,6 +567,7 @@ const definicjeSekcji: DefinicjaSekcji[] = [
   zrodloRepozytoriow('badania', ['wynikiBadan']),
   zrodloRepozytoriow('samopoczucie', ['wpisySamopoczucia']),
   zrodloRepozytoriow('finanse', ['rachunki', 'platnosciRachunkow', 'wydatki', 'platnosciStale', 'planyRat', 'raty', 'budzety', 'kontaFinansowe']),
+  { nazwa: 'puleZobowiazania', wersjaSchematu: 1, tabele: TABELE_BACKUPU_FZ, pobierz: pobierzSekcjeFz },
   zrodloRepozytoriow('wspolneKasy', ['wspolneKasy', 'operacjeKas']),
   zrodloRepozytoriow('rozliczenia', ['rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen']),
   zrodloRepozytoriow('samochod', ['pojazdy']),
@@ -634,7 +650,7 @@ export async function utworzBackup(
     const zrodlo = definicjeSekcji.find((element) => element.nazwa === nazwa)!
     try {
       const dane = await przygotujWartoscDoTransportu(await zrodlo.pobierz()) as DaneSekcji
-      if (czySekcjaZawieraWspolneFinanse(dane)) sprawdzDostepFinansowWspolnych('odczyt')
+      if (czySekcjaZawieraWspolneFinanse(dane) || nazwa === 'puleZobowiazania' && Object.values(dane).some((rekordy) => rekordy.length)) sprawdzDostepFinansowWspolnych('odczyt')
       payload[nazwa] = dane
       recordCounts[nazwa] = Object.values(dane).reduce((suma, rekordy) => suma + rekordy.length, 0)
       schemaVersions[nazwa] = zrodlo.wersjaSchematu
@@ -643,6 +659,7 @@ export async function utworzBackup(
     }
   }
 
+  sprawdzWyborDokumentowFz(payload, unikalneSekcje, new Set((await baza.tabela('dokumenty').toArray()).filter((dokument) => dokument.finansowe).map((dokument) => dokument.id)))
   const manifestBezChecksum: Omit<ManifestBackupu, 'checksum'> = {
     formatVersion: WERSJA_FORMATU_BACKUPU,
     createdAt: teraz(),
@@ -723,7 +740,7 @@ function walidujSekcje(backup: SurowyBackup, wybraneSekcje: readonly NazwaSekcji
       throw new BladBackupu(`Backup nie zawiera sekcji „${nazwa}”.`, 'BRAK_SEKCJI')
     }
     const definicja = definicjeSekcji.find((element) => element.nazwa === nazwa)!
-    if (backup.manifest.schemaVersions[nazwa] !== definicja.wersjaSchematu) {
+    if (backup.manifest.schemaVersions[nazwa] !== definicja.wersjaSchematu && !(['wspolneKasy', 'dokumenty', 'ustawienia'].includes(nazwa) && backup.manifest.schemaVersions[nazwa] === 1)) {
       throw new BladBackupu(`Nieobsługiwana wersja schematu sekcji „${nazwa}”.`, 'WERSJA_SEKCJI')
     }
     const dane = backup.payload[nazwa]
@@ -741,7 +758,7 @@ function walidujSekcje(backup: SurowyBackup, wybraneSekcje: readonly NazwaSekcji
       if (!Array.isArray(rekordy)) {
         throw new BladBackupu(`Źródło „${tabela}” w sekcji „${nazwa}” nie jest listą.`, 'STRUKTURA_SEKCJI')
       }
-      const schemat = schematyTabel[tabela]
+      const schemat = nazwa === 'puleZobowiazania' && tabela === 'ustawienia' ? schematEncji.extend({ finanseFz: schematUstawienFz }) : schematyTabel[tabela]
       const identyfikatory = new Set<string>()
       for (const [indeks, rekord] of rekordy.entries()) {
         const wynik = schemat?.safeParse(rekord)
@@ -789,6 +806,7 @@ function walidujCaloscBackupu(backup: SurowyBackup): OgarniaczBackup {
     throw new BladBackupu('Sekcje payloadu nie zgadzają się z manifestem.', 'STRUKTURA_MANIFESTU')
   }
   walidujSekcje(backup, sekcje)
+  if (backup.payload.puleZobowiazania) walidujKopieFz(backup.payload.puleZobowiazania as Record<string, RekordBackupu[]>)
   try { walidujSekcjeFinansowe(backup.payload) }
   catch (blad) { throw new BladBackupu('Niepoprawne relacje, kwoty lub historia wspólnych finansów.', 'MODEL_DANYCH', blad) }
   return backup as OgarniaczBackup
@@ -945,9 +963,10 @@ export async function przywrocBackup(
   sprawdzKompatybilnosc(backup as unknown as SurowyBackup)
   walidujCaloscBackupu(backup as unknown as SurowyBackup)
   const wybraneSekcje = sprawdzWyborSekcji(backup, sekcje)
+  sprawdzWyborDokumentowFz(backup.payload, wybraneSekcje, new Set([...(backup.payload.puleZobowiazania?.dokumenty ?? []).map((dokument) => String(dokument.id)), ...(await baza.tabela('dokumenty').toArray()).filter((dokument) => dokument.finansowe).map((dokument) => dokument.id)]))
   const sprawdzFinanse = () => {
     const historia = backup.payload.historia?.historiaZmian ?? []
-    if (wybraneSekcje.some((sekcja) => sekcja === 'wspolneKasy' || sekcja === 'rozliczenia') || wybraneSekcje.includes('historia') && historia.some((rekord) => czyTabelaFinansowWspolnych(String(rekord.typEncji)))) sprawdzDostepFinansowWspolnych('edycja')
+    if (wybraneSekcje.some((sekcja) => sekcja === 'wspolneKasy' || sekcja === 'rozliczenia' || sekcja === 'puleZobowiazania') || wybraneSekcje.includes('historia') && historia.some((rekord) => czyTabelaFinansowWspolnych(String(rekord.typEncji)))) sprawdzDostepFinansowWspolnych('edycja')
   }
   sprawdzFinanse()
   const utworzKopie = opcje.utworzKopiePrzedPrzywracaniem
@@ -980,30 +999,58 @@ export async function przywrocBackup(
     const daneSekcji = backup.payload[definicja.nazwa]!
     for (const tabela of definicja.tabele) {
       const rekordy = daneSekcji[tabela]
-      daneDoZapisu.set(tabela, tabela === 'ustawienia'
-        ? rekordy.map((rekord) => normalizujUstawienia(rekord) as unknown as RekordBackupu)
-        : rekordy.map((rekord) => normalizujRekordDoPrzywrocenia(tabela, rekord)))
+      daneDoZapisu.set(tabela, [...daneDoZapisu.get(tabela) ?? [], ...(tabela === 'ustawienia'
+        ? rekordy.map((rekord) => definicja.nazwa === 'puleZobowiazania' ? rekord : normalizujUstawienia(rekord) as unknown as RekordBackupu)
+        : rekordy.map((rekord) => normalizujRekordDoPrzywrocenia(tabela, rekord)))])
     }
   }
 
   const przywracaFinanse = tabele.some(czyTabelaFinansowWspolnych)
-  const tabeleTransakcji = [...new Set([...tabele, ...(przywracaFinanse ? ['kolejkaSynchronizacji', 'stanSynchronizacji'] as const : [])])]
+  const tabeleTransakcji = [...new Set([...tabele, ...TABELE_BACKUPU_FZ, ...(przywracaFinanse ? ['kolejkaSynchronizacji', 'stanSynchronizacji'] as const : [])])]
   await baza.transaction('rw', tabeleTransakcji.map((tabela) => baza.table(tabela)), async () => {
     sprawdzProfil()
     sprawdzBiezacyDostep('ustawienia', 'edycja')
     sprawdzFinanse()
+    const obecneFz = await pobierzSekcjeFz()
+    const puleFz = new Set(obecneFz.wspolneKasy.map((rekord) => String(rekord.id)))
+    const dokumentyFz = new Set(obecneFz.dokumenty.map((rekord) => String(rekord.id)))
+    for (const tabela of TABELE_BACKUPU_FZ) for (const rekord of obecneFz[tabela]) dokumentyFz.add(`${tabela}:${rekord.id}`)
     for (const tabela of tabele) {
       const repozytorium = baza.table(tabela)
       const prywatneUstawienia = tabela === 'ustawienia' ? (await baza.tabela('ustawienia').get('glowne'))?.samopoczucie : undefined
       const historiaPodsumowan = tabela === 'przypomnienia' ? (await baza.tabela('przypomnienia').toArray())
         .filter((element) => element.echoPoPracy && (element.echoPoPracy.dostarczonoAt || element.echoPoPracy.zamknietoOknoAt || element.echoPoPracy.zaplanowanoNa && Date.parse(element.echoPoPracy.zaplanowanoNa) <= Date.now())) : []
+      const dotychczasowe = await repozytorium.toArray() as RekordBackupu[]
+      let rekordy = daneDoZapisu.get(tabela) ?? []
+      if (tabela === 'ustawienia') {
+        const zwykle = rekordy.find((rekord) => 'wyglad' in rekord) ?? dotychczasowe[0]
+        const reguly = wybraneSekcje.includes('puleZobowiazania') ? rekordy.find((rekord) => 'finanseFz' in rekord)?.finanseFz : dotychczasowe[0]?.finanseFz
+        rekordy = zwykle ? [{ ...zwykle, ...(reguly ? { finanseFz: reguly } : {}) }] : []
+      } else {
+        const zachowane = dotychczasowe.filter((rekord) => {
+          const finansowy = czyZakresFz(tabela, rekord, puleFz, dokumentyFz)
+          return finansowy ? !wybraneSekcje.includes('puleZobowiazania') : !definicje.some((definicja) => definicja.nazwa !== 'puleZobowiazania' && definicja.tabele.includes(tabela))
+        })
+        if (rekordy.some((rekord) => zachowane.some((stary) => stary.id === rekord.id))) throw new BladBackupu('Starsza sekcja koliduje z chronionym rekordem FZ.', 'MODEL_DANYCH')
+        rekordy = [...rekordy, ...zachowane]
+      }
+      if (new Set(rekordy.map((rekord) => rekord.id)).size !== rekordy.length) throw new BladBackupu('Sekcje zawierają podwójne ID.', 'MODEL_DANYCH')
       await repozytorium.clear()
-      const rekordy = daneDoZapisu.get(tabela) ?? []
       if (tabela === 'ustawienia' && prywatneUstawienia) for (const rekord of rekordy) if (rekord.id === 'glowne' && !('samopoczucie' in rekord)) rekord.samopoczucie = prywatneUstawienia
+      if (tabela === 'dokumenty') for (const rekord of rekordy) {
+        const stary = dotychczasowe.find((element) => element.id === rekord.id)
+        if (stary?.finansowe && !rekord.finansowe) throw new BladBackupu('Nie można usunąć ochrony dokumentu finansowego.', 'MODEL_DANYCH')
+        if (Array.isArray(stary?.sekcjePrywatnosci)) rekord.sekcjePrywatnosci = [...new Set([...stary.sekcjePrywatnosci, ...(Array.isArray(rekord.sekcjePrywatnosci) ? rekord.sekcjePrywatnosci : [])])]
+      }
       if (rekordy.length > 0) await repozytorium.bulkPut(rekordy)
       if (historiaPodsumowan.length > 0) await repozytorium.bulkPut(historiaPodsumowan)
-      if (czyTabelaFinansowWspolnych(tabela)) await baza.tabela('kolejkaSynchronizacji').where('tabela').equals(tabela).delete()
+      if (czyTabelaFinansowWspolnych(tabela)) {
+        await baza.tabela('kolejkaSynchronizacji').where('tabela').equals(tabela).filter((zmiana) => !czyZakresFz(tabela, zmiana.rekord as unknown as RekordBackupu, puleFz)).delete()
+        if (wybraneSekcje.includes('puleZobowiazania')) for (const rekord of rekordy) if (czyZakresFz(tabela, rekord, new Set((backup.payload.puleZobowiazania?.wspolneKasy ?? []).map((pula) => String(pula.id))))) await dodajDoKolejkiSynchronizacji(tabela, rekord as unknown as import('../domain/typy').EncjaBazowa)
+      }
     }
+    await pobierzSekcjeFz()
+    sprawdzProfil()
     if (przywracaFinanse) await baza.tabela('stanSynchronizacji').update('glowny', { finanseWspolneZmigrowane: false })
   })
   for (const tabela of tabele) powiadomOZmianieDanych(tabela)

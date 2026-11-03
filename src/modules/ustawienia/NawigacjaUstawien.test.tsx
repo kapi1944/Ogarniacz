@@ -187,7 +187,7 @@ it('zachowuje formularz Edytora i istniejące odnośniki kont oraz personalizacj
   expect(ekran.getByPlaceholderText('Nazwa Edytora')).toHaveValue('Profil próbny')
   wywolajZdarzenie.click(ekran.getByRole('button', { name: 'Dodaj' }))
   await czekajNa(() => expect(zapiszEdytora).toHaveBeenCalledWith(expect.objectContaining({ nazwa: 'Profil próbny' })))
-  expect(ekran.getByPlaceholderText('Nazwa Edytora')).toHaveValue('')
+  await czekajNa(() => expect(ekran.getByPlaceholderText('Nazwa Edytora')).toHaveValue(''))
 })
 
 it('zachowuje ręcznie wpisywaną godzinę harmonogramu i blokuje zapis niepełnego czasu', async () => {

@@ -1,3 +1,4 @@
+import { czyRekordFz } from '../../server/wspolne/WalidacjaPulZobowiazan.ts'
 import { schematWaznejInformacjiZdrowotnej } from '../domain/historiaZdrowia'
 import { schematWynikuBadania } from '../domain/badania'
 import type { Dokument, EncjaBazowa, MapaTabel, NazwaModulu, NazwaTabeli, Przypomnienie } from '../domain/typy'
@@ -65,6 +66,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
 
   private async sprawdzZmiane(przed: T | undefined, po: T): Promise<void> {
     if (this.nazwa === 'dokumenty') {
+      if ((przed as Dokument | undefined)?.finansowe && !(po as unknown as Dokument).finansowe) throw new Error('Nie można usunąć ochrony finansowej dokumentu.')
       const stareSekcje = (przed as Dokument | undefined)?.sekcjePrywatnosci ?? []
       const noweSekcje = (po as unknown as Dokument).sekcjePrywatnosci ?? []
       if (stareSekcje.some((sekcja) => !noweSekcje.includes(sekcja))) throw new Error('Nie można usunąć ochrony dokumentu.')
@@ -122,6 +124,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
   }
 
   private czyDostep(encja: T | undefined, operacja: 'odczyt' | 'edycja'): boolean {
+    if (czyRekordFz(this.nazwa, encja) && !czyDostepFinansowWspolnych(operacja)) return false
     if (this.nazwa === 'przypomnienia' && encja && ('echoPoPracy' in encja || encja.id.startsWith('echo-po-pracy:')) && !czyBiezacyDostep('echo', operacja)) return false
     if (this.nazwa === 'historiaZmian' && encja && 'typEncji' in encja && czyTabelaFinansowWspolnych(String(encja.typEncji))) return czyDostepFinansowWspolnych(operacja)
     if (this.nazwa === 'dokumenty' && !czyBiezacyDostep('dokumenty', operacja)) return false

@@ -512,7 +512,7 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
       backupType: 'export',
       sections: ['ustawienia', 'zadania'],
       recordCounts: { ustawienia: 1, zadania: 0 },
-      schemaVersions: { ustawienia: 1, zadania: 1 },
+      schemaVersions: { ustawienia: 2, zadania: 1 },
     })
     expect(backup.manifest.checksum).toMatch(/^sha256:[a-f0-9]{64}$/)
   })

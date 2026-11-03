@@ -1,3 +1,4 @@
+import { schematUstawienFz } from '../../server/wspolne/modelePulZobowiazan.ts'
 import { utworzMetadane } from './fabryki'
 import { schematUstawienSamopoczucia } from './samopoczucie'
 import { DOMYSLNA_PERSONALIZACJA, normalizujPersonalizacje, zastosujPersonalizacje } from './personalizacja'
@@ -226,6 +227,7 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
     updatedAt: tekst(zrodlo.updatedAt, domyslne.updatedAt),
     ...(opcjonalnyTekst(zrodlo.usunietoAt) ? { usunietoAt: opcjonalnyTekst(zrodlo.usunietoAt) } : {}),
     wersja: WERSJA_USTAWIEN,
+    ...(zrodlo.finanseFz !== undefined ? { finanseFz: schematUstawienFz.parse(zrodlo.finanseFz) } : {}),
     ...(samopoczucie ? { samopoczucie } : {}),
     wyglad: {
       motyw: enumWartosci<MotywAplikacji>(wyglad.motyw ?? staryMotyw, ['jasny', 'ciemny', 'systemowy'], domyslne.wyglad.motyw),

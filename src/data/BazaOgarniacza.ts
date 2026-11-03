@@ -3,7 +3,7 @@ import { utworzMetadane } from '../domain/fabryki'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { MapaTabel, NazwaTabeli } from '../domain/typy'
 
-export const WERSJA_SCHEMATU_BAZY = 20
+export const WERSJA_SCHEMATU_BAZY = 21
 
 const POSTAC_Z_HISTORYCZNEJ_WARTOSCI: Record<string, string> = {
   tabletka: 'tabletka',
@@ -62,6 +62,7 @@ export const nazwyTabel: NazwaTabeli[] = [
   'cele',
   'kontakty',
   'dokumenty',
+  'zakupyPul', 'sprzedazePul', 'osobyFinansowe', 'zobowiazania', 'operacjeZobowiazan',
   'wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen',
   'wydatki',
   'platnosciStale',
@@ -225,6 +226,13 @@ export class BazaOgarniacza extends Dexie {
       rozliczenia: 'id, etap, updatedAt, usunietoAt',
       wydatkiGrupowe: 'id, rozliczenieId, dataOperacji, updatedAt, usunietoAt',
       zwrotyRozliczen: 'id, rozliczenieId, dataOperacji, updatedAt, usunietoAt',
+    })
+    this.version(21).stores({
+      zakupyPul: 'id, pulaId, dataZakupu, updatedAt, usunietoAt',
+      sprzedazePul: 'id, pulaId, dataSprzedazy, kupujacyId, updatedAt, usunietoAt',
+      osobyFinansowe: 'id, nieaktywna, updatedAt, usunietoAt',
+      zobowiazania: 'id, osobaId, kierunek, termin, zarchiwizowanoAt, updatedAt, usunietoAt',
+      operacjeZobowiazan: 'id, zobowiazanieId, pulaId, dataOperacji, idOperacjiZrodlowej, updatedAt, usunietoAt',
     })
   }
 

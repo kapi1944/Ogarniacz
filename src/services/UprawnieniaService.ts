@@ -1,3 +1,4 @@
+import { TABELE_FZ } from '../../server/wspolne/modelePulZobowiazan.ts'
 import { czyKontoZgodneZDanymiLokalnymi, pobierzKontoOffline } from './KontaService'
 import type { EncjaBazowa, NazwaModulu, NazwaTabeli, Uprawnienie } from '../domain/typy'
 import { baza } from '../data/BazaOgarniacza'
@@ -20,7 +21,7 @@ export function sprawdzDostepFinansowWspolnych(operacja: 'odczyt' | 'edycja'): v
 }
 
 export function czyTabelaFinansowWspolnych(tabela: string): boolean {
-  return (TABELE_FINANSOW_WSPOLNYCH as readonly string[]).includes(tabela)
+  return ([...TABELE_FINANSOW_WSPOLNYCH, ...TABELE_FZ] as readonly string[]).includes(tabela)
 }
 
 export const PRYWATNE_SEKCJE_ZDROWIA = { samopoczucie: 'Dziennik psychiatryczny i samopoczucie', psychoterapia: 'Notatki i sesje psychoterapii', dokumentacja: 'Dokumentacja medyczna', badania: 'Wyniki badań', wazne_informacje: 'Ważne informacje zdrowotne', nagrania: 'Nagrania i transkrypcje (jeszcze niedostępne)' } as const

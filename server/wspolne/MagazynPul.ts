@@ -1,0 +1,37 @@
+import type { ObrazFz } from './WalidacjaPulZobowiazan.ts'
+import { sumaGroszy, obliczStanPartii, type ZdarzeniePartii } from './ObliczeniaPul.ts'
+
+export function obliczMagazynPuli(obraz: ObrazFz, pulaId: string, dataOdniesienia: string) {
+  const partie = obraz.zakupyPul.filter((zakup) => zakup.pulaId === pulaId && !zakup.usunietoAt && zakup.dataZakupu <= dataOdniesienia).flatMap((zakup) => zakup.partie.filter((partia) => !partia.usunietoAt).map((partia) => {
+    const korektyZakupu = zakup.korekty.filter((korekta) => !korekta.usunietoAt && korekta.dataOperacji <= dataOdniesienia)
+    const dodatkoweGrosze = sumaGroszy(zakup.kosztyDodatkowe.filter((koszt) => !koszt.usunietoAt).flatMap((koszt) => koszt.alokacja.filter((alokacja) => alokacja.partiaId === partia.id).map((alokacja) => alokacja.kwotaGrosze)))
+    const zmianaKosztu = sumaGroszy(korektyZakupu.filter((korekta) => korekta.rodzaj === 'cena' || korekta.rodzaj === 'rozbieznosc').flatMap((korekta) => korekta.pozycje.filter((pozycja) => pozycja.partiaId === partia.id && (korekta.rodzaj === 'cena' || pozycja.zmianaSztuk > 0)).map((pozycja) => pozycja.zmianaKosztuGrosze ?? 0)))
+    const kosztGrosze = sumaGroszy([partia.kosztTowaruGrosze, dodatkoweGrosze, zmianaKosztu])
+    const zdarzenia: ZdarzeniePartii[] = []
+    for (const sprzedaz of obraz.sprzedazePul.filter((sprzedaz) => sprzedaz.pulaId === pulaId && !sprzedaz.usunietoAt && sprzedaz.dataSprzedazy <= dataOdniesienia)) {
+      for (const pozycja of sprzedaz.pozycje.filter((pozycja) => !pozycja.usunietoAt && pozycja.partiaId === partia.id)) {
+        if (sprzedaz.dataSprzedazy < zakup.dataZakupu) throw new Error('Wydanie poprzedza przyjęcie partii.')
+        const idWydania = `${sprzedaz.id}:${pozycja.id}`
+        zdarzenia.push({ id: idWydania, data: sprzedaz.dataSprzedazy, rodzaj: 'wydanie', liczbaSztuk: pozycja.liczbaSztuk })
+      }
+      for (const korekta of sprzedaz.korekty.filter((korekta) => !korekta.usunietoAt && korekta.dataOperacji <= dataOdniesienia)) {
+        if (korekta.dataOperacji < sprzedaz.dataSprzedazy) throw new Error('Korekta poprzedza sprzedaż.')
+        for (const [indeks, pozycja] of korekta.pozycje.entries()) {
+          if (pozycja.partiaId !== partia.id || pozycja.zmianaSztuk === 0) continue
+          if (!sprzedaz.pozycje.some((oryginalna) => oryginalna.id === pozycja.pozycjaId)) throw new Error('Korekta nie wskazuje oryginalnej pozycji sprzedaży.')
+          if (pozycja.zmianaSztuk > 0) zdarzenia.push({ id: `${korekta.id}:${indeks}`, data: korekta.dataOperacji, rodzaj: 'zwrot', liczbaSztuk: pozycja.zmianaSztuk, zrodloId: (() => {
+            const poprzednie = sprzedaz.korekty.filter((element) => !element.usunietoAt && element.rodzaj === 'pomylka_partii' && (element.dataOperacji < korekta.dataOperacji || element.dataOperacji === korekta.dataOperacji && element.id < korekta.id)).sort((pierwsza, druga) => pierwsza.dataOperacji < druga.dataOperacji ? -1 : pierwsza.dataOperacji > druga.dataOperacji ? 1 : pierwsza.id < druga.id ? -1 : 1)
+            const przeniesienie = poprzednie.flatMap((element) => element.pozycje.map((wiersz, indeks) => ({ element, wiersz, indeks }))).filter(({ wiersz }) => wiersz.partiaId === partia.id && wiersz.pozycjaId === pozycja.pozycjaId && wiersz.zmianaSztuk < 0).at(-1)
+            return przeniesienie ? `${przeniesienie.element.id}:${przeniesienie.indeks}` : `${sprzedaz.id}:${pozycja.pozycjaId}`
+          })(), uszkodzoneSztuki: pozycja.sztukiUszkodzone ?? 0 })
+          else zdarzenia.push({ id: `${korekta.id}:${indeks}`, data: korekta.dataOperacji, rodzaj: 'wydanie', liczbaSztuk: -pozycja.zmianaSztuk })
+        }
+      }
+    }
+    for (const korekta of korektyZakupu.filter((korekta) => korekta.rodzaj !== 'cena')) for (const [indeks, pozycja] of korekta.pozycje.entries()) if (pozycja.partiaId === partia.id && pozycja.zmianaSztuk) {
+      zdarzenia.push({ id: `${korekta.id}:${indeks}`, data: korekta.dataOperacji, rodzaj: pozycja.zmianaSztuk > 0 ? 'przyjecie' : korekta.rodzaj === 'rozbieznosc' ? 'strata' : 'zwrot_dostawcy', liczbaSztuk: Math.abs(pozycja.zmianaSztuk), odSztuki: pozycja.odSztuki })
+    }
+    return { partiaId: partia.id, produktId: partia.produktId, zakupId: zakup.id, kosztNabyciaGrosze: kosztGrosze, przeliczono: korektyZakupu.length > 0, ...obliczStanPartii(kosztGrosze, sumaGroszy([partia.liczbaSztuk, ...zdarzenia.filter((zdarzenie) => zdarzenie.rodzaj === 'przyjecie').map((zdarzenie) => zdarzenie.liczbaSztuk)]), zdarzenia, partia.liczbaSztuk) }
+  }))
+  return partie
+}
