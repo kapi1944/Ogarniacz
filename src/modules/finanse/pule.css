@@ -1,0 +1,20 @@
+.pule, .pule-formularz { min-width: 0; overflow-wrap: anywhere; }
+.pule-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.pule-filtry { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; }
+.pule :is(.przycisk, summary, input, select), .pule-formularz :is(.przycisk, .przycisk-ikona, input, select) { min-height: 44px; }
+.pule > a, .pule-lista h2 a { display: inline-flex; align-items: center; min-height: 44px; }
+.pule-formularz, .pule-formularz fieldset { display: grid; gap: 16px; min-width: 0; }
+.pule-formularz fieldset { border: 0; padding: 0; margin: 0; }
+.pule .pole, .pule-formularz .pole { min-width: 0; }
+.pule input, .pule select, .pule-formularz :is(input, select, textarea) { width: 100%; min-width: 0; }
+.pule-formularz .pole-kwoty__wiersz input { width: 0; flex: 1; }
+.pule-dialog .przycisk-ikona { min-width: 44px; min-height: 44px; }
+.pule-podsumowanie { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.pule-podsumowanie dd { margin: 0; text-align: right; font-weight: 700; }
+.pule-cel progress { display: block; width: 100%; margin-top: 8px; accent-color: var(--akcent); }
+.pule-operacja { border-bottom: 1px solid var(--obramowanie); padding-block: 16px; }
+.pule .przycisk, .pule-formularz .przycisk { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .pule .naglowek-widoku__akcje, .pule .naglowek-widoku__akcje .przycisk { width: 100%; }
+  .pule .akcje-formularza, .pule-formularz .akcje-formularza { display: grid; grid-template-columns: minmax(0, 1fr); }
+}

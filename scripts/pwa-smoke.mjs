@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process'
 
 const PORT = 4178
 const ADRES = `http://127.0.0.1:${PORT}`
-const SCIEZKI = ['/', '/zadania?element=testowy-rekord', '/ustawienia', '/echo']
+const SCIEZKI = ['/', '/zadania?element=testowy-rekord', '/ustawienia', '/echo', '/finanse/pule', '/finanse/pule/052e11d3-9ca4-49ae-b04f-e6af6ee29c91']
 
 function zapewnij(warunek, komunikat) {
   if (!warunek) throw new Error(komunikat)

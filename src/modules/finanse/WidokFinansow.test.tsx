@@ -1,3 +1,4 @@
+import { MemoryRouter } from 'react-router-dom'
 import Dexie from 'dexie'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -16,7 +17,7 @@ afterEach(async () => { cleanup(); await baza.transaction('rw', baza.tables, asy
 it('zapisuje offline kwotę i walutę, ponownie je odczytuje i pokazuje rozdzielone podsumowania', async () => {
   const repozytorium = pobierzRepozytorium('wydatki')
   await repozytorium.zapisz({ ...utworzMetadane('stara'), opis: 'Historyczne PLN', kwota: 100, data: dzisiajIso(), kategoria: 'Dom' })
-  const { unmount } = render(<WidokFinansow />)
+  const { unmount } = render(<MemoryRouter><WidokFinansow /></MemoryRouter>)
   await screen.findByText('Historyczne PLN')
   fireEvent.click(screen.getByRole('button', { name: 'Dodaj transakcję' }))
   const modal = within(screen.getByRole('dialog'))
@@ -33,7 +34,7 @@ it('zapisuje offline kwotę i walutę, ponownie je odczytuje i pokazuje rozdziel
   expect(screen.getByText('Bilans okresu').parentElement?.textContent).toContain('-100,00')
   expect(screen.getByText('Transakcje EUR').parentElement?.textContent).toContain('125,50')
   unmount()
-  render(<WidokFinansow />)
+  render(<MemoryRouter><WidokFinansow /></MemoryRouter>)
   const wiersz = (await screen.findByText('Zakup EUR')).closest('article')!
   fireEvent.click(within(wiersz).getByTitle('Edytuj'))
   expect(screen.getByRole('textbox', { name: /^Kwota/ })).toHaveProperty('value', '125.5')
@@ -74,7 +75,7 @@ it('czyta stare własne kwoty i zachowuje dokładny obiekt kwoty z walutą przez
 })
 
 it('tworzy raty z polskiej kwoty i daty oraz zachowuje obliczenia po nadpłacie', async () => {
-  render(<WidokFinansow />)
+  render(<MemoryRouter><WidokFinansow /></MemoryRouter>)
   fireEvent.click(screen.getAllByRole('button', { name: 'Dodaj zakup na raty' })[0])
   let formularz = within(screen.getByRole('dialog'))
   fireEvent.change(formularz.getByLabelText(/Opis zakupu/), { target: { value: 'Pralka' } })
@@ -103,7 +104,7 @@ it('tworzy raty z polskiej kwoty i daty oraz zachowuje obliczenia po nadpłacie'
 
 it.each([['Dodaj płatność stałą', 'Kwota'], ['Dodaj budżet', 'Limit']])('używa kwoty PLN w formularzu %s', async (przycisk, etykieta) => {
   await pobierzRepozytorium('wydatki').zapisz({ ...utworzMetadane(), opis: 'Wpis kontrolny', kwota: 10, data: dzisiajIso(), kategoria: 'Dom' })
-  render(<WidokFinansow />)
+  render(<MemoryRouter><WidokFinansow /></MemoryRouter>)
   await screen.findByText('Wpis kontrolny')
   fireEvent.click(screen.getAllByRole('button', { name: przycisk })[0])
   const pole = within(screen.getByRole('dialog')).getByRole('textbox', { name: new RegExp(etykieta) })

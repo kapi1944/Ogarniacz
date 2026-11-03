@@ -159,6 +159,7 @@ export async function zapiszGrupeFinansowa(polecenie: PolecenieGrupyFinansowej):
         if (staraKasa && maFakty && (staraKasa?.waluta !== zapis.dane.waluta || staraKasa?.pula && staraKasa.pula.rodzaj !== nowaPula.rodzaj)) throw new Error('Nie można zmienić waluty lub rodzaju Puli po pierwszym fakcie.')
       }
       for (const pole of ['pulaId', 'kasaId', 'zobowiazanieId', 'osobaId', 'waluta', 'idOperacjiZrodlowej', 'rolaZapisu', 'zrodlo']) {
+        if (pole === 'zrodlo' && zapis.tabela === 'operacjeKas') continue
         if (pole === 'waluta' && zapis.tabela === 'wspolneKasy') continue
         if (stary && pole in stary && kanonicznyZapis(stary[pole as keyof typeof stary]) !== kanonicznyZapis(zapis.dane[pole])) throw new Error('Nie można przenieść źródła lub rodzica zapisanego faktu.')
       }

@@ -3,6 +3,7 @@ import { PoleDaty } from '../../components/PoleDaty'
 import { PoleLiczbowe } from '../../components/PoleLiczbowe'
 import { PoleAutouzupelniania } from '../../components/PoleAutouzupelniania'
 import { useState, type FormEvent } from 'react'
+import { Link } from 'react-router-dom'
 import { Edit3, Plus } from 'lucide-react'
 import { Karta, Modal, NaglowekWidoku, PustyStan, Znacznik } from '../../components/Interfejs'
 import { WidokRejestru } from '../../components/WidokRejestru'
@@ -78,6 +79,7 @@ export function WidokFinansow() {
   return <div className="widok">
     <NaglowekWidoku tytul="Finanse" opis="Cash flow, zobowiązania, budżety i rejestry transakcji." akcje={<label className="pole-inline"><span>Miesiąc</span><input type="month" value={miesiac} onChange={(e) => ustawMiesiac(e.target.value)} /></label>} />
     <p>Bilans, prognoza, budżety i analizy dotyczą PLN. Pozostałe waluty są podsumowane oddzielnie, bez przeliczania kursów.</p>
+    {czyDostepFinansowWspolnych('odczyt') && <Karta><h2>Pule</h2><p>Gromadź środki na cel i zapisuj wpłaty oraz wydatki lokalnie, bez uczestników.</p><Link className="przycisk" to="/finanse/pule">Pule</Link></Karta>}
     {czyDostepFinansowWspolnych('odczyt') && <Karta><h2>Wspólne rozliczenia</h2><p>Wspólne zakupy, wyjazdy i podział kosztów między osobami.</p><a className="przycisk" href="/finanse/rozliczenia">Otwórz wspólne rozliczenia</a></Karta>}
     {podsumujWaluty(miesiac, wydatki).filter((podsumowanie) => podsumowanie.waluta !== 'PLN').map((podsumowanie) => <Karta key={podsumowanie.waluta}><h2>Transakcje {podsumowanie.waluta}</h2><p>Przychody: {formatujKwote(podsumowanie.przychody, podsumowanie.waluta)} · Wydatki: {formatujKwote(podsumowanie.wydatki, podsumowanie.waluta)} · Bilans: {formatujKwote(podsumowanie.bilans, podsumowanie.waluta)}</p></Karta>)}
     <div className="podsumowanie-finansowe"><Karta><small>Bilans okresu</small><strong className={cashFlow.bilansBiezacy < 0 ? 'tekst-bledu' : ''}>{formatujKwote(cashFlow.bilansBiezacy)}</strong></Karta><Karta><small>Przychody</small><strong>{formatujKwote(cashFlow.przychody)}</strong></Karta><Karta><small>Zobowiązania</small><strong>{formatujKwote(cashFlow.zobowiazania)}</strong></Karta><Karta><small>Prognoza końca miesiąca</small><strong className={cashFlow.prognozowanyBilans < 0 ? 'tekst-bledu' : ''}>{formatujKwote(cashFlow.prognozowanyBilans)}</strong></Karta></div>
