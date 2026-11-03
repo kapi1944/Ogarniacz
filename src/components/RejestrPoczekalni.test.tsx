@@ -35,7 +35,7 @@ describe.sequential('RejestrPoczekalni', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Zadanie' })[0])
     await waitFor(async () => expect(await pobierzRepozytorium('zadania').lista()).toMatchObject([{ tytul: 'Napraw rower' }]))
     expect(await pobierzRepozytorium('skrzynka').pobierz(element.id)).toMatchObject({ status: 'przetworzone' })
-    expect(screen.getByRole('link', { name: 'Otwórz utworzony element' })).toHaveAttribute('href', expect.stringMatching(/^\/zadania\?element=/))
+    expect(await screen.findByRole('link', { name: 'Otwórz utworzony element' })).toHaveAttribute('href', expect.stringMatching(/^\/zadania\?element=/))
     fireEvent.click(screen.getByRole('button', { name: 'Cofnij' }))
     await waitFor(async () => expect(await pobierzRepozytorium('skrzynka').pobierz(element.id)).toMatchObject({ status: 'do_sklasyfikowania', przeksztalconoNa: undefined }))
     expect(await pobierzRepozytorium('zadania').lista()).toEqual([])
