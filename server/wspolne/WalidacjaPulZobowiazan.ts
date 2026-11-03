@@ -2,7 +2,7 @@ import { obliczMagazynPuli } from './MagazynPul.ts'
 import { schematyFz, TABELE_FZ, type ZakupPuli, type SprzedazPuli, type OsobaFinansowa, type Zobowiazanie, type OperacjaZobowiazania } from './modelePulZobowiazan.ts'
 import { schematWspolnejKasy, schematOperacjiKasy, type WspolnaKasa, type OperacjaKasy } from './modeleFinansowWspolnych.ts'
 import { kanonicznyZapis } from './ZapisFinansowy.ts'
-import { sumaGroszy, obliczZobowiazanie } from './ObliczeniaPul.ts'
+import { sumaGroszy, obliczZobowiazanie, aktywneOperacjeZobowiazania } from './ObliczeniaPul.ts'
 import { walidujOperacjeKasy } from './WalidacjaFinansowa.ts'
 import { normalizujKwote } from './kwoty.ts'
 
@@ -123,7 +123,7 @@ export function walidujObrazFz(obraz: ObrazFz): void {
       if (dlug.zrodlo?.id !== sprzedaz.id) throw new Error('Obcy dług sprzedaży.')
       if (!sprzedaz.korekty.length && (dlug.kwotaPoczatkowaGrosze !== Math.abs(roznica) || dlug.kierunek !== (roznica > 0 ? 'do_mnie' : 'ode_mnie'))) throw new Error('Początkowy dług nie odpowiada pierwszej wpłacie.')
       const korektyCeny = sumaGroszy(sprzedaz.korekty.filter((korekta) => !korekta.usunietoAt).flatMap((korekta) => korekta.pozycje.map((pozycja) => pozycja.zmianaCenyGrosze ?? 0)))
-      const korektyDlugu = sumaGroszy(obraz.operacjeZobowiazan.filter((operacja) => operacja.zobowiazanieId === dlug.id && operacja.rodzaj === 'korekta_kwoty' && !operacja.usunietoAt).map((operacja) => operacja.kwotaGrosze))
+      const korektyDlugu = sumaGroszy(aktywneOperacjeZobowiazania(dlug, obraz.operacjeZobowiazan).filter((operacja) => operacja.rodzaj === 'korekta_kwoty').map((operacja) => operacja.kwotaGrosze))
       if (sumaGroszy([dlug.kwotaPoczatkowaGrosze, korektyDlugu]) * (dlug.kierunek === 'do_mnie' ? 1 : -1) !== sumaGroszy([roznica, korektyCeny])) throw new Error('Korekta ceny i należności musi stanowić spójną grupę.')
     } else if (roznica !== 0) throw new Error('Sprzedaż wymaga powiązanego zobowiązania.')
   }

@@ -133,6 +133,24 @@ describe('FZ — migracja i chronione operacje', () => {
     await zapiszGrupeFinansowa({ idZapisu: noweId(), idOperacjiZrodlowej, oczekiwaneRewizje: [{ tabela: 'zakupyPul', id: zakup.id, rewizja: 1 }, { tabela: 'wspolneKasy', id: pulaId, rewizja: 1 }], zapisy: [{ ...zakup, operacja: 'aktualizacja', dane: { ...zakup.dane, korekty: [korekta] } }] })
     expect(obliczProjekcjePuli(await obraz(), pulaId, '2026-11-04')).toMatchObject({ kompletne: true, wynik: { wartoscZapasuGrosze: 7200, koszty: { razemGrosze: 12000 }, zapas: { partie: [{ liczbaSztuk: 6, kosztStratGrosze: 1200, kosztSprzedanychGrosze: 3600 }] } } })
   })
+  it('waliduje korektę ceny razem z długiem, a potem ich atomowe storno', async () => {
+    const pierwotne = grupaSprzedazy(); await zapiszGrupeFinansowa(pierwotne)
+    const sprzedaz = pierwotne.zapisy.find((zapis) => zapis.tabela === 'sprzedazePul')!, dlug = pierwotne.zapisy.find((zapis) => zapis.tabela === 'zobowiazania')!
+    const pulaId = pierwotne.zapisy[0].id, partiaId = (sprzedaz.dane.pozycje as { partiaId: string }[])[0].partiaId
+    const korekty: Record<string, unknown>[] = [], korektaDluguId = noweId()
+    for (const cofnij of [false, true]) {
+      const idOperacjiZrodlowej = noweId(), id = cofnij ? noweId() : korektaDluguId
+      korekty.push({ id: noweId(), createdAt: czas, updatedAt: czas, idOperacjiZrodlowej, rodzaj: 'cena', dataOperacji: cofnij ? '2026-11-05' : '2026-11-04', uzasadnienie: 'Korekta testowa', pozycje: [{ partiaId, zmianaSztuk: 0, zmianaCenyGrosze: cofnij ? 1000 : -1000 }], powiazaneOperacjeIds: [id] })
+      const daneOperacji = { ...Object.fromEntries(Object.entries(operacja(dlug.id, cofnij ? 0 : -1000, cofnij ? 'storno' : 'korekta_kwoty')).filter(([klucz]) => !['id', 'createdAt', 'updatedAt', 'rewizja', 'historiaWersji'].includes(klucz))), idOperacjiZrodlowej, rolaZapisu: cofnij ? 'storno' : 'korekta', pulaId, sprzedazId: sprzedaz.id, dataOperacji: cofnij ? '2026-11-05' : '2026-11-04', ...(cofnij ? { operacjaKorygowanaId: korektaDluguId } : {}) }
+      const polecenie: PolecenieGrupyFinansowej = {
+        idZapisu: noweId(), idOperacjiZrodlowej,
+        oczekiwaneRewizje: [...pierwotne.oczekiwaneRewizje.filter((warunek) => warunek.tabela !== 'operacjeKas').map((warunek) => ({ ...warunek, rewizja: warunek.tabela === 'sprzedazePul' && cofnij ? 2 : 1 })), { tabela: 'operacjeZobowiazan', id, rewizja: 0 }],
+        zapisy: [{ ...sprzedaz, operacja: 'aktualizacja', dane: { ...sprzedaz.dane, korekty: [...korekty] } }, { tabela: 'operacjeZobowiazan', id, operacja: 'utworzenie', dane: daneOperacji }],
+      }
+      await zapiszGrupeFinansowa(polecenie)
+      expect(obliczProjekcjePuli(await obraz(), pulaId, '2026-11-05')).toMatchObject({ kompletne: true, wynik: { bilansGotowkowyGrosze: -10000, naleznosci: { doOtrzymaniaGrosze: cofnij ? 4000 : 3000 } } })
+    }
+  })
   it('przelicza kolejne spłaty i zwrot nadpłaty bez drugiej kopii gotówki', async () => {
     const polecenie = grupaSprzedazy(); await zapiszGrupeFinansowa(polecenie)
     const pulaId = polecenie.zapisy[0].id, dlugId = polecenie.zapisy.find((zapis) => zapis.tabela === 'zobowiazania')!.id
