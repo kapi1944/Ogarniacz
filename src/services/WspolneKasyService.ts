@@ -105,14 +105,14 @@ export async function pobierzSaldoKasy(id: string): Promise<number> {
 
 const schematDanychPuli = z.object({
   nazwa: z.string().trim().min(1, 'Wpisz nazwę Puli.'), opis: z.string().trim(),
-  waluta: z.string().default('PLN'), celGrosze: z.number().int().safe().positive('Cel musi być dodatni.').optional(),
+  waluta: z.string().default('PLN'), rodzaj: z.enum(['finansowa', 'zakupowa']).optional(), celGrosze: z.number().int().safe().positive('Cel musi być dodatni.').optional(),
 }).strict()
 export type DanePuliFinansowej = z.input<typeof schematDanychPuli>
 export type DaneOperacjiPuli = Pick<DaneOperacjiKasy, 'typ' | 'kwotaGrosze' | 'dataOperacji' | 'opis' | 'kategoria' | 'zrodlo'>
 
 function wymagajPuliFinansowej(kasa: WspolnaKasa | undefined): WspolnaKasa {
   const pula = wymagajRekordu(kasa)
-  if (pula.pula?.wersja !== 1 || pula.pula.rodzaj !== 'finansowa') throw new Error('Nie znaleziono Puli finansowej.')
+  if (pula.pula?.wersja !== 1) throw new Error('Nie znaleziono Puli.')
   return pula
 }
 
@@ -134,7 +134,7 @@ export async function utworzPuleFinansowa(id: string, dane: DanePuliFinansowej, 
   const poprawne = schematDanychPuli.parse(dane)
   await zapiszZmianePuli('wspolneKasy', id, {
     nazwa: poprawne.nazwa, opis: poprawne.opis, waluta: poprawne.waluta, ikona: '', kolor: '', status: 'aktywna', saldoPoczatkoweGrosze: 0,
-    pula: { wersja: 1, rodzaj: 'finansowa', ...(poprawne.celGrosze === undefined ? {} : { celGrosze: poprawne.celGrosze }) },
+    pula: { wersja: 1, rodzaj: poprawne.rodzaj ?? 'finansowa', ...(poprawne.celGrosze === undefined ? {} : { celGrosze: poprawne.celGrosze }) },
   }, 'utworzenie', polecenie)
 }
 
@@ -144,9 +144,10 @@ export async function edytujPuleFinansowa(id: string, dane: DanePuliFinansowej, 
     const pula = wymagajPuliFinansowej(await baza.tabela('wspolneKasy').get(id))
     const poprzedniaProba = pula.historiaWersji?.find((wersja) => wersja.idZapisu === polecenie.idZapisu)
     if (!poprzedniaProba) wymagajAktywnejKasy(pula)
+    const rodzajPrzed = (poprzedniaProba?.przed?.pula as WspolnaKasa['pula'])?.rodzaj ?? pula.pula!.rodzaj
     await zapiszZmianePuli('wspolneKasy', id, {
       ...(poprzedniaProba?.przed ?? stanFinansowy(pula)), nazwa: poprawne.nazwa, opis: poprawne.opis, waluta: poprawne.waluta,
-      pula: { wersja: 1, rodzaj: 'finansowa', ...(poprawne.celGrosze === undefined ? {} : { celGrosze: poprawne.celGrosze }) },
+      pula: { wersja: 1, rodzaj: poprawne.rodzaj ?? rodzajPrzed, ...(poprawne.celGrosze === undefined ? {} : { celGrosze: poprawne.celGrosze }) },
     }, 'aktualizacja', polecenie)
   })
 }
@@ -184,8 +185,8 @@ export async function zapiszOperacjePuli(pulaId: string, id: string, dane: DaneO
   })
 }
 
-async function obrazPul(): Promise<ObrazFz> {
-  return Object.fromEntries(await Promise.all(TABELE_OBRAZU_FZ.map(async (tabela) => [tabela, await baza.tabela(tabela).toArray()]))) as unknown as ObrazFz
+export async function obrazPul(): Promise<ObrazFz> {
+  return wTransakcjiFinansowej('odczyt', async () => Object.fromEntries(await Promise.all(TABELE_OBRAZU_FZ.map(async (tabela) => [tabela, await baza.tabela(tabela).toArray()]))) as unknown as ObrazFz)
 }
 
 function podsumujPule(pula: WspolnaKasa, obraz: ObrazFz, ograniczenie: string) {
@@ -199,7 +200,9 @@ function podsumujPule(pula: WspolnaKasa, obraz: ObrazFz, ograniczenie: string) {
       podsumowanie = { saldoGrosze: projekcja.wynik.bilansGotowkowyGrosze, wplatyGrosze, wydatkiGrosze: sumaGroszy(aktywne.filter((operacja) => operacja.typ === 'wydatek').map((operacja) => operacja.kwotaGrosze)), ...(pula.pula?.celGrosze ? { postep: Number(BigInt(wplatyGrosze) * 10000n / BigInt(pula.pula.celGrosze)) / 100 } : {}) }
     }
   } catch (blad) { ograniczenie = (blad as Error).message }
-  return { pula, operacje, podsumowanie, ograniczenie: ograniczenie || (!projekcja.kompletne ? projekcja.przyczyna : ''), ostatniaOperacja: operacje.find((operacja) => !operacja.usunietoAt)?.dataOperacji, ostatniaAktywnosc: [pula.updatedAt, ...operacje.map((operacja) => operacja.updatedAt)].sort().at(-1)! }
+  const zakupy = obraz.zakupyPul.filter((zakup) => zakup.pulaId === pula.id)
+  const sprzedaze = obraz.sprzedazePul.filter((sprzedaz) => sprzedaz.pulaId === pula.id)
+  return { pula, operacje, podsumowanie, maFakty: operacje.length > 0 || zakupy.length > 0 || sprzedaze.length > 0, ograniczenie: ograniczenie || (!projekcja.kompletne ? projekcja.przyczyna : ''), ostatniaOperacja: operacje.find((operacja) => !operacja.usunietoAt)?.dataOperacji, ostatniaAktywnosc: [pula.updatedAt, ...operacje.map((operacja) => operacja.updatedAt), ...zakupy.map((zakup) => zakup.updatedAt), ...sprzedaze.map((sprzedaz) => sprzedaz.updatedAt)].sort().at(-1)! }
 }
 
 export async function listaPodsumowanPul() {
@@ -207,7 +210,7 @@ export async function listaPodsumowanPul() {
     let ograniczenie = ''
     try { await sprawdzKompletnoscFinansow() } catch (blad) { ograniczenie = (blad as Error).message }
     const obraz = await obrazPul()
-    return obraz.wspolneKasy.filter((kasa) => !kasa.usunietoAt && kasa.pula?.wersja === 1 && kasa.pula.rodzaj === 'finansowa').map((pula) => podsumujPule(pula, obraz, ograniczenie)).sort((pierwsza, druga) => druga.ostatniaAktywnosc.localeCompare(pierwsza.ostatniaAktywnosc) || pierwsza.pula.id.localeCompare(druga.pula.id))
+    return obraz.wspolneKasy.filter((kasa) => !kasa.usunietoAt && kasa.pula?.wersja === 1).map((pula) => podsumujPule(pula, obraz, ograniczenie)).sort((pierwsza, druga) => druga.ostatniaAktywnosc.localeCompare(pierwsza.ostatniaAktywnosc) || pierwsza.pula.id.localeCompare(druga.pula.id))
   })
 }
 

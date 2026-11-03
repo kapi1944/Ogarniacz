@@ -7,6 +7,9 @@ export function obliczMagazynPuli(obraz: ObrazFz, pulaId: string, dataOdniesieni
     const dodatkoweGrosze = sumaGroszy(zakup.kosztyDodatkowe.filter((koszt) => !koszt.usunietoAt).flatMap((koszt) => koszt.alokacja.filter((alokacja) => alokacja.partiaId === partia.id).map((alokacja) => alokacja.kwotaGrosze)))
     const zmianaKosztu = sumaGroszy(korektyZakupu.filter((korekta) => korekta.rodzaj === 'cena' || korekta.rodzaj === 'rozbieznosc').flatMap((korekta) => korekta.pozycje.filter((pozycja) => pozycja.partiaId === partia.id && (korekta.rodzaj === 'cena' || pozycja.zmianaSztuk > 0)).map((pozycja) => pozycja.zmianaKosztuGrosze ?? 0)))
     const kosztGrosze = sumaGroszy([partia.kosztTowaruGrosze, dodatkoweGrosze, zmianaKosztu])
+    // Pomyłka przyjęcia zmienia przypisanie ilości, zachowując osobny koszt każdej partii.
+    const przyjeteSztuki = sumaGroszy([partia.liczbaSztuk, ...korektyZakupu.filter((korekta) => korekta.rodzaj === 'pomylka_partii').flatMap((korekta) => korekta.pozycje.filter((pozycja) => pozycja.partiaId === partia.id).map((pozycja) => pozycja.zmianaSztuk))])
+    if (przyjeteSztuki < 0 || przyjeteSztuki === 0 && kosztGrosze !== 0) throw new Error('Korekta przyjęcia wymaga nieujemnej ilości i zerowego kosztu pustej partii.')
     const zdarzenia: ZdarzeniePartii[] = []
     for (const sprzedaz of obraz.sprzedazePul.filter((sprzedaz) => sprzedaz.pulaId === pulaId && !sprzedaz.usunietoAt && sprzedaz.dataSprzedazy <= dataOdniesienia)) {
       for (const pozycja of sprzedaz.pozycje.filter((pozycja) => !pozycja.usunietoAt && pozycja.partiaId === partia.id)) {
@@ -28,10 +31,11 @@ export function obliczMagazynPuli(obraz: ObrazFz, pulaId: string, dataOdniesieni
         }
       }
     }
-    for (const korekta of korektyZakupu.filter((korekta) => korekta.rodzaj !== 'cena')) for (const [indeks, pozycja] of korekta.pozycje.entries()) if (pozycja.partiaId === partia.id && pozycja.zmianaSztuk) {
+    for (const korekta of korektyZakupu.filter((korekta) => korekta.rodzaj !== 'cena' && korekta.rodzaj !== 'pomylka_partii')) for (const [indeks, pozycja] of korekta.pozycje.entries()) if (pozycja.partiaId === partia.id && pozycja.zmianaSztuk) {
       zdarzenia.push({ id: `${korekta.id}:${indeks}`, data: korekta.dataOperacji, rodzaj: pozycja.zmianaSztuk > 0 ? 'przyjecie' : korekta.rodzaj === 'rozbieznosc' ? 'strata' : 'zwrot_dostawcy', liczbaSztuk: Math.abs(pozycja.zmianaSztuk), odSztuki: pozycja.odSztuki })
     }
-    return { partiaId: partia.id, produktId: partia.produktId, zakupId: zakup.id, kosztNabyciaGrosze: kosztGrosze, przeliczono: korektyZakupu.length > 0, ...obliczStanPartii(kosztGrosze, sumaGroszy([partia.liczbaSztuk, ...zdarzenia.filter((zdarzenie) => zdarzenie.rodzaj === 'przyjecie').map((zdarzenie) => zdarzenie.liczbaSztuk)]), zdarzenia, partia.liczbaSztuk) }
+    const wszystkieSztuki = sumaGroszy([przyjeteSztuki, ...zdarzenia.filter((zdarzenie) => zdarzenie.rodzaj === 'przyjecie').map((zdarzenie) => zdarzenie.liczbaSztuk)])
+    return { partiaId: partia.id, produktId: partia.produktId, zakupId: zakup.id, kosztNabyciaGrosze: kosztGrosze, przeliczono: korektyZakupu.length > 0, ...obliczStanPartii(kosztGrosze, wszystkieSztuki || 1, zdarzenia, przyjeteSztuki) }
   }))
   return partie
 }

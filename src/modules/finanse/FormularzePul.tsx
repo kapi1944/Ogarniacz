@@ -16,6 +16,7 @@ export function FormularzPuli({ pula, walutaZablokowana = false, zamknij, zapisa
   const [nazwa, ustawNazwe] = useState(pula?.nazwa ?? '')
   const [opis, ustawOpis] = useState(pula?.opis ?? '')
   const [waluta, ustawWalute] = useState(pula?.waluta ?? 'PLN')
+  const [rodzaj, ustawRodzaj] = useState<'finansowa' | 'zakupowa'>(pula?.pula?.rodzaj ?? 'finansowa')
   const [cel, ustawCel] = useState(pula?.pula?.celGrosze ? groszeNaKwote(pula.pula.celGrosze, pula.waluta) : '')
   const zapis = useZapisRozliczenia(poczatkowa?.rewizja ?? 0)
   const zamknijBezZapisu = () => { if (!zapis.zajety) zamknij() }
@@ -23,7 +24,7 @@ export function FormularzPuli({ pula, walutaZablokowana = false, zamknij, zapisa
     zdarzenie.preventDefault()
     try {
       if (!nazwa.trim()) throw new Error('Wpisz nazwę Puli.')
-      const dane = { nazwa: nazwa.trim(), opis: opis.trim(), waluta, ...(cel ? { celGrosze: kwotaNaGrosze(cel, waluta) } : {}) }
+      const dane = { nazwa: nazwa.trim(), opis: opis.trim(), waluta, rodzaj, ...(cel ? { celGrosze: kwotaNaGrosze(cel, waluta) } : {}) }
       void zapis.wykonaj(dane, (polecenie) => (poczatkowa ? edytujPuleFinansowa : utworzPuleFinansowa)(id, dane, polecenie), () => zapisano(id))
     } catch (blad) { zapis.ustawBlad((blad as Error).message) }
   }
@@ -31,7 +32,8 @@ export function FormularzPuli({ pula, walutaZablokowana = false, zamknij, zapisa
     <fieldset disabled={zapis.zajety}>
       <label className="pole"><span>Nazwa Puli</span><input required autoFocus value={nazwa} onChange={(zdarzenie) => ustawNazwe(zdarzenie.target.value)} /></label>
       <label className="pole"><span>Opis</span><textarea value={opis} onChange={(zdarzenie) => ustawOpis(zdarzenie.target.value)} /></label>
-      <p>Rodzaj: finansowa. Uczestnicy nie są wymagani.</p>
+      <label className="pole"><span>Rodzaj Puli</span><select value={rodzaj} disabled={walutaZablokowana} onChange={(zdarzenie) => ustawRodzaj(zdarzenie.target.value as typeof rodzaj)}><option value="finansowa">Finansowa</option><option value="zakupowa">Zakupowa</option></select></label>
+      <p>Uczestnicy nie są wymagani. Rodzaj i waluta są niezmienne po pierwszym fakcie.</p>
       <WyborWaluty wartosc={waluta} zmien={ustawWalute} zablokowany={walutaZablokowana} />
       {walutaZablokowana && <p>Waluta jest zablokowana po pierwszej operacji, również usuniętej.</p>}
       <PoleKwoty etykieta="Cel finansowy (opcjonalny)" wartosc={cel} zmien={ustawCel} waluta={waluta} min="0.01" />

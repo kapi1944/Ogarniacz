@@ -2,6 +2,8 @@
 
 Kontrakt: [Pule i Zobowiązania](FINANSE_PULE_ZOBOWIAZANIA.md). Fundament: [FZ-2](FINANSE_FZ2.md).
 
+Poniższy opis dokumentuje zakres FZ-3. Jawny wybór rodzaju zakupowego, zakupy, partie i korekty dodaje [FZ-4](FINANSE_FZ4.md), bez zmiany rodzaju istniejących Pul.
+
 ## Interfejs
 
 Podmoduł Finansów ma dwie trasy ładowane leniwie: `/finanse/pule` oraz `/finanse/pule/:pulaId`. Odnośnik „Pule” znajduje się w Finansach; główne menu i Wspólne rozliczenia zachowują dotychczasowy zakres. Whitelista platformy przyjmuje szczegóły z UUID. Wstecz zamyka panel daty, następnie modal, wraca do listy i Finansów, także po bezpośrednim wejściu.

@@ -9,6 +9,7 @@ import { listaPodsumowanPul, pobierzWidokPuli, zmienArchiwizacjePuli, zapiszOper
 import type { PolecenieZapisuFinansowego } from '../../services/ZapisFinansowWspolnych'
 import { useObslugaWstecz } from '../../platform/obslugaWstecz'
 import { FormularzPuli, FormularzOperacjiPuli } from './FormularzePul'
+import WidokZakupowPuli from './WidokZakupowPuli'
 import { dataDoWyswietlenia, kwotaDoWyswietlenia, useZapisRozliczenia } from './pomocRozliczen'
 import './pule.css'
 
@@ -35,7 +36,7 @@ function InformacjaLokalna() {
 function PodsumowaniePuli({ widok }: { widok: WidokPuli }) {
   const { pula, podsumowanie, ograniczenie, ostatniaOperacja } = widok
   return <>
-    <p><Znacznik>{pula.status === 'aktywna' ? 'Aktywna' : 'Archiwalna'}</Znacznik> · Finansowa · {pula.waluta}</p>
+    <p><Znacznik>{pula.status === 'aktywna' ? 'Aktywna' : 'Archiwalna'}</Znacznik> · {pula.pula?.rodzaj === 'zakupowa' ? 'Zakupowa' : 'Finansowa'} · {pula.waluta}</p>
     {ograniczenie ? <Komunikat typ="blad">Niekompletne dane — saldo i postęp niedostępne: {ograniczenie}</Komunikat> : podsumowanie && <>
       <dl className="pule-podsumowanie"><dt>Aktualne saldo</dt><dd className={podsumowanie.saldoGrosze < 0 ? 'tekst-bledu' : ''}>{kwotaDoWyswietlenia(podsumowanie.saldoGrosze, pula.waluta)}</dd><dt>Zebrano — wpłaty</dt><dd>{kwotaDoWyswietlenia(podsumowanie.wplatyGrosze, pula.waluta)}</dd><dt>Wydatki</dt><dd>{kwotaDoWyswietlenia(podsumowanie.wydatkiGrosze, pula.waluta)}</dd></dl>
       {pula.pula?.celGrosze && <div className="pule-cel"><p>Cel: {kwotaDoWyswietlenia(pula.pula.celGrosze, pula.waluta)}</p><label>Postęp zbiórki: {podsumowanie.postep}%<progress max={100} value={Math.min(100, podsumowanie.postep ?? 0)} /></label></div>}
@@ -105,15 +106,16 @@ function SzczegolyPuli({ id }: { id: string }) {
       {edycja && <><button className="przycisk przycisk--glowny" onClick={() => ustawFormularz('wplyw')}>Zarejestruj wpłatę</button><button className="przycisk" onClick={() => ustawFormularz('wydatek')}>Zarejestruj wydatek</button><button className="przycisk" onClick={() => ustawFormularz('pula')}>Edytuj Pulę</button></>}
       {!widok.ograniczenie && czyDostepFinansowWspolnych('edycja') && <button className="przycisk" onClick={() => ustawPotwierdzenie({ klucz: id, tytul: pula.status === 'aktywna' ? 'Archiwizuj Pulę' : 'Przywróć Pulę', opis: 'Wszystkie operacje, historia i saldo pozostaną zachowane. Archiwum blokuje edycję i nowe operacje.', wykonaj: (polecenie) => zmienArchiwizacjePuli(id, pula.status === 'aktywna', { ...polecenie, oczekiwanaRewizja: pula.rewizja ?? 0 }) })}>{pula.status === 'aktywna' ? 'Archiwizuj Pulę' : 'Przywróć Pulę'}</button>}
     </div>
+    {pula.pula?.rodzaj === 'zakupowa' && <WidokZakupowPuli pula={pula} edycja={edycja} />}
     <Karta><h2>Historia operacji</h2>{!operacje.length && <p>Brak operacji. Zarejestruj pierwszą wpłatę.</p>}{operacje.map((wpis) => <article key={wpis.id} className="pule-operacja">
       <h3>{wpis.typ === 'wplyw' ? 'Wpłata — wpływ' : wpis.typ === 'wydatek' ? 'Wydatek — wypływ' : 'Korekta'}{wpis.usunietoAt && ' · Usunięta'}</h3>
       <p><strong>{wpis.typ === 'wydatek' ? '−' : '+'}{kwotaDoWyswietlenia(wpis.kwotaGrosze, wpis.waluta)}</strong> · {dataDoWyswietlenia(wpis.dataOperacji)}</p><p>{wpis.opis}</p>{wpis.kategoria && <p>Kategoria: {wpis.kategoria}</p>}{wpis.zrodlo && <p>Źródło: {wpis.zrodlo}</p>}
       <details><summary>Szczegóły operacji</summary><p>Identyfikator: {wpis.id}</p><p>Rewizja: {wpis.rewizja}</p><p>Zapisano: {new Date(wpis.createdAt).toLocaleString('pl-PL')}</p></details>
-      {edycja && <div className="akcje-formularza">{!wpis.usunietoAt && wpis.typ !== 'korekta' && <button className="przycisk" onClick={() => { ustawOperacje(wpis); ustawFormularz(wpis.typ as 'wplyw' | 'wydatek') }}>Popraw operację: {wpis.opis || dataDoWyswietlenia(wpis.dataOperacji)}</button>}<button className="przycisk" onClick={() => ustawPotwierdzenie({ klucz: wpis.id, tytul: wpis.usunietoAt ? 'Przywróć operację' : 'Usuń błędną operację', opis: 'Saldo i postęp zostaną przeliczone z operacji. Historia zmian pozostanie zachowana.', wykonaj: (polecenie) => zapiszOperacjePuli(id, wpis.id, undefined, wpis.usunietoAt ? 'przywrocenie' : 'usuniecie', { ...polecenie, oczekiwanaRewizja: wpis.rewizja ?? 0 }, pula.rewizja ?? 0) })}>{wpis.usunietoAt ? 'Przywróć operację' : 'Usuń błędną operację'}</button></div>}
+      {edycja && wpis.powiazaniePuli && ['wplata', 'koszt'].includes(wpis.powiazaniePuli.rodzaj) && !wpis.powiazaniePuli.zakupId && <div className="akcje-formularza">{!wpis.usunietoAt && wpis.typ !== 'korekta' && <button className="przycisk" onClick={() => { ustawOperacje(wpis); ustawFormularz(wpis.typ as 'wplyw' | 'wydatek') }}>Popraw operację: {wpis.opis || dataDoWyswietlenia(wpis.dataOperacji)}</button>}<button className="przycisk" onClick={() => ustawPotwierdzenie({ klucz: wpis.id, tytul: wpis.usunietoAt ? 'Przywróć operację' : 'Usuń błędną operację', opis: 'Saldo i postęp zostaną przeliczone z operacji. Historia zmian pozostanie zachowana.', wykonaj: (polecenie) => zapiszOperacjePuli(id, wpis.id, undefined, wpis.usunietoAt ? 'przywrocenie' : 'usuniecie', { ...polecenie, oczekiwanaRewizja: wpis.rewizja ?? 0 }, pula.rewizja ?? 0) })}>{wpis.usunietoAt ? 'Przywróć operację' : 'Usuń błędną operację'}</button></div>}
       <HistoriaPuli rekord={wpis} />
     </article>)}</Karta>
     <Karta><h2>Historia Puli</h2><HistoriaPuli rekord={pula} /></Karta>
-    {formularz === 'pula' && <FormularzPuli pula={pula} walutaZablokowana={operacje.length > 0} zamknij={zamknij} zapisano={zapisano} />}
+    {formularz === 'pula' && <FormularzPuli pula={pula} walutaZablokowana={widok.maFakty} zamknij={zamknij} zapisano={zapisano} />}
     {(formularz === 'wplyw' || formularz === 'wydatek') && podsumowanie && <FormularzOperacjiPuli pula={pula} typ={formularz} operacja={operacja} saldoGrosze={podsumowanie.saldoGrosze} zamknij={zamknij} zapisano={zapisano} />}
     {potwierdzenie && <div className="pule-dialog"><ModalPotwierdzenia tytul={potwierdzenie.tytul} opis={[potwierdzenie.opis, zapis.blad].filter(Boolean).join(' ')} anuluj={() => { if (!zapis.zajety) ustawPotwierdzenie(undefined) }} potwierdz={() => zapis.wykonaj({ klucz: potwierdzenie.klucz, tytul: potwierdzenie.tytul }, potwierdzenie.wykonaj, () => { ustawPotwierdzenie(undefined); ustawKomunikat('Zmiana została zapisana lokalnie.') })} /></div>}
   </div>

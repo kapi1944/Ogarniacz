@@ -8,6 +8,8 @@
 .pule .pole, .pule-formularz .pole { min-width: 0; }
 .pule input, .pule select, .pule-formularz :is(input, select, textarea) { width: 100%; min-width: 0; }
 .pule-formularz .pole-kwoty__wiersz input { width: 0; flex: 1; }
+.pule-formularz .pole-liczbowe__wiersz input { width: 0; flex: 1; }
+.pule-pozycja { display: grid; gap: 12px; min-width: 0; border: 1px solid var(--obramowanie); border-radius: var(--promien); padding: 12px; }
 .pule-dialog .przycisk-ikona { min-width: 44px; min-height: 44px; }
 .pule-podsumowanie { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 .pule-podsumowanie dd { margin: 0; text-align: right; font-weight: 700; }
