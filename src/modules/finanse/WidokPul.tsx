@@ -10,6 +10,7 @@ import type { PolecenieZapisuFinansowego } from '../../services/ZapisFinansowWsp
 import { useObslugaWstecz } from '../../platform/obslugaWstecz'
 import { FormularzPuli, FormularzOperacjiPuli } from './FormularzePul'
 import WidokZakupowPuli from './WidokZakupowPuli'
+import WidokSprzedazyPuli from './WidokSprzedazyPuli'
 import { dataDoWyswietlenia, kwotaDoWyswietlenia, useZapisRozliczenia } from './pomocRozliczen'
 import './pule.css'
 
@@ -107,6 +108,7 @@ function SzczegolyPuli({ id }: { id: string }) {
       {!widok.ograniczenie && czyDostepFinansowWspolnych('edycja') && <button className="przycisk" onClick={() => ustawPotwierdzenie({ klucz: id, tytul: pula.status === 'aktywna' ? 'Archiwizuj Pulę' : 'Przywróć Pulę', opis: 'Wszystkie operacje, historia i saldo pozostaną zachowane. Archiwum blokuje edycję i nowe operacje.', wykonaj: (polecenie) => zmienArchiwizacjePuli(id, pula.status === 'aktywna', { ...polecenie, oczekiwanaRewizja: pula.rewizja ?? 0 }) })}>{pula.status === 'aktywna' ? 'Archiwizuj Pulę' : 'Przywróć Pulę'}</button>}
     </div>
     {pula.pula?.rodzaj === 'zakupowa' && <WidokZakupowPuli pula={pula} edycja={edycja} />}
+    {pula.pula?.rodzaj === 'zakupowa' && <WidokSprzedazyPuli pula={pula} edycja={edycja} />}
     <Karta><h2>Historia operacji</h2>{!operacje.length && <p>Brak operacji. Zarejestruj pierwszą wpłatę.</p>}{operacje.map((wpis) => <article key={wpis.id} className="pule-operacja">
       <h3>{wpis.typ === 'wplyw' ? 'Wpłata — wpływ' : wpis.typ === 'wydatek' ? 'Wydatek — wypływ' : 'Korekta'}{wpis.usunietoAt && ' · Usunięta'}</h3>
       <p><strong>{wpis.typ === 'wydatek' ? '−' : '+'}{kwotaDoWyswietlenia(wpis.kwotaGrosze, wpis.waluta)}</strong> · {dataDoWyswietlenia(wpis.dataOperacji)}</p><p>{wpis.opis}</p>{wpis.kategoria && <p>Kategoria: {wpis.kategoria}</p>}{wpis.zrodlo && <p>Źródło: {wpis.zrodlo}</p>}

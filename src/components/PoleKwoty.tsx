@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import { WALUTY, kwotaDoModelu, normalizujKwote } from '../domain/kwoty'
 import './PoleKwoty.css'
+import { cenaCalkowitaZJednostkowej } from '../../server/wspolne/ObliczeniaPul.ts'
 
 interface Wlasciwosci {
   etykieta: string
@@ -13,22 +14,24 @@ interface Wlasciwosci {
   max?: number | string
   krok?: number
   modelLiczbowy?: boolean
+  cenaDlaSztuk?: number
 }
 
-export function PoleKwoty({ etykieta, wartosc, zmien, waluta = 'PLN', zmienWalute, wymagane, min, max, krok, modelLiczbowy }: Wlasciwosci) {
+export function PoleKwoty({ etykieta, wartosc, zmien, waluta = 'PLN', zmienWalute, wymagane, min, max, krok, modelLiczbowy, cenaDlaSztuk }: Wlasciwosci) {
   const id = useId()
   const [sprawdzone, ustawSprawdzone] = useState(false)
   const [szkic, ustawSzkic] = useState({ zrodlo: wartosc, tekst: wartosc })
   const tekst = szkic.zrodlo === wartosc ? szkic.tekst : wartosc
   function wpisz(nowyTekst: string) {
     let nowaWartosc = nowyTekst
-    try { if (nowyTekst) nowaWartosc = normalizujKwote(nowyTekst, waluta) } catch { /* Niepełny zapis pozostaje widoczny i nie przechodzi walidacji. */ }
+    try { if (nowyTekst && cenaDlaSztuk === undefined) nowaWartosc = normalizujKwote(nowyTekst, waluta) } catch { /* Niepełny zapis pozostaje widoczny i nie przechodzi walidacji. */ }
     ustawSzkic({ zrodlo: nowaWartosc, tekst: nowyTekst })
     zmien(nowaWartosc)
   }
   let blad = ''
   try {
     if (!tekst) blad = wymagane ? 'Wpisz kwotę.' : ''
+    else if (cenaDlaSztuk !== undefined) cenaCalkowitaZJednostkowej(tekst, cenaDlaSztuk, waluta)
     else {
       const kwota = normalizujKwote(tekst, waluta)
       if (modelLiczbowy) kwotaDoModelu(tekst, waluta)

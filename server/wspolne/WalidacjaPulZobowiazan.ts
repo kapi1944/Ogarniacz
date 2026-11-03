@@ -125,6 +125,11 @@ export function walidujObrazFz(obraz: ObrazFz): void {
       const korektyCeny = sumaGroszy(sprzedaz.korekty.filter((korekta) => !korekta.usunietoAt).flatMap((korekta) => korekta.pozycje.map((pozycja) => pozycja.zmianaCenyGrosze ?? 0)))
       const korektyDlugu = sumaGroszy(aktywneOperacjeZobowiazania(dlug, obraz.operacjeZobowiazan).filter((operacja) => operacja.rodzaj === 'korekta_kwoty').map((operacja) => operacja.kwotaGrosze))
       if (sumaGroszy([dlug.kwotaPoczatkowaGrosze, korektyDlugu]) * (dlug.kierunek === 'do_mnie' ? 1 : -1) !== sumaGroszy([roznica, korektyCeny])) throw new Error('Korekta ceny i należności musi stanowić spójną grupę.')
-    } else if (roznica !== 0) throw new Error('Sprzedaż wymaga powiązanego zobowiązania.')
+    } else {
+      if (roznica !== 0) throw new Error('Sprzedaż wymaga powiązanego zobowiązania.')
+      const zmianaCeny = sumaGroszy(sprzedaz.korekty.filter((korekta) => !korekta.usunietoAt).flatMap((korekta) => korekta.pozycje.map((pozycja) => pozycja.zmianaCenyGrosze ?? 0)))
+      const rozliczenie = sumaGroszy(obraz.operacjeKas.filter((operacja) => !operacja.usunietoAt && operacja.powiazaniePuli?.sprzedazId === sprzedaz.id && operacja.powiazaniePuli.rodzaj === 'korekta').map((operacja) => operacja.kwotaGrosze))
+      if (sumaGroszy([cena, zmianaCeny]) < 0 || zmianaCeny !== rozliczenie) throw new Error('Korekta bez zobowiązania wymaga pełnego rzeczywistego rozliczenia.')
+    }
   }
 }

@@ -107,7 +107,7 @@ export function obliczSaldoZobowiazanOsoby(osobaId: string, zobowiazania: readon
 }
 
 /** Zakresy numerów sztuk są projekcją; nie tworzymy rekordów dla każdej sztuki. */
-export interface ZdarzeniePartii { id: string; data: string; rodzaj: 'przyjecie' | 'wydanie' | 'zwrot' | 'strata' | 'zwrot_dostawcy'; liczbaSztuk: number; zrodloId?: string; uszkodzoneSztuki?: number; odSztuki?: number }
+export interface ZdarzeniePartii { id: string; data: string; rodzaj: 'przyjecie' | 'wydanie' | 'zwrot' | 'strata' | 'zwrot_dostawcy'; liczbaSztuk: number; zrodloId?: string; poprzednikId?: string; uszkodzoneSztuki?: number; odSztuki?: number }
 type Zakres = { od: number; ile: number }
 export function obliczStanPartii(kosztGrosze: number, liczbaSztuk: number, zdarzenia: readonly ZdarzeniePartii[], przyjetePoczatkowo = liczbaSztuk) {
   kosztZakresu(kosztGrosze, liczbaSztuk, 0, liczbaSztuk)
@@ -134,7 +134,7 @@ export function obliczStanPartii(kosztGrosze: number, liczbaSztuk: number, zdarz
   const oczekujace = [...zdarzenia].sort((pierwsze, drugie) => porownaj(pierwsze.data, drugie.data) || porownaj(pierwsze.id, drugie.id))
   while (oczekujace.length) {
     const dzien = oczekujace[0].data
-    const indeks = oczekujace.findIndex((zdarzenie) => zdarzenie.data === dzien && (!zdarzenie.zrodloId || wydania.has(zdarzenie.zrodloId)))
+    const indeks = oczekujace.findIndex((zdarzenie) => zdarzenie.data === dzien && (!zdarzenie.zrodloId || wydania.has(zdarzenie.zrodloId)) && (!zdarzenie.poprzednikId || ids.has(zdarzenie.poprzednikId)))
     if (indeks < 0) throw new Error('Cykl lub zwrot przed wydaniem.')
     const zdarzenie = oczekujace.splice(indeks, 1)[0]
     if (ids.has(zdarzenie.id) || !Number.isSafeInteger(zdarzenie.liczbaSztuk) || zdarzenie.liczbaSztuk <= 0) throw new Error('Niepoprawne zdarzenie magazynowe.')

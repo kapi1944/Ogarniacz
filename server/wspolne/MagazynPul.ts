@@ -22,12 +22,14 @@ export function obliczMagazynPuli(obraz: ObrazFz, pulaId: string, dataOdniesieni
         for (const [indeks, pozycja] of korekta.pozycje.entries()) {
           if (pozycja.partiaId !== partia.id || pozycja.zmianaSztuk === 0) continue
           if (!sprzedaz.pozycje.some((oryginalna) => oryginalna.id === pozycja.pozycjaId)) throw new Error('Korekta nie wskazuje oryginalnej pozycji sprzedaży.')
-          if (pozycja.zmianaSztuk > 0) zdarzenia.push({ id: `${korekta.id}:${indeks}`, data: korekta.dataOperacji, rodzaj: 'zwrot', liczbaSztuk: pozycja.zmianaSztuk, zrodloId: (() => {
-            const poprzednie = sprzedaz.korekty.filter((element) => !element.usunietoAt && element.rodzaj === 'pomylka_partii' && (element.dataOperacji < korekta.dataOperacji || element.dataOperacji === korekta.dataOperacji && element.id < korekta.id)).sort((pierwsza, druga) => pierwsza.dataOperacji < druga.dataOperacji ? -1 : pierwsza.dataOperacji > druga.dataOperacji ? 1 : pierwsza.id < druga.id ? -1 : 1)
+          const poprzedniWpis = sprzedaz.korekty.slice(0, sprzedaz.korekty.indexOf(korekta)).filter((element) => !element.usunietoAt && element.dataOperacji <= korekta.dataOperacji).flatMap((element) => element.pozycje.map((wiersz, indeks) => ({ element, wiersz, indeks }))).filter(({ wiersz }) => wiersz.partiaId === partia.id && wiersz.pozycjaId === pozycja.pozycjaId && wiersz.zmianaSztuk !== 0).at(-1)
+          const poprzednikId = poprzedniWpis ? poprzedniWpis.element.id + ':' + poprzedniWpis.indeks : undefined
+          if (pozycja.zmianaSztuk > 0) zdarzenia.push({ id: `${korekta.id}:${indeks}`, data: korekta.dataOperacji, rodzaj: 'zwrot', poprzednikId, liczbaSztuk: pozycja.zmianaSztuk, zrodloId: (() => {
+            const poprzednie = sprzedaz.korekty.filter((element, indeks) => !element.usunietoAt && element.rodzaj === 'pomylka_partii' && (element.dataOperacji < korekta.dataOperacji || element.dataOperacji === korekta.dataOperacji && indeks < sprzedaz.korekty.indexOf(korekta)))
             const przeniesienie = poprzednie.flatMap((element) => element.pozycje.map((wiersz, indeks) => ({ element, wiersz, indeks }))).filter(({ wiersz }) => wiersz.partiaId === partia.id && wiersz.pozycjaId === pozycja.pozycjaId && wiersz.zmianaSztuk < 0).at(-1)
             return przeniesienie ? `${przeniesienie.element.id}:${przeniesienie.indeks}` : `${sprzedaz.id}:${pozycja.pozycjaId}`
           })(), uszkodzoneSztuki: pozycja.sztukiUszkodzone ?? 0 })
-          else zdarzenia.push({ id: `${korekta.id}:${indeks}`, data: korekta.dataOperacji, rodzaj: 'wydanie', liczbaSztuk: -pozycja.zmianaSztuk })
+          else zdarzenia.push({ id: `${korekta.id}:${indeks}`, data: korekta.dataOperacji, rodzaj: 'wydanie', poprzednikId, liczbaSztuk: -pozycja.zmianaSztuk })
         }
       }
     }
