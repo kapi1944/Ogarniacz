@@ -109,9 +109,18 @@ export async function pobierzKolejkeSynchronizacji(): Promise<ZmianaKolejkiSynch
   return pobierzDozwoloneZmianyKolejki()
 }
 
-/** Licznik stosuje filtry wysyłki, ale nie migruje rekordów ani nie zmienia kolejki. */
+/** Wstrzymane FZ pozostają oczekujące, także gdy transport nie może ich jeszcze wysłać. */
 export async function policzZmianyDoSynchronizacji(): Promise<number> {
-  return (await pobierzDozwoloneZmianyKolejki()).length
+  const dozwolone = await pobierzDozwoloneZmianyKolejki()
+  if (!czyDostepFinansowWspolnych('odczyt')) return dozwolone.length
+  let wstrzymane = 0
+  for (const zmiana of await tabelaKolejki().toArray()) {
+    const tabela = zmiana.tabela as NazwaTabeli
+    if (!nazwyTabel.includes(tabela) || !czyTabelaSynchronizowana(tabela)) continue
+    if (await czyWstrzymanyTransportFz(tabela, zmiana.rekord)) { wstrzymane++; continue }
+    if (await czyWstrzymanyTransportFz(tabela, await baza.tabela(tabela).get(zmiana.rekordId))) wstrzymane++
+  }
+  return dozwolone.length + wstrzymane
 }
 
 async function pobierzDozwoloneZmianyKolejki(): Promise<ZmianaKolejkiSynchronizacji[]> {

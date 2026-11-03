@@ -114,6 +114,7 @@ describe('FZ — migracja i chronione operacje', () => {
     expect(await baza.tabela('sprzedazePul').count()).toBe(1)
     const zdalne = new RepozytoriumZdalneInMemory(), wyslij = vi.spyOn(zdalne, 'wyslijZmiany')
     await expect(new SyncEngine({ czyOnline: () => true }).synchronizuj(zdalne)).resolves.toBeDefined()
+    expect(await baza.tabela('stanSynchronizacji').get('glowny')).toMatchObject({ stan: 'oczekuje' })
     expect(wyslij.mock.calls.flatMap((wywolanie) => wywolanie[0]).some((zmiana) => ['wspolneKasy', 'operacjeKas', ...TABELE_FZ].includes(zmiana.tabela))).toBe(false)
     expect(await baza.tabela('kolejkaSynchronizacji').where('tabela').equals('sprzedazePul').count()).toBe(1)
     await expect(dodajOperacjeKasy(noweId(), { kasaId: pulaId, typ: 'wplyw', kwotaGrosze: 1, waluta: 'PLN', dataOperacji: '2026-11-03', kategoria: '', zrodlo: '', opis: '' }, { idZapisu: noweId(), oczekiwanaRewizja: 0 })).rejects.toThrow('FZ')

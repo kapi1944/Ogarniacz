@@ -24,7 +24,7 @@ Globalny format backupu pozostaje **3**. Sekcja `puleZobowiazania` v1 zawiera ca
 
 Starsza kopia bez sekcji FZ zachowuje istniejące dane FZ i oczekujące zmiany. Kolizja starszego rekordu z aktywowaną Pulą lub chronionym dokumentem blokuje restore. Restore obejmuje pełną sekcję i walidację grafu oraz korzysta z dotychczasowego checksum, szyfrowania, kontroli profilu i `before-restore`. Brak wymaganego pliku lub członka operacji blokuje pełną kopię. Ochrona finansowa i medyczna dokumentów pozostaje zachowana.
 
-Nowe rekordy pozostają w istniejącym outboxie z komunikatem o wstrzymaniu do FZ-7. Filtr transportu obejmuje też rozszerzenia kas, dokumentów i ustawień, finansowe przypomnienia oraz wszystkie stare operacje aktywowanej Puli. Transport nie nadpisuje lokalnych rozszerzeń pobraną starszą wersją. Protokół F7, endpointy i wdrożenia pozostają na dotychczasowym etapie.
+Nowe rekordy pozostają w istniejącym outboxie z komunikatem o wstrzymaniu do FZ-7 i są nadal liczone jako oczekujące. Filtr transportu obejmuje też rozszerzenia kas, dokumentów i ustawień, finansowe przypomnienia oraz wszystkie stare operacje aktywowanej Puli. Transport nie nadpisuje lokalnych rozszerzeń pobraną starszą wersją. Protokół F7, endpointy i wdrożenia pozostają na dotychczasowym etapie.
 
 ## Weryfikacja
 
