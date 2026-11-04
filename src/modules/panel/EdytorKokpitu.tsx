@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent } from 'react'
 import { Komunikat, ModalPotwierdzenia } from '../../components/Interfejs'
 import { PoleLiczbowe } from '../../components/PoleLiczbowe'
-import { katalogBlokow, definicjaBloku, domyslnyUklad, nowyBlok, odczytajKokpit, poprawnaPlansza, sprawdzPolozenie, uporzadkujPlansze, widokiKokpitu, znajdzMiejsce } from '../../domain/kokpit'
+import { katalogBlokow, definicjaBloku, domyslnyUklad, nowyBlok, odczytajKokpit, poprawnaPlansza, profileKokpitu, sprawdzPolozenie, uporzadkujPlansze, widokiKokpitu, znajdzMiejsce } from '../../domain/kokpit'
 import type { BlokKokpitu, KonfiguracjaKokpitu, PlanszaKokpitu, ProfilKokpitu, TypBlokuKokpitu, UkladKokpitu } from '../../domain/kokpit'
 import { useObslugaWstecz } from '../../platform/obslugaWstecz'
 import { KonfiguratorBloku, SuwakKokpitu } from './KonfiguratorBloku'
@@ -38,12 +38,15 @@ function EdytujSiatke({ plansza, zmien, zglos }: { plansza: PlanszaKokpitu; zmie
   </div>
 }
 
-export function EdytorKokpitu({ konfiguracja, profil: profilPoczatkowy, widok: widokPoczatkowy, numer, zapisz, zamknij }: {
+export function EdytorKokpitu({ konfiguracja, profil: profilPoczatkowy, widok: widokPoczatkowy, numer, wyborProfilu, ustawWyborProfilu, zapisz, zamknij }: {
   konfiguracja: KonfiguracjaKokpitu; profil: ProfilKokpitu; widok: keyof typeof widokiKokpitu; numer: number
+  wyborProfilu: ProfilKokpitu | 'auto'; ustawWyborProfilu: (profil: ProfilKokpitu | 'auto') => void
   zapisz: (nowa: KonfiguracjaKokpitu) => Promise<void>; zamknij: () => void
 }) {
   const [historia, ustawHistorie] = useState<Historia>({ wczesniej: [], biezaca: konfiguracja, pozniej: [] })
-  const [profil] = useState(profilPoczatkowy)
+  const [profil, ustawProfil] = useState(profilPoczatkowy)
+  const [profilUrzadzenia, ustawProfilUrzadzenia] = useState(wyborProfilu)
+  const [zrodloProfilu, ustawZrodloProfilu] = useState<ProfilKokpitu>('komputer')
   const [widok, ustawWidok] = useState(widokPoczatkowy)
   const [indeks, ustawIndeks] = useState(widokPoczatkowy === 'plansze' ? numer : 0)
   const [typ, ustawTyp] = useState<TypBlokuKokpitu>('zegar')
@@ -61,7 +64,7 @@ export function EdytorKokpitu({ konfiguracja, profil: profilPoczatkowy, widok: w
   const numerPlanszy = Math.min(indeks, zestaw.length - 1)
   const plansza = zestaw[numerPlanszy]
   const wybrany = plansza.bloki.find(({ id }) => id === wybranyId)
-  const brudny = historia.wczesniej.length > 0
+  const brudny = historia.wczesniej.length > 0 || profilUrzadzenia !== wyborProfilu
 
   useEffect(() => {
     if (!brudny) return
@@ -160,7 +163,11 @@ export function EdytorKokpitu({ konfiguracja, profil: profilPoczatkowy, widok: w
         const poprawna = odczytajKokpit(biezaca)
         if (!poprawna) { ustawBlad('Sprawdź nazwy, wartości pól i rozmieszczenie bloków.'); return }
         ustawZapisuje(true)
-        try { await zapisz(poprawna); zamknij() }
+        try {
+          if (historia.wczesniej.length) await zapisz(poprawna)
+          ustawWyborProfilu(profilUrzadzenia)
+          zamknij()
+        }
         catch { ustawBlad('Nie udało się zapisać konfiguracji. Zmiany nadal są w edytorze.'); ustawZapisuje(false) }
       }}>Zapisz</button>
       <button type="button" className="przycisk" disabled={zapisuje} onClick={anuluj}>Anuluj</button>
@@ -171,6 +178,17 @@ export function EdytorKokpitu({ konfiguracja, profil: profilPoczatkowy, widok: w
     <fieldset disabled={zapisuje} className="kokpit__ustawienia">
       <legend>Układ i preferencje</legend>
       <div className="kokpit__pola">
+        <label>Profil tego urządzenia<select value={profilUrzadzenia} onChange={(zdarzenie) => ustawProfilUrzadzenia(zdarzenie.target.value as typeof profilUrzadzenia)}>
+          <option value="auto">Automatycznie wg ekranu</option>{Object.entries(profileKokpitu).map(([id, nazwa]) => <option key={id} value={id}>{nazwa}</option>)}
+        </select></label>
+        <label>Profil edytowany<select value={profil} onChange={(zdarzenie) => { ustawProfil(zdarzenie.target.value as ProfilKokpitu); ustawIndeks(0) }}>
+          {Object.entries(profileKokpitu).map(([id, nazwa]) => <option key={id} value={id}>{nazwa}</option>)}
+        </select></label>
+        <label>Kopiuj układ z profilu<select value={zrodloProfilu} onChange={(zdarzenie) => ustawZrodloProfilu(zdarzenie.target.value as ProfilKokpitu)}>
+          {Object.entries(profileKokpitu).map(([id, nazwa]) => <option key={id} value={id}>{nazwa}</option>)}
+        </select></label>
+        <button type="button" className="przycisk" disabled={zrodloProfilu === profil} onClick={() => { zmienUklad(structuredClone(biezaca.profile[zrodloProfilu] ?? domyslnyUklad(zrodloProfilu))); ustawIndeks(0) }}>Kopiuj do edytowanego profilu</button>
+        <button type="button" className="przycisk" onClick={() => { zmienUklad(domyslnyUklad(profil)); ustawIndeks(0) }}>Przywróć domyślny profil</button>
         <label>Widok edytowany<select value={widok} onChange={(zdarzenie) => { ustawWidok(zdarzenie.target.value as typeof widok); ustawIndeks(0) }}>
           {Object.entries(widokiKokpitu).map(([id, nazwa]) => <option key={id} value={id}>{nazwa}</option>)}
         </select></label>
@@ -192,6 +210,20 @@ export function EdytorKokpitu({ konfiguracja, profil: profilPoczatkowy, widok: w
           {uklad.wysokosc === 'piksele' && <SuwakKokpitu etykieta="Wysokość (px)" min={160} max={1800} wartosc={uklad.wysokoscPx} zmien={(wysokoscPx) => zmienUklad({ ...uklad, wysokoscPx })} />}
         </>}
       </div>
+      <details><summary>Nawigacja i pełny ekran</summary><div className="kokpit__pola">
+        <label>Pasek plansz<select value={biezaca.pasek} onChange={(zdarzenie) => zmien({ ...biezaca, pasek: zdarzenie.target.value as typeof biezaca.pasek })}>
+          <option value="zawsze">Zawsze widoczny</option><option value="auto">Automatycznie ukrywany</option><option value="ukryty">Ukryty</option>
+        </select></label>
+        <label>Styl paska<select value={biezaca.stylPaska} onChange={(zdarzenie) => zmien({ ...biezaca, stylPaska: zdarzenie.target.value as typeof biezaca.stylPaska })}>
+          <option value="numery">Numery</option><option value="ikony">Ikony</option><option value="nazwy">Ikony i nazwy</option>
+        </select></label>
+        {biezaca.pasek === 'auto' && <label>Ukryj po<select value={biezaca.ukryjPo} onChange={(zdarzenie) => zmien({ ...biezaca, ukryjPo: Number(zdarzenie.target.value) as typeof biezaca.ukryjPo })}>
+          {[3, 5, 10, 15, 30].map((czas) => <option key={czas} value={czas}>{czas} s</option>)}
+        </select></label>}
+        <label><input type="checkbox" checked={biezaca.interwal > 0} onChange={(zdarzenie) => zmien({ ...biezaca, interwal: zdarzenie.target.checked ? 15 : 0 })} /> Automatyczna zmiana plansz</label>
+        {biezaca.interwal > 0 && <SuwakKokpitu etykieta="Interwał (s)" min={10} max={600} wartosc={biezaca.interwal} zmien={(interwal) => zmien({ ...biezaca, interwal })} />}
+        <label><input type="checkbox" checked={biezaca.immersja} onChange={(zdarzenie) => zmien({ ...biezaca, immersja: zdarzenie.target.checked })} /> Ukryj paski systemowe Androida w pełnym ekranie</label>
+      </div></details>
       <div className="kokpit__akcje">
         <button type="button" className="przycisk" onClick={() => dodajPlansze()} disabled={zestaw.length >= 20}>Dodaj pustą</button>
         <button type="button" className="przycisk" onClick={() => dodajPlansze(plansza)} disabled={zestaw.length >= 20}>Duplikuj układ</button>

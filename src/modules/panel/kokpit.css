@@ -12,6 +12,7 @@
 
 .kokpit--plansze { height: 100dvh; min-height: 0; }
 .kokpit:fullscreen { overflow: auto; }
+.kokpit[data-pelny-ekran="true"] { position: fixed; inset: 0; z-index: 200; overflow: auto; }
 .kokpit__gora {
   position: sticky;
   inset-block-start: 0;
@@ -66,6 +67,7 @@
 .kokpit__pasek { display: flex; justify-content: safe center; gap: 6px; overflow: auto; padding: 3px; flex: none; }
 .kokpit__pasek .przycisk { min-height: 44px; flex-shrink: 0; }
 .kokpit__pasek [aria-current] { border-color: var(--akcent); color: var(--akcent); background: var(--panel-2); }
+.kokpit__pasek[data-ukryty="true"]:not(:focus-within) { opacity: 0; pointer-events: none; }
 .kokpit__pusta { grid-column: 1 / -1; color: var(--tekst-2); text-align: center; }
 .kokpit__edytor { display: grid; gap: 12px; width: min(100%, 1400px); margin: 0 auto; }
 .kokpit__edycja-pasek { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
