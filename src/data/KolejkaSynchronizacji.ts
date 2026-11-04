@@ -39,6 +39,10 @@ export function zachowajLokalneSamopoczucie(tabela: NazwaTabeli, rekord: EncjaBa
     if (sekcje.length) (kopia as Dokument).sekcjePrywatnosci = sekcje
   }
   if (tabela === 'ustawienia' && lokalny && 'samopoczucie' in lokalny) Object.assign(kopia, { samopoczucie: structuredClone(lokalny.samopoczucie) })
+  // Starszy klient może zapisać rekord ustawień bez pola kokpitu.
+  if (tabela === 'ustawienia' && lokalny && 'kokpit' in lokalny && !('kokpit' in kopia)) {
+    Object.assign(kopia, { kokpit: structuredClone(lokalny.kokpit) })
+  }
   if (tabela === 'przypomnienia') {
     const przypomnienie = kopia as Przypomnienie
     const poprzednie = lokalny as Przypomnienie | undefined

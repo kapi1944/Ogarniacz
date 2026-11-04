@@ -306,7 +306,7 @@ export function KontaIUzytkownicy() {
   return <section className="karta"><h2>Konta i użytkownicy</h2><ZawartoscKonta konto={konto} odswiez={odswiez} wyczysc={wyczysc} /></section>
 }
 
-export function DostawcaKonta({ children }: { children: ReactNode }) {
+export function DostawcaKonta({ children, publicznyKokpit = false }: { children: ReactNode; publicznyKokpit?: boolean }) {
   const wymagaKonta = Boolean(pobierzKonfiguracjeSynchronizacji().adresApi)
   const [konto, ustawKonto] = useState<KontoUzytkownika | undefined>(() => wymagaKonta ? pobierzKontoOffline() : undefined)
   const [ladowanie, ustawLadowanie] = useState(wymagaKonta)
@@ -335,6 +335,9 @@ export function DostawcaKonta({ children }: { children: ReactNode }) {
   }, [wymagaKonta])
 
   if (!wymagaKonta) return children
+  if (publicznyKokpit && (!konto || konto.wymaganaZmianaHasla)) {
+    return <KontekstKonta.Provider value={{ offline: true }}>{children}</KontekstKonta.Provider>
+  }
   if (ladowanie && !konto) return <main className="ekran-konta"><div role="status">Sprawdzam sesję…</div></main>
   if (!konto && !offline) return <EkranLogowania bootstrapDostepny={bootstrapDostepny} poZalogowaniu={(sesja) => { ustawKonto(sesja); ustawOffline(false); ustawBootstrapDostepny(false) }} pracujLokalnie={() => ustawOffline(true)} />
   if (!konto) return <KontekstKonta.Provider value={{ offline: true }}>
@@ -345,8 +348,8 @@ export function DostawcaKonta({ children }: { children: ReactNode }) {
   return <KontekstKonta.Provider value={{ konto, offline, odswiez, wyczysc: () => { ustawPanel(false); ustawKonto(undefined) } }}>
     {bladZmiany && <Komunikat typ="blad">{bladZmiany}</Komunikat>}
     {children}
-    <button type="button" className="przycisk-konta" onClick={() => ustawPanel(true)} title="Konto i współdzielenie"><ShieldCheck aria-hidden="true" /><span>{offline ? 'Konto offline' : konto.rola === 'wlasciciel' ? 'Właściciel' : 'Edytor'}</span></button>
-    {panel && <PanelKonta konto={konto} zamknij={() => ustawPanel(false)} odswiez={odswiez} wyczysc={() => { ustawPanel(false); ustawKonto(undefined) }} />}
+    {!publicznyKokpit && <button type="button" className="przycisk-konta" onClick={() => ustawPanel(true)} title="Konto i współdzielenie"><ShieldCheck aria-hidden="true" /><span>{offline ? 'Konto offline' : konto.rola === 'wlasciciel' ? 'Właściciel' : 'Edytor'}</span></button>}
+    {!publicznyKokpit && panel && <PanelKonta konto={konto} zamknij={() => ustawPanel(false)} odswiez={odswiez} wyczysc={() => { ustawPanel(false); ustawKonto(undefined) }} />}
   </KontekstKonta.Provider>
 }
 

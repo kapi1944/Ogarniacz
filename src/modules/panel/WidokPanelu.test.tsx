@@ -1,5 +1,5 @@
 import { cleanup as wyczysc, fireEvent as wywolaj, render as renderuj, screen as ekran, act as wykonaj } from '@testing-library/react'
-import { MemoryRouter as RouterPamieci, Route as Trasa, Routes as Trasy } from 'react-router-dom'
+import { createMemoryRouter, MemoryRouter as RouterPamieci, RouterProvider } from 'react-router-dom'
 import { afterEach as poKazdym, beforeEach as przedKazdym, describe as opisz, expect as oczekuj, it as sprawdz, vi } from 'vitest'
 import { WidokPanelu } from './WidokPanelu'
 import { useAplikacja } from '../../app/KontekstAplikacji'
@@ -7,6 +7,9 @@ import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { pobierzKonfiguracjeSynchronizacji } from '../../services/KonfiguracjaSynchronizacji'
 import { UkladAplikacji } from '../../app/UkladAplikacji'
 import { DOMYSLNE_USTAWIENIA } from '../../domain/ustawienia'
+import { domyslnyKokpit } from '../../domain/kokpit'
+import * as kontekstKonta from '../../app/DostawcaKonta'
+import * as serwisKonta from '../../services/KontaService'
 
 vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: vi.fn() }))
 vi.mock('../../hooks/useRepozytorium', () => ({ useRepozytorium: vi.fn() }))
@@ -28,16 +31,15 @@ przedKazdym(() => {
 poKazdym(() => { wyczysc(); vi.restoreAllMocks(); vi.useRealTimers() })
 
 function pokazPanel() {
-  return renderuj(<RouterPamieci initialEntries={['/panel']}><Trasy>
-    <Trasa path="/panel" element={<WidokPanelu />} />
-    <Trasa path="/" element={<p>Pulpit docelowy</p>} />
-    <Trasa path="/echo" element={<p>Rozmowa Echo</p>} />
-    <Trasa path="/zadania" element={<p>Lista zadań</p>} />
-    <Trasa path="/planer" element={<p>Planer docelowy</p>} />
-  </Trasy></RouterPamieci>)
+  const router = createMemoryRouter([
+    { path: '/panel', element: <WidokPanelu /> }, { path: '/', element: <p>Pulpit docelowy</p> },
+    { path: '/echo', element: <p>Rozmowa Echo</p> }, { path: '/zadania', element: <p>Lista zadań</p> },
+    { path: '/planer', element: <p>Planer docelowy</p> },
+  ], { initialEntries: ['/', '/panel'] })
+  return { ...renderuj(<RouterProvider router={router} />), router }
 }
 
-opisz('panel domowy', () => {
+opisz('ekran kokpitu', () => {
   sprawdz('nie odczytuje modułów bez uprawnień ani przed ustaleniem dostępu', () => {
     vi.mocked(useAplikacja).mockReturnValue({ ...kontekstTestowy, moze: () => false })
     pokazPanel()
@@ -88,6 +90,7 @@ opisz('panel domowy', () => {
       { tytul: 'Praca prywatna', typ: 'praca', status: 'zaakceptowany', poczatek: data, koniec: data },
     ] : [], gotowe: true })) as typeof useRepozytorium)
     const { container: kontener } = pokazPanel()
+    wywolaj.click(ekran.getByRole('button', { name: 'Następna plansza' }))
     oczekuj(ekran.getByText(/zadań na dziś/)).toHaveTextContent('1 zadań na dziś')
     oczekuj(ekran.getByText(/bloków pracy/)).toHaveTextContent('1 bloków pracy')
     oczekuj(kontener).not.toHaveTextContent(/Prywatny tytuł|Terapia|Sekret wizyty|Praca prywatna/)
@@ -95,11 +98,108 @@ opisz('panel domowy', () => {
   })
 
   sprawdz.each([
-    ['Otwórz Echo', 'Rozmowa Echo'], ['Otwórz zadania', 'Lista zadań'], ['Otwórz planer', 'Planer docelowy'], ['Wyjdź z panelu', 'Pulpit docelowy'],
+    ['Otwórz Echo', 'Rozmowa Echo'], ['Otwórz zadania', 'Lista zadań'], ['Otwórz planer', 'Planer docelowy'], ['Wyjdź z kokpitu', 'Pulpit docelowy'],
   ])('przechodzi przez istniejący router: %s', (link, cel) => {
     pokazPanel()
+    if (link !== 'Wyjdź z kokpitu') wywolaj.click(ekran.getByRole('button', { name: 'Następna plansza' }))
     wywolaj.click(ekran.getByRole('link', { name: link }))
     oczekuj(ekran.getByText(cel)).toBeInTheDocument()
+  })
+
+  sprawdz('domyślnie otwiera plansze i przełącza na niezależny widok ciągły', () => {
+    pokazPanel()
+    oczekuj(ekran.getByRole('navigation', { name: 'Plansze kokpitu' })).toBeInTheDocument()
+    oczekuj(ekran.queryByRole('region', { name: 'Organizacja' })).not.toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Widok ciągły' }))
+    oczekuj(ekran.getByRole('region', { name: 'Organizacja' })).toBeInTheDocument()
+    oczekuj(ekran.queryByRole('navigation', { name: 'Plansze kokpitu' })).not.toBeInTheDocument()
+  })
+
+  sprawdz('historia edycji jest robocza aż do zapisu', async () => {
+    const zapiszUstawienia = vi.fn(async () => undefined)
+    vi.mocked(useAplikacja).mockReturnValue({ ...kontekstTestowy, zapiszUstawienia })
+    pokazPanel()
+    wywolaj.click(ekran.getByRole('button', { name: 'Edytuj kokpit' }))
+    wywolaj.click(ekran.getByRole('button', { name: 'Dodaj pustą' }))
+    wywolaj.click(ekran.getByRole('button', { name: 'Dodaj blok' }))
+    oczekuj(ekran.getByRole('button', { name: 'Usuń blok' })).toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Cofnij' }))
+    oczekuj(ekran.queryByRole('button', { name: 'Usuń blok' })).not.toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Ponów' }))
+    oczekuj(ekran.getByRole('button', { name: 'Usuń blok' })).toBeInTheDocument()
+    oczekuj(zapiszUstawienia).not.toHaveBeenCalled()
+    wywolaj.click(ekran.getByRole('button', { name: 'Zapisz' }))
+    oczekuj(zapiszUstawienia).toHaveBeenCalledWith({ kokpit: oczekuj.objectContaining({ wersja: 1 }) })
+    oczekuj(await ekran.findByRole('button', { name: 'Edytuj kokpit' })).toBeInTheDocument()
+  })
+
+  sprawdz('ostrzega przed utratą zmian przy nawigacji Wstecz', async () => {
+    const { router } = pokazPanel()
+    wywolaj.click(ekran.getByRole('button', { name: 'Edytuj kokpit' }))
+    wywolaj.click(ekran.getByRole('button', { name: 'Dodaj pustą' }))
+    await wykonaj(() => router.navigate(-1))
+    oczekuj(ekran.getByRole('dialog', { name: 'Opuścić edytor?' })).toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Potwierdz' }))
+    oczekuj(await ekran.findByText('Pulpit docelowy')).toBeInTheDocument()
+  })
+
+  sprawdz('przełącza plansze według interwału i wstrzymuje go podczas edycji', () => {
+    vi.useFakeTimers()
+    vi.mocked(useAplikacja).mockReturnValue({ ...kontekstTestowy, zapisaneUstawienia: { ...DOMYSLNE_USTAWIENIA, kokpit: { ...domyslnyKokpit, interwal: 10 } } })
+    pokazPanel()
+    wykonaj(() => vi.advanceTimersByTime(10_000))
+    oczekuj(ekran.getByRole('region', { name: 'Organizacja' })).toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Edytuj kokpit' }))
+    wykonaj(() => vi.advanceTimersByTime(20_000))
+    wywolaj.click(ekran.getByRole('button', { name: 'Anuluj' }))
+    oczekuj(ekran.getByRole('region', { name: 'Organizacja' })).toBeInTheDocument()
+  })
+
+  sprawdz('po bezczynności pokazuje Ambient i wraca do tego samego układu', () => {
+    vi.useFakeTimers()
+    vi.mocked(useAplikacja).mockReturnValue({ ...kontekstTestowy, zapisaneUstawienia: { ...DOMYSLNE_USTAWIENIA, kokpit: {
+      ...domyslnyKokpit, ambient: { ...domyslnyKokpit.ambient, wlaczony: true, sekundy: 10 },
+    } } })
+    pokazPanel()
+    wywolaj.click(ekran.getByRole('button', { name: 'Następna plansza' }))
+    wykonaj(() => vi.advanceTimersByTime(10_000))
+    oczekuj(ekran.getByRole('region', { name: 'Informacje Ambient' })).toBeInTheDocument()
+    oczekuj(ekran.queryByRole('region', { name: 'Organizacja' })).not.toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Zakończ Ambient' }))
+    oczekuj(ekran.getByRole('region', { name: 'Organizacja' })).toBeInTheDocument()
+  })
+
+  sprawdz('zmienia planszę po poziomym geście i ignoruje gest pionowy', () => {
+    pokazPanel()
+    const gest = { pointerType: 'touch', pointerId: 1, isPrimary: true }
+    const plansza = ekran.getByRole('region', { name: 'Przegląd' })
+    wywolaj.pointerDown(plansza, { ...gest, clientX: 200, clientY: 100 })
+    wywolaj.pointerUp(plansza, { ...gest, clientX: 200, clientY: 180 })
+    oczekuj(plansza).toBeInTheDocument()
+    wywolaj.pointerDown(plansza, { ...gest, clientX: 200, clientY: 100 })
+    wywolaj.pointerUp(plansza, { ...gest, clientX: 100, clientY: 102 })
+    oczekuj(ekran.getByRole('region', { name: 'Organizacja' })).toBeInTheDocument()
+  })
+
+  sprawdz('usuwa prywatny tytuł z DOM i blokuje akcje po wygaśnięciu sesji', async () => {
+    const konto = { zalogowany: true, uzytkownikId: 'test', wlascicielId: 'test', email: 'test@invalid', rola: 'wlasciciel', granty: [], edytorzy: [] } as const
+    const sesja = { ...konto, granty: [], edytorzy: [] }
+    vi.spyOn(kontekstKonta, 'useKonto').mockReturnValue({ konto: sesja, offline: false })
+    vi.spyOn(serwisKonta, 'pobierzSesjeKonta').mockResolvedValue(sesja)
+    vi.spyOn(serwisKonta, 'czyKontoZgodneZDanymiLokalnymi').mockReturnValue(true)
+    vi.mocked(pobierzKonfiguracjeSynchronizacji).mockReturnValue({ adresApi: 'https://test.invalid' })
+    vi.mocked(useRepozytorium).mockImplementation(((nazwa: string) => ({
+      dane: nazwa === 'zadania' ? [{ id: 'zadanie', tytul: 'Prywatny tytuł', status: 'otwarte', termin: new Date().toLocaleDateString('sv-SE'), powiazania: [] }] : [],
+    })) as typeof useRepozytorium)
+    pokazPanel()
+    wywolaj.click(ekran.getByRole('button', { name: 'Następna plansza' }))
+    wywolaj.click(ekran.getByLabelText('Tryb publiczny'))
+    wywolaj.click(await ekran.findByRole('button', { name: 'Użyj prywatnego' }))
+    oczekuj(ekran.getByText('Prywatny tytuł')).toBeInTheDocument()
+    oczekuj(ekran.getByRole('button', { name: 'Wykonaj zadanie: Prywatny tytuł' })).toBeInTheDocument()
+    wykonaj(() => window.dispatchEvent(new Event('ogarniacz:sesja-wygasla')))
+    oczekuj(ekran.queryByText('Prywatny tytuł')).not.toBeInTheDocument()
+    oczekuj(ekran.queryByRole('button', { name: 'Wykonaj zadanie: Prywatny tytuł' })).not.toBeInTheDocument()
   })
 
   sprawdz('aktualizuje zegar i datę po północy', () => {
@@ -116,7 +216,7 @@ opisz('panel domowy', () => {
     pokazPanel()
     wywolaj.click(ekran.getByRole('button', { name: 'Pełny ekran' }))
     oczekuj(await ekran.findByText(/Ta przeglądarka nie obsługuje/)).toBeInTheDocument()
-    oczekuj(ekran.getByRole('link', { name: 'Wyjdź z panelu' })).toBeInTheDocument()
+    oczekuj(ekran.getByRole('link', { name: 'Wyjdź z kokpitu' })).toBeInTheDocument()
   })
 
   sprawdz('korzysta z Fullscreen API i aktualizuje przycisk po Escape', async () => {
@@ -125,8 +225,9 @@ opisz('panel domowy', () => {
     const { container: kontener } = pokazPanel()
     wywolaj.click(ekran.getByRole('button', { name: 'Pełny ekran' }))
     oczekuj(pelnyEkran).toHaveBeenCalledOnce()
-    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: kontener.querySelector('.panel-domowy') })
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: kontener.querySelector('.kokpit') })
     wywolaj(document, new Event('fullscreenchange'))
+    oczekuj(ekran.queryByRole('heading', { name: 'Ekran kokpitu' })).not.toBeInTheDocument()
     oczekuj(ekran.getByRole('button', { name: 'Wyłącz pełny ekran' })).toBeInTheDocument()
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
     wywolaj(document, new Event('fullscreenchange'))

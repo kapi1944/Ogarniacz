@@ -227,6 +227,8 @@ export function normalizujUstawienia(wartosc: unknown): Ustawienia {
     updatedAt: tekst(zrodlo.updatedAt, domyslne.updatedAt),
     ...(opcjonalnyTekst(zrodlo.usunietoAt) ? { usunietoAt: opcjonalnyTekst(zrodlo.usunietoAt) } : {}),
     wersja: WERSJA_USTAWIEN,
+    // Zachowaj także nieznaną wersję konfiguracji podczas zapisu innych preferencji.
+    ...(zrodlo.kokpit === undefined ? {} : { kokpit: zrodlo.kokpit }),
     ...(zrodlo.finanseFz !== undefined ? { finanseFz: schematUstawienFz.parse(zrodlo.finanseFz) } : {}),
     ...(samopoczucie ? { samopoczucie } : {}),
     wyglad: {

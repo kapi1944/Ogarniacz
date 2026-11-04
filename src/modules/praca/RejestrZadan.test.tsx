@@ -24,7 +24,7 @@ describe.sequential('Rejestr Zadania', () => {
     await waitFor(() => expect(screen.getByText('Stare zadanie')).toBeInTheDocument())
     fireEvent.click(screen.getByTitle('Edytuj'))
     fireEvent.change(screen.getByLabelText('Tytuł'), { target: { value: 'Zmienione zadanie' } })
-    fireEvent.change(screen.getByLabelText('Klient'), { target: { value: 'Ogarniacz' } })
+    fireEvent.change(await screen.findByLabelText('Klient'), { target: { value: 'Ogarniacz' } })
     fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
     await waitFor(async () => { const zapisane = await pobierzRepozytorium('zadania').pobierz(zadanie.id); expect(zapisane?.tytul).toBe('Zmienione zadanie'); expect(Object.values(zapisane?.polaWlasne ?? {}) as unknown[]).toContain('Ogarniacz') })
   })

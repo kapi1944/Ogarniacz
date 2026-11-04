@@ -1,0 +1,146 @@
+.kokpit {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1.3vmin, 16px);
+  min-height: 100dvh;
+  padding: max(8px, var(--bezpieczny-obszar-gora)) max(8px, var(--bezpieczny-obszar-prawo))
+    max(8px, var(--bezpieczny-obszar-dol)) max(8px, var(--bezpieczny-obszar-lewo));
+  background: var(--tlo);
+  color: var(--tekst);
+}
+
+.kokpit--plansze { height: 100dvh; min-height: 0; }
+.kokpit:fullscreen { overflow: auto; }
+.kokpit[data-pelny-ekran="true"] { position: fixed; inset: 0; z-index: 200; overflow: auto; }
+.kokpit[data-ambient="true"] { height: 100dvh; background: #0b1210; color: #f1f6f3; }
+.kokpit__ambient { flex: 1; display: grid; place-items: center; min-height: 0; }
+.kokpit__ambient .kokpit__siatka { width: min(80vw, 880px); height: min(68dvh, 650px); align-self: center; }
+.kokpit__ambient .kokpit__blok { background: transparent; text-align: center; border: 0; }
+.kokpit__ambient[data-przesuwaj="true"] .kokpit__siatka { animation: kokpit-odswiez-piksele 240s steps(1) infinite; }
+@keyframes kokpit-odswiez-piksele {
+  25% { transform: translate(6px, 4px); }
+  50% { transform: translate(-5px, 6px); }
+  75% { transform: translate(4px, -5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kokpit__ambient[data-przesuwaj="true"] .kokpit__siatka { animation: none; }
+}
+.kokpit__gora {
+  position: sticky;
+  inset-block-start: var(--bezpieczny-obszar-gora);
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--tlo);
+}
+.kokpit__gora .naglowek-widoku { min-height: 0; padding: 0; margin: 0; border: 0; }
+.kokpit__sterowanie { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-inline-start: auto; gap: 4px; }
+.kokpit__prywatnosc summary { min-height: 44px; cursor: pointer; }
+.kokpit__prywatnosc-menu { position: absolute; inset-inline-end: 0; min-width: min(255px, 80vw); display: grid; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); }
+.kokpit__prywatnosc-menu label { display: grid; gap: 5px; }
+.kokpit .przycisk-ikona { min-width: 44px; min-height: 44px; }
+.kokpit :is(button, a, input, select):focus-visible { outline: 2px solid var(--akcent); outline-offset: 2px; }
+.kokpit__plansza { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; align-items: center; min-height: 0; }
+.kokpit__siatka {
+  display: grid;
+  grid-template-columns: repeat(var(--kolumny), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--wiersze), minmax(0, 1fr));
+  gap: min(var(--odstep), 2vmin);
+  align-self: stretch;
+  min-height: 0;
+  min-width: 0;
+  touch-action: pan-y;
+}
+.kokpit__siatka--ciagla { grid-template-rows: repeat(var(--wiersze), minmax(90px, auto)); touch-action: auto; }
+.kokpit__ciagly { display: grid; gap: 16px; }
+.kokpit__blok {
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  justify-content: safe center;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  background: var(--premium-karta, var(--panel));
+  border: 1px solid var(--obramowanie);
+  border-radius: var(--promien-karty);
+  font-size: var(--kokpit-opis, .875rem);
+}
+.kokpit__tresc-bloku { padding: min(var(--kokpit-odstep, clamp(5px, 1.4vmin, 20px)), 9cqw); }
+.kokpit__kompakt { display: none; }
+@container (max-width: 110px) or (max-height: 78px) {
+  .kokpit__blok[data-kompakt="true"] > .kokpit__tresc-bloku { display: none; }
+  .kokpit__blok[data-kompakt="true"] > .kokpit__kompakt {
+    display: grid; place-items: center; flex: 1; width: 100%; min-height: 0; padding: 0;
+    border: 0; background: transparent; color: inherit; cursor: pointer; font-size: clamp(.85rem, 45cqh, 1.8rem);
+  }
+}
+.kokpit__siatka--ciagla .kokpit__blok { container-type: inline-size; min-height: 90px; }
+.kokpit__blok h2 { margin: 0 0 6px; font-size: var(--kokpit-tytul, 1rem); }
+.kokpit__blok h2 span { color: var(--premium-zloto, var(--akcent)); }
+.kokpit__blok p { margin: 2px 0; }
+.kokpit__lista { display: grid; gap: 4px; list-style: none; padding: 0; margin: 4px 0; }
+.kokpit__lista li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.kokpit__wartosc { font-size: var(--kokpit-wartosc, 1em); }
+.kokpit__blok .przycisk { width: fit-content; min-height: 44px; white-space: normal; }
+.kokpit__blok--zegar { text-align: center; background: var(--premium-powierzchnia, var(--panel-2)); }
+.kokpit__godzina { font-size: var(--kokpit-wartosc, clamp(2rem, min(25cqw, 48cqh), 8rem)); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.kokpit__siatka--ciagla .kokpit__godzina { font-size: var(--kokpit-wartosc, clamp(2rem, 22cqw, 8rem)); }
+.kokpit__data { font-size: var(--kokpit-wartosc, clamp(1rem, 9cqw, 2.2rem)); }
+.kokpit__pasek { display: flex; justify-content: safe center; gap: 6px; overflow: auto; padding: 3px; flex: none; }
+.kokpit__pasek .przycisk {
+  min-height: 44px; min-width: 44px; max-width: min(75vw, 26rem); flex-shrink: 0;
+  white-space: normal; overflow-wrap: anywhere; text-align: center;
+}
+.kokpit__pasek [aria-current] { border-color: var(--akcent); color: var(--akcent); background: var(--panel-2); }
+.kokpit__pasek[data-ukryty="true"]:not(:focus-within) { opacity: 0; pointer-events: none; }
+.kokpit__pusta { grid-column: 1 / -1; color: var(--tekst-2); text-align: center; }
+.kokpit__edytor { display: grid; gap: 12px; width: min(100%, 1400px); margin: 0 auto; }
+.kokpit__edycja-pasek { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kokpit__edycja-pasek h2 { margin: 0 auto 0 0; }
+.kokpit__ustawienia { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); }
+.kokpit__pola { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr)); gap: 8px; align-items: end; }
+.kokpit__ustawienia label { display: grid; gap: 4px; min-width: 0; }
+.kokpit__ustawienia label:has(input[type="checkbox"]) { display: flex; align-items: center; }
+.kokpit__akcje { display: flex; align-items: end; flex-wrap: wrap; gap: 6px; }
+.kokpit__ustawienia .przycisk { min-height: 44px; white-space: normal; }
+.kokpit__siatka--edycja { position: relative; min-height: max(320px, calc(var(--wiersze) * 88px)); padding: 4px; border: 1px dashed var(--akcent); }
+.kokpit__siatka--edycja .kokpit__blok { border-style: dashed; border-color: var(--akcent); }
+.kokpit__uchwyt { touch-action: none; cursor: grab; }
+.kokpit__podglad { z-index: 1; pointer-events: none; border: 2px dashed var(--akcent); background: color-mix(in srgb, var(--akcent) 24%, transparent); }
+.kokpit__podglad[data-kolizja="true"] { border-color: #dc4747; background: #dc474733; }
+.kokpit__ustawienia summary { cursor: pointer; padding: 10px 0; }
+.kokpit__ustawienia :is(input[type="checkbox"], input[type="range"]) { width: auto; }
+.kokpit__kolor { display: grid; gap: 6px; }
+.kokpit__ustawienia :is(input[type="text"], input:not([type]), select) {
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 9px;
+  border: 1px solid var(--obramowanie-mocne);
+  border-radius: var(--promien-pola);
+  background: var(--panel);
+  color: var(--tekst);
+}
+.kokpit__ustawienia input[type="range"] { accent-color: var(--akcent); }
+@container (max-height: 132px) {
+  .kokpit__szczegoly { display: none; }
+  .kokpit__blok h2 { margin-block-end: 3px; }
+}
+@media (max-height: 550px) {
+  .kokpit__gora .naglowek-widoku p { display: none; }
+  .kokpit__gora .naglowek-widoku h1 { font-size: 1.25rem; }
+}
+@media (max-width: 560px) {
+  .kokpit__gora .naglowek-widoku p { display: none; }
+  .kokpit__gora .naglowek-widoku h1 { font-size: 1.25rem; }
+  .kokpit__gora:has(.naglowek-widoku) { flex-wrap: wrap; }
+  .kokpit__gora .naglowek-widoku { flex-basis: 100%; }
+  .kokpit__plansza { position: relative; grid-template-columns: minmax(0, 1fr); padding-block-end: 46px; }
+  .kokpit__plansza > button { position: absolute; inset-block-end: 0; }
+  .kokpit__plansza > button:last-child { inset-inline-end: 0; }
+}
