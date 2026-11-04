@@ -112,7 +112,7 @@ export function WidokPanelu() {
       : widok === 'plansze' ? <>
       <div className="kokpit__plansza">
         <button className="przycisk-ikona" type="button" aria-label="Poprzednia plansza" onClick={() => zmienPlansze(-1)}><ChevronLeft /></button>
-        <RendererUkladu plansza={plansza} data={data} tryb={prywatnosc.tryb} sesja={prywatnosc.sesja} etykieta={plansza.nazwa} zdarzenia={nawigacja.zdarzenia} />
+        <RendererUkladu plansza={plansza} data={data} tryb={prywatnosc.tryb} sesja={prywatnosc.sesja} etykieta={plansza.nazwa} zdarzenia={nawigacja.zdarzenia} zmienPlansze={zmienPlansze} />
         <button className="przycisk-ikona" type="button" aria-label="Następna plansza" onClick={() => zmienPlansze(1)}><ChevronRight /></button>
       </div>
       {konfiguracja.pasek !== 'ukryty' && <nav className="kokpit__pasek" data-ukryty={nawigacja.ukryty} aria-label="Plansze kokpitu">

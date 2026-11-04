@@ -3,7 +3,7 @@ import { useAplikacja } from '../../app/KontekstAplikacji'
 import { definicjaBloku, type BlokKokpitu, type PlanszaKokpitu, type TrybKokpitu } from '../../domain/kokpit'
 import { TrescBloku } from './BlokiKokpitu'
 import type { KontoUzytkownika } from '../../services/KontaService'
-import { czyPasujeSekcja } from '../../services/UprawnieniaService'
+import { czySesjaPozwala } from '../../services/PrywatnoscKokpitu'
 
 export function stylBloku(blok: BlokKokpitu): CSSProperties {
   const { wyglad, x, y, szerokosc, wysokosc } = blok
@@ -20,9 +20,10 @@ export function stylBloku(blok: BlokKokpitu): CSSProperties {
   } as CSSProperties
 }
 
-export function RendererUkladu({ plansza, data, tryb, sesja, etykieta, ciagly, wysokosc, narzedzia, podglad, zdarzenia }: {
+export function RendererUkladu({ plansza, data, tryb, sesja, etykieta, ciagly, wysokosc, narzedzia, podglad, zdarzenia, zmienPlansze }: {
   plansza: PlanszaKokpitu; data: string; tryb: TrybKokpitu; etykieta: string; ciagly?: boolean; wysokosc?: string
   sesja?: KontoUzytkownika
+  zmienPlansze?: (kierunek: number) => void
   narzedzia?: (blok: BlokKokpitu) => ReactNode
   podglad?: { blok: BlokKokpitu; poprawny: boolean }
   zdarzenia?: { onPointerDown?: PointerEventHandler; onPointerUp?: PointerEventHandler; onPointerCancel?: PointerEventHandler }
@@ -33,14 +34,14 @@ export function RendererUkladu({ plansza, data, tryb, sesja, etykieta, ciagly, w
     {...zdarzenia}>
     {plansza.bloki.map((blok) => {
       const definicja = definicjaBloku(blok.typ)
-      const modul = definicja && 'modul' in definicja ? definicja.modul : undefined
-      const dostepKonta = !modul || !sesja || sesja.rola === 'wlasciciel'
-        || sesja.granty.some((grant) => grant.modul === modul && grant.status === 'aktywne' && grant.odczyt && czyPasujeSekcja(modul, grant.sekcja, undefined))
+      const modul = definicja && 'modul' in definicja ? definicja.modul
+        : blok.typ === 'skrot' || (blok.typ === 'akcja' && (!blok.akcja || blok.akcja === 'modul')) ? blok.skrot : undefined
+      const dostepKonta = !modul || !sesja || czySesjaPozwala(sesja, modul)
       const dozwolony = definicja && dostepKonta && (!modul || (gotowyDostep && moze(modul)))
       if (!narzedzia && blok.widocznosc !== 'zawsze' && blok.widocznosc !== tryb) return null
       return <article key={blok.id} className={`kokpit__blok ${blok.typ === 'zegar' ? 'kokpit__blok--zegar' : ''}`} style={stylBloku(blok)}>
         {(narzedzia || blok.wyglad.pokazTytul !== false) && <h2><span aria-hidden="true">{definicja?.ikona ?? '?'}</span> {definicja?.nazwa ?? 'Nieznany blok'}</h2>}
-        {narzedzia ? narzedzia(blok) : dozwolony ? <TrescBloku blok={blok} data={data} tryb={tryb} /> : <p>Blok niedostępny.</p>}
+        {narzedzia ? narzedzia(blok) : dozwolony ? <TrescBloku blok={blok} data={data} tryb={tryb} sesja={sesja} zmienPlansze={zmienPlansze} /> : <p>Blok niedostępny.</p>}
       </article>
     })}
     {podglad && <div className="kokpit__podglad" data-kolizja={!podglad.poprawny} style={stylBloku({ ...podglad.blok, wyglad: {} })} aria-hidden="true" />}

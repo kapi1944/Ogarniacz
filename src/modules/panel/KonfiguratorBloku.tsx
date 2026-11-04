@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { definicjaBloku, type BlokKokpitu } from '../../domain/kokpit'
+import { definicjaBloku, skrotyKokpitu, type BlokKokpitu } from '../../domain/kokpit'
 import { obliczKontrast, wybierzCzytelnyTekst } from '../../domain/personalizacja'
 
 const presety = [
@@ -62,6 +62,16 @@ export function KonfiguratorBloku({ blok, zmien, usun, duplikuj }: {
       <label>Widoczność bloku<select value={blok.widocznosc} onChange={(zdarzenie) => zmien({ ...blok, widocznosc: zdarzenie.target.value as BlokKokpitu['widocznosc'] })}>
         <option value="zawsze">Zawsze</option><option value="publiczny">Tylko publicznie</option><option value="prywatny">Tylko prywatnie</option><option value="ukryty">Ukryty</option>
       </select></label>
+      {blok.typ === 'zadania' && <label>Filtr zadań<select value={blok.filtr} onChange={(zdarzenie) => zmien({ ...blok, filtr: zdarzenie.target.value as BlokKokpitu['filtr'] })}>
+        <option value="dzisiaj">Na dziś</option><option value="zalegle">Zaległe</option><option value="priorytet">Wysoki priorytet</option>
+      </select></label>}
+      {blok.typ === 'finanse' && <label><input type="checkbox" checked={Boolean(blok.podgladPubliczny)} onChange={(zdarzenie) => zmien({ ...blok, podgladPubliczny: zdarzenie.target.checked })} /> Publiczny wskaźnik bez kwot</label>}
+      {blok.typ === 'akcja' && <label>Działanie<select value={blok.akcja ?? 'modul'} onChange={(zdarzenie) => zmien({ ...blok, akcja: zdarzenie.target.value as BlokKokpitu['akcja'] })}>
+        <option value="modul">Otwórz moduł</option><option value="nastepna">Następna plansza</option><option value="poprzednia">Poprzednia plansza</option>
+      </select></label>}
+      {(blok.typ === 'skrot' || (blok.typ === 'akcja' && (!blok.akcja || blok.akcja === 'modul'))) && <label>Moduł<select value={blok.skrot} onChange={(zdarzenie) => zmien({ ...blok, skrot: zdarzenie.target.value as BlokKokpitu['skrot'] })}>
+        {Object.entries(skrotyKokpitu).map(([id, nazwa]) => <option value={id} key={id}>{nazwa}</option>)}
+      </select></label>}
       <label>Paleta<select value="" onChange={(zdarzenie) => {
         const kolor = zdarzenie.target.value
         if (kolor) ustawWyglad({ tlo: kolor, tekst: wybierzCzytelnyTekst(kolor) })

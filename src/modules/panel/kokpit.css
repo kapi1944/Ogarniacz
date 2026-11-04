@@ -63,6 +63,9 @@
 .kokpit__blok h2 { margin: 0 0 6px; font-size: var(--kokpit-tytul, 1rem); }
 .kokpit__blok h2 span { color: var(--premium-zloto, var(--akcent)); }
 .kokpit__blok p { margin: 2px 0; }
+.kokpit__lista { display: grid; gap: 4px; list-style: none; padding: 0; margin: 4px 0; }
+.kokpit__lista li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.kokpit__wartosc { font-size: var(--kokpit-wartosc, 1em); }
 .kokpit__blok .przycisk { width: fit-content; min-height: 44px; white-space: normal; }
 .kokpit__blok--zegar { text-align: center; background: var(--premium-powierzchnia, var(--panel-2)); }
 .kokpit__godzina { font-size: var(--kokpit-wartosc, clamp(2rem, min(25cqw, 48cqh), 8rem)); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }

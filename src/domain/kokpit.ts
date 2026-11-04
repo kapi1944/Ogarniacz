@@ -18,6 +18,8 @@ const schematBloku = z.object({
   widocznosc: z.enum(['zawsze', 'publiczny', 'prywatny', 'ukryty']).default('zawsze'),
   filtr: z.enum(['dzisiaj', 'zalegle', 'priorytet']).default('dzisiaj'),
   skrot: z.enum(['zadania', 'planer', 'echo', 'terminy', 'finanse', 'przypomnienia']).default('zadania'),
+  akcja: z.enum(['modul', 'nastepna', 'poprzednia']).optional(),
+  podgladPubliczny: z.boolean().optional(),
   wyglad: z.object({
     tlo: kolor, tekst: kolor, obramowanie: kolor, jasnosc: calkowita(25, 175),
     krycie: calkowita(0, 100), krycieRamki: calkowita(0, 100),
@@ -83,6 +85,10 @@ export const katalogBlokow = {
   akcja: { nazwa: 'Przycisk akcji', ikona: '★', kategoria: 'Sterowanie', minimum: [2, 1] },
 } as const
 export type TypBlokuKokpitu = keyof typeof katalogBlokow
+
+export const skrotyKokpitu = {
+  zadania: 'Zadania', planer: 'Planer', echo: 'Echo', terminy: 'Terminy', finanse: 'Finanse', przypomnienia: 'Przypomnienia',
+}
 
 export function definicjaBloku(typ: string) {
   return Object.hasOwn(katalogBlokow, typ) ? katalogBlokow[typ as TypBlokuKokpitu] : undefined

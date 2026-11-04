@@ -2,6 +2,15 @@ import type { KonfiguracjaKokpitu, TrybKokpitu } from '../domain/kokpit'
 import type { Urlop, UstawieniaHarmonogramu, WyjatekGrafiku } from '../domain/typy'
 import { dzisiajIso } from '../domain/fabryki'
 import { utworzHarmonogramDnia } from '../modules/pulpit/logikaOsiCzasu'
+import { czyPasujeSekcja } from './UprawnieniaService'
+import type { KontoUzytkownika } from './KontaService'
+import type { NazwaModulu } from '../domain/typy'
+
+export function czySesjaPozwala(sesja: KontoUzytkownika, modul: NazwaModulu, operacja: 'odczyt' | 'edycja' = 'odczyt') {
+  return !sesja.wymaganaZmianaHasla && (!sesja.statusKonta || sesja.statusKonta === 'aktywne')
+    && (sesja.rola === 'wlasciciel' || sesja.granty.some((grant) => grant.modul === modul
+      && grant.status === 'aktywne' && grant[operacja] && czyPasujeSekcja(modul, grant.sekcja, undefined)))
+}
 
 type Regula = KonfiguracjaKokpitu['harmonogram'][number]
 export type NadpisanieKokpitu = { tryb: TrybKokpitu; do?: number; regula?: string }

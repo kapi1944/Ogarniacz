@@ -4,18 +4,86 @@ import { CalendarDays, CheckSquare, MessageCircle } from 'lucide-react'
 import { SekcjaDom } from './SekcjaDom'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { pobierzKonfiguracjeSynchronizacji } from '../../services/KonfiguracjaSynchronizacji'
-import type { BlokKokpitu, TrybKokpitu } from '../../domain/kokpit'
+import { skrotyKokpitu, type BlokKokpitu, type TrybKokpitu } from '../../domain/kokpit'
+import type { Przypomnienie, Zadanie } from '../../domain/typy'
+import type { KontoUzytkownika } from '../../services/KontaService'
+import { ukonczZadanie } from '../../services/ZadaniaService'
+import { aktywnePrzypomnienia, odroczPrzypomnienie } from '../../services/PrzypomnieniaService'
+import { obliczWykorzystanieBudzetow } from '../../services/FinanseService'
+import { useAkcjaKokpitu } from './useAkcjaKokpitu'
 const odmowPrywatnychDanych = () => false
+const zrodlaWrazliwe = new Set(['zdrowie', 'leki', 'wizyty', 'skierowania', 'dokumenty', 'recepty', 'terapie', 'wpisyTerapii', 'wynikiBadan', 'wpisySamopoczucia'])
 
-function SkrotZadan({ data }: { data: string }) {
-  const { dane: zadania } = useRepozytorium('zadania', odmowPrywatnychDanych)
-  const zwykle = zadania.filter((zadanie) => !zadanie.sesjaTerapiiId && !zadanie.powiazania.some((relacja) => ['zdrowie', 'leki', 'wizyty', 'skierowania', 'dokumenty'].includes(relacja.typ)))
-  const otwarte = zwykle.filter((zadanie) => zadanie.status !== 'wykonane')
+function czyZwykleZadanie(zadanie: Zadanie) {
+  return !zadanie.sesjaTerapiiId && !zadanie.powiazania?.some((relacja) => zrodlaWrazliwe.has(relacja.typ))
+}
+
+function SkrotZadan({ data, filtr, sesja }: { data: string; filtr: BlokKokpitu['filtr']; sesja?: KontoUzytkownika }) {
+  const { dane: zadania, repozytorium } = useRepozytorium('zadania', odmowPrywatnychDanych)
+  const akcja = useAkcjaKokpitu('zadania', sesja)
+  const otwarte = zadania.filter((zadanie) => czyZwykleZadanie(zadanie) && zadanie.status !== 'wykonane')
+  const dzisiaj = otwarte.filter((zadanie) => zadanie.termin?.slice(0, 10) === data)
+  const zalegle = otwarte.filter((zadanie) => zadanie.termin && zadanie.termin.slice(0, 10) < data)
+  const pilne = otwarte.filter((zadanie) => ['wysoki', 'krytyczny'].includes(zadanie.priorytet))
+  const wybrane = { dzisiaj, zalegle, priorytet: pilne }[filtr]
   return <>
-    <p><strong>{otwarte.filter((zadanie) => zadanie.termin?.slice(0, 10) === data).length}</strong> zadań na dziś</p>
-    <p className="tekst-pomocniczy">Zaległe: {otwarte.filter((zadanie) => zadanie.termin && zadanie.termin.slice(0, 10) < data).length}</p>
+    <p><strong>{wybrane.length}</strong> {{ dzisiaj: 'zadań na dziś', zalegle: 'zadań zaległych', priorytet: 'zadań o wysokim priorytecie' }[filtr]}</p>
+    {filtr === 'dzisiaj' && <p>Zaległe: {zalegle.length}</p>}
+    {sesja && <ul className="kokpit__lista">{wybrane.slice(0, 3).map((zadanie) => <li key={zadanie.id}>
+      <span>{zadanie.tytul}</span>
+      {akcja.mozna && <button className="przycisk-ikona" type="button" disabled={akcja.zajety} aria-label={`Wykonaj zadanie: ${zadanie.tytul}`}
+        onClick={() => void akcja.wykonaj(zadanie.id, async () => {
+          const aktualne = await repozytorium.pobierz(zadanie.id)
+          if (!aktualne || aktualne.status === 'wykonane' || !czyZwykleZadanie(aktualne)) return
+          const { wykonane, nastepne } = ukonczZadanie(aktualne)
+          await repozytorium.zapiszWiele(nastepne ? [wykonane, nastepne] : [wykonane])
+        })}>✓</button>}
+    </li>)}</ul>}
+    {akcja.blad && <p role="alert">{akcja.blad}</p>}
     <Link className="przycisk przycisk--drugorzedny" to="/zadania"><CheckSquare aria-hidden="true" />Otwórz zadania</Link>
   </>
+}
+
+function czyZwyklePrzypomnienie(przypomnienie: Przypomnienie) {
+  return !przypomnienie.dawkaLeku && !przypomnienie.echoPoPracy
+    && (!przypomnienie.zrodlo || !zrodlaWrazliwe.has(przypomnienie.zrodlo.typ))
+}
+
+function SkrotPrzypomnien({ sesja }: { sesja?: KontoUzytkownika }) {
+  const { dane, repozytorium } = useRepozytorium('przypomnienia', odmowPrywatnychDanych)
+  const akcja = useAkcjaKokpitu('przypomnienia', sesja)
+  const przypomnienia = aktywnePrzypomnienia(dane.filter(czyZwyklePrzypomnienie))
+  return <>
+    <p>{przypomnienia.length} aktywnych</p>
+    {sesja && <ul className="kokpit__lista">{przypomnienia.slice(0, 3).map((przypomnienie) => <li key={przypomnienie.id}>
+      <span>{przypomnienie.tytul}</span>
+      {akcja.mozna && <button className="przycisk" type="button" disabled={akcja.zajety} aria-label={`Odłóż przypomnienie: ${przypomnienie.tytul}`}
+        onClick={() => void akcja.wykonaj(przypomnienie.id, async () => {
+          const aktualne = await repozytorium.pobierz(przypomnienie.id)
+          if (aktualne && czyZwyklePrzypomnienie(aktualne) && aktywnePrzypomnienia([aktualne]).length) await repozytorium.zapisz(odroczPrzypomnienie(aktualne, 15))
+        })}>+15 min</button>}
+    </li>)}</ul>}
+    {akcja.blad && <p role="alert">{akcja.blad}</p>}
+  </>
+}
+
+function SkrotKalendarza({ data, prywatny }: { data: string; prywatny: boolean }) {
+  const { dane } = useRepozytorium('terminyWaznosci', odmowPrywatnychDanych)
+  const najblizszy = dane.filter((termin) => !termin.dokumentId && termin.status !== 'odnowione' && termin.dataWaznosci >= data)
+    .sort((a, b) => a.dataWaznosci.localeCompare(b.dataWaznosci))[0]
+  return najblizszy ? <><p>Najbliższy termin: <time dateTime={najblizszy.dataWaznosci}>{najblizszy.dataWaznosci}</time></p>{prywatny && <p>{najblizszy.nazwa}</p>}</>
+    : <p>Brak nadchodzących terminów.</p>
+}
+
+const formatPLN = new Intl.NumberFormat('pl-PL', { style: 'currency', currency: 'PLN' })
+function SkrotFinansow({ miesiac, prywatny }: { miesiac: string; prywatny: boolean }) {
+  const { dane: budzety } = useRepozytorium('budzety')
+  const { dane: wydatki } = useRepozytorium('wydatki')
+  const podsumowanie = obliczWykorzystanieBudzetow(budzety, wydatki, miesiac)
+  if (!podsumowanie.length) return <p>Brak budżetów na ten miesiąc.</p>
+  if (!prywatny) return <p>{podsumowanie.some((budzet) => budzet.przekroczony) ? 'Osiągnięto limit budżetu.' : 'Budżety w granicach limitów.'}</p>
+  return <ul className="kokpit__lista">{podsumowanie.slice(0, 3).map(({ budzet, wydano }) =>
+    <li key={budzet.id}>{budzet.kategoria || 'Budżet ogólny'}: <strong className="kokpit__wartosc">{formatPLN.format(wydano)}</strong></li>)}</ul>
 }
 
 function SkrotPlanu({ data }: { data: string }) {
@@ -65,16 +133,29 @@ function Czas({ data }: { data?: boolean }) {
   </time>
 }
 
-export function TrescBloku({ blok, data, tryb }: { blok: BlokKokpitu; data: string; tryb: TrybKokpitu }) {
+export function TrescBloku({ blok, data, tryb, sesja, zmienPlansze }: {
+  blok: BlokKokpitu; data: string; tryb: TrybKokpitu; sesja?: KontoUzytkownika; zmienPlansze?: (kierunek: number) => void
+}) {
+  const prywatnaSesja = tryb === 'prywatny' ? sesja : undefined
   switch (blok.typ) {
     case 'zegar': return <Czas />
     case 'data': return <Czas data />
     case 'plan': return <SkrotPlanu data={data} />
-    case 'zadania': return <SkrotZadan data={data} />
+    case 'zadania': return <SkrotZadan data={data} filtr={blok.filtr} sesja={prywatnaSesja} />
+    case 'przypomnienia': return <SkrotPrzypomnien sesja={prywatnaSesja} />
+    case 'kalendarz': return <SkrotKalendarza data={data} prywatny={Boolean(prywatnaSesja)} />
+    case 'finanse': return prywatnaSesja || (sesja && blok.podgladPubliczny)
+      ? <SkrotFinansow miesiac={data.slice(0, 7)} prywatny={Boolean(prywatnaSesja)} /> : <p>Szczegóły w trybie prywatnym.</p>
     case 'polaczenie': return <StanPolaczenia />
     case 'echo': return <Link className="przycisk przycisk--glowny" to="/echo"><MessageCircle aria-hidden="true" />Otwórz Echo</Link>
     case 'dom': return tryb === 'prywatny' ? <SekcjaDom /> : <p>Zaloguj się online jako właściciel, aby sprawdzić Home Assistant.</p>
     case 'pogoda': return <p>Brak skonfigurowanego źródła pogody.</p>
+    case 'akcja':
+      if (blok.akcja === 'nastepna' || blok.akcja === 'poprzednia') return zmienPlansze ? <button className="przycisk" type="button"
+        onClick={() => zmienPlansze(blok.akcja === 'nastepna' ? 1 : -1)}>{blok.akcja === 'nastepna' ? 'Następna plansza' : 'Poprzednia plansza'}</button>
+        : <p>Akcja dostępna w widoku plansz.</p>
+      return <Link className="przycisk" to={`/${blok.skrot}`}>{skrotyKokpitu[blok.skrot]}</Link>
+    case 'skrot': return <Link className="przycisk" to={`/${blok.skrot}`}>{skrotyKokpitu[blok.skrot]}</Link>
     default: return <p>Ten blok jest niedostępny w tej wersji.</p>
   }
 }
