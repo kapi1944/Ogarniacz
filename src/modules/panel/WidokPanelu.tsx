@@ -6,6 +6,7 @@ import { useAplikacja } from '../../app/KontekstAplikacji'
 import { dzisiajIso } from '../../domain/fabryki'
 import { domyslnyKokpit, domyslnyUklad, odczytajKokpit, widokiKokpitu, type ProfilKokpitu } from '../../domain/kokpit'
 import { RendererUkladu } from './RendererUkladu'
+import { EdytorKokpitu } from './EdytorKokpitu'
 import './kokpit.css'
 
 function profilEkranu(): ProfilKokpitu {
@@ -17,7 +18,11 @@ function profilEkranu(): ProfilKokpitu {
 
 export function WidokPanelu() {
   const { zapisaneUstawienia, zapiszUstawienia, gotowyDostep, moze } = useAplikacja()
-  const konfiguracja = odczytajKokpit(zapisaneUstawienia.kokpit) ?? domyslnyKokpit
+  const zapisana = odczytajKokpit(zapisaneUstawienia.kokpit)
+  const konfiguracja = zapisana ?? domyslnyKokpit
+  const mozeEdytowac = gotowyDostep && moze('ustawienia', 'edycja') && (zapisana || zapisaneUstawienia.kokpit === undefined)
+  const [edytuje, ustawEdytuje] = useState(false)
+  const edycja = edytuje && mozeEdytowac
   const [profil, ustawProfil] = useState(profilEkranu)
   const [wybranyWidok, ustawWidok] = useState<keyof typeof widokiKokpitu>()
   const [numer, ustawNumer] = useState(0)
@@ -63,20 +68,23 @@ export function WidokPanelu() {
     }
   }
 
-  return <div className={`kokpit ${widok === 'plansze' ? 'kokpit--plansze' : ''}`} ref={panel}>
+  return <div className={`kokpit ${widok === 'plansze' && !edycja ? 'kokpit--plansze' : ''}`} ref={panel}>
     <header className="kokpit__gora">
       {!pelnyEkran && <NaglowekWidoku tytul="Ekran kokpitu" opis="Ekran informacyjny i centrum sterowania." />}
       <div className="kokpit__sterowanie">
-        <button className="przycisk-ikona" type="button" aria-label={widokiKokpitu[widok === 'plansze' ? 'ciagly' : 'plansze']}
-          onClick={() => zmienWidok(widok === 'plansze' ? 'ciagly' : 'plansze')}>{widok === 'plansze' ? '↕' : '▦'}</button>
+        {!edycja && <button className="przycisk-ikona" type="button" aria-label={widokiKokpitu[widok === 'plansze' ? 'ciagly' : 'plansze']}
+          onClick={() => zmienWidok(widok === 'plansze' ? 'ciagly' : 'plansze')}>{widok === 'plansze' ? '↕' : '▦'}</button>}
+        {mozeEdytowac && !edycja && <button className="przycisk-ikona" type="button" aria-label="Edytuj kokpit" onClick={() => ustawEdytuje(true)}>⚙</button>}
         <button className="przycisk-ikona" type="button" onClick={() => void zmienPelnyEkran()} aria-label={pelnyEkran ? 'Wyłącz pełny ekran' : 'Pełny ekran'}>
           {pelnyEkran ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}
         </button>
-        <Link className="przycisk-ikona" to="/" aria-label="Wyjdź z kokpitu"><X aria-hidden="true" /></Link>
+        {!edycja && <Link className="przycisk-ikona" to="/" aria-label="Wyjdź z kokpitu"><X aria-hidden="true" /></Link>}
       </div>
     </header>
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
-    {widok === 'plansze' ? <>
+    {edycja ? <EdytorKokpitu konfiguracja={konfiguracja} profil={profil} widok={widok} numer={aktywny}
+      zapisz={async (kokpit) => { await zapiszUstawienia({ kokpit }); ustawWidok(undefined) }} zamknij={() => ustawEdytuje(false)} />
+      : widok === 'plansze' ? <>
       <div className="kokpit__plansza">
         <button className="przycisk-ikona" type="button" aria-label="Poprzednia plansza" onClick={() => ustawNumer((aktywny - 1 + uklad.plansze.length) % uklad.plansze.length)}><ChevronLeft /></button>
         <RendererUkladu plansza={plansza} data={data} tryb="publiczny" etykieta={plansza.nazwa} />

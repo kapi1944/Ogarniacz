@@ -113,6 +113,24 @@ opisz('ekran kokpitu', () => {
     oczekuj(ekran.queryByRole('navigation', { name: 'Plansze kokpitu' })).not.toBeInTheDocument()
   })
 
+  sprawdz('historia edycji jest robocza aż do zapisu', async () => {
+    const zapiszUstawienia = vi.fn(async () => undefined)
+    vi.mocked(useAplikacja).mockReturnValue({ ...kontekstTestowy, zapiszUstawienia })
+    pokazPanel()
+    wywolaj.click(ekran.getByRole('button', { name: 'Edytuj kokpit' }))
+    wywolaj.click(ekran.getByRole('button', { name: 'Dodaj pustą' }))
+    wywolaj.click(ekran.getByRole('button', { name: 'Dodaj blok' }))
+    oczekuj(ekran.getByRole('button', { name: 'Usuń blok' })).toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Cofnij' }))
+    oczekuj(ekran.queryByRole('button', { name: 'Usuń blok' })).not.toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Ponów' }))
+    oczekuj(ekran.getByRole('button', { name: 'Usuń blok' })).toBeInTheDocument()
+    oczekuj(zapiszUstawienia).not.toHaveBeenCalled()
+    wywolaj.click(ekran.getByRole('button', { name: 'Zapisz' }))
+    oczekuj(zapiszUstawienia).toHaveBeenCalledWith({ kokpit: oczekuj.objectContaining({ wersja: 1 }) })
+    oczekuj(await ekran.findByRole('button', { name: 'Edytuj kokpit' })).toBeInTheDocument()
+  })
+
   sprawdz('aktualizuje zegar i datę po północy', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 9, 15, 23, 59, 59))
@@ -146,4 +164,3 @@ opisz('ekran kokpitu', () => {
     delete (HTMLElement.prototype as Partial<HTMLElement>).requestFullscreen
   })
 })
-

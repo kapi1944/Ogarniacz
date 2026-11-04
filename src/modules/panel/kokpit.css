@@ -67,6 +67,20 @@
 .kokpit__pasek .przycisk { min-height: 44px; flex-shrink: 0; }
 .kokpit__pasek [aria-current] { border-color: var(--akcent); color: var(--akcent); background: var(--panel-2); }
 .kokpit__pusta { grid-column: 1 / -1; color: var(--tekst-2); text-align: center; }
+.kokpit__edytor { display: grid; gap: 12px; width: min(100%, 1400px); margin: 0 auto; }
+.kokpit__edycja-pasek { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.kokpit__edycja-pasek h2 { margin: 0 auto 0 0; }
+.kokpit__ustawienia { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 12px; border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); }
+.kokpit__pola { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr)); gap: 8px; align-items: end; }
+.kokpit__ustawienia label { display: grid; gap: 4px; min-width: 0; }
+.kokpit__ustawienia label:has(input[type="checkbox"]) { display: flex; align-items: center; }
+.kokpit__akcje { display: flex; align-items: end; flex-wrap: wrap; gap: 6px; }
+.kokpit__ustawienia .przycisk { min-height: 44px; white-space: normal; }
+.kokpit__siatka--edycja { position: relative; min-height: max(320px, calc(var(--wiersze) * 88px)); padding: 4px; border: 1px dashed var(--akcent); }
+.kokpit__siatka--edycja .kokpit__blok { border-style: dashed; border-color: var(--akcent); }
+.kokpit__uchwyt { touch-action: none; cursor: grab; }
+.kokpit__podglad { z-index: 1; pointer-events: none; border: 2px dashed var(--akcent); background: color-mix(in srgb, var(--akcent) 24%, transparent); }
+.kokpit__podglad[data-kolizja="true"] { border-color: #dc4747; background: #dc474733; }
 @media (max-height: 550px) {
   .kokpit__gora .naglowek-widoku p { display: none; }
   .kokpit__gora .naglowek-widoku h1 { font-size: 1.25rem; }
