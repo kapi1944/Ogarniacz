@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import { Capacitor, SystemBars } from '@capacitor/core'
 import { pobierzInstallationId } from '../../services/InstallationService'
-import { profileKokpitu, type KonfiguracjaKokpitu, type ProfilKokpitu } from '../../domain/kokpit'
+import { dostepneProfile, type KonfiguracjaKokpitu, type ProfilKokpitu } from '../../domain/kokpit'
 
 export const natywnyAndroid = Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
 type WyborProfilu = ProfilKokpitu | 'auto'
@@ -13,14 +13,14 @@ export function profilEkranu(): ProfilKokpitu {
   return szerokosc < 1050 ? 'tablet' : 'komputer'
 }
 
-export function useProfilKokpitu(wlasciciel: string) {
+export function useProfilKokpitu(wlasciciel: string, konfiguracja: KonfiguracjaKokpitu) {
   const klucz = `ogarniacz.kokpit.profil:${pobierzInstallationId()}:${wlasciciel}`
   const [ekran, ustawEkran] = useState(profilEkranu)
   const [lokalny, ustawLokalny] = useState<{ klucz: string; wybor: WyborProfilu }>()
   let wybor: WyborProfilu = 'auto'
   try {
     const zapisany = lokalny?.klucz === klucz ? lokalny.wybor : localStorage.getItem(klucz)
-    if (zapisany && Object.hasOwn(profileKokpitu, zapisany)) wybor = zapisany as ProfilKokpitu
+    if (zapisany && Object.hasOwn(dostepneProfile(konfiguracja), zapisany)) wybor = zapisany as ProfilKokpitu
   } catch {
     if (lokalny?.klucz === klucz) wybor = lokalny.wybor
   }
@@ -71,8 +71,8 @@ export function useNawigacjaKokpitu({ konfiguracja, edycja, plansze, zmienPlansz
     ostatniaAkcja.current = Date.now()
     let ostatniObrot = ostatniaAkcja.current
     const zegar = window.setInterval(() => {
-      if (document.hidden || poczatekGestu.current || document.querySelector('[role="dialog"], dialog[open]')
-        || document.activeElement?.matches(kontrolka)) {
+      if (document.hidden || poczatekGestu.current || document.querySelector('[role="dialog"], dialog[open], .kokpit__prywatnosc[open]')
+        || document.activeElement?.matches('input, select, textarea, [contenteditable="true"], .kokpit :is(a,button):focus-visible')) {
         ostatniaAkcja.current = Date.now()
         return
       }

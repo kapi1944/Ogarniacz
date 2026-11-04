@@ -3,7 +3,8 @@ import { z } from 'zod'
 export const profileKokpitu = {
   pion: 'Telefon pionowo', poziom: 'Telefon poziomo', tablet: 'Tablet', komputer: 'Monitor', prezentacja: 'Ekran prezentacyjny',
 }
-export type ProfilKokpitu = keyof typeof profileKokpitu
+type ProfilBazowy = keyof typeof profileKokpitu
+export type ProfilKokpitu = ProfilBazowy | `wariant-${string}`
 export const widokiKokpitu = { plansze: 'Widok plansz', ciagly: 'Widok ciągły' }
 export type TrybKokpitu = 'publiczny' | 'prywatny'
 
@@ -38,11 +39,15 @@ const schematProfilu = z.object({
   sekcje: z.array(schematPlanszy).min(1).max(20),
   wysokosc: z.enum(['auto', 'procent', 'pelna', 'piksele']), wysokoscProcent: calkowita(25, 100), wysokoscPx: calkowita(160, 1800),
 })
+const schematProfiluBazowego = z.enum(['pion', 'poziom', 'tablet', 'komputer', 'prezentacja'])
+const schematIdWariantu = z.templateLiteral(['wariant-', z.uuid()])
+const schematIdProfilu = z.union([schematProfiluBazowego, schematIdWariantu])
 const godzina = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/)
 const schematKokpitu = z.object({
   wersja: z.literal(1), id: tekst, wlasciciel: tekst.optional(),
   start: z.enum(['plansze', 'ciagly', 'ostatni']), ostatni: schematWidoku,
-  profile: z.partialRecord(z.enum(['pion', 'poziom', 'tablet', 'komputer', 'prezentacja']), schematProfilu),
+  profile: z.partialRecord(schematIdProfilu, schematProfilu),
+  warianty: z.array(z.object({ id: schematIdWariantu, nazwa: tekst, baza: schematProfiluBazowego })).max(12).optional(),
   pasek: z.enum(['zawsze', 'auto', 'ukryty']), stylPaska: z.enum(['numery', 'ikony', 'nazwy']),
   ukryjPo: z.union([z.literal(3), z.literal(5), z.literal(10), z.literal(15), z.literal(30)]),
   interwal: z.union([z.literal(0), calkowita(10, 600)]),
@@ -69,6 +74,10 @@ export const domyslnyKokpit: KonfiguracjaKokpitu = {
   ambient: { wlaczony: false, sekundy: 60, przyciemnienie: 35, przesuwaj: false, bloki: ['zegar', 'data'] },
 }
 
+export function dostepneProfile(konfiguracja: KonfiguracjaKokpitu) {
+  return { ...profileKokpitu, ...Object.fromEntries((konfiguracja.warianty ?? []).map(({ id, nazwa }) => [id, nazwa])) }
+}
+
 export const katalogBlokow = {
   zegar: { nazwa: 'Zegar', ikona: '◷', kategoria: 'Prezentacja', minimum: [2, 1] },
   data: { nazwa: 'Data', ikona: '◈', kategoria: 'Prezentacja', minimum: [2, 1] },
@@ -81,8 +90,8 @@ export const katalogBlokow = {
   echo: { nazwa: 'Echo', ikona: '✦', kategoria: 'Sterowanie', minimum: [2, 1], modul: 'echo' },
   polaczenie: { nazwa: 'Połączenie', ikona: '↻', kategoria: 'Sterowanie', minimum: [2, 1] },
   dom: { nazwa: 'Dom', ikona: '⌂', kategoria: 'Sterowanie', minimum: [2, 1] },
-  skrot: { nazwa: 'Skrót do modułu', ikona: '↗', kategoria: 'Sterowanie', minimum: [2, 1] },
-  akcja: { nazwa: 'Przycisk akcji', ikona: '★', kategoria: 'Sterowanie', minimum: [2, 1] },
+  skrot: { nazwa: 'Skrót do modułu', ikona: '↗', kategoria: 'Sterowanie', minimum: [1, 1] },
+  akcja: { nazwa: 'Przycisk akcji', ikona: '★', kategoria: 'Sterowanie', minimum: [1, 1] },
 } as const
 export type TypBlokuKokpitu = keyof typeof katalogBlokow
 
@@ -102,9 +111,9 @@ export function nowyBlok(typ: string, id = crypto.randomUUID() as string): BlokK
 export function domyslnyUklad(profil: ProfilKokpitu): UkladKokpitu {
   const pion = profil === 'pion'
   const poczatek: PlanszaKokpitu = { id: 'start', nazwa: 'Przegląd', ikona: '◈', kolumny: pion ? 4 : 8, wiersze: 4, odstep: 8,
-    bloki: [ { ...nowyBlok('zegar', 'zegar'), szerokosc: pion ? 4 : 6, wysokosc: 2 },
+    bloki: [ { ...nowyBlok('zegar', 'zegar'), szerokosc: pion ? 4 : 6, wysokosc: pion ? 2 : 4 },
       { ...nowyBlok('data', 'data'), x: pion ? 0 : 6, y: pion ? 2 : 0, szerokosc: pion ? 4 : 2, wysokosc: pion ? 1 : 2 },
-      { ...nowyBlok('polaczenie', 'polaczenie'), y: pion ? 3 : 2, szerokosc: pion ? 4 : 8, wysokosc: pion ? 1 : 2 } ],
+      { ...nowyBlok('polaczenie', 'polaczenie'), x: pion ? 0 : 6, y: pion ? 3 : 2, szerokosc: pion ? 4 : 2, wysokosc: pion ? 1 : 2 } ],
   }
   const organizacja: PlanszaKokpitu = { ...poczatek, id: 'organizacja', nazwa: 'Organizacja', ikona: '▦',
     bloki: ['zadania', 'plan', 'echo', 'dom'].map((typ, numer) => ({
@@ -154,10 +163,17 @@ export function poprawnaPlansza(plansza: PlanszaKokpitu): boolean {
 export function odczytajKokpit(dane: unknown): KonfiguracjaKokpitu | undefined {
   const wynik = schematKokpitu.safeParse(dane)
   if (!wynik.success) return
+  const warianty = wynik.data.warianty ?? []
+  if (new Set(warianty.map(({ id }) => id)).size !== warianty.length || warianty.some(({ id }) => !wynik.data.profile[id])
+    || Object.keys(wynik.data.profile).some((id) => id.startsWith('wariant-') && !warianty.some((wariant) => wariant.id === id))) return
+  let liczbaBlokow = 0
   for (const uklad of Object.values(wynik.data.profile)) {
+    if (!uklad) continue
     if (new Set(uklad.plansze.map(({ id }) => id)).size !== uklad.plansze.length
       || new Set(uklad.sekcje.map(({ id }) => id)).size !== uklad.sekcje.length
       || ![...uklad.plansze, ...uklad.sekcje].every(poprawnaPlansza)) return
+    for (const plansza of [...uklad.plansze, ...uklad.sekcje]) liczbaBlokow += plansza.bloki.length
   }
+  if (liczbaBlokow > 1500) return
   return wynik.data
 }

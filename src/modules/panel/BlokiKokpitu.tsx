@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarDays, CheckSquare, MessageCircle } from 'lucide-react'
 import { SekcjaDom } from './SekcjaDom'
@@ -28,7 +28,7 @@ function SkrotZadan({ data, filtr, sesja }: { data: string; filtr: BlokKokpitu['
   const wybrane = { dzisiaj, zalegle, priorytet: pilne }[filtr]
   return <>
     <p><strong>{wybrane.length}</strong> {{ dzisiaj: 'zadań na dziś', zalegle: 'zadań zaległych', priorytet: 'zadań o wysokim priorytecie' }[filtr]}</p>
-    {filtr === 'dzisiaj' && <p>Zaległe: {zalegle.length}</p>}
+    {filtr === 'dzisiaj' && <p className="kokpit__szczegoly">Zaległe: {zalegle.length}</p>}
     {sesja && <ul className="kokpit__lista">{wybrane.slice(0, 3).map((zadanie) => <li key={zadanie.id}>
       <span>{zadanie.tytul}</span>
       {akcja.mozna && <button className="przycisk-ikona" type="button" disabled={akcja.zajety} aria-label={`Wykonaj zadanie: ${zadanie.tytul}`}
@@ -92,7 +92,6 @@ function SkrotPlanu({ data }: { data: string }) {
     && ['zaakceptowany', 'wykonany'].includes(blok.status) && blok.poczatek.slice(0, 10) <= data && blok.koniec.slice(0, 10) >= data)
   return <>
     <p><strong>{zwykle.length}</strong> bloków pracy, przerw i czasu wolnego na dziś</p>
-    <p className="tekst-pomocniczy">Szczegóły planu są dostępne w planerze.</p>
     <Link className="przycisk przycisk--drugorzedny" to="/planer"><CalendarDays aria-hidden="true" />Otwórz planer</Link>
   </>
 }
@@ -114,19 +113,38 @@ function StanPolaczenia() {
   return <div role="status">
     <p>Serwer: <strong>{serwer}</strong></p>
     <p>Synchronizacja: <strong>{!konfiguracja.adresApi ? 'Dane lokalne' : !polaczenieSieciowe ? 'Offline' : stan?.sesjaWymagaLogowania ? 'Wymaga zalogowania' : stan ? etykiety[stan.stan] : 'Brak informacji'}</strong></p>
-    <p className="tekst-pomocniczy">Stan z istniejącej synchronizacji.</p>
   </div>
 }
 
 
+const sluchaczeZegara = new Set<() => void>()
+let zegarKokpitu: number | undefined
+const aktualnaMinuta = () => Math.floor(Date.now() / 60_000)
+
+function odswiezZegar() {
+  window.clearTimeout(zegarKokpitu)
+  for (const sluchacz of sluchaczeZegara) sluchacz()
+  if (sluchaczeZegara.size) zegarKokpitu = window.setTimeout(odswiezZegar, 60_000 - Date.now() % 60_000)
+}
+
+function nasluchujZegara(sluchacz: () => void) {
+  sluchaczeZegara.add(sluchacz)
+  if (sluchaczeZegara.size === 1) {
+    document.addEventListener('visibilitychange', odswiezZegar)
+    odswiezZegar()
+  }
+  return () => {
+    sluchaczeZegara.delete(sluchacz)
+    if (sluchaczeZegara.size === 0) {
+      document.removeEventListener('visibilitychange', odswiezZegar)
+      window.clearTimeout(zegarKokpitu)
+    }
+  }
+}
+
 function Czas({ data }: { data?: boolean }) {
-  const [teraz, ustawTeraz] = useState(() => new Date())
-  useEffect(() => {
-    const odswiez = () => ustawTeraz(new Date())
-    const zegar = window.setInterval(odswiez, 1000)
-    document.addEventListener('visibilitychange', odswiez)
-    return () => { clearInterval(zegar); document.removeEventListener('visibilitychange', odswiez) }
-  }, [])
+  const minuta = useSyncExternalStore(nasluchujZegara, aktualnaMinuta)
+  const teraz = new Date(minuta * 60_000)
   return <time className={data ? 'kokpit__data' : 'kokpit__godzina'} dateTime={teraz.toISOString()}>
     {data ? teraz.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
       : teraz.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}

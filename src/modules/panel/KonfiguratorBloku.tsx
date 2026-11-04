@@ -8,6 +8,14 @@ const presety = [
   ['Neutralny jasny', '#f1f3f2'], ['Neutralny ciemny', '#171c1b'],
 ]
 
+function zmieszajKolory(pierwszy: string, drugi: string, udzial: number) {
+  return '#' + [1, 3, 5].map((indeks) => {
+    const od = Number.parseInt(pierwszy.slice(indeks, indeks + 2), 16)
+    const doKoloru = Number.parseInt(drugi.slice(indeks, indeks + 2), 16)
+    return Math.round(od + (doKoloru - od) * udzial).toString(16).padStart(2, '0')
+  }).join('')
+}
+
 export function SuwakKokpitu({ etykieta, min, max, wartosc, zmien }: {
   etykieta: string; min: number; max: number; wartosc: number; zmien: (liczba: number) => void
 }) {
@@ -24,7 +32,7 @@ function PoleKoloru({ nazwa, kolor, zmien }: { nazwa: string; kolor: string; zmi
   const poprawny = /^#[\da-f]{6}$/i.test(szkic)
   return <div className="kokpit__kolor">
     <label>{nazwa}<input type="color" value={kolor} onChange={(zdarzenie) => { zmien(zdarzenie.target.value); ustawSzkic(zdarzenie.target.value) }} /></label>
-    <label>{nazwa} HEX<input value={szkic} maxLength={7} aria-invalid={!poprawny} onChange={(zdarzenie) => ustawSzkic(zdarzenie.target.value)}
+    <label>{nazwa} HEX<input data-kolor-hex value={szkic} maxLength={7} required pattern="#[0-9A-Fa-f]{6}" aria-invalid={!poprawny} onChange={(zdarzenie) => ustawSzkic(zdarzenie.target.value)}
       onBlur={() => { if (poprawny && kolor !== szkic) zmien(szkic) }} /></label>
     {!poprawny && <small role="alert">Wpisz kolor w formacie #RRGGBB.</small>}
   </div>
@@ -38,6 +46,15 @@ export function KonfiguratorBloku({ blok, zmien, usun, duplikuj }: {
   const tlo = wyglad.tlo ?? '#124638'
   const tekst = wyglad.tekst ?? wybierzCzytelnyTekst(tlo)
   const ramka = wyglad.obramowanie ?? '#bd9d61'
+  const stylEkranu = getComputedStyle(document.documentElement)
+  const tloEkranu = stylEkranu.getPropertyValue('--tlo').trim()
+  const domyslneTlo = /^#[\da-f]{6}$/i.test(tloEkranu) ? tloEkranu : '#ffffff'
+  const jasnosc = (wyglad.jasnosc ?? 100) - 100
+  const tloBloku = wyglad.tlo
+    ? zmieszajKolory(zmieszajKolory(tlo, jasnosc > 0 ? '#ffffff' : '#000000', Math.abs(jasnosc) / 100), domyslneTlo, 1 - (wyglad.krycie ?? 100) / 100)
+    : domyslneTlo
+  const kolorMotywu = stylEkranu.getPropertyValue('--tekst').trim()
+  const widocznyTekst = wyglad.tekst ?? (/^#[\da-f]{6}$/i.test(kolorMotywu) ? kolorMotywu : tekst)
   const suwaki = [
     ['Jasność tła', 'jasnosc', 25, 175, 100], ['Krycie tła', 'krycie', 0, 100, 100],
     ['Rozmiar tytułu', 'tytul', 12, 40, 16], ['Tekst pomocniczy', 'opis', 12, 36, 14],
@@ -83,9 +100,13 @@ export function KonfiguratorBloku({ blok, zmien, usun, duplikuj }: {
         <option value="left">Do lewej</option><option value="center">Na środku</option><option value="right">Do prawej</option>
       </select></label>
       <label><input type="checkbox" checked={wyglad.pokazTytul !== false} onChange={(zdarzenie) => ustawWyglad({ pokazTytul: zdarzenie.target.checked })} /> Pokaż tytuł</label>
-      {suwaki.map(([nazwa, klucz, min, max, domyslna]) => <SuwakKokpitu key={klucz} etykieta={nazwa} min={min} max={max} wartosc={wyglad[klucz] ?? domyslna} zmien={(wartosc) => ustawWyglad({ [klucz]: wartosc })} />)}
+      {suwaki.filter(([, klucz]) => klucz !== 'opis' || (blok.typ !== 'zegar' && blok.typ !== 'data')).map(([nazwa, klucz, min, max, domyslna]) =>
+        <SuwakKokpitu key={klucz} etykieta={nazwa} min={min} max={max} wartosc={wyglad[klucz] ?? domyslna} zmien={(wartosc) => ustawWyglad({
+          [klucz]: wartosc,
+          ...(klucz === 'jasnosc' || klucz === 'krycie' ? { tlo } : klucz === 'krycieRamki' ? { obramowanie: ramka } : {}),
+        })} />)}
       {['zegar', 'data', 'finanse'].includes(blok.typ) && <SuwakKokpitu etykieta="Rozmiar wartości" min={16} max={120} wartosc={wyglad.wartosc ?? 32} zmien={(wartosc) => ustawWyglad({ wartosc })} />}
     </div>
-    {obliczKontrast(tlo, tekst) < 4.5 && <p role="status">Niski kontrast tekstu. <button type="button" className="przycisk" onClick={() => ustawWyglad({ tekst: wybierzCzytelnyTekst(tlo) })}>Użyj czytelniejszego koloru</button></p>}
+    {obliczKontrast(tloBloku, widocznyTekst) < 4.5 && <p role="status">Niski kontrast tekstu. <button type="button" className="przycisk" onClick={() => ustawWyglad({ tekst: wybierzCzytelnyTekst(tloBloku) })}>Użyj czytelniejszego koloru</button></p>}
   </fieldset>
 }

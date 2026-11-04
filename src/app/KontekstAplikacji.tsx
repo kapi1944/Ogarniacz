@@ -27,7 +27,7 @@ interface WartoscKontekstu {
 
 const KontekstAplikacji = createContext<WartoscKontekstu | null>(null)
 
-export function DostawcaAplikacji({ children }: { children: ReactNode }) {
+export function DostawcaAplikacji({ children, prezentacja = false }: { children: ReactNode; prezentacja?: boolean }) {
   const { konto } = useKonto()
   const wczytaneUstawienia = useLiveQuery(() => repozytoriumUstawien.wczytaj(), [])
   const zapisaneUstawienia = wczytaneUstawienia ?? DOMYSLNE_USTAWIENIA
@@ -145,9 +145,9 @@ export function DostawcaAplikacji({ children }: { children: ReactNode }) {
       moze,
     }}>
       {children}
-      <SilnikPrzypomnien />
-      {szybkieDodawanie && <SzybkieDodawanie danePoczatkowe={szybkieDodawanie} moze={moze} zamknij={() => ustawSzybkieDodawanie(null)} />}
-      {wyszukiwanie && <WyszukiwanieGlobalne moze={moze} otworzDodawanie={otworzSzybkieDodawanieZDanymi} zamknij={() => ustawWyszukiwanie(false)} />}
+      <SilnikPrzypomnien bezKomunikatow={prezentacja} />
+      {!prezentacja && szybkieDodawanie && <SzybkieDodawanie danePoczatkowe={szybkieDodawanie} moze={moze} zamknij={() => ustawSzybkieDodawanie(null)} />}
+      {!prezentacja && wyszukiwanie && <WyszukiwanieGlobalne moze={moze} otworzDodawanie={otworzSzybkieDodawanieZDanymi} zamknij={() => ustawWyszukiwanie(false)} />}
     </KontekstAplikacji.Provider>
   )
 }

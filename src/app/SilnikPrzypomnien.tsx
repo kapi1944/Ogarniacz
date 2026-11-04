@@ -10,7 +10,7 @@ import { Komunikat } from '../components/Interfejs'
 import { oznaczDostarczeniePrzypomnienia, sciezkaAlarmuDawki, sprawdzAlarmDawki, uzgodnijPrzypomnieniaLekow } from '../services/PrzypomnieniaLekow'
 import { oznaczStanPodsumowaniaPoPracy, sciezkaPodsumowaniaPoPracy, uzgodnijPodsumowaniaPoPracy } from '../services/PodsumowaniePoPracyService'
 
-export function SilnikPrzypomnien() {
+export function SilnikPrzypomnien({ bezKomunikatow = false }: { bezKomunikatow?: boolean }) {
   const { dane, repozytorium } = useRepozytorium('przypomnienia')
   const { dane: leki } = useRepozytorium('leki')
   const { dane: wpisy } = useRepozytorium('dziennikLekow')
@@ -72,7 +72,7 @@ export function SilnikPrzypomnien() {
           }
           continue
         }
-        if (platforma.natywna || !ustawienia.powiadomienia) continue
+        if (platforma.natywna || !ustawienia.powiadomienia || bezKomunikatow) continue
         if (element.dawkaLeku) {
           try { await sprawdzAlarmDawki(element.id, element.dawkaLeku.wersjaStanu) } catch { continue }
         }
@@ -90,7 +90,8 @@ export function SilnikPrzypomnien() {
     return () => {
       anulowano = true
     }
-  }, [dane, leki, wpisy, zadania, wyjatki, urlopy, gotowyDostep, repozytorium, teraz, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach, ustawienia.updatedAt, wznowienie])
+  }, [dane, leki, wpisy, zadania, wyjatki, urlopy, gotowyDostep, repozytorium, teraz, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach, ustawienia.updatedAt, wznowienie, bezKomunikatow])
 
+  if (bezKomunikatow) return null
   return <>{blad && <Komunikat typ="blad">{blad}</Komunikat>}{dataPodsumowania && ustawienia.proaktywnoscEcho && !ustawienia.echoWyciszone && ustawienia.podsumowaniePoPracy.wlaczone && <Komunikat typ="informacja"><Link to={sciezkaPodsumowaniaPoPracy(dataPodsumowania)}>🏠 Podsumowanie po pracy — sprawdź pozostałe zadania</Link><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawDatePodsumowania('')}>Zamknij</button></Komunikat>}</>
 }

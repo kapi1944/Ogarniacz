@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
 import { GranicaBledu } from './components/GranicaBledu'
 import { DostawcaAplikacji } from './app/KontekstAplikacji'
 import { DostawcaSesjiEcho } from './app/DostawcaSesjiEcho'
@@ -59,8 +59,10 @@ function LadowanieWidoku() {
   return <div className="pusty-stan" role="status"><span>Ładowanie widoku…</span></div>
 }
 
-export default function App() {
-  return <BrowserRouter><DostawcaKonta><DostawcaAplikacji><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><GranicaBleduTrasy><Suspense fallback={<LadowanieWidoku />}><Routes>
+function TrasyAplikacji() {
+  const { pathname } = useLocation()
+  const kokpit = pathname === '/panel'
+  return <DostawcaKonta publicznyKokpit={kokpit}><DostawcaAplikacji prezentacja={kokpit}><DostawcaSesjiEcho><NawigacjaPlatformy /><UkladAplikacji><GranicaBleduTrasy><Suspense fallback={<LadowanieWidoku />}><Routes>
     <Route path="/" element={<WidokPulpitu />} />
     <Route path="/panel" element={<WidokPanelu />} />
     <Route path="/poczekalnia" element={chron('skrzynka', <WidokPoczekalni />)} />
@@ -107,7 +109,13 @@ export default function App() {
     <Route path="/ustawienia/konta" element={<KontaIUzytkownicy />} />
     <Route path="/ustawienia/personalizacja" element={chron('ustawienia', <EdytorPersonalizacji />)} />
     <Route path="*" element={<NieZnaleziono />} />
-  </Routes></Suspense></GranicaBleduTrasy></UkladAplikacji></DostawcaSesjiEcho></DostawcaAplikacji></DostawcaKonta></BrowserRouter>
+  </Routes></Suspense></GranicaBleduTrasy></UkladAplikacji></DostawcaSesjiEcho></DostawcaAplikacji></DostawcaKonta>
+}
+
+const router = createBrowserRouter([{ path: '*', Component: TrasyAplikacji }])
+
+export default function App() {
+  return <RouterProvider router={router} />
 }
 
 function GranicaBleduTrasy({ children }: { children: React.ReactNode }) {

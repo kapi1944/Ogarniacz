@@ -13,9 +13,22 @@
 .kokpit--plansze { height: 100dvh; min-height: 0; }
 .kokpit:fullscreen { overflow: auto; }
 .kokpit[data-pelny-ekran="true"] { position: fixed; inset: 0; z-index: 200; overflow: auto; }
+.kokpit[data-ambient="true"] { height: 100dvh; background: #0b1210; color: #f1f6f3; }
+.kokpit__ambient { flex: 1; display: grid; place-items: center; min-height: 0; }
+.kokpit__ambient .kokpit__siatka { width: min(80vw, 880px); height: min(68dvh, 650px); align-self: center; }
+.kokpit__ambient .kokpit__blok { background: transparent; text-align: center; border: 0; }
+.kokpit__ambient[data-przesuwaj="true"] .kokpit__siatka { animation: kokpit-odswiez-piksele 240s steps(1) infinite; }
+@keyframes kokpit-odswiez-piksele {
+  25% { transform: translate(6px, 4px); }
+  50% { transform: translate(-5px, 6px); }
+  75% { transform: translate(4px, -5px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kokpit__ambient[data-przesuwaj="true"] .kokpit__siatka { animation: none; }
+}
 .kokpit__gora {
   position: sticky;
-  inset-block-start: 0;
+  inset-block-start: var(--bezpieczny-obszar-gora);
   z-index: 2;
   display: flex;
   align-items: center;
@@ -24,8 +37,8 @@
   background: var(--tlo);
 }
 .kokpit__gora .naglowek-widoku { padding: 0; margin: 0; }
+.kokpit__gora .naglowek-widoku { border: 0; }
 .kokpit__sterowanie { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-inline-start: auto; gap: 4px; }
-.kokpit__prywatnosc { position: relative; }
 .kokpit__prywatnosc summary { min-height: 44px; cursor: pointer; }
 .kokpit__prywatnosc-menu { position: absolute; inset-inline-end: 0; min-width: min(255px, 80vw); display: grid; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); }
 .kokpit__prywatnosc-menu label { display: grid; gap: 5px; }
@@ -48,7 +61,7 @@
   container-type: size;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: safe center;
   min-height: 0;
   min-width: 0;
   padding: clamp(5px, 1.4vmin, 20px);
@@ -58,6 +71,14 @@
   border: 1px solid var(--obramowanie);
   border-radius: var(--promien-karty);
   font-size: var(--kokpit-opis, .875rem);
+}
+.kokpit__kompakt { display: none; }
+@container (max-width: 110px) or (max-height: 78px) {
+  .kokpit__blok[data-kompakt="true"] > .kokpit__tresc-bloku { display: none; }
+  .kokpit__blok[data-kompakt="true"] > .kokpit__kompakt {
+    display: grid; place-items: center; flex: 1; width: 100%; min-height: 0; padding: 0;
+    border: 0; background: transparent; color: inherit; cursor: pointer; font-size: clamp(.85rem, 45cqh, 1.8rem);
+  }
 }
 .kokpit__siatka--ciagla .kokpit__blok { container-type: inline-size; min-height: 90px; }
 .kokpit__blok h2 { margin: 0 0 6px; font-size: var(--kokpit-tytul, 1rem); }
@@ -72,7 +93,7 @@
 .kokpit__siatka--ciagla .kokpit__godzina { font-size: var(--kokpit-wartosc, clamp(2rem, 22cqw, 8rem)); }
 .kokpit__data { font-size: var(--kokpit-wartosc, clamp(1rem, 9cqw, 2.2rem)); }
 .kokpit__pasek { display: flex; justify-content: safe center; gap: 6px; overflow: auto; padding: 3px; flex: none; }
-.kokpit__pasek .przycisk { min-height: 44px; flex-shrink: 0; }
+.kokpit__pasek .przycisk { min-height: 44px; min-width: 44px; flex-shrink: 0; }
 .kokpit__pasek [aria-current] { border-color: var(--akcent); color: var(--akcent); background: var(--panel-2); }
 .kokpit__pasek[data-ukryty="true"]:not(:focus-within) { opacity: 0; pointer-events: none; }
 .kokpit__pusta { grid-column: 1 / -1; color: var(--tekst-2); text-align: center; }
@@ -90,6 +111,23 @@
 .kokpit__uchwyt { touch-action: none; cursor: grab; }
 .kokpit__podglad { z-index: 1; pointer-events: none; border: 2px dashed var(--akcent); background: color-mix(in srgb, var(--akcent) 24%, transparent); }
 .kokpit__podglad[data-kolizja="true"] { border-color: #dc4747; background: #dc474733; }
+.kokpit__ustawienia summary { cursor: pointer; padding: 10px 0; }
+.kokpit__ustawienia :is(input[type="checkbox"], input[type="range"]) { width: auto; }
+.kokpit__kolor { display: grid; gap: 6px; }
+.kokpit__ustawienia :is(input[type="text"], input:not([type]), select) {
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 9px;
+  border: 1px solid var(--obramowanie-mocne);
+  border-radius: var(--promien-pola);
+  background: var(--panel);
+  color: var(--tekst);
+}
+.kokpit__ustawienia input[type="range"] { accent-color: var(--akcent); }
+@container (max-height: 132px) {
+  .kokpit__szczegoly { display: none; }
+  .kokpit__blok h2 { margin-block-end: 3px; }
+}
 @media (max-height: 550px) {
   .kokpit__gora .naglowek-widoku p { display: none; }
   .kokpit__gora .naglowek-widoku h1 { font-size: 1.25rem; }
@@ -97,6 +135,8 @@
 @media (max-width: 560px) {
   .kokpit__gora .naglowek-widoku p { display: none; }
   .kokpit__gora .naglowek-widoku h1 { font-size: 1.25rem; }
+  .kokpit__gora:has(.naglowek-widoku) { flex-wrap: wrap; }
+  .kokpit__gora .naglowek-widoku { flex-basis: 100%; }
   .kokpit__plansza { position: relative; grid-template-columns: minmax(0, 1fr); padding-block-end: 46px; }
   .kokpit__plansza > button { position: absolute; inset-block-end: 0; }
   .kokpit__plansza > button:last-child { inset-inline-end: 0; }

@@ -58,7 +58,7 @@ export function usePrywatnoscKokpitu(konfiguracja: KonfiguracjaKokpitu) {
   const [minuta, ustawMinute] = useState(() => Math.floor(Date.now() / 60_000))
   const teraz = new Date(minuta * 60_000)
   const [nadpisanie, ustawNadpisanie] = useState<NadpisanieKokpitu>()
-  const [czas, ustawCzas] = useState<'regula' | 'godzina' | 'recznie'>('regula')
+  const [czas, ustawCzas] = useState<'regula' | 15 | 30 | 60 | 120 | 'recznie'>('regula')
   const grafik = Boolean(sesja && gotowyDostep && konfiguracja.prywatnyWPracy && moze('grafik'))
   const danePracy = useLiveQuery(() => grafik ? Promise.all([
     pobierzRepozytorium('wyjatkiGrafiku').lista(), pobierzRepozytorium('urlopy').lista(),
@@ -86,7 +86,7 @@ export function usePrywatnoscKokpitu(konfiguracja: KonfiguracjaKokpitu) {
   return { tryb, uwierzytelniony, sesja, czas, ustawCzas, nadpisanie,
     wybierz: (tryb: TrybKokpitu) => {
       if (!uwierzytelniony) return
-      ustawNadpisanie({ tryb, ...(czas === 'regula' ? { regula: regula.id } : czas === 'godzina' ? { do: Date.now() + 3_600_000 } : {}) })
+      ustawNadpisanie({ tryb, ...(czas === 'regula' ? { regula: regula.id } : typeof czas === 'number' ? { do: Date.now() + czas * 60_000 } : {}) })
     },
     automatyczny: () => ustawNadpisanie(undefined),
   }

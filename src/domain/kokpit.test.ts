@@ -16,6 +16,17 @@ describe('konfiguracja kokpitu', () => {
     expect(odczytajKokpit({ ...domyslnyKokpit, profile })?.profile.pion?.plansze[0].bloki[0].typ).toBe('przyszly-typ')
   })
 
+  it('zachowuje nazwany wariant niezależnie od profilu bazowego', () => {
+    const id = `wariant-${crypto.randomUUID()}` as const
+    const baza = domyslnyUklad('pion')
+    const wariant = domyslnyUklad('pion')
+    wariant.plansze[0].nazwa = 'Inne urządzenie'
+    const konfiguracja = odczytajKokpit({ ...domyslnyKokpit, profile: { pion: baza, [id]: wariant },
+      warianty: [{ id, nazwa: 'Przedpokój', baza: 'pion' }] })
+    expect(konfiguracja?.profile.pion?.plansze[0].nazwa).toBe('Przegląd')
+    expect(konfiguracja?.profile[id]?.plansze[0].nazwa).toBe('Inne urządzenie')
+  })
+
   it('sprawdza granice, minimum i kolizje oraz pozwala zostawić wolne miejsca', () => {
     const plansza = domyslnyUklad('komputer').plansze[0]
     const pusty = { ...plansza, bloki: [plansza.bloki[0]] }
