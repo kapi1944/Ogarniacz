@@ -88,6 +88,7 @@ opisz('ekran kokpitu', () => {
       { tytul: 'Praca prywatna', typ: 'praca', status: 'zaakceptowany', poczatek: data, koniec: data },
     ] : [], gotowe: true })) as typeof useRepozytorium)
     const { container: kontener } = pokazPanel()
+    wywolaj.click(ekran.getByRole('button', { name: 'Następna plansza' }))
     oczekuj(ekran.getByText(/zadań na dziś/)).toHaveTextContent('1 zadań na dziś')
     oczekuj(ekran.getByText(/bloków pracy/)).toHaveTextContent('1 bloków pracy')
     oczekuj(kontener).not.toHaveTextContent(/Prywatny tytuł|Terapia|Sekret wizyty|Praca prywatna/)
@@ -98,8 +99,18 @@ opisz('ekran kokpitu', () => {
     ['Otwórz Echo', 'Rozmowa Echo'], ['Otwórz zadania', 'Lista zadań'], ['Otwórz planer', 'Planer docelowy'], ['Wyjdź z kokpitu', 'Pulpit docelowy'],
   ])('przechodzi przez istniejący router: %s', (link, cel) => {
     pokazPanel()
+    if (link !== 'Wyjdź z kokpitu') wywolaj.click(ekran.getByRole('button', { name: 'Następna plansza' }))
     wywolaj.click(ekran.getByRole('link', { name: link }))
     oczekuj(ekran.getByText(cel)).toBeInTheDocument()
+  })
+
+  sprawdz('domyślnie otwiera plansze i przełącza na niezależny widok ciągły', () => {
+    pokazPanel()
+    oczekuj(ekran.getByRole('navigation', { name: 'Plansze kokpitu' })).toBeInTheDocument()
+    oczekuj(ekran.queryByRole('region', { name: 'Organizacja' })).not.toBeInTheDocument()
+    wywolaj.click(ekran.getByRole('button', { name: 'Widok ciągły' }))
+    oczekuj(ekran.getByRole('region', { name: 'Organizacja' })).toBeInTheDocument()
+    oczekuj(ekran.queryByRole('navigation', { name: 'Plansze kokpitu' })).not.toBeInTheDocument()
   })
 
   sprawdz('aktualizuje zegar i datę po północy', () => {
@@ -125,7 +136,7 @@ opisz('ekran kokpitu', () => {
     const { container: kontener } = pokazPanel()
     wywolaj.click(ekran.getByRole('button', { name: 'Pełny ekran' }))
     oczekuj(pelnyEkran).toHaveBeenCalledOnce()
-    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: kontener.querySelector('.panel-domowy') })
+    Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: kontener.querySelector('.kokpit') })
     wywolaj(document, new Event('fullscreenchange'))
     oczekuj(ekran.queryByRole('heading', { name: 'Ekran kokpitu' })).not.toBeInTheDocument()
     oczekuj(ekran.getByRole('button', { name: 'Wyłącz pełny ekran' })).toBeInTheDocument()
@@ -135,3 +146,4 @@ opisz('ekran kokpitu', () => {
     delete (HTMLElement.prototype as Partial<HTMLElement>).requestFullscreen
   })
 })
+

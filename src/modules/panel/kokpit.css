@@ -1,0 +1,80 @@
+.kokpit {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1.3vmin, 16px);
+  min-height: 100dvh;
+  padding: max(8px, var(--bezpieczny-obszar-gora)) max(8px, var(--bezpieczny-obszar-prawo))
+    max(8px, var(--bezpieczny-obszar-dol)) max(8px, var(--bezpieczny-obszar-lewo));
+  background: var(--tlo);
+  color: var(--tekst);
+}
+
+.kokpit--plansze { height: 100dvh; min-height: 0; }
+.kokpit:fullscreen { overflow: auto; }
+.kokpit__gora {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--tlo);
+}
+.kokpit__gora .naglowek-widoku { padding: 0; margin: 0; }
+.kokpit__sterowanie { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-inline-start: auto; gap: 4px; }
+.kokpit .przycisk-ikona { min-width: 44px; min-height: 44px; }
+.kokpit :is(button, a, input, select):focus-visible { outline: 2px solid var(--akcent); outline-offset: 2px; }
+.kokpit__plansza { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; align-items: center; min-height: 0; }
+.kokpit__siatka {
+  display: grid;
+  grid-template-columns: repeat(var(--kolumny), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--wiersze), minmax(0, 1fr));
+  gap: var(--odstep);
+  align-self: stretch;
+  min-height: 0;
+  min-width: 0;
+  touch-action: pan-y;
+}
+.kokpit__siatka--ciagla { grid-template-rows: repeat(var(--wiersze), minmax(90px, auto)); touch-action: auto; }
+.kokpit__ciagly { display: grid; gap: 16px; }
+.kokpit__blok {
+  container-type: size;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+  min-width: 0;
+  padding: clamp(5px, 1.4vmin, 20px);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  background: var(--premium-karta, var(--panel));
+  border: 1px solid var(--obramowanie);
+  border-radius: var(--promien-karty);
+  font-size: var(--kokpit-opis, .875rem);
+}
+.kokpit__siatka--ciagla .kokpit__blok { container-type: inline-size; min-height: 90px; }
+.kokpit__blok h2 { margin: 0 0 6px; font-size: var(--kokpit-tytul, 1rem); }
+.kokpit__blok h2 span { color: var(--premium-zloto, var(--akcent)); }
+.kokpit__blok p { margin: 2px 0; }
+.kokpit__blok .przycisk { width: fit-content; min-height: 44px; white-space: normal; }
+.kokpit__blok--zegar { text-align: center; background: var(--premium-powierzchnia, var(--panel-2)); }
+.kokpit__godzina { font-size: var(--kokpit-wartosc, clamp(2rem, min(25cqw, 48cqh), 8rem)); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1; }
+.kokpit__siatka--ciagla .kokpit__godzina { font-size: var(--kokpit-wartosc, clamp(2rem, 22cqw, 8rem)); }
+.kokpit__data { font-size: var(--kokpit-wartosc, clamp(1rem, 9cqw, 2.2rem)); }
+.kokpit__pasek { display: flex; justify-content: safe center; gap: 6px; overflow: auto; padding: 3px; flex: none; }
+.kokpit__pasek .przycisk { min-height: 44px; flex-shrink: 0; }
+.kokpit__pasek [aria-current] { border-color: var(--akcent); color: var(--akcent); background: var(--panel-2); }
+.kokpit__pusta { grid-column: 1 / -1; color: var(--tekst-2); text-align: center; }
+@media (max-height: 550px) {
+  .kokpit__gora .naglowek-widoku p { display: none; }
+  .kokpit__gora .naglowek-widoku h1 { font-size: 1.25rem; }
+}
+@media (max-width: 560px) {
+  .kokpit__gora .naglowek-widoku p { display: none; }
+  .kokpit__gora .naglowek-widoku h1 { font-size: 1.25rem; }
+  .kokpit__plansza { position: relative; grid-template-columns: minmax(0, 1fr); padding-block-end: 46px; }
+  .kokpit__plansza > button { position: absolute; inset-block-end: 0; }
+  .kokpit__plansza > button:last-child { inset-inline-end: 0; }
+}
