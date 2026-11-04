@@ -54,6 +54,7 @@ function useSesjaKokpitu() {
 
 export function usePrywatnoscKokpitu(konfiguracja: KonfiguracjaKokpitu) {
   const { gotowyDostep, moze, zapisaneUstawienia } = useAplikacja()
+  const { konto } = useKonto()
   const sesja = useSesjaKokpitu()
   const [minuta, ustawMinute] = useState(() => Math.floor(Date.now() / 60_000))
   const teraz = new Date(minuta * 60_000)
@@ -76,7 +77,18 @@ export function usePrywatnoscKokpitu(konfiguracja: KonfiguracjaKokpitu) {
   const tryb = rozwiazPrywatnosc(teraz, uwierzytelniony, regula, nadpisanie)
 
   useEffect(() => {
-    if (!uwierzytelniony || (nadpisanie?.regula && nadpisanie.regula !== regula.id)) ustawNadpisanie(undefined)
+    ustawNadpisanie(undefined)
+    const wyczysc = () => ustawNadpisanie(undefined)
+    window.addEventListener('ogarniacz:sesja-wygasla', wyczysc)
+    window.addEventListener('ogarniacz:inna-sesja', wyczysc)
+    return () => {
+      window.removeEventListener('ogarniacz:sesja-wygasla', wyczysc)
+      window.removeEventListener('ogarniacz:inna-sesja', wyczysc)
+    }
+  }, [konto?.uzytkownikId, konto?.wlascicielId])
+
+  useEffect(() => {
+    if (uwierzytelniony && nadpisanie?.regula && nadpisanie.regula !== regula.id) ustawNadpisanie(undefined)
     else if (nadpisanie?.do) {
       const zegar = window.setTimeout(() => ustawNadpisanie(undefined), Math.max(0, nadpisanie.do - Date.now()))
       return () => clearTimeout(zegar)

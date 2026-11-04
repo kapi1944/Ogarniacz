@@ -129,7 +129,8 @@ export function WidokPanelu() {
         await zapiszUstawienia({ kokpit: { ...kokpit, wlasciciel: konto?.wlascicielId } })
         ustawWidok(undefined)
       }} zamknij={() => ustawEdytuje(false)} />
-      : nawigacja.ambient ? <Ambient konfiguracja={konfiguracja.ambient} data={data} ograniczRuch={zapisaneUstawienia.dostepnosc.ograniczRuch} />
+      : nawigacja.ambient ? <Ambient konfiguracja={konfiguracja.ambient} data={data} czytajModuly={czytajModuly}
+        ograniczRuch={zapisaneUstawienia.dostepnosc.ograniczRuch} />
       : widok === 'plansze' ? <>
       <div className="kokpit__plansza">
         <button className="przycisk-ikona" type="button" aria-label="Poprzednia plansza" onClick={() => zmienPlansze(-1)}><ChevronLeft /></button>
@@ -149,12 +150,14 @@ export function WidokPanelu() {
   </div>
 }
 
-function Ambient({ konfiguracja, data, ograniczRuch }: { konfiguracja: typeof domyslnyKokpit.ambient; data: string; ograniczRuch: boolean }) {
+function Ambient({ konfiguracja, data, ograniczRuch, czytajModuly }: {
+  konfiguracja: typeof domyslnyKokpit.ambient; data: string; ograniczRuch: boolean; czytajModuly: boolean
+}) {
   const plansza: PlanszaKokpitu = {
     id: 'ambient', nazwa: 'Ambient', ikona: '◷', kolumny: 2, wiersze: Math.max(1, konfiguracja.bloki.length),
     odstep: 6, bloki: konfiguracja.bloki.map((typ, y) => ({ ...nowyBlok(typ, `ambient-${y}`), y, wyglad: { pokazTytul: false } })),
   }
   return <div className="kokpit__ambient" data-przesuwaj={konfiguracja.przesuwaj && !ograniczRuch} style={{ filter: `brightness(${100 - konfiguracja.przyciemnienie}%)` }}>
-    {plansza.bloki.length > 0 && <RendererUkladu plansza={plansza} data={data} tryb="publiczny" etykieta="Informacje Ambient" trybAmbient />}
+    {plansza.bloki.length > 0 && <RendererUkladu plansza={plansza} data={data} tryb="publiczny" etykieta="Informacje Ambient" trybAmbient czytajModuly={czytajModuly} />}
   </div>
 }
