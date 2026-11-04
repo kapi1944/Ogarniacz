@@ -6,7 +6,7 @@ import { pobierzRepozytorium } from '../../data/Repozytorium'
 import type { KonfiguracjaKokpitu, TrybKokpitu } from '../../domain/kokpit'
 import { pobierzKonfiguracjeSynchronizacji } from '../../services/KonfiguracjaSynchronizacji'
 import { czyKontoZgodneZDanymiLokalnymi, pobierzSesjeKonta, type KontoUzytkownika } from '../../services/KontaService'
-import { czyTrwaPracaKokpitu, regulaPrywatnosci, rozwiazPrywatnosc, type NadpisanieKokpitu } from '../../services/PrywatnoscKokpitu'
+import { czySesjaPozwala, czyTrwaPracaKokpitu, regulaPrywatnosci, rozwiazPrywatnosc, type NadpisanieKokpitu } from '../../services/PrywatnoscKokpitu'
 
 function useSesjaKokpitu() {
   const { konto, offline } = useKonto()
@@ -60,7 +60,7 @@ export function usePrywatnoscKokpitu(konfiguracja: KonfiguracjaKokpitu) {
   const teraz = new Date(minuta * 60_000)
   const [nadpisanie, ustawNadpisanie] = useState<NadpisanieKokpitu>()
   const [czas, ustawCzas] = useState<'regula' | 15 | 30 | 60 | 120 | 'recznie'>('regula')
-  const grafik = Boolean(sesja && gotowyDostep && konfiguracja.prywatnyWPracy && moze('grafik'))
+  const grafik = Boolean(sesja && gotowyDostep && konfiguracja.prywatnyWPracy && moze('grafik') && czySesjaPozwala(sesja, 'grafik'))
   const danePracy = useLiveQuery(() => grafik ? Promise.all([
     pobierzRepozytorium('wyjatkiGrafiku').lista(), pobierzRepozytorium('urlopy').lista(),
   ]) : undefined, [grafik, sesja?.uzytkownikId])

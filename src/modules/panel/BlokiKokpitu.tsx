@@ -166,7 +166,7 @@ export function TrescBloku({ blok, data, tryb, sesja, zmienPlansze }: {
       ? <SkrotFinansow miesiac={data.slice(0, 7)} prywatny={Boolean(prywatnaSesja)} /> : <p>Szczegóły w trybie prywatnym.</p>
     case 'polaczenie': return <StanPolaczenia />
     case 'echo': return <Link className="przycisk przycisk--glowny" to="/echo"><MessageCircle aria-hidden="true" />Otwórz Echo</Link>
-    case 'dom': return tryb === 'prywatny' ? <SekcjaDom /> : <p>Zaloguj się online jako właściciel, aby sprawdzić Home Assistant.</p>
+    case 'dom': return prywatnaSesja?.rola === 'wlasciciel' ? <SekcjaDom /> : <p>Zaloguj się online jako właściciel, aby sprawdzić Home Assistant.</p>
     case 'pogoda': return <p>Brak skonfigurowanego źródła pogody.</p>
     case 'akcja':
       if (blok.akcja === 'nastepna' || blok.akcja === 'poprzednia') return zmienPlansze ? <button className="przycisk" type="button"
