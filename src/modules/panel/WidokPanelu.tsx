@@ -32,6 +32,7 @@ export function WidokPanelu() {
   const [pelnyEkran, ustawPelnyEkran] = useState(false)
   const [blad, ustawBlad] = useState('')
   const panel = useRef<HTMLDivElement>(null)
+  const pasek = useRef<HTMLElement>(null)
   const widok = wybranyWidok ?? (konfiguracja.start === 'ostatni' ? konfiguracja.ostatni : konfiguracja.start)
   const uklad = useMemo(() => konfiguracja.profile[profil] ?? domyslnyUklad(profil), [konfiguracja, profil])
   const aktywny = Math.min(numer, uklad.plansze.length - 1)
@@ -41,6 +42,10 @@ export function WidokPanelu() {
   usePaskiAndroida(pelnyEkran && konfiguracja.immersja, ustawBlad)
   useObslugaWstecz(pelnyEkran && !edycja, () => void zmienPelnyEkran(), 20)
   const wysokosc = { auto: undefined, procent: `${uklad.wysokoscProcent}dvh`, pelna: '100dvh', piksele: `${uklad.wysokoscPx}px` }[uklad.wysokosc]
+
+  useEffect(() => {
+    pasek.current?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [aktywny, uklad, widok, edycja, nawigacja.ambient, konfiguracja.pasek])
 
   useEffect(() => {
     const odswiezDate = () => ustawDate(dzisiajIso())
@@ -132,7 +137,7 @@ export function WidokPanelu() {
           zdarzenia={nawigacja.zdarzenia} zmienPlansze={zmienPlansze} czytajModuly={czytajModuly} />
         <button className="przycisk-ikona" type="button" aria-label="Następna plansza" onClick={() => zmienPlansze(1)}><ChevronRight /></button>
       </div>
-      {konfiguracja.pasek !== 'ukryty' && <nav className="kokpit__pasek" data-ukryty={nawigacja.ukryty} aria-label="Plansze kokpitu">
+      {konfiguracja.pasek !== 'ukryty' && <nav ref={pasek} className="kokpit__pasek" data-ukryty={nawigacja.ukryty} aria-label="Plansze kokpitu">
         {uklad.plansze.map(({ id, nazwa, ikona }, indeks) => <button key={id} type="button" className="przycisk" aria-label={nazwa} aria-current={aktywny === indeks ? 'true' : undefined} onClick={() => ustawNumer(indeks)}>
           {konfiguracja.stylPaska === 'numery' ? indeks + 1 : <span aria-hidden="true">{ikona}</span>} {konfiguracja.stylPaska === 'nazwy' && nazwa}
         </button>)}
