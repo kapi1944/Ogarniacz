@@ -48,7 +48,7 @@
   display: grid;
   grid-template-columns: repeat(var(--kolumny), minmax(0, 1fr));
   grid-template-rows: repeat(var(--wiersze), minmax(0, 1fr));
-  gap: var(--odstep);
+  gap: min(var(--odstep), 2vmin);
   align-self: stretch;
   min-height: 0;
   min-width: 0;
@@ -63,7 +63,7 @@
   justify-content: safe center;
   min-height: 0;
   min-width: 0;
-  padding: clamp(5px, 1.4vmin, 20px);
+  padding: 0;
   overflow: auto;
   overflow-wrap: anywhere;
   background: var(--premium-karta, var(--panel));
@@ -71,6 +71,7 @@
   border-radius: var(--promien-karty);
   font-size: var(--kokpit-opis, .875rem);
 }
+.kokpit__tresc-bloku { padding: min(var(--kokpit-odstep, clamp(5px, 1.4vmin, 20px)), 9cqw); }
 .kokpit__kompakt { display: none; }
 @container (max-width: 110px) or (max-height: 78px) {
   .kokpit__blok[data-kompakt="true"] > .kokpit__tresc-bloku { display: none; }

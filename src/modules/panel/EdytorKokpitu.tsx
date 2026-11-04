@@ -124,10 +124,15 @@ export function EdytorKokpitu({ konfiguracja, profil: profilPoczatkowy, widok: w
   }
   function zacznij(zdarzenie: PointerEvent<HTMLButtonElement>, blok: BlokKokpitu, rozmiar: boolean) {
     if (zdarzenie.button !== 0 || gest.current) return
-    const siatka = zdarzenie.currentTarget.closest('.kokpit__siatka')?.getBoundingClientRect()
+    const siatka = zdarzenie.currentTarget.closest<HTMLElement>('.kokpit__siatka')
     if (!siatka) return
+    const styl = getComputedStyle(siatka)
+    const odstepX = Number.parseFloat(styl.columnGap)
+    const odstepY = Number.parseFloat(styl.rowGap)
+    const szerokosc = siatka.clientWidth - Number.parseFloat(styl.paddingLeft) - Number.parseFloat(styl.paddingRight)
+    const wysokosc = siatka.clientHeight - Number.parseFloat(styl.paddingTop) - Number.parseFloat(styl.paddingBottom)
     gest.current = { blok, rozmiar, id: zdarzenie.pointerId, x: zdarzenie.clientX, y: zdarzenie.clientY,
-      krokX: (siatka.width + plansza.odstep) / plansza.kolumny, krokY: (siatka.height + plansza.odstep) / plansza.wiersze }
+      krokX: (szerokosc + odstepX) / plansza.kolumny, krokY: (wysokosc + odstepY) / plansza.wiersze }
     zdarzenie.currentTarget.setPointerCapture(zdarzenie.pointerId)
     ustawWybrany(blok.id)
   }

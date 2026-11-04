@@ -14,12 +14,13 @@ function stylBloku(blok: BlokKokpitu): CSSProperties {
     gridColumn: x + 1 + ' / span ' + szerokosc,
     gridRow: y + 1 + ' / span ' + wysokosc,
     background: wyglad.tlo && `color-mix(in srgb, color-mix(in srgb, ${wyglad.tlo}, ${jasnosc > 0 ? 'white' : 'black'} ${Math.abs(jasnosc)}%), transparent ${100 - (wyglad.krycie ?? 100)}%)`,
-    color: wyglad.tekst, textAlign: wyglad.wyrownanie, padding: wyglad.odstep,
+    color: wyglad.tekst, textAlign: wyglad.wyrownanie,
     borderWidth: wyglad.grubosc, borderRadius: wyglad.promien,
     borderColor: wyglad.obramowanie && `color-mix(in srgb, ${wyglad.obramowanie}, transparent ${100 - (wyglad.krycieRamki ?? 100)}%)`,
     '--kokpit-tytul': wyglad.tytul && `${wyglad.tytul}px`,
     '--kokpit-wartosc': wyglad.wartosc && `${wyglad.wartosc}px`,
     '--kokpit-opis': wyglad.opis && `${wyglad.opis}px`,
+    '--kokpit-odstep': wyglad.odstep === undefined ? undefined : `${wyglad.odstep}px`,
   } as CSSProperties
 }
 
