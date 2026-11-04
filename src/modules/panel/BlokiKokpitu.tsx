@@ -4,7 +4,7 @@ import { CalendarDays, CheckSquare, MessageCircle } from 'lucide-react'
 import { SekcjaDom } from './SekcjaDom'
 import { useRepozytorium } from '../../hooks/useRepozytorium'
 import { pobierzKonfiguracjeSynchronizacji } from '../../services/KonfiguracjaSynchronizacji'
-import type { BlokKokpitu } from '../../domain/kokpit'
+import type { BlokKokpitu, TrybKokpitu } from '../../domain/kokpit'
 const odmowPrywatnychDanych = () => false
 
 function SkrotZadan({ data }: { data: string }) {
@@ -65,7 +65,7 @@ function Czas({ data }: { data?: boolean }) {
   </time>
 }
 
-export function TrescBloku({ blok, data }: { blok: BlokKokpitu; data: string }) {
+export function TrescBloku({ blok, data, tryb }: { blok: BlokKokpitu; data: string; tryb: TrybKokpitu }) {
   switch (blok.typ) {
     case 'zegar': return <Czas />
     case 'data': return <Czas data />
@@ -73,7 +73,7 @@ export function TrescBloku({ blok, data }: { blok: BlokKokpitu; data: string }) 
     case 'zadania': return <SkrotZadan data={data} />
     case 'polaczenie': return <StanPolaczenia />
     case 'echo': return <Link className="przycisk przycisk--glowny" to="/echo"><MessageCircle aria-hidden="true" />Otwórz Echo</Link>
-    case 'dom': return <SekcjaDom />
+    case 'dom': return tryb === 'prywatny' ? <SekcjaDom /> : <p>Zaloguj się online jako właściciel, aby sprawdzić Home Assistant.</p>
     case 'pogoda': return <p>Brak skonfigurowanego źródła pogody.</p>
     default: return <p>Ten blok jest niedostępny w tej wersji.</p>
   }

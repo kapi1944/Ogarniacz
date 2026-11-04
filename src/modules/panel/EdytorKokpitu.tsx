@@ -7,6 +7,7 @@ import type { BlokKokpitu, KonfiguracjaKokpitu, PlanszaKokpitu, ProfilKokpitu, T
 import { useObslugaWstecz } from '../../platform/obslugaWstecz'
 import { KonfiguratorBloku, SuwakKokpitu } from './KonfiguratorBloku'
 import { RendererUkladu } from './RendererUkladu'
+import { KonfiguratorPrywatnosci } from './KonfiguratorPrywatnosci'
 
 type Historia = { wczesniej: KonfiguracjaKokpitu[]; biezaca: KonfiguracjaKokpitu; pozniej: KonfiguracjaKokpitu[] }
 type Przeciaganie = { blok: BlokKokpitu; id: number; x: number; y: number; krokX: number; krokY: number; rozmiar: boolean }
@@ -234,6 +235,7 @@ export function EdytorKokpitu({ konfiguracja, profil: profilPoczatkowy, widok: w
         <button type="button" className="przycisk" disabled={zestaw.length === 1} onClick={() => zmienZestaw(zestaw.filter(({ id }) => id !== plansza.id))}>Usuń z układu</button>
         <button type="button" className="przycisk" onClick={() => { zmienZestaw(domyslnyUklad(profil)[klucz]); ustawIndeks(0) }}>Przywróć domyślny układ</button>
       </div>
+      <KonfiguratorPrywatnosci konfiguracja={biezaca} zmien={zmien} />
       <EdytujSiatke key={`${plansza.id}:${plansza.kolumny}:${plansza.wiersze}`} plansza={plansza} zmien={zmienPlansze} zglos={ustawBlad} />
       <SuwakKokpitu etykieta="Odstęp między blokami" min={0} max={24} wartosc={plansza.odstep} zmien={(odstep) => zmienPlansze({ ...plansza, odstep })} />
       <div className="kokpit__akcje">

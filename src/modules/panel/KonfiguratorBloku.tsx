@@ -59,6 +59,9 @@ export function KonfiguratorBloku({ blok, zmien, usun, duplikuj }: {
     </div>
     <p>Pozycja {blok.x + 1}, {blok.y + 1} · {blok.szerokosc} × {blok.wysokosc}</p>
     <div className="kokpit__pola">
+      <label>Widoczność bloku<select value={blok.widocznosc} onChange={(zdarzenie) => zmien({ ...blok, widocznosc: zdarzenie.target.value as BlokKokpitu['widocznosc'] })}>
+        <option value="zawsze">Zawsze</option><option value="publiczny">Tylko publicznie</option><option value="prywatny">Tylko prywatnie</option><option value="ukryty">Ukryty</option>
+      </select></label>
       <label>Paleta<select value="" onChange={(zdarzenie) => {
         const kolor = zdarzenie.target.value
         if (kolor) ustawWyglad({ tlo: kolor, tekst: wybierzCzytelnyTekst(kolor) })

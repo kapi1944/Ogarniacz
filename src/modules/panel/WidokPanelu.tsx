@@ -10,6 +10,7 @@ import { useObslugaWstecz } from '../../platform/obslugaWstecz'
 import { RendererUkladu } from './RendererUkladu'
 import { EdytorKokpitu } from './EdytorKokpitu'
 import { natywnyAndroid, useNawigacjaKokpitu, usePaskiAndroida, useProfilKokpitu } from './obslugaKokpitu'
+import { usePrywatnoscKokpitu } from './usePrywatnoscKokpitu'
 import './kokpit.css'
 
 export function WidokPanelu() {
@@ -17,7 +18,9 @@ export function WidokPanelu() {
   const { konto } = useKonto()
   const zapisana = odczytajKokpit(zapisaneUstawienia.kokpit)
   const konfiguracja = zapisana ?? domyslnyKokpit
-  const mozeEdytowac = gotowyDostep && moze('ustawienia', 'edycja') && (zapisana || zapisaneUstawienia.kokpit === undefined)
+  const prywatnosc = usePrywatnoscKokpitu(konfiguracja)
+  const mozeEdytowac = gotowyDostep && moze('ustawienia', 'edycja') && (!konto || prywatnosc.sesja?.rola === 'wlasciciel')
+    && (zapisana || zapisaneUstawienia.kokpit === undefined)
   const [edytuje, ustawEdytuje] = useState(false)
   const edycja = edytuje && mozeEdytowac
   const { profil, wybor, ustawWybor } = useProfilKokpitu(konto?.uzytkownikId ?? 'lokalny')
@@ -80,6 +83,19 @@ export function WidokPanelu() {
     <header className="kokpit__gora">
       {!pelnyEkran && <NaglowekWidoku tytul="Ekran kokpitu" opis="Ekran informacyjny i centrum sterowania." />}
       <div className="kokpit__sterowanie">
+        {!edycja && <details className="kokpit__prywatnosc">
+          <summary className="przycisk" aria-label={`Tryb ${prywatnosc.tryb}`}>{prywatnosc.tryb === 'publiczny' ? 'Publiczny' : 'Prywatny'}</summary>
+          <div className="kokpit__prywatnosc-menu">
+            {prywatnosc.uwierzytelniony ? <>
+              <label>Ręczny tryb obowiązuje<select value={prywatnosc.czas} onChange={(zdarzenie) => prywatnosc.ustawCzas(zdarzenie.target.value as typeof prywatnosc.czas)}>
+                <option value="regula">Do zmiany harmonogramu</option><option value="godzina">Przez godzinę</option><option value="recznie">Do ręcznego odwołania</option>
+              </select></label>
+              <button className="przycisk" type="button" onClick={() => prywatnosc.wybierz('publiczny')}>Użyj publicznego</button>
+              <button className="przycisk" type="button" onClick={() => prywatnosc.wybierz('prywatny')}>Użyj prywatnego</button>
+              <button className="przycisk" type="button" onClick={prywatnosc.automatyczny}>Według harmonogramu</button>
+            </> : <p>Tryb prywatny wymaga aktywnej sesji konta.</p>}
+          </div>
+        </details>}
         {!edycja && <button className="przycisk-ikona" type="button" aria-label={widokiKokpitu[widok === 'plansze' ? 'ciagly' : 'plansze']}
           onClick={() => zmienWidok(widok === 'plansze' ? 'ciagly' : 'plansze')}>{widok === 'plansze' ? '↕' : '▦'}</button>}
         {mozeEdytowac && !edycja && <button className="przycisk-ikona" type="button" aria-label="Edytuj kokpit" onClick={() => ustawEdytuje(true)}>⚙</button>}
@@ -96,7 +112,7 @@ export function WidokPanelu() {
       : widok === 'plansze' ? <>
       <div className="kokpit__plansza">
         <button className="przycisk-ikona" type="button" aria-label="Poprzednia plansza" onClick={() => zmienPlansze(-1)}><ChevronLeft /></button>
-        <RendererUkladu plansza={plansza} data={data} tryb="publiczny" etykieta={plansza.nazwa} zdarzenia={nawigacja.zdarzenia} />
+        <RendererUkladu plansza={plansza} data={data} tryb={prywatnosc.tryb} sesja={prywatnosc.sesja} etykieta={plansza.nazwa} zdarzenia={nawigacja.zdarzenia} />
         <button className="przycisk-ikona" type="button" aria-label="Następna plansza" onClick={() => zmienPlansze(1)}><ChevronRight /></button>
       </div>
       {konfiguracja.pasek !== 'ukryty' && <nav className="kokpit__pasek" data-ukryty={nawigacja.ukryty} aria-label="Plansze kokpitu">
@@ -105,7 +121,7 @@ export function WidokPanelu() {
         </button>)}
       </nav>}
     </> : <div className="kokpit__ciagly">
-      {uklad.sekcje.map((sekcja, indeks) => <RendererUkladu key={sekcja.id} plansza={sekcja} data={data} tryb="publiczny"
+      {uklad.sekcje.map((sekcja, indeks) => <RendererUkladu key={sekcja.id} plansza={sekcja} data={data} tryb={prywatnosc.tryb} sesja={prywatnosc.sesja}
         etykieta={sekcja.nazwa} ciagly wysokosc={indeks === 0 ? wysokosc : undefined} />)}
     </div>}
   </div>

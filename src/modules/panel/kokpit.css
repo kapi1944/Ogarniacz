@@ -25,6 +25,10 @@
 }
 .kokpit__gora .naglowek-widoku { padding: 0; margin: 0; }
 .kokpit__sterowanie { display: flex; flex-wrap: wrap; justify-content: flex-end; margin-inline-start: auto; gap: 4px; }
+.kokpit__prywatnosc { position: relative; }
+.kokpit__prywatnosc summary { min-height: 44px; cursor: pointer; }
+.kokpit__prywatnosc-menu { position: absolute; inset-inline-end: 0; min-width: min(255px, 80vw); display: grid; gap: 8px; padding: 12px; background: var(--panel); border: 1px solid var(--obramowanie); border-radius: var(--promien-karty); }
+.kokpit__prywatnosc-menu label { display: grid; gap: 5px; }
 .kokpit .przycisk-ikona { min-width: 44px; min-height: 44px; }
 .kokpit :is(button, a, input, select):focus-visible { outline: 2px solid var(--akcent); outline-offset: 2px; }
 .kokpit__plansza { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px; align-items: center; min-height: 0; }
