@@ -749,6 +749,7 @@ export interface UstawieniaDostepnosci {
 }
 
 export interface Ustawienia extends EncjaBazowa {
+  kokpit?: unknown
   finanseFz?: import('zod').infer<typeof import('../../server/wspolne/modelePulZobowiazan.ts').schematUstawienFz>
   podsumowaniePoPracy: {
     wlaczone: boolean
