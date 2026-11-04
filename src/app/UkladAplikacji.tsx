@@ -22,7 +22,7 @@ interface PozycjaMenu {
 const grupy: { etykieta: string; pozycje: PozycjaMenu[] }[] = [
   { etykieta: 'Główne', pozycje: [
     { etykieta: 'Pulpit', adres: '/', ikona: LayoutDashboard },
-    { etykieta: 'Panel domowy', adres: '/panel', ikona: LayoutDashboard },
+    { etykieta: 'Ekran kokpitu', adres: '/panel', ikona: LayoutDashboard },
     { etykieta: 'Dzisiaj', adres: '/dzisiaj', ikona: CalendarDays },
     { etykieta: 'Echo', adres: '/echo', modul: 'echo', ikona: MessageCircle },
   ] },
@@ -212,7 +212,7 @@ export function UkladAplikacji({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', klawisze)
   }, [otworzSzybkieDodawanie, otworzWyszukiwanie, pathname])
 
-  if (pathname === '/panel') return <main className="zawartosc">{children}</main>
+  if (pathname === '/panel') return <main>{children}</main>
 
   const zmienZwiniecie = () => {
     const nowe = !zwiniete

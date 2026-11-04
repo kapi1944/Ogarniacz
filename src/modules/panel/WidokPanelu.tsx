@@ -68,17 +68,18 @@ export function WidokPanelu() {
   const zmienPelnyEkran = async () => {
     ustawBlad('')
     try {
-      if (document.fullscreenElement) await document.exitFullscreen()
+      if (document.fullscreenElement === panel.current) await document.exitFullscreen()
       else if (panel.current?.requestFullscreen) await panel.current.requestFullscreen()
-      else ustawBlad('Ta przeglądarka nie obsługuje pełnego ekranu. Panel nadal działa w oknie.')
-    } catch { ustawBlad('Nie udało się zmienić pełnego ekranu. Panel nadal działa w oknie.') }
+      else ustawBlad('Ta przeglądarka nie obsługuje pełnego ekranu. Kokpit nadal działa w oknie.')
+    } catch { ustawBlad('Nie udało się zmienić pełnego ekranu. Kokpit nadal działa w oknie.') }
   }
   const data = dzisiajIso(teraz)
   return <div className="widok panel-domowy" ref={panel}>
-    <NaglowekWidoku tytul="Panel domowy" opis="Widok do wspólnego ekranu — bez szczegółów zdrowia i kont." akcje={<>
+    {!pelnyEkran && <NaglowekWidoku tytul="Ekran kokpitu" opis="Widok do wspólnego ekranu — bez szczegółów zdrowia i kont." />}
+    <div className="panel-domowy__sterowanie">
       <button className="przycisk przycisk--drugorzedny" type="button" onClick={() => void zmienPelnyEkran()}>{pelnyEkran ? <Minimize aria-hidden="true" /> : <Maximize aria-hidden="true" />}{pelnyEkran ? 'Wyłącz pełny ekran' : 'Pełny ekran'}</button>
-      <Link className="przycisk przycisk--drugorzedny" to="/" onClick={() => { if (document.fullscreenElement === panel.current) void document.exitFullscreen().catch(() => undefined) }}><X aria-hidden="true" />Wyjdź z panelu</Link>
-    </>} />
+      <Link className="przycisk przycisk--drugorzedny" to="/" onClick={() => { if (document.fullscreenElement === panel.current) void document.exitFullscreen().catch(() => undefined) }}><X aria-hidden="true" />Wyjdź z kokpitu</Link>
+    </div>
     {blad && <Komunikat typ="blad">{blad}</Komunikat>}
     <Karta klasa="karta--akcent">
       <time className="panel-domowy__godzina" dateTime={teraz.toISOString()}>{teraz.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}</time>

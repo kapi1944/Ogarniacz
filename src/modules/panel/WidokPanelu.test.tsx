@@ -37,7 +37,7 @@ function pokazPanel() {
   </Trasy></RouterPamieci>)
 }
 
-opisz('panel domowy', () => {
+opisz('ekran kokpitu', () => {
   sprawdz('nie odczytuje modułów bez uprawnień ani przed ustaleniem dostępu', () => {
     vi.mocked(useAplikacja).mockReturnValue({ ...kontekstTestowy, moze: () => false })
     pokazPanel()
@@ -95,7 +95,7 @@ opisz('panel domowy', () => {
   })
 
   sprawdz.each([
-    ['Otwórz Echo', 'Rozmowa Echo'], ['Otwórz zadania', 'Lista zadań'], ['Otwórz planer', 'Planer docelowy'], ['Wyjdź z panelu', 'Pulpit docelowy'],
+    ['Otwórz Echo', 'Rozmowa Echo'], ['Otwórz zadania', 'Lista zadań'], ['Otwórz planer', 'Planer docelowy'], ['Wyjdź z kokpitu', 'Pulpit docelowy'],
   ])('przechodzi przez istniejący router: %s', (link, cel) => {
     pokazPanel()
     wywolaj.click(ekran.getByRole('link', { name: link }))
@@ -116,7 +116,7 @@ opisz('panel domowy', () => {
     pokazPanel()
     wywolaj.click(ekran.getByRole('button', { name: 'Pełny ekran' }))
     oczekuj(await ekran.findByText(/Ta przeglądarka nie obsługuje/)).toBeInTheDocument()
-    oczekuj(ekran.getByRole('link', { name: 'Wyjdź z panelu' })).toBeInTheDocument()
+    oczekuj(ekran.getByRole('link', { name: 'Wyjdź z kokpitu' })).toBeInTheDocument()
   })
 
   sprawdz('korzysta z Fullscreen API i aktualizuje przycisk po Escape', async () => {
@@ -127,6 +127,7 @@ opisz('panel domowy', () => {
     oczekuj(pelnyEkran).toHaveBeenCalledOnce()
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: kontener.querySelector('.panel-domowy') })
     wywolaj(document, new Event('fullscreenchange'))
+    oczekuj(ekran.queryByRole('heading', { name: 'Ekran kokpitu' })).not.toBeInTheDocument()
     oczekuj(ekran.getByRole('button', { name: 'Wyłącz pełny ekran' })).toBeInTheDocument()
     Object.defineProperty(document, 'fullscreenElement', { configurable: true, value: null })
     wywolaj(document, new Event('fullscreenchange'))
