@@ -27,6 +27,7 @@ class RepozytoriumUstawienDexie implements RepozytoriumUstawien {
         }
       }
       zapisane.samopoczucie ??= poprzednie?.samopoczucie
+      if (zapisane.kokpit === undefined && poprzednie?.kokpit !== undefined) zapisane.kokpit = poprzednie.kokpit
       const porownywalne = (rekord: Ustawienia) => ({ ...rekordDoSynchronizacji('ustawienia', rekord), updatedAt: '' })
       const zmienionoWspolne = !poprzednie || JSON.stringify(porownywalne(zapisane)) !== JSON.stringify(porownywalne(poprzednie))
       if (!zmienionoWspolne && poprzednie) zapisane.updatedAt = poprzednie.updatedAt

@@ -9,6 +9,8 @@ import { baza, inicjalizujBaze, WERSJA_SCHEMATU_BAZY } from '../data/BazaOgarnia
 import { pobierzRepozytorium } from '../data/Repozytorium'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { utworzMetadane } from '../domain/fabryki'
+import { domyslnyKokpit, domyslnyUklad } from '../domain/kokpit'
+import { rekordDoSynchronizacji, zachowajLokalneSamopoczucie } from '../data/KolejkaSynchronizacji'
 import type { Dokument, ElementPoczekalni, Lek, ListaZakupow, Notatka, Pojazd, PozycjaZakupow, Projekt, Przypomnienie, Rachunek, Recepta, Skierowanie, Terapia, WpisTerapii, Wizyta, Zadanie } from '../domain/typy'
 import { utworzZadanie } from './ZadaniaService'
 import { pobierzInstallationId } from './InstallationService'
@@ -638,6 +640,21 @@ describe.sequential('wersjonowany backup i bezpieczne restore', () => {
     await przywrocBackup(await przygotuj(obcyBackup as unknown as OgarniaczBackup), ['zadania'])
 
     expect(pobierzInstallationId()).toBe(lokalneInstallationId)
+  })
+
+  it('przywraca kokpit z kopii i zachowuje go przy imporcie starszych ustawień', async () => {
+    const ustawienia = await repozytoriumUstawien.wczytaj()
+    const starsza = await przygotuj(await utworzBackup(['ustawienia'], () => STALA_DATA))
+    const kokpit = { ...domyslnyKokpit, profile: { pion: domyslnyUklad('pion') } }
+    const zapisane = await repozytoriumUstawien.zapisz({ ...ustawienia, kokpit })
+    const aktualna = await przygotuj(await utworzBackup(['ustawienia'], () => STALA_DATA))
+    await przywrocBackup(starsza, ['ustawienia'])
+    expect((await repozytoriumUstawien.wczytaj()).kokpit).toEqual(kokpit)
+    await baza.tabela('ustawienia').put(ustawienia)
+    await przywrocBackup(aktualna, ['ustawienia'])
+    expect((await repozytoriumUstawien.wczytaj()).kokpit).toEqual(kokpit)
+    expect(rekordDoSynchronizacji('ustawienia', zapisane)).toMatchObject({ kokpit })
+    expect(zachowajLokalneSamopoczucie('ustawienia', ustawienia, zapisane)).toMatchObject({ kokpit })
   })
 
   it('kolejny import tego samego backupu zastępuje sekcję zamiast dublować rekordy', async () => {

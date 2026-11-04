@@ -1025,7 +1025,8 @@ export async function przywrocBackup(
       if (tabela === 'ustawienia') {
         const zwykle = rekordy.find((rekord) => 'wyglad' in rekord) ?? dotychczasowe[0]
         const reguly = wybraneSekcje.includes('puleZobowiazania') ? rekordy.find((rekord) => 'finanseFz' in rekord)?.finanseFz : dotychczasowe[0]?.finanseFz
-        rekordy = zwykle ? [{ ...zwykle, ...(reguly ? { finanseFz: reguly } : {}) }] : []
+        const kokpit = zwykle?.kokpit ?? dotychczasowe[0]?.kokpit
+        rekordy = zwykle ? [{ ...zwykle, ...(reguly ? { finanseFz: reguly } : {}), ...(kokpit === undefined ? {} : { kokpit }) }] : []
       } else {
         const zachowane = dotychczasowe.filter((rekord) => {
           const finansowy = czyZakresFz(tabela, rekord, puleFz, dokumentyFz)
