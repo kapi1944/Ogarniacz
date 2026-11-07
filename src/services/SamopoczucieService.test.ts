@@ -1,5 +1,5 @@
 import Dexie from 'dexie'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach as poKazdym, beforeEach, describe, expect, it, vi } from 'vitest'
 import { baza, inicjalizujBaze } from '../data/BazaOgarniacza'
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { domyslneUstawieniaSamopoczucia, schematWpisuSamopoczucia, type WpisSamopoczucia } from '../domain/samopoczucie'
@@ -16,6 +16,7 @@ const dostep = () => true
 
 describe.sequential('Lokalny dziennik samopoczucia', () => {
   beforeEach(async () => { baza.close(); await Dexie.delete('ogarniacz-v1'); await inicjalizujBaze(); await baza.tabela('kolejkaSynchronizacji').clear() })
+  poKazdym(() => { vi.useRealTimers() })
 
   it('zapisuje notatkę i wiele obserwacji jednego dnia offline, zachowując zero i brak osobno', async () => {
     await zapiszWpisSamopoczucia(wpis(), dostep)
@@ -36,10 +37,34 @@ describe.sequential('Lokalny dziennik samopoczucia', () => {
     await zapiszWpisSamopoczucia(wpis(), dostep)
     const pierwotny = (await baza.tabela('wpisySamopoczucia').get('obserwacja'))!
     await zapiszWpisSamopoczucia({ ...pierwotny, notatka: 'Po edycji' }, dostep)
+    const zmieniony = (await baza.tabela('wpisySamopoczucia').get(pierwotny.id))!
+    expect(Date.parse(zmieniony.updatedAt)).toBeGreaterThan(Date.parse(pierwotny.updatedAt))
     await expect(zapiszWpisSamopoczucia({ ...pierwotny, notatka: 'Spóźniona' }, dostep)).rejects.toThrow('uległ zmianie')
+    await expect(zapiszWpisSamopoczucia({ ...zmieniony, notatka: 'Bez dostępu' }, () => false)).rejects.toThrow('uprawnienia')
     await expect(usunWpisSamopoczucia(pierwotny.id, () => false)).rejects.toThrow('uprawnienia')
+    expect(await baza.tabela('wpisySamopoczucia').get(pierwotny.id)).toEqual(zmieniony)
     await usunWpisSamopoczucia(pierwotny.id, dostep)
     expect((await baza.tabela('wpisySamopoczucia').get(pierwotny.id))?.usunietoAt).toBeTruthy()
+    await expect(zapiszWpisSamopoczucia(zmieniony, dostep)).rejects.toThrow('uległ zmianie')
+    expect(await baza.tabela('kolejkaSynchronizacji').count()).toBe(0)
+  })
+
+  it.each([0, -60_000])('chroni dwie równoległe edycje przy przesunięciu zegara o %i ms', async (przesuniecie) => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date(czas))
+    await zapiszWpisSamopoczucia(wpis(), dostep)
+    const pierwotny = (await baza.tabela('wpisySamopoczucia').get('obserwacja'))!
+    vi.setSystemTime(new Date(Date.parse(czas) + przesuniecie))
+    const wyniki = await Promise.allSettled([
+      zapiszWpisSamopoczucia({ ...pierwotny, notatka: 'Pierwsza edycja' }, dostep),
+      zapiszWpisSamopoczucia({ ...pierwotny, notatka: 'Spóźniona edycja' }, dostep),
+    ])
+    expect(wyniki[0].status).toBe('fulfilled')
+    expect(wyniki[1]).toMatchObject({ status: 'rejected', reason: new Error('Wpis uległ zmianie. Otwórz go ponownie przed edycją.') })
+    const zapisany = (await baza.tabela('wpisySamopoczucia').get(pierwotny.id))!
+    expect(zapisany.notatka).toBe('Pierwsza edycja')
+    expect(Date.parse(zapisany.updatedAt)).toBeGreaterThan(Date.parse(pierwotny.updatedAt))
+    expect(zapisany.createdAt).toBe(pierwotny.createdAt)
     expect(await baza.tabela('kolejkaSynchronizacji').count()).toBe(0)
   })
 

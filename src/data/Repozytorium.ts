@@ -83,7 +83,7 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
       if (this.nazwa === 'zadania' && (!('sesjaTerapiiId' in po) || typeof po.sesjaTerapiiId !== 'string' || !po.sesjaTerapiiId.trim())) throw new Error('Nie można usunąć ochrony danych psychoterapii.')
     }
     // Dwie szybkie edycje prywatnego rekordu muszą mieć różne znaczniki aktualności.
-    if ((this.nazwa === 'wynikiBadan' || this.nazwa === 'wazneInformacjeZdrowotne' || czyPrywatnaPsychoterapia(this.nazwa, po)) && przed && Date.parse(po.updatedAt) <= Date.parse(przed.updatedAt)) po.updatedAt = new Date(Date.parse(przed.updatedAt) + 1).toISOString()
+    if ((this.nazwa === 'wpisySamopoczucia' || this.nazwa === 'wynikiBadan' || this.nazwa === 'wazneInformacjeZdrowotne' || czyPrywatnaPsychoterapia(this.nazwa, po)) && przed && Date.parse(po.updatedAt) <= Date.parse(przed.updatedAt)) po.updatedAt = new Date(Date.parse(przed.updatedAt) + 1).toISOString()
   }
 
   private tabela(): Table<T, string> {
