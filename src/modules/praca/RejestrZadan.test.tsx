@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { afterEach as poKazdym, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup as wyczysc, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { baza, inicjalizujBaze } from '../../data/BazaOgarniacza'
 import { pobierzRepozytorium } from '../../data/Repozytorium'
@@ -12,6 +12,7 @@ vi.mock('../../app/KontekstAplikacji', () => ({ useAplikacja: () => ({ moze: () 
 
 describe.sequential('Rejestr Zadania', () => {
   beforeEach(async () => { baza.close(); await Dexie.delete('ogarniacz-v1'); await inicjalizujBaze() })
+  poKazdym(() => { wyczysc(); baza.close() })
 
   it('zachowuje stare zadanie, edytuje zwykłe pole i własną właściwość', async () => {
     const zadanie: Zadanie = { ...utworzMetadane('zadanie-rejestr-1'), tytul: 'Stare zadanie', opis: 'Opis', status: 'otwarte', priorytet: 'normalny', tagi: [], podzadania: [], powiazania: [] }
@@ -27,6 +28,8 @@ describe.sequential('Rejestr Zadania', () => {
     fireEvent.change(await screen.findByLabelText('Klient'), { target: { value: 'Ogarniacz' } })
     fireEvent.click(screen.getByRole('button', { name: 'Zapisz' }))
     await waitFor(async () => { const zapisane = await pobierzRepozytorium('zadania').pobierz(zadanie.id); expect(zapisane?.tytul).toBe('Zmienione zadanie'); expect(Object.values(zapisane?.polaWlasne ?? {}) as unknown[]).toContain('Ogarniacz') })
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Zapisz' })).not.toBeInTheDocument())
+    expect(await screen.findByText('Zmienione zadanie')).toBeInTheDocument()
   })
 
   it('zmienia priorytet przez istniejącą akcję domenową Zadania', async () => {
@@ -36,5 +39,6 @@ describe.sequential('Rejestr Zadania', () => {
     await waitFor(() => expect(screen.getAllByLabelText('Priorytet zadania Priorytet').length).toBeGreaterThan(0))
     fireEvent.change(screen.getAllByLabelText('Priorytet zadania Priorytet')[0], { target: { value: 'wysoki' } })
     await waitFor(async () => expect(await pobierzRepozytorium('zadania').pobierz(zadanie.id)).toMatchObject({ priorytet: 'wysoki' }))
+    expect(await screen.findByText('Zmieniono priorytet „Priorytet”.')).toBeInTheDocument()
   })
 })
