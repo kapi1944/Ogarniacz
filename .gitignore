@@ -43,8 +43,18 @@ artifacts/
 !.env.example
 
 # Prywatne eksporty danych i kopie ochronne (także w podkatalogach)
+# Domyślna baza SQLite backendu, jej WAL/SHM i dane runtime
+/data/
 ogarniacz-backup*
 ogarniacz-before-restore*
 ogarniacz-przed-*.sqlite*
 ogarniacz-przed-*.json
 ogarniacz-windows*.7z
+
+# Lokalne materiały sesji i kopie — bez usuwania istniejących plików
+/.backup-*/
+/.tmp-*/
+/tmp/
+/.codex-remote-attachments/
+/.ogarniacz-publikacja-test-*/
+/_instalatory/

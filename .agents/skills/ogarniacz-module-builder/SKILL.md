@@ -17,6 +17,12 @@ Użyj przy nowym module lub rozbudowie funkcji wymagającej połączenia widoku,
 4. Jeśli funkcja zmienia model, uprawnienia, backup lub synchronizację, sprawdź odpowiednie dokumenty zasad i bezpośrednie zależności przed edycją. Zapewnij wymaganą migrację i regresję. Migracja modułu do Rejestru wymaga osobnego GO opisanego w `ARCHITECTURE.md`; samo dodanie funkcji nie jest takim GO.
 5. Zaimplementuj najmniejszy kompletny przepływ i dobierz weryfikację według [TESTING.md](../../../docs/TESTING.md). Dokumentację aktualizuj tylko tam, gdzie zmienia się rzeczywisty kontrakt lub obsługa funkcji.
 
+## Echo i synchronizacja — odczyt warunkowy
+
+- Dla funkcji Echo zacznij od [ECHO.md](../../../docs/ECHO.md) i wskazanego tam przepływu. Rozszerz istniejący rejestr narzędzi oraz serwis domenowy; nie twórz drugiego agenta, pamięci ani kontrolera głosu.
+- Dla zapisu danych sprawdź [KolejkaSynchronizacji.ts](../../../src/data/KolejkaSynchronizacji.ts) i repozytorium zmienianej encji. Nie zakładaj, że każda tabela jest synchronizowana; `pamiecEcho` i `dziennikEcho` są lokalne, a transport FZ ma osobną blokadę.
+- Dopiero przy zmianie transportu odczytaj [SYNC_ARCHITECTURE.md](../../../docs/SYNC_ARCHITECTURE.md), [RepozytoriumZdalneHttp.ts](../../../src/data/RepozytoriumZdalneHttp.ts) i właściwy handler w [server/serwer.ts](../../../server/serwer.ts). Zachowaj outbox, konflikty, izolację profilu i ochronę prywatnych rekordów; dobierz testy tych granic.
+
 ## Granice
 
 Nie twórz równoległego magazynu danych, drugiego źródła prawdy ani abstrakcji bez realnego zastosowania. Refaktor może obejmować zależne moduły, jeśli jest konieczny dla kompletnego rozwiązania; nie wykonuj porządków poza zadaniem. Nowe integracje i działania zewnętrzne wymagają odpowiedniego zakresu zlecenia. Implementacja nie upoważnia do publikacji ani wdrożenia.
