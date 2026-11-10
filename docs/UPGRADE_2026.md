@@ -2,6 +2,8 @@
 
 Data: 2026-11-10. Zakres sesji: instrukcje, dokumentacja, organizacja; bez zmiany kodu aplikacji, modeli, danych, synchronizacji i wydań.
 
+Aktualizacja: etap 1B wykonano lokalnie po tym punkcie odniesienia. Poprzednie 12 zmian dokumentacyjnych zapisano osobno w commicie `3cd6328`; implementacja 1B pozostaje niezatwierdzona. Nie wykonano pushu ani integracji gałęzi.
+
 ## Punkt odniesienia i granice analizy
 
 - Repozytorium `kapi1944/Ogarniacz` jest publiczne. Lokalny HEAD: `7163d1d`, gałąź `codex/kokpit-2`; katalog roboczy na początku był czysty.
@@ -18,8 +20,8 @@ Data: 2026-11-10. Zakres sesji: instrukcje, dokumentacja, organizacja; bez zmian
 | Dokumentacja startowa | README z pierwszej wersji aplikacji | Nieaktualny opis localStorage, backupu i środowiska Node | Skorygowano sprawdzone fragmenty, dodano wejście do Echo |
 | Skille | Sześć niewielkich skilli Codex; brak `.claude/skills/` | Brak konkretnego routingu dla istniejącego Echo i wyjątków sync | Rozszerzono module-builder i test-selector; bez nowych skilli i kopii biblioteki |
 | Dokumentacja Echo | Szczegółowe dokumenty kolejnych etapów | Mieszają wdrożone funkcje z dawnymi planami | Nowy bieżący indeks ECHO; poprzednia architektura oznaczona jako materiał etapów |
-| Kontrakty głosu | Wspólny adapter STT/TTS, wymienny provider LLM i interfejs wake word | STT/TTS to jeden typ z fabryki; brak osobnej granicy VAD | Etap 1B: lokalne kontrakty i testy; bez nowego silnika |
-| Stany Echo | Stany agenta i kontrolera głosu oraz `wysylanie` w UI | Callback agenta nie jest podpięty w DostawcaSesjiEcho; brak jednolitego źródła aktywności | Model projekcji opisany w ECHO; implementacja dopiero w 1B |
+| Kontrakty głosu | Wspólny adapter STT/TTS, wymienny provider LLM i interfejs wake word | Brak jawnych granic STT i TTS | **1B ukończone lokalnie:** typowane kontrakty bez wymiany adaptera |
+| Stany Echo | Stany agenta i kontrolera głosu oraz aktywność tekstu | Brak wspólnej projekcji i obsługi konkurencji w UI | **1B ukończone lokalnie:** projekcja, priorytety i anulowanie opisane w ECHO |
 | Prywatność historii | Usunięty eksport + reguły ignorowania | Historyczny plik nadal istnieje w obiekcie `901c3627` | Zachować procedurę z SECURITY; decyzja właściciela, bez odczytu treści i przepisywania historii |
 | Baza backendu | `server/config.ts` domyślnie używa `./data/ogarniacz.sqlite` | Katalog runtime nie miał własnej reguły `.gitignore` | Dodano `/data/`, obejmujące bazę i WAL/SHM, bez wpływu na `src/data/` |
 | Porządek repo | Lokalne kopie, pliki sesji, binaria i archiwa | Brak reguł dla części katalogów sesji; stare załączniki i instalator są już śledzone | Dodano precyzyjne ignore dla nowych plików; istniejące zachowane, klasyfikacja poniżej |
@@ -106,14 +108,14 @@ Rekomendowana kolejność eksperymentów: obecny systemowy STT/TTS jako punkt od
 
 Faza 0 i dokumentacyjna część fazy 1 są wykonane w tej sesji. Dalsze pozycje wymagają osobnego zadania implementacyjnego. Złożoność jest względna, bez niezmierzonych szacunków godzin. Nie planujemy ponownego tworzenia istniejących pamięci preferencji, podsumowania P1, agenta, kontrolerów ani sync.
 
-### 1B — kontrakty głosu i obserwowalność stanów (pierwszy niewykonany etap)
+### 1B — kontrakty głosu i obserwowalność stanów (ukończony lokalnie 2026-11-10)
 
 - **Start / fundamenty:** dostępny ECHO, istniejące kontrolery i testy; sprawdzony status/relacja gałęzi. Bez wymogu dostępu do urządzenia na potrzeby samego kontraktu.
-- **Zmiany:** małe jawne kontrakty STT i TTS wyprowadzone z obecnych operacji, przy zachowaniu publicznej fabryki i adapterów. Lokalna projekcja stanów agenta, tekstu i sesji do jednego obserwowalnego stanu aktywności Echo; udokumentowane punkty dla przyszłego VAD i audio. Bez implementacji pozornego VAD i streamingu.
+- **Zmiany:** dodano `RozpoznawanieMowyEcho` i `SyntezaMowyEcho` przy zachowaniu publicznej fabryki i adapterów. `AgregatorStanuEcho` łączy callback agenta, aktywność tekstową, wynik oczekiwania na potwierdzenie/doprecyzowanie i stan kontrolera według priorytetów. Web TTS kończy oczekującą obietnicę po zatrzymaniu lub zastąpieniu. Żądanie tekstowe jest anulowane po zmianie widoku i przejściu aplikacji w tło. Bez nowego VAD i streamingu.
 - **Zależności:** bieżące `DostawcaSesjiEcho`, `GlosEchoService`, `KontrolerSesjiGlosowejEcho`, `AgentEcho`. Bez przebudowy modułów domenowych.
-- **Testy:** cykl STT→agent→TTS, tekst bez głosu, doprecyzowanie/potwierdzenie, anulowanie, błędy, spóźnione wyniki, przejście w tło, ręczne przerwanie i wyłączenie głosu. Wąskie testy kontrolerów/agenta/widoku, lint, typecheck, build; pełniejsza regresja tylko przy przekroczeniu tych granic.
+- **Testy lokalne 2026-11-10:** 202 testy w 19 plikach Echo/głosu przeszły; lint zakończył się kodem 0 z ostrzeżeniami, typecheck i build przeszły. Zestawy obejmują cykl STT→agent→TTS, tekst, potwierdzenie/doprecyzowanie, anulowanie, błędy, spóźnione odpowiedzi, tło, ponowne uruchomienie, barge-in i anulowanie syntezy webowej. Bez testu fizycznego Androida/WebView2.
 - **Ryzyka:** wyścigi dwóch źródeł stanu, reset sesji po zmianie ustawień, zmiana zachowania fabryki. Nie oznaczać `gotowe` jako wypowiedzi TTS ani oczekiwania jako wykonania akcji.
-- **Koniec:** dotychczasowe adaptery nadal działają, stan wynika z faktycznego cyklu operacji i nie pozostaje aktywny po anulowaniu/błędzie. Testy przechodzą, brak nowej zależności i migracji. Akceptacja sprzętowa pozostaje jawnym osobnym krokiem.
+- **Koniec:** spełniony dla kodu i testów lokalnych; adaptery i fabryka zachowane, stany nie pozostają aktywne po anulowaniu/błędzie, brak nowych zależności i migracji. Akceptacja sprzętowa pozostaje osobnym krokiem.
 - **Złożoność:** średnia.
 
 ### 2A — pomiar obecnego głosu i wybór jednego kandydata

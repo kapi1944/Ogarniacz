@@ -8,6 +8,7 @@ import { modulNarzedziaEcho, utworzDomyslnyRejestrNarzedziEcho, WykonawcaNarzedz
 import { MagazynPreferencjiEcho, preferencjePlanowaniaZPamieci } from '../services/echo/PamiecPreferencjiEcho'
 import { KonfiguracjaRozmowyEcho } from '../services/echo/KonfiguracjaRozmowyEcho'
 import { KontrolerWakeWordEcho, type WynikTestuWakeWordEcho } from '../services/echo/KontrolerWakeWordEcho'
+import type { StanPracyEcho } from '../services/echo/typyEcho'
 import { AdapterNatywnegoSilnikaWakeWordEcho, type StanSilnikaWakeWordEcho } from '../services/echo/SilnikWakeWordEcho'
 import type { AkcjaDoPotwierdzeniaEcho, OdpowiedzEcho, TrybEcho, TrybRozmowyEcho, WartoscDomyslnaEcho, WynikNarzedziaEcho, ZrodloWejsciaEcho } from '../services/echo/typyEcho'
 import type { NazwaModulu } from '../domain/typy'
@@ -30,6 +31,7 @@ interface WartoscSesjiEcho {
   komunikatWakeWord?: string
   testujWakeWord: () => Promise<WynikTestuWakeWordEcho>
   stan: StanSesjiGlosowejEcho
+  stanAgenta: StanPracyEcho
   ustawStan: (stan: StanSesjiGlosowejEcho) => void
   tryb: TrybEcho
   trybRozmowy: TrybRozmowyEcho
@@ -38,6 +40,8 @@ interface WartoscSesjiEcho {
   ustawWiadomosci: React.Dispatch<React.SetStateAction<WiadomoscEcho[]>>
   oczekujacaAkcja?: AkcjaDoPotwierdzeniaEcho
   ustawOczekujacaAkcje: (akcja?: AkcjaDoPotwierdzeniaEcho) => void
+  oczekujeDoprecyzowania: boolean
+  ustawOczekujeDoprecyzowania: (oczekuje: boolean) => void
   bladGlosu: string
   ustawBladGlosu: (blad: string) => void
   czesciowaWypowiedz: string
@@ -52,6 +56,7 @@ const etykietyModulowEcho: Partial<Record<NazwaModulu, string>> = {
 
 export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
+  const [stanAgenta, ustawStanAgenta] = useState<StanPracyEcho>('gotowy')
   const magazynPamieci = useMemo(() => new MagazynPreferencjiEcho(), [])
   const konfiguracjaRozmowy = useMemo(() => new KonfiguracjaRozmowyEcho(ustawienia.trybRozmowyEcho), [])
   const echo = useMemo(() => {
@@ -64,13 +69,14 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
       if (!modul || ustawienia.modulyEcho.includes(modul)) return true
       return `Nie mam obecnie dostępu do modułu ${etykietyModulowEcho[modul] ?? modul}. Możesz włączyć go w Ustawieniach Echo.`
     })
-    return new EchoService({ rejestr, wykonawca, magazynPamieci, pamiecPreferencjiWlaczona: ustawienia.pamiecPreferencjiEcho, konfiguracjaRozmowy, ustawAutomatycznyOdczyt: async (automatycznyOdczytEcho) => { await zapiszUstawienia({ automatycznyOdczytEcho }) }, ustawTrybRozmowy: async (trybRozmowy) => { await zapiszUstawienia({ trybRozmowyEcho: trybRozmowy }) } })
+    return new EchoService({ rejestr, wykonawca, magazynPamieci, pamiecPreferencjiWlaczona: ustawienia.pamiecPreferencjiEcho, konfiguracjaRozmowy, onZmianaStanu: ustawStanAgenta, ustawAutomatycznyOdczyt: async (automatycznyOdczytEcho) => { await zapiszUstawienia({ automatycznyOdczytEcho }) }, ustawTrybRozmowy: async (trybRozmowy) => { await zapiszUstawienia({ trybRozmowyEcho: trybRozmowy }) } })
   }, [konfiguracjaRozmowy, magazynPamieci, ustawienia.internetEcho, ustawienia.modulyEcho, ustawienia.pamiecPreferencjiEcho, zapiszUstawienia])
   const [stan, ustawStan] = useState<StanSesjiGlosowejEcho>('bezczynny')
   const [tryb, ustawTryb] = useState<TrybEcho>(echo.agent.provider.tryb)
   const [trybRozmowy, ustawTrybRozmowyStan] = useState<TrybRozmowyEcho>(konfiguracjaRozmowy.pobierzTrybRozmowy())
   const [wiadomosci, ustawWiadomosci] = useState<WiadomoscEcho[]>([{ id: 'powitanie', autor: 'echo', tresc: 'Napisz albo powiedz, co masz na głowie. Z Echo możesz rozmawiać normalnie.' }])
   const [oczekujacaAkcja, ustawOczekujacaAkcje] = useState<AkcjaDoPotwierdzeniaEcho>()
+  const [oczekujeDoprecyzowania, ustawOczekujeDoprecyzowania] = useState(false)
   const [bladGlosu, ustawBladGlosu] = useState('')
   const [czesciowaWypowiedz, ustawCzesciowaWypowiedz] = useState('')
   const [stanWakeWord, ustawStanWakeWord] = useState<StanSilnikaWakeWordEcho>('zatrzymany')
@@ -87,6 +93,7 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
     ustawTryb(odpowiedz.tryb)
     ustawWiadomosci((obecne) => [...obecne, { id: noweId(), autor: 'echo', tresc: odpowiedz.tekst, zrodloWejscia, ryzyko: odpowiedz.ryzyko, wartosciDomyslne: odpowiedz.wartosciDomyslne, wyniki: odpowiedz.wyniki }])
     ustawOczekujacaAkcje(odpowiedz.akcjaDoPotwierdzenia)
+    ustawOczekujeDoprecyzowania(Boolean(odpowiedz.oczekujeDoprecyzowania))
   }, [])
   const kontrolerGlosu = useMemo(() => new KontrolerSesjiGlosowejEcho({
     glos: platforma.glosEcho, echo, konfiguracjaRozmowy: echo.agent.konfiguracjaRozmowy, cyklZycia: platforma.cyklZycia,
@@ -123,7 +130,7 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
     return () => { void kontrolerWakeWord.zniszcz() }
   }, [kontrolerWakeWord, ustawienia.glosEcho, ustawienia.hejEcho])
 
-  return <KontekstSesjiEcho.Provider value={{ echo, kontrolerGlosu, kontrolerWakeWord, stanWakeWord, komunikatWakeWord, testujWakeWord: () => kontrolerWakeWord.testuj(), stan, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz }}>{children}</KontekstSesjiEcho.Provider>
+  return <KontekstSesjiEcho.Provider value={{ echo, kontrolerGlosu, kontrolerWakeWord, stanWakeWord, komunikatWakeWord, testujWakeWord: () => kontrolerWakeWord.testuj(), stan, stanAgenta, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, oczekujeDoprecyzowania, ustawOczekujeDoprecyzowania, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz }}>{children}</KontekstSesjiEcho.Provider>
 }
 
 export function useSesjaEcho() {

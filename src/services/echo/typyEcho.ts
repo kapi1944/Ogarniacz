@@ -3,7 +3,7 @@ import type { RyzykoDzialania } from '../../domain/typy'
 export type TrybEcho = 'pelny_agent' | 'ograniczony_lokalny'
 export type TrybRozmowyEcho = 'szybki' | 'swobodny'
 export type ZrodloWejsciaEcho = 'tekst' | 'stt'
-export type StanPracyEcho = 'gotowy' | 'slucham' | 'rozumiem' | 'wykonuje' | 'gotowe'
+export type StanPracyEcho = 'gotowy' | 'slucham' | 'rozumiem' | 'generuje' | 'wykonuje' | 'gotowe'
 
 export interface KontekstCzasuEcho {
   teraz: string

@@ -70,8 +70,8 @@ Eksport diagnostyczny JSON/Markdown to dopiero propozycja. Powinien działać na
 
 | Mechanizm | Wdrożone w kodzie | Brak / ograniczenie |
 |---|---|---|
-| STT | `GlosEchoService.ts`: Web Speech API; Android `EchoGlosPlugin.java`: `SpeechRecognizer`, `pl-PL`, częściowe wyniki, timeout, anulowanie | Brak osobnego interfejsu STT; wspólny typ `UslugaGlosuEcho` jest wyprowadzany z fabryki. Brak gwarancji pracy offline |
-| TTS | Web `speechSynthesis`; Android `TextToSpeech`, polski język, zatrzymanie | Ten sam adapter co STT; dostępność głosu zależy od systemu. Brak kolejki strumieniowego TTS |
+| STT | Kontrakt `RozpoznawanieMowyEcho` w `GlosEchoService.ts`; Web Speech API; Android `EchoGlosPlugin.java`: `SpeechRecognizer`, `pl-PL`, częściowe wyniki, timeout, anulowanie | Obecny adapter jest wspólny z TTS. Brak gwarancji pracy offline |
+| TTS | Kontrakt `SyntezaMowyEcho` w `GlosEchoService.ts`; Web `speechSynthesis`; Android `TextToSpeech`, polski język, zatrzymanie | Dostępność głosu zależy od systemu. Brak kolejki strumieniowego TTS |
 | LLM | `ProviderModeluEcho`, provider semantyczny i adapter lokalnego modelu | Brak pomiarów wybranego modelu na docelowym sprzęcie; bieżąca odpowiedź modelu bez streamingu |
 | VAD | Systemowe zdarzenia początku/końca mowy i timeouty w Android STT | Brak wymiennego VAD i strumienia PCM dla modeli. `onRmsChanged` nie publikuje amplitudy do UI |
 | Wake word | `SilnikWakeWordEcho`, kontroler cyklu życia, Android Porcupine 4.0.2 | Wymaga klucza i `echo/hej_echo_android.ppn`; repo zawiera README zamiast modelu. Web zwraca niedostępność; brak dowodu gotowości prywatnego builda |
@@ -83,29 +83,31 @@ Systemowe STT może korzystać z serwera dostawcy: [Android SpeechRecognizer](ht
 
 Natywny wake word pobiera klucz z `BuildConfig`; ignorowanie env chroni źródła, lecz nie zapewnia tajności klucza w gotowym APK. Nie zmieniono kluczy, SDK ani sposobu dystrybucji.
 
-## Stany — istniejące i proponowane
+## Stany — istniejące i prezentowane
 
 Istnieją dwa różne kontrakty:
 
-- `StanPracyEcho`: `gotowy`, `slucham`, `rozumiem`, `wykonuje`, `gotowe`; agent udostępnia callback `onZmianaStanu`.
-- `StanSesjiGlosowejEcho`: `bezczynny`, `sluchanie`, `mowiUzytkownik`, `transkrypcja`, `myslenie`, `mowienie`, `oczekiwanie`, `oczekujeDoprecyzowania`, `oczekujePotwierdzenia`, `blad`.
+- `StanPracyEcho`: `gotowy`, `slucham`, `rozumiem`, `generuje`, `wykonuje`, `gotowe`; agent udostępnia callback `onZmianaStanu`.
+- `StanSesjiGlosowejEcho`: `bezczynny`, `sluchanie`, `mowiUzytkownik`, `transkrypcja`, `myslenie`, `mowienie`, `oczekiwanie`, `oczekujeDoprecyzowania`, `oczekujePotwierdzenia`, `anulowanie`, `blad`.
 
-`DostawcaSesjiEcho` nie podpina callbacku agenta; widok tekstowy ma osobny `wysylanie`. Dziś pasek stanu nie jest kompletnym modelem całej pracy Echo. To potwierdzona luka dla przyszłej wizualizacji, nie powód do przebudowy agenta.
+`DostawcaSesjiEcho` podpina callback agenta. `AgregatorStanuEcho` w `src/services/echo/` rzutuje stan sesji, agenta, aktywność tekstową oraz wynik oczekującego potwierdzenia/doprecyzowania do jednego `StanPrezentacjiEcho`. To adapter prezentacji, a nie drugi kontroler cyklu operacji.
 
-Poniższa projekcja jest **projektem etapu 1B**, bez implementacji w tej sesji:
+Reguły projekcji i priorytety:
 
 | Stan prezentacji | Rzeczywiste źródło / warunek |
 |---|---|
-| Bezczynność | Brak aktywnego żądania i głosu |
-| Nasłuchiwanie / mowa użytkownika | Zdarzenia istniejącej sesji STT |
-| Rozpoznawanie | `transkrypcja`; nie utożsamiać timeoutu z rozpoznaniem |
-| Przetwarzanie | Początek tury, `rozumiem`/`wykonuje` i status aktualnego narzędzia |
-| Generowanie odpowiedzi | Osobne zdarzenie oczekiwania na model po dodaniu obserwowalności. Bez streamingu nie pokazywać rzekomego postępu tokenów |
-| Wypowiadanie | Start/koniec TTS, zatrzymanie i barge-in |
-| Oczekiwanie na użytkownika | Istniejące doprecyzowanie i potwierdzenie; nie sugerować, że narzędzie już wykonano |
-| Błąd | Błąd providera, narzędzia lub głosu; anulowanie pozostaje osobnym zakończeniem |
+| Bezczynność | Sesja nieaktywna i brak aktywnego żądania tekstowego |
+| Nasłuchiwanie | `sluchanie`, `mowiUzytkownik` lub cykl kontynuacji `oczekiwanie` |
+| Rozpoznawanie | Zdarzenie `transkrypcja`; timeout nie jest rozpoznaniem |
+| Przetwarzanie | Sesja `myslenie` albo aktywność agenta poza wywołaniem modelu |
+| Oczekiwanie na potwierdzenie / doprecyzowanie | Stany kontrolera wynikające z odpowiedzi agenta |
+| Generowanie odpowiedzi | Agent emituje `generuje` przed wywołaniem providera; bez postępu tokenów |
+| Odtwarzanie głosu | Kontroler jest w `mowienie`; anulowanie ustawia `anulowanie` przed zatrzymaniem silnika |
+| Anulowanie / błąd | Stany kończące sesję; po anulowaniu wraca aktywność tekstu lub bezczynność |
 
-Projekcja powinna pozostać lokalnym adapterem zdarzeń Echo. Nie dodawać globalnej magistrali aplikacji, sztucznego progressu ani amplitudy losowanej jako pomiar mikrofonu.
+Kolejność przy równoczesnych zdarzeniach: błąd, anulowanie, potwierdzenie/doprecyzowanie, aktywny głos, tekst, bezczynność. Widok anuluje żądanie tekstowe po zmianie widoku lub przejściu aplikacji w tło. Numer sesji kontrolera odrzuca spóźnione wyniki; widok numeruje odczyty TTS, żeby zakończenie starszego odczytu nie nadpisało nowszego stanu. Webowe `mow()` kończy obietnicę po zatrzymaniu albo zastąpieniu syntezy.
+
+Kontrakty `RozpoznawanieMowyEcho` i `SyntezaMowyEcho` wydzielają istniejące operacje, zachowując `utworzUslugeGlosuEcho`, bieżący adapter i konsumentów. Nie dodano dostawcy, silnika ani streamingu. Działanie poza atrapami testowymi wymaga osobnej weryfikacji sprzętowej.
 
 ## Proaktywność już dostępna
 
