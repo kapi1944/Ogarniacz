@@ -27,6 +27,8 @@ Przy konflikcie: dokumenty zasad są nadrzędne co do reguł. Dokumenty szczegó
 
 Mapa warstw i współdzielonych komponentów: `docs/ARCHITECTURE.md`. Plan dalszych prac Upgrade 2026: `docs/UPGRADE_2026.md` — czytaj tylko przy kontynuacji tych etapów. Zasady proporcjonalności są w `docs/INSTRUCTIONS.md`.
 
+Przed rozpoczęciem edycji sprawdź właściwą bazę, stan katalogu i worktree według [zasad Git](docs/INSTRUCTIONS.md#git-i-github) oraz skilla `ogarniacz-github-workflow`.
+
 ## Skille Codex
 
 Wspólne źródła skilli są w `.agents/skills/`. Codex odkrywa je w tym katalogu; Claude Code może odczytać wskazany `SKILL.md` na potrzeby zadania, bez kopiowania biblioteki do `.claude/skills/`. Dobieraj skill według `description` i czytaj tylko potrzebne odwołania. Skill nie rozszerza zakresu zgody użytkownika.
