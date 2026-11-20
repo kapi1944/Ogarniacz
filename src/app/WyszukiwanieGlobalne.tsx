@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Bot, CalendarDays, LayoutDashboard, Plus, Search } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Modal, PustyStan } from '../components/Interfejs'
@@ -20,6 +20,9 @@ export function WyszukiwanieGlobalne({ zamknij, moze, otworzDodawanie }: { zamkn
   const [aktywnyIndeks, ustawAktywnyIndeks] = useState(-1)
   const przejdz = useNavigate()
 
+  const mozeRef = useRef(moze)
+  mozeRef.current = moze
+
   useEffect(() => {
     if (fraza.trim().length < 2) {
       ustawWyniki([])
@@ -29,14 +32,17 @@ export function WyszukiwanieGlobalne({ zamknij, moze, otworzDodawanie }: { zamkn
     let aktywne = true
     const opoznienie = window.setTimeout(async () => {
       ustawSzukanie(true)
-      const znalezione = (await szukajGlobalnie(fraza)).filter((wynik) => moze(wynik.modul))
-      if (aktywne) {
-        ustawWyniki(znalezione)
-        ustawSzukanie(false)
+      try {
+        const znalezione = (await szukajGlobalnie(fraza)).filter((wynik) => mozeRef.current(wynik.modul))
+        if (aktywne) ustawWyniki(znalezione)
+      } catch {
+        if (aktywne) ustawWyniki([])
+      } finally {
+        if (aktywne) ustawSzukanie(false)
       }
     }, 180)
     return () => { aktywne = false; window.clearTimeout(opoznienie) }
-  }, [fraza, moze])
+  }, [fraza])
 
   useEffect(() => ustawAktywnyIndeks(wyniki.length > 0 ? 0 : -1), [wyniki])
 

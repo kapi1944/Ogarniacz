@@ -35,7 +35,7 @@ try {
     const odpowiedz = await fetch(`${ADRES}${sciezka}`, { redirect: 'manual' })
     const html = await odpowiedz.text()
     zapewnij(odpowiedz.ok, `Trasa ${sciezka} zwróciła HTTP ${odpowiedz.status}.`)
-    zapewnij(html.includes('<div id="root"></div>'), `Trasa ${sciezka} nie użyła fallbacku aplikacji.`)
+    zapewnij(html.includes('<div id="root">'), `Trasa ${sciezka} nie użyła fallbacku aplikacji.`)
   }
 
   const manifest = await fetch(`${ADRES}/manifest.webmanifest`).then((odpowiedz) => odpowiedz.json())

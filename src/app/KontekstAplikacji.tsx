@@ -1,5 +1,5 @@
 import { czyKontoZgodneZDanymiLokalnymi } from '../services/KontaService'
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useRepozytorium } from '../hooks/useRepozytorium'
 import type { DaneSzybkiegoDodawania, NazwaModulu, Ustawienia } from '../domain/typy'
@@ -7,8 +7,6 @@ import { DOMYSLNE_USTAWIENIA, normalizujUstawienia, zastosujUstawieniaInterfejsu
 import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { czyDozwolone, czyPasujeSekcja, ustawBiezacyDostep } from '../services/UprawnieniaService'
 import { platforma } from '../platform/platforma'
-import { SzybkieDodawanie } from './SzybkieDodawanie'
-import { WyszukiwanieGlobalne } from './WyszukiwanieGlobalne'
 import { SilnikPrzypomnien } from './SilnikPrzypomnien'
 import { useKonto } from './DostawcaKonta'
 
@@ -24,6 +22,10 @@ interface WartoscKontekstu {
   otworzWyszukiwanie: () => void
   moze: (modul: NazwaModulu, operacja?: 'odczyt' | 'edycja', sekcja?: string) => boolean
 }
+
+// Okna otwierane na żądanie nie powinny powiększać początkowego pakietu.
+const SzybkieDodawanie = lazy(() => import('./SzybkieDodawanie').then((modul) => ({ default: modul.SzybkieDodawanie })))
+const WyszukiwanieGlobalne = lazy(() => import('./WyszukiwanieGlobalne').then((modul) => ({ default: modul.WyszukiwanieGlobalne })))
 
 const KontekstAplikacji = createContext<WartoscKontekstu | null>(null)
 
@@ -100,14 +102,21 @@ export function DostawcaAplikacji({ children, prezentacja = false }: { children:
     }
   }, [])
 
-  const zapiszUstawienia = async (zmiany: Partial<Ustawienia>) => {
-    const zapisane = await repozytoriumUstawien.zapisz({ ...zapisaneUstawienia, ...zmiany })
-    zapisaneUstawieniaRef.current = zapisane
-    podgladUstawienRef.current = null
-    zastosujBiezaceUstawienia(zapisane)
-  }
+  // Zapisy są szeregowane i scalane ze świeżym rekordem, żeby szybkie zmiany nie nadpisywały się nawzajem.
+  const kolejkaZapisuUstawien = useRef<Promise<unknown>>(Promise.resolve())
+  const zapiszUstawienia = useCallback((zmiany: Partial<Ustawienia>): Promise<void> => {
+    const zapis = kolejkaZapisuUstawien.current.catch(() => undefined).then(async () => {
+      const biezace = await repozytoriumUstawien.wczytaj()
+      const zapisane = await repozytoriumUstawien.zapisz({ ...biezace, ...zmiany })
+      zapisaneUstawieniaRef.current = zapisane
+      podgladUstawienRef.current = null
+      zastosujBiezaceUstawienia(zapisane)
+    })
+    kolejkaZapisuUstawien.current = zapis
+    return zapis
+  }, [zastosujBiezaceUstawienia])
 
-  const moze = (modul: NazwaModulu, operacja: 'odczyt' | 'edycja' = 'odczyt', sekcja?: string) => {
+  const moze = useCallback((modul: NazwaModulu, operacja: 'odczyt' | 'edycja' = 'odczyt', sekcja?: string) => {
     if (['zdrowie', 'leki', 'wizyty', 'skierowania', 'dokumenty', 'ustawienia'].includes(modul) && !czyKontoZgodneZDanymiLokalnymi()) return false
     if (konto?.rola === 'wlasciciel') return true
     if (konto?.rola === 'edytor') {
@@ -121,33 +130,47 @@ export function DostawcaAplikacji({ children, prezentacja = false }: { children:
     }
     if (!wczytaneUstawienia) return false
     return czyDozwolone(ustawienia.trybUzytkownika, uprawnienia, modul, operacja, ustawienia.aktywnyEdytorId, sekcja)
-  }
+  }, [konto, wczytaneUstawienia, ustawienia.trybUzytkownika, ustawienia.aktywnyEdytorId, uprawnienia])
 
   const dostepRef = useRef(moze)
   dostepRef.current = moze
-  ustawBiezacyDostep((modul, operacja, sekcja) => dostepRef.current(modul, operacja, sekcja))
+  // Dzieci uruchamiają efekty przed rodzicem, więc delegat trzeba zarejestrować już przy pierwszym renderze.
+  const delegatZarejestrowany = useRef(false)
+  if (!delegatZarejestrowany.current) {
+    delegatZarejestrowany.current = true
+    ustawBiezacyDostep((modul, operacja, sekcja) => dostepRef.current(modul, operacja, sekcja))
+  }
   useEffect(() => {
     ustawBiezacyDostep((modul, operacja, sekcja) => dostepRef.current(modul, operacja, sekcja))
     return () => ustawBiezacyDostep(() => false)
   }, [])
 
+  const otworzWyszukiwanie = useCallback(() => ustawWyszukiwanie(true), [])
+  const zamknijWyszukiwanie = useCallback(() => ustawWyszukiwanie(false), [])
+  const zamknijSzybkieDodawanie = useCallback(() => ustawSzybkieDodawanie(null), [])
+  const kluczUprawnien = useMemo(
+    () => JSON.stringify([konto?.uzytkownikId, konto?.rola, konto?.granty, ustawienia.trybUzytkownika, ustawienia.aktywnyEdytorId, uprawnienia]),
+    [konto?.uzytkownikId, konto?.rola, konto?.granty, ustawienia.trybUzytkownika, ustawienia.aktywnyEdytorId, uprawnienia],
+  )
+  const wartosc = useMemo<WartoscKontekstu>(() => ({
+    gotowyDostep: Boolean(wczytaneUstawienia),
+    ustawienia,
+    zapisaneUstawienia,
+    zapiszUstawienia,
+    ustawPodgladUstawien,
+    wyczyscPodgladUstawien,
+    otworzSzybkieDodawanie,
+    otworzSzybkieDodawanieZDanymi,
+    otworzWyszukiwanie,
+    moze,
+  }), [wczytaneUstawienia, ustawienia, zapisaneUstawienia, zapiszUstawienia, ustawPodgladUstawien, wyczyscPodgladUstawien, otworzSzybkieDodawanie, otworzSzybkieDodawanieZDanymi, otworzWyszukiwanie, moze])
+
   return (
-    <KontekstAplikacji.Provider key={JSON.stringify([konto?.uzytkownikId, konto?.rola, konto?.granty, ustawienia.trybUzytkownika, ustawienia.aktywnyEdytorId, uprawnienia])} value={{
-      gotowyDostep: Boolean(wczytaneUstawienia),
-      ustawienia,
-      zapisaneUstawienia,
-      zapiszUstawienia,
-      ustawPodgladUstawien,
-      wyczyscPodgladUstawien,
-      otworzSzybkieDodawanie,
-      otworzSzybkieDodawanieZDanymi,
-      otworzWyszukiwanie: () => ustawWyszukiwanie(true),
-      moze,
-    }}>
+    <KontekstAplikacji.Provider key={kluczUprawnien} value={wartosc}>
       {children}
       <SilnikPrzypomnien bezKomunikatow={prezentacja} />
-      {!prezentacja && szybkieDodawanie && <SzybkieDodawanie danePoczatkowe={szybkieDodawanie} moze={moze} zamknij={() => ustawSzybkieDodawanie(null)} />}
-      {!prezentacja && wyszukiwanie && <WyszukiwanieGlobalne moze={moze} otworzDodawanie={otworzSzybkieDodawanieZDanymi} zamknij={() => ustawWyszukiwanie(false)} />}
+      {!prezentacja && szybkieDodawanie && <Suspense fallback={null}><SzybkieDodawanie danePoczatkowe={szybkieDodawanie} moze={moze} zamknij={zamknijSzybkieDodawanie} /></Suspense>}
+      {!prezentacja && wyszukiwanie && <Suspense fallback={null}><WyszukiwanieGlobalne moze={moze} otworzDodawanie={otworzSzybkieDodawanieZDanymi} zamknij={zamknijWyszukiwanie} /></Suspense>}
     </KontekstAplikacji.Provider>
   )
 }

@@ -1,9 +1,10 @@
 import { StrictMode } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DostawcaAplikacji, useAplikacja } from './KontekstAplikacji'
 import { DOMYSLNE_USTAWIENIA } from '../domain/ustawienia'
 import type { Ustawienia } from '../domain/typy'
+import { repozytoriumUstawien } from '../data/RepozytoriumUstawien'
 import { czyBiezacyDostep, ustawBiezacyDostep } from '../services/UprawnieniaService'
 
 const stan = vi.hoisted(() => ({ ustawienia: undefined as Ustawienia | undefined }))
@@ -49,5 +50,23 @@ describe('Inicjalizacja kontroli dostępu', () => {
     widok.rerender(<DostawcaAplikacji><ProbaDostepu /></DostawcaAplikacji>)
     expect(screen.getByText('false')).toBeInTheDocument()
     expect(czyBiezacyDostep('zdrowie', 'edycja', 'psychoterapia')).toBe(false)
+  })
+
+  it('szeregowane zapisy ustawień scalają zmiany zamiast nadpisywać poprzednią', async () => {
+    stan.ustawienia = DOMYSLNE_USTAWIENIA
+    const zapis = vi.spyOn(repozytoriumUstawien, 'zapisz')
+    let kontekst!: ReturnType<typeof useAplikacja>
+    function Pobierz() { kontekst = useAplikacja(); return null }
+    render(<DostawcaAplikacji><Pobierz /></DostawcaAplikacji>)
+    await act(async () => {
+      await Promise.all([
+        kontekst.zapiszUstawienia({ wyglad: { ...DOMYSLNE_USTAWIENIA.wyglad, motyw: 'ciemny' } }),
+        kontekst.zapiszUstawienia({ nawigacja: { ...DOMYSLNE_USTAWIENIA.nawigacja, menuDomyslnieZwiniete: true } }),
+      ])
+    })
+    const ostatnie = zapis.mock.calls.at(-1)![0] as Ustawienia
+    expect(ostatnie.wyglad.motyw).toBe('ciemny')
+    expect(ostatnie.nawigacja.menuDomyslnieZwiniete).toBe(true)
+    zapis.mockRestore()
   })
 })

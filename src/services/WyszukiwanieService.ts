@@ -38,9 +38,21 @@ function normalizuj(tekst: string): string {
   return tekst.toLocaleLowerCase('pl-PL').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l')
 }
 
-function pasuje(tekst: string, fraza: string): boolean {
+function slowaFrazy(fraza: string): string[] {
+  return normalizuj(fraza).split(/\s+/).filter(Boolean)
+}
+
+function pasuje(tekst: string, slowa: string[]): boolean {
   const znormalizowany = normalizuj(tekst)
-  return normalizuj(fraza).split(/\s+/).filter(Boolean).every((slowo) => znormalizowany.includes(slowo))
+  return slowa.every((slowo) => znormalizowany.includes(slowo))
+}
+
+/** Im niższa liczba, tym trafniejszy wynik: tytuł zaczyna się od frazy, potem zawiera ją, na końcu dopasowanie w treści. */
+function trafnosc(etykieta: string, slowa: string[]): number {
+  const tytul = normalizuj(etykieta)
+  if (slowa.every((slowo) => tytul.startsWith(slowo) || tytul.includes(` ${slowo}`))) return 0
+  if (slowa.every((slowo) => tytul.includes(slowo))) return 1
+  return 2
 }
 
 const etykietyKontekstu: Record<string, string> = {
@@ -63,6 +75,7 @@ function wartoscKontekstu(pole: string, wartosc: unknown): string | undefined {
 
 export async function szukajGlobalnie(fraza: string): Promise<WynikWyszukiwania[]> {
   const szukana = fraza.trim()
+  const slowa = slowaFrazy(szukana)
   if (normalizuj(szukana).length < 2) return []
   const [projekty, pojazdy] = await Promise.all([pobierzRepozytorium('projekty').lista(), pobierzRepozytorium('pojazdy').lista()])
   const nazwaProjektu = new Map(projekty.map((x) => [x.id, x.nazwa]))
@@ -70,7 +83,7 @@ export async function szukajGlobalnie(fraza: string): Promise<WynikWyszukiwania[
   const wyniki = (await Promise.all(zrodla.map(async (zrodlo) => (await pobierzRepozytorium(zrodlo.tabela).lista()).flatMap((rekord) => {
     const dane = rekord as unknown as Record<string, unknown>
     const tekst = zrodlo.pola.map((pole) => Array.isArray(dane[pole]) ? dane[pole].join(' ') : String(dane[pole] ?? '')).join(' ')
-    if (!pasuje(tekst, szukana)) return []
+    if (!pasuje(tekst, slowa)) return []
     const etykieta = String(dane.tytul ?? dane.nazwa ?? dane.opis ?? dane.nazwaPliku ?? 'Element')
     const powiazania = Array.isArray(dane.powiazania) ? dane.powiazania as { typ?: string; id?: string }[] : []
     const projektId = typeof dane.projektId === 'string' ? dane.projektId : powiazania.find((x) => x.typ === 'projekty')?.id
@@ -80,7 +93,7 @@ export async function szukajGlobalnie(fraza: string): Promise<WynikWyszukiwania[
       : samochodId && nazwaPojazdu.get(samochodId) ? `Samochód: ${nazwaPojazdu.get(samochodId)}` : undefined
     const szczegoly = zrodlo.kontekst.map((pole) => wartoscKontekstu(pole, dane[pole])).filter((wartosc): wartosc is string => Boolean(wartosc)).slice(0, 2)
     const opis = [powiazanyKontekst, ...szczegoly].filter(Boolean).join(' · ') || 'Bez dodatkowych szczegółów'
-    return [{ id: rekord.id, modul: zrodlo.modul, etykieta, typ: zrodlo.typ, opis, url: `${zrodlo.url}?element=${encodeURIComponent(rekord.id)}` }]
-  })))).flat().sort((a, b) => a.etykieta.localeCompare(b.etykieta, 'pl') || a.id.localeCompare(b.id))
-  return wyniki.slice(0, 30)
+    return [{ id: rekord.id, modul: zrodlo.modul, etykieta, typ: zrodlo.typ, opis, url: `${zrodlo.url}?element=${encodeURIComponent(rekord.id)}`, trafnosc: trafnosc(etykieta, slowa) }]
+  })))).flat().sort((a, b) => a.trafnosc - b.trafnosc || a.etykieta.localeCompare(b.etykieta, 'pl') || a.id.localeCompare(b.id))
+  return wyniki.slice(0, 30).map(({ trafnosc: _trafnosc, ...wynik }) => wynik)
 }

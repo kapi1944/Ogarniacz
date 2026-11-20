@@ -8,6 +8,13 @@ import { platforma } from '../platform/platforma'
 
 export const ZDARZENIE_ZAMKNIECIA_PROFILU = 'ogarniacz:zamknij-profil'
 const KLUCZ_ZMIANY = 'ogarniacz-zmiana-profilu'
+const LIMIT_SESJI_PRZY_STARCIE_MS = 4_000
+
+function czekajNaSesje<T>(operacja: Promise<T>, limitMs: number): Promise<T> {
+  let zegar: ReturnType<typeof setTimeout> | undefined
+  const przekroczenie = new Promise<never>((_, odrzuc) => { zegar = setTimeout(() => odrzuc(new Error('Przekroczono czas odpowiedzi serwera kont.')), limitMs) })
+  return Promise.race([operacja, przekroczenie]).finally(() => clearTimeout(zegar))
+}
 
 export function zamknijProfilNatychmiast(): void {
   window.dispatchEvent(new Event(ZDARZENIE_ZAMKNIECIA_PROFILU))
@@ -82,18 +89,22 @@ export async function przygotujProfilStartowy(): Promise<{ migracja?: ProfilLoka
     return {}
   }
   let profil: ProfilLokalny | undefined
+  const stanAktywny = await rejestrProfili.stan.get('aktywny')
+  const znanyProfil = stanAktywny?.profilId ? await rejestrProfili.profile.get(stanAktywny.profilId) : undefined
+  const maZnanyProfil = znanyProfil?.serwer === adresApi
   try {
-    const konto = await pobierzSesjeKonta()
+    // Dla znanego profilu wolny serwer nie może blokować startu; dane są lokalne.
+    const konto = await (maZnanyProfil ? czekajNaSesje(pobierzSesjeKonta(), LIMIT_SESJI_PRZY_STARCIE_MS) : pobierzSesjeKonta())
     profil = await zarejestrujProfilSesji(adresApi, konto)
   } catch (blad) {
-    if (blad instanceof BladKonta) {
-      if (blad.status !== 401) throw blad
+    if (blad instanceof BladKonta && blad.status === 401) {
       wyczyscKontoLokalne()
       await rejestrProfili.stan.put({ id: 'aktywny' })
-    } else {
-      const stan = await rejestrProfili.stan.get('aktywny')
-      const znany = stan?.profilId ? await rejestrProfili.profile.get(stan.profilId) : undefined
-      if (znany?.serwer === adresApi) profil = znany
+    } else if (blad instanceof BladKonta && blad.status < 500) {
+      throw blad
+    } else if (maZnanyProfil) {
+      // Brak sieci, przekroczony czas albo błąd serwera (5xx): start na ostatnim znanym profilu.
+      profil = znanyProfil
     }
   }
   if (!profil) {

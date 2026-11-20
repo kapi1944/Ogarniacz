@@ -22,19 +22,22 @@ export async function uzgodnijPrzypomnieniaLekow(teraz = new Date()): Promise<Pr
   let zmieniono = false
   const wynik = await baza.transaction('rw', [baza.tabela('leki'), baza.tabela('dziennikLekow'), tabela, tabelaKolejki()], async () => {
     const leki = await baza.tabela('leki').toArray()
-    const wpisy = (await baza.tabela('dziennikLekow').toArray()).filter((wpis) => !wpis.usunietoAt)
     const przypomnienia = await tabela.toArray()
+    const przypomnieniaWgId = new Map(przypomnienia.map((element) => [element.id, element]))
     const daty = new Set(Array.from({ length: 7 }, (_, indeks) => format(addDays(teraz, indeks), 'yyyy-MM-dd')))
     // Odroczenie przez północ zachowuje datę i ID pierwotnego wystąpienia.
-    for (const wpis of wpisy) if (wpis.status === 'odroczone') daty.add(wpis.data)
+    const dziennik = baza.tabela('dziennikLekow')
+    for (const wpis of await dziennik.where('status').equals('odroczone').toArray()) if (!wpis.usunietoAt) daty.add(wpis.data)
     for (const przypomnienie of przypomnienia) if (przypomnienie.dawkaLeku && aktywneStany.has(przypomnienie.stan)) daty.add(przypomnienie.dawkaLeku.data)
+    // Generator dawek korzysta tylko z wpisów z rozpatrywanych dni, więc nie czytamy całej historii dziennika.
+    const wpisy = (await dziennik.where('data').anyOf([...daty]).toArray()).filter((wpis) => !wpis.usunietoAt)
     const docelowe = new Map<string, Przypomnienie>()
     for (const data of daty) {
       const zaplanowane = new Set(generujDawkiDnia(leki, [], data).map((dawka) => dawka.idWystapienia))
       for (const dawka of generujDawkiDnia(leki, wpisy, data)) {
         if (!dawka.lek.aktywny || !zaplanowane.has(dawka.idWystapienia) || !dawka.planowanyCzas) continue
         const id = `dawka:${dawka.idWystapienia}`
-        const poprzednie = przypomnienia.find((element) => element.id === id)
+        const poprzednie = przypomnieniaWgId.get(id)
         if (poprzednie?.usunietoAt) continue
         const wersjaStanu = wersjaStanuDawki(dawka)
         const stan = dawka.status === 'zazyte' ? 'wykonane' : dawka.status === 'pominiete' ? 'pominiete'
@@ -59,7 +62,7 @@ export async function uzgodnijPrzypomnieniaLekow(teraz = new Date()): Promise<Pr
       docelowe.set(stare.id, { ...stare, stan: 'pominiete', dawkaLeku: { ...stare.dawkaLeku, nieaktualne: true } })
     }
     for (const nowe of docelowe.values()) {
-      const stare = przypomnienia.find((element) => element.id === nowe.id)
+      const stare = przypomnieniaWgId.get(nowe.id)
       if (JSON.stringify(stare) === JSON.stringify(nowe)) continue
       nowe.updatedAt = teraz.toISOString()
       await tabela.put(nowe)

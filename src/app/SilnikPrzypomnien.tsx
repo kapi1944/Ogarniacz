@@ -1,7 +1,9 @@
 import { czyBiezacyDostep, zakresDanychZdrowotnych } from '../services/UprawnieniaService'
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useRepozytorium } from '../hooks/useRepozytorium'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { baza } from '../data/BazaOgarniacza'
+import type { NazwaTabeli } from '../domain/typy'
 import { aktywnePrzypomnienia } from '../services/PrzypomnieniaService'
 import { platforma } from '../platform/platforma'
 import { sciezkaDlaSourceRef } from '../platform/trasy'
@@ -10,13 +12,28 @@ import { Komunikat } from '../components/Interfejs'
 import { oznaczDostarczeniePrzypomnienia, sciezkaAlarmuDawki, sprawdzAlarmDawki, uzgodnijPrzypomnieniaLekow } from '../services/PrzypomnieniaLekow'
 import { oznaczStanPodsumowaniaPoPracy, sciezkaPodsumowaniaPoPracy, uzgodnijPodsumowaniaPoPracy } from '../services/PodsumowaniePoPracyService'
 
+const TABELE_SILNIKA: NazwaTabeli[] = ['przypomnienia', 'leki', 'dziennikLekow', 'zadania', 'wyjatkiGrafiku', 'urlopy']
+
+/** Lekka sygnatura zmian (liczba rekordów i ostatnia aktualizacja) zamiast ładowania całych tabel do pamięci Reacta. */
+async function odczytajSygnatureTabel(): Promise<string> {
+  try {
+    return await policzSygnature()
+  } catch {
+    return 'blad' // Błąd odczytu nie może zatrzymać uzgadniania przypomnień.
+  }
+}
+
+async function policzSygnature(): Promise<string> {
+  const sygnatury = await Promise.all(TABELE_SILNIKA.map(async (nazwa) => {
+    const tabela = baza.tabela(nazwa)
+    const [liczba, ostatni] = await Promise.all([tabela.count(), tabela.orderBy('updatedAt').last()])
+    return `${liczba}:${ostatni?.updatedAt ?? ''}`
+  }))
+  return sygnatury.join('|')
+}
+
 export function SilnikPrzypomnien({ bezKomunikatow = false }: { bezKomunikatow?: boolean }) {
-  const { dane, repozytorium } = useRepozytorium('przypomnienia')
-  const { dane: leki } = useRepozytorium('leki')
-  const { dane: wpisy } = useRepozytorium('dziennikLekow')
-  const { dane: zadania } = useRepozytorium('zadania')
-  const { dane: wyjatki } = useRepozytorium('wyjatkiGrafiku')
-  const { dane: urlopy } = useRepozytorium('urlopy')
+  const sygnaturaDanych = useLiveQuery(odczytajSygnatureTabel, [])
   const kolejka = useRef(Promise.resolve())
   const { ustawienia, gotowyDostep } = useAplikacja()
   const [teraz, ustawTeraz] = useState(() => new Date())
@@ -47,7 +64,7 @@ export function SilnikPrzypomnien({ bezKomunikatow = false }: { bezKomunikatow?:
   useEffect(() => {
     let anulowano = false
     const dostarcz = async () => {
-      if (gotowyDostep === false || anulowano) return
+      if (gotowyDostep === false || anulowano || sygnaturaDanych === undefined) return
       const teraz = new Date()
       const dostarczoneIds = gotowyDostep === true ? await platforma.powiadomienia.odczytajDostarczenia?.() ?? [] : []
       const lekiUzgodnione = await uzgodnijPrzypomnieniaLekow()
@@ -90,7 +107,7 @@ export function SilnikPrzypomnien({ bezKomunikatow = false }: { bezKomunikatow?:
     return () => {
       anulowano = true
     }
-  }, [dane, leki, wpisy, zadania, wyjatki, urlopy, gotowyDostep, repozytorium, teraz, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach, ustawienia.updatedAt, wznowienie, bezKomunikatow])
+  }, [sygnaturaDanych, gotowyDostep, teraz, ustawienia.powiadomienia, ustawienia.ukrywajSzczegolyZdrowotneWPowiadomieniach, ustawienia.updatedAt, wznowienie, bezKomunikatow])
 
   if (bezKomunikatow) return null
   return <>{blad && <Komunikat typ="blad">{blad}</Komunikat>}{dataPodsumowania && ustawienia.proaktywnoscEcho && !ustawienia.echoWyciszone && ustawienia.podsumowaniePoPracy.wlaczone && <Komunikat typ="informacja"><Link to={sciezkaPodsumowaniaPoPracy(dataPodsumowania)}>🏠 Podsumowanie po pracy — sprawdź pozostałe zadania</Link><button type="button" className="przycisk przycisk--tekstowy" onClick={() => ustawDatePodsumowania('')}>Zamknij</button></Komunikat>}</>

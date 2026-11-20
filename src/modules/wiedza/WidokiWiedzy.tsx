@@ -875,8 +875,11 @@ export function WidokDokumentow() {
     const link = document.createElement("a");
     link.href = adres;
     link.download = dokument.nazwaPliku ?? dokument.nazwa;
+    document.body.append(link);
     link.click();
-    URL.revokeObjectURL(adres);
+    link.remove();
+    // Natychmiastowe zwolnienie adresu przerywa pobieranie w części przeglądarek i WebView.
+    window.setTimeout(() => URL.revokeObjectURL(adres), 30_000);
   };
   const zapisz = async (zdarzenie: FormEvent) => {
     zdarzenie.preventDefault();

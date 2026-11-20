@@ -283,10 +283,12 @@ function dopasujWpisyDziennika(
   return dopasowane
 }
 
-export function generujDawkiDnia(leki: Lek[], wpisy: DziennikLeku[], data: string): DawkaDnia[] {
+export function generujDawkiDnia(leki: Lek[], wszystkieWpisy: DziennikLeku[], data: string): DawkaDnia[] {
+  // Dalsza logika używa wyłącznie nieusuniętych wpisów z tego dnia, więc filtrujemy dziennik raz, a nie dla każdego leku.
+  const wpisy = wszystkieWpisy.filter((wpis) => wpis.data === data && !wpis.usunietoAt)
   return leki.filter((lek) => !lek.usunietoAt).flatMap((lek) => {
     const wystapienia = lek.aktywny ? wystapieniaSchematow(lek, data) : []
-    const dopasowane = dopasujWpisyDziennika(lek, data, wystapienia, wpisy.filter((wpis) => !wpis.usunietoAt))
+    const dopasowane = dopasujWpisyDziennika(lek, data, wystapienia, wpisy)
     const wykorzystane = new Set([...dopasowane.values()].map((wpis) => wpis.id))
     const wynik: DawkaDnia[] = wystapienia.map((wystapienie) => {
       const wpis = dopasowane.get(wystapienie.idWystapienia)

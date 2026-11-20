@@ -40,9 +40,8 @@ try {
   } else if (kontekst.zmianaHasla) {
     korzen.render(<DostawcaKonta><p>Sprawdzam zmianę hasła…</p></DostawcaKonta>)
   } else {
-  await inicjalizujBaze()
-  await inicjalizujPlatforme()
-  await inicjalizujRuntimeConfig()
+  // Baza i platforma są niezależne, więc nie wydłużamy startu sekwencyjnym oczekiwaniem.
+  await Promise.all([inicjalizujBaze(), inicjalizujPlatforme()])
   zastosujUstawieniaInterfejsu(
     await repozytoriumUstawien.wczytaj(),
     window.matchMedia('(prefers-color-scheme: dark)').matches,

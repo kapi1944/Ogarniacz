@@ -3,7 +3,7 @@ import Dexie from 'dexie'
 import { CapacitorHttp } from '@capacitor/core'
 import { baza } from '../data/BazaOgarniacza'
 import { rejestrProfili, pobierzAktywnyProfil, pobierzSygnalProfilu } from '../data/ProfileLokalne'
-import { pobierzSesjeKonta, type KontoUzytkownika } from './KontaService'
+import { BladKonta, pobierzSesjeKonta, type KontoUzytkownika } from './KontaService'
 import { przygotujProfilStartowy, nasluchujZmianyProfilu, zamknijProfilNatychmiast, zmienSesjeIPrzeladuj } from './KontekstProfilu'
 import { RepozytoriumZdalneHttp } from '../data/RepozytoriumZdalneHttp'
 
@@ -57,6 +57,16 @@ it('offline otwiera tylko ostatni profil z rejestru; localStorage nie wybiera in
   await expect(zmienSesjeIPrzeladuj(operacja)).rejects.toThrow('połączenia')
   expect(operacja).not.toHaveBeenCalled()
   expect(baza.isOpen()).toBe(true)
+})
+
+it('błąd serwera 5xx nie blokuje startu na znanym profilu, a błąd 4xx nadal przerywa', async () => {
+  await przygotujProfilStartowy()
+  const profilA = pobierzAktywnyProfil()!.id
+  vi.mocked(pobierzSesjeKonta).mockRejectedValue(new BladKonta(502, 'Bad gateway'))
+  await przygotujProfilStartowy()
+  expect(pobierzAktywnyProfil()?.id).toBe(profilA)
+  vi.mocked(pobierzSesjeKonta).mockRejectedValue(new BladKonta(403, 'Zabronione'))
+  await expect(przygotujProfilStartowy()).rejects.toThrow('Zabronione')
 })
 
 it('zamknięcie podczas push odrzuca odpowiedź i nie pozwala ponownie wysłać starej kolejki', async () => {

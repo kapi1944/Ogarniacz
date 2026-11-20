@@ -47,4 +47,16 @@ describe.sequential('wyszukiwanie globalne', () => {
       expect.objectContaining({ typ: 'Wizyta', opis: 'Data: 2026-09-15 · Godzina: 10:30', url: '/zdrowie/wizyty?element=wizyta-1' }),
     ])
   })
+
+  it('wyżej stawia dopasowanie w tytule niż w treści, a wyniki nie zawierają pola pomocniczego', async () => {
+    await baza.tabela('notatki').bulkPut([
+      { ...utworzMetadane('a-tresc'), tytul: 'Aaa pierwszy', tresc: 'wspomnienie o kranie', tagi: [] },
+      { ...utworzMetadane('z-tytul'), tytul: 'Kran w łazience', tresc: '', tagi: [] },
+    ] as never)
+
+    const wyniki = await szukajGlobalnie('kran')
+
+    expect(wyniki.map((wynik) => wynik.id)).toEqual(['z-tytul', 'a-tresc'])
+    expect(wyniki[0]).not.toHaveProperty('trafnosc')
+  })
 })

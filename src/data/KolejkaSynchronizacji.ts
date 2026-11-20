@@ -129,15 +129,33 @@ export async function policzZmianyDoSynchronizacji(): Promise<number> {
 
 async function pobierzDozwoloneZmianyKolejki(): Promise<ZmianaKolejkiSynchronizacji[]> {
   const zmiany = await tabelaKolejki().orderBy('createdAt').toArray()
-  const bezpieczne: ZmianaKolejkiSynchronizacji[] = []
-  for (const zmiana of zmiany) {
+  // Kandydaci przechodzą te same wstępne odrzucenia co wcześniej, zanim sięgniemy po lokalne rekordy.
+  const kandydaci = zmiany.filter((zmiana) => {
     const tabela = zmiana.tabela as NazwaTabeli
-    if (czyRekordFz(tabela, zmiana.rekord)) continue
-    if (!nazwyTabel.includes(tabela) || !czyTabelaSynchronizowana(tabela)) continue
-    if (czyTabelaFinansowWspolnych(tabela) && !czyDostepFinansowWspolnych('odczyt')) continue
-    if (czyPrywatnaPsychoterapia(tabela, zmiana.rekord) || czyPrywatnaPsychoterapia(tabela, await baza.tabela(tabela).get(zmiana.rekordId))) continue
-    if (await czyWstrzymanyTransportFz(tabela, zmiana.rekord) || await czyWstrzymanyTransportFz(tabela, await baza.tabela(tabela).get(zmiana.rekordId))) continue
-    bezpieczne.push({ ...zmiana, rekord: zachowajLokalneSamopoczucie(tabela, zmiana.rekord, await baza.tabela(tabela).get(zmiana.rekordId)) })
+    if (czyRekordFz(tabela, zmiana.rekord)) return false
+    if (!nazwyTabel.includes(tabela) || !czyTabelaSynchronizowana(tabela)) return false
+    return !(czyTabelaFinansowWspolnych(tabela) && !czyDostepFinansowWspolnych('odczyt'))
+  })
+  // Lokalne rekordy pobieramy jednym bulkGet na tabelę, a nie trzema get na każdą zmianę.
+  const idWgTabeli = new Map<string, Set<string>>()
+  for (const zmiana of kandydaci) {
+    const ids = idWgTabeli.get(zmiana.tabela) ?? new Set<string>()
+    ids.add(zmiana.rekordId)
+    idWgTabeli.set(zmiana.tabela, ids)
+  }
+  const lokalne = new Map<string, EncjaBazowa | undefined>()
+  for (const [tabela, ids] of idWgTabeli) {
+    const lista = [...ids]
+    const rekordy = await baza.tabela(tabela as NazwaTabeli).bulkGet(lista)
+    lista.forEach((id, indeks) => lokalne.set(`${tabela}:${id}`, rekordy[indeks]))
+  }
+  const bezpieczne: ZmianaKolejkiSynchronizacji[] = []
+  for (const zmiana of kandydaci) {
+    const tabela = zmiana.tabela as NazwaTabeli
+    const lokalny = lokalne.get(`${tabela}:${zmiana.rekordId}`)
+    if (czyPrywatnaPsychoterapia(tabela, zmiana.rekord) || czyPrywatnaPsychoterapia(tabela, lokalny)) continue
+    if (await czyWstrzymanyTransportFz(tabela, zmiana.rekord) || await czyWstrzymanyTransportFz(tabela, lokalny)) continue
+    bezpieczne.push({ ...zmiana, rekord: zachowajLokalneSamopoczucie(tabela, zmiana.rekord, lokalny) })
   }
   return bezpieczne
     .map((zmiana) => ({ ...zmiana, rekord: rekordDoSynchronizacji(zmiana.tabela as NazwaTabeli, zmiana.rekord) }))

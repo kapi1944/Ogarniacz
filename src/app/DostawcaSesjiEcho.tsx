@@ -58,6 +58,8 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
   const { ustawienia, zapiszUstawienia } = useAplikacja()
   const [stanAgenta, ustawStanAgenta] = useState<StanPracyEcho>('gotowy')
   const magazynPamieci = useMemo(() => new MagazynPreferencjiEcho(), [])
+  // Tryb początkowy; późniejsze zmiany synchronizuje efekt poniżej.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps
   const konfiguracjaRozmowy = useMemo(() => new KonfiguracjaRozmowyEcho(ustawienia.trybRozmowyEcho), [])
   const echo = useMemo(() => {
     const rejestr = utworzDomyslnyRejestrNarzedziEcho({

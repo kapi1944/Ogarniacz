@@ -49,6 +49,8 @@ import { OsCzasu } from './OsCzasu'
 import { etykietaStatusuElementu } from './logikaDniaPulpitu'
 import { kandydaciSugestiiEchoPulpitu, widoczneSugestieEchoPulpitu } from './SugestieEchoPulpitu'
 
+const PUSTE_ELEMENTY: ElementOgarniacza[] = []
+const PUSTE_DANE_ZDROWIA = { skierowania: [], recepty: [] } as { skierowania: Awaited<ReturnType<ReturnType<typeof pobierzRepozytorium<'skierowania'>>['lista']>>; recepty: Awaited<ReturnType<ReturnType<typeof pobierzRepozytorium<'recepty'>>['lista']>> }
 const dostawcaZadan = new DostawcaZadanPulpitu()
 const dostawcaLekow = new DostawcaLekowPulpitu()
 const dostawcaWizyt = new DostawcaWizytPulpitu()
@@ -166,7 +168,7 @@ export function WidokPulpitu() {
     return { od: dzisiaj, do: konceZakresow.sort().at(-1) ?? dzisiaj }
   }, [dzisiaj, ustawienia.pulpit.kafelki, ustawienia.pulpit.pokazAlerty])
   const { daneDnia, elementyDnia, elementyOsi, harmonogram, wyjatekDnia, edycjaHarmonogramu, ustawEdycjeHarmonogramu, komunikat, ustawKomunikat, zapiszZmianeHarmonogramu, przelaczDostepnosc, usunWyjatek } = usePlanDniaPulpitu(data)
-  const zadaniaKafelkow = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: '1900-01-01', do: '9999-12-31' }), [], [])
+  const zadaniaKafelkow = useLiveQuery(() => dostawcaZadan.pobierzElementy({ od: '1900-01-01', do: '9999-12-31' }), [], PUSTE_ELEMENTY)
   const modulyKafelkow = useLiveQuery(async () => {
     const [leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia] = await Promise.all([
       pobierzBezpiecznie(dostawcaLekow, zakresModulow),
@@ -195,7 +197,10 @@ export function WidokPulpitu() {
     ])
     return { leki, wizyty, finanse, samochod, zakupy, notatki, poczekalnia }
   }, [dzisiaj])
-  const zdrowieDoAlertow = useLiveQuery(async () => ({ skierowania: await pobierzRepozytorium('skierowania').lista(), recepty: await pobierzRepozytorium('recepty').lista() }), [], { skierowania: [], recepty: [] })
+  const zdrowieDoAlertow = useLiveQuery(async () => {
+    const [skierowania, recepty] = await Promise.all([pobierzRepozytorium('skierowania').lista(), pobierzRepozytorium('recepty').lista()])
+    return { skierowania, recepty }
+  }, [], PUSTE_DANE_ZDROWIA)
   const elementyModulowKafelkow = useMemo(() => [
     ...(modulyKafelkow?.leki.elementy ?? []),
     ...(modulyKafelkow?.wizyty.elementy ?? []),

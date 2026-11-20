@@ -45,6 +45,20 @@ function czyZrodloZakonczone(nazwa: NazwaTabeli, encja: EncjaBazowa): boolean {
   return false
 }
 
+type PamiecDostepu = Map<string, boolean>
+interface PowiazaniaDokumentow { wizyty: MapaTabel['wizyty'][]; wyniki: MapaTabel['wynikiBadan'][]; sesje: MapaTabel['wpisyTerapii'][] }
+
+/** Sprawdzenie dostępu z pamięcią podręczną na czas jednej operacji; samo sprawdzenie czyta localStorage. */
+function dostepZPamiecia(pamiec?: PamiecDostepu): typeof czyBiezacyDostep {
+  if (!pamiec) return czyBiezacyDostep
+  return (modul, operacja, sekcja) => {
+    const klucz = `${modul}|${operacja}|${sekcja ?? ''}`
+    let wynik = pamiec.get(klucz)
+    if (wynik === undefined) { wynik = czyBiezacyDostep(modul, operacja, sekcja); pamiec.set(klucz, wynik) }
+    return wynik
+  }
+}
+
 export interface Repozytorium<T extends EncjaBazowa> {
   lista(): Promise<T[]>
   pobierz(id: string): Promise<T | undefined>
@@ -113,24 +127,34 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
     if (powiazane) powiadomOZmianieDanych('dokumenty')
   }
 
-  private async czyDostepPowiazanegoDokumentu(encja: T | undefined, operacja: 'odczyt' | 'edycja'): Promise<boolean> {
-    if (this.nazwa !== 'dokumenty' || !encja) return true
+  private async wczytajPowiazaniaDokumentow(): Promise<PowiazaniaDokumentow> {
     const [wizyty, wyniki, sesje] = await Promise.all([baza.tabela('wizyty').toArray(), baza.tabela('wynikiBadan').toArray(), baza.tabela('wpisyTerapii').toArray()])
+    return { wizyty, wyniki, sesje }
+  }
+
+  private async czyDostepPowiazanegoDokumentu(encja: T | undefined, operacja: 'odczyt' | 'edycja', powiazania?: PowiazaniaDokumentow): Promise<boolean> {
+    if (this.nazwa !== 'dokumenty' || !encja) return true
+    return this.czyDostepDokumentu(encja, operacja, powiazania ?? await this.wczytajPowiazaniaDokumentow())
+  }
+
+  private czyDostepDokumentu(encja: T, operacja: 'odczyt' | 'edycja', { wizyty, wyniki, sesje }: PowiazaniaDokumentow, pamiec?: PamiecDostepu): boolean {
     const sekcje = (encja as unknown as Dokument).sekcjePrywatnosci ?? []
     const materialTerapii = sekcje.includes('psychoterapia') || sesje.some((sesja) => sesja.psychoterapia?.dokumentyIds?.includes(encja.id))
     const medyczny = sekcje.includes('dokumentacja') || materialTerapii || wizyty.some((wizyta) => wizyta.dokumentyIds.includes(encja.id)) || wyniki.some((wynik) => wynik.dokumentId === encja.id)
     if (!medyczny) return true
-    return czyBiezacyDostep('zdrowie', operacja, 'dokumentacja') && (!materialTerapii || czyBiezacyDostep('zdrowie', operacja, 'psychoterapia')) && (!this.dostepDoDanychPrywatnych || this.dostepDoDanychPrywatnych(operacja))
+    const dostep = dostepZPamiecia(pamiec)
+    return dostep('zdrowie', operacja, 'dokumentacja') && (!materialTerapii || dostep('zdrowie', operacja, 'psychoterapia')) && (!this.dostepDoDanychPrywatnych || this.dostepDoDanychPrywatnych(operacja))
   }
 
-  private czyDostep(encja: T | undefined, operacja: 'odczyt' | 'edycja'): boolean {
+  private czyDostep(encja: T | undefined, operacja: 'odczyt' | 'edycja', pamiec?: PamiecDostepu): boolean {
+    const dostep = dostepZPamiecia(pamiec)
     if (czyRekordFz(this.nazwa, encja) && !czyDostepFinansowWspolnych(operacja)) return false
-    if (this.nazwa === 'przypomnienia' && encja && ('echoPoPracy' in encja || encja.id.startsWith('echo-po-pracy:')) && !czyBiezacyDostep('echo', operacja)) return false
+    if (this.nazwa === 'przypomnienia' && encja && ('echoPoPracy' in encja || encja.id.startsWith('echo-po-pracy:')) && !dostep('echo', operacja)) return false
     if (this.nazwa === 'historiaZmian' && encja && 'typEncji' in encja && czyTabelaFinansowWspolnych(String(encja.typEncji))) return czyDostepFinansowWspolnych(operacja)
-    if (this.nazwa === 'dokumenty' && !czyBiezacyDostep('dokumenty', operacja)) return false
+    if (this.nazwa === 'dokumenty' && !dostep('dokumenty', operacja)) return false
     const zakres = zakresDanychZdrowotnych(this.nazwa, encja)
     if (!zakres) return true
-    if (!czyBiezacyDostep(zakres.modul, operacja, zakres.sekcja)) return false
+    if (!dostep(zakres.modul, operacja, zakres.sekcja)) return false
     if (zakres.sekcja && this.dostepDoDanychPrywatnych && !this.dostepDoDanychPrywatnych(operacja)) return false
     if (this.nazwa === 'wpisySamopoczucia' && !this.dostepDoDanychPrywatnych?.(operacja)) return false
     return true
@@ -193,10 +217,16 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
 
   async lista(): Promise<T[]> {
     const wszystkie = await this.tabela().toArray()
-    const dostepneDokumenty = new Set((await Promise.all(wszystkie.map(async (encja) => await this.czyDostepPowiazanegoDokumentu(encja, 'odczyt') ? encja.id : undefined))).filter(Boolean))
+    // Uprawnienia i powiązania dokumentów liczymy raz na wywołanie, nie dla każdego rekordu.
+    const pamiec: PamiecDostepu = new Map()
+    const powiazania = this.nazwa === 'dokumenty' ? await this.wczytajPowiazaniaDokumentow() : undefined
+    const prywatnyOdczyt = this.dostepDoDanychPrywatnych?.('odczyt')
     return wszystkie
-      .filter((encja) => dostepneDokumenty.has(encja.id) && !encja.usunietoAt && this.czyDostep(encja, 'odczyt') && (this.nazwa !== 'wynikiBadan' && this.nazwa !== 'wazneInformacjeZdrowotne' && !czyPrywatnaPsychoterapia(this.nazwa, encja) || this.dostepDoDanychPrywatnych?.('odczyt')))
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .filter((encja) => !encja.usunietoAt
+        && (!powiazania || this.czyDostepDokumentu(encja, 'odczyt', powiazania, pamiec))
+        && this.czyDostep(encja, 'odczyt', pamiec)
+        && (this.nazwa !== 'wynikiBadan' && this.nazwa !== 'wazneInformacjeZdrowotne' && !czyPrywatnaPsychoterapia(this.nazwa, encja) || prywatnyOdczyt))
+      .sort((a, b) => a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0)
   }
 
   async pobierz(id: string): Promise<T | undefined> {
