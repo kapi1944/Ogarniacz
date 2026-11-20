@@ -17,6 +17,11 @@ Użyj, gdy zadanie wymaga wyboru testów, weryfikacji zmiany albo ustalenia bram
 4. Zmiana modelu danych wymaga testu migracji na reprezentatywnym stanie sprzed zmiany. Dla bezpieczeństwa, synchronizacji oraz pozostałych modułów wrażliwych z `TESTING.md` uwzględnij wymagane regresje, także na granicach modułów. Szczegóły dobieraj z dokumentów zasad wskazanych w [AGENTS.md](../../../AGENTS.md).
 5. Przy zmianie przekrojowej lub release zastosuj właściwą bramkę regresji z `TESTING.md`. Poszerz weryfikację również wtedy, gdy wąskie testy ujawnią szerszy problem. Zapisz polecenia, wyniki i ograniczenia środowiska.
 
+## Najbliższe testy Echo i synchronizacji
+
+- Echo: mapa testów w [ECHO.md](../../../docs/ECHO.md); przy zmianie adaptera modelu dołącz kontrakt backendu, a przy głosie testy kontrolerów i osobną akceptację na urządzeniu.
+- Synchronizacja: [SyncEngine.test.ts](../../../src/services/SyncEngine.test.ts), [RepozytoriumZdalneHttp.test.ts](../../../src/data/RepozytoriumZdalneHttp.test.ts), [SynchronizacjaAplikacji.test.ts](../../../src/services/SynchronizacjaAplikacji.test.ts). Dobieraj tylko dotknięte kontrakty; migracje i backup mają własne zestawy przy odpowiednich implementacjach.
+
 ## Granice
 
 Nie wyłączaj testów ani nie zawężaj zakresu kosztem wymaganych kontroli bezpieczeństwa, migracji lub synchronizacji. Nie dodawaj testów odtwarzających samą implementację. Weryfikacja nie upoważnia do publikacji ani wdrożenia. Wynik automatyczny nie potwierdza testu fizycznego urządzenia lub produkcji.

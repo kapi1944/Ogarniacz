@@ -1,11 +1,11 @@
 # Ogarniacz v1
 
-Ogarniacz to prywatne, lokalne centrum dowodzenia codziennym życiem. Łączy zadania, plan dnia, zdrowie, przypomnienia, zakupy, finanse, wiedzę i lokalnego asystenta Echo. Aplikacja działa bez konta, backendu i internetu; dane pozostają w IndexedDB wybranej przeglądarki.
+Ogarniacz to prywatne centrum dowodzenia codziennym życiem. Łączy zadania, plan dnia, zdrowie, przypomnienia, zakupy, finanse, wiedzę i asystenta Echo. Podstawowe funkcje działają local-first w IndexedDB; opcjonalny backend obsługuje konta, synchronizację i lokalny model Echo. Klienci: web/PWA, Android (Capacitor) i Windows (WebView2).
 
 ## Wymagania
 
 - Windows 10/11;
-- Node.js 20 lub nowszy;
+- Node.js 24 (wersja używana przez CI i backend);
 - aktualny Chrome, Edge albo inna nowoczesna przeglądarka.
 
 ## Instalacja
@@ -58,17 +58,16 @@ npm run test:watch
 
 ## Gdzie są dane
 
-Dane są zapisane w **IndexedDB** pod nazwą `ogarniacz-v1`, w profilu konkretnej przeglądarki i dla konkretnego adresu aplikacji. Nie znajdują się w pliku repozytorium. Wyczyszczenie danych witryny w przeglądarce usuwa bazę.
+Dane klienta są zapisane w **IndexedDB**, w bazie bazowej `ogarniacz-v1` lub bazie aktywnego profilu, dla konkretnego adresu aplikacji. Wyczyszczenie danych witryny usuwa dane lokalne. Opcjonalny backend przechowuje dane serwerowe w SQLite; domyślny prywatny katalog `data/` jest ignorowany przez Git.
 
-`localStorage` przechowuje jedynie stan zwinięcia sidebara. Dane użytkownika nie są tam zapisywane.
+Profile lokalne są zarządzane przez `src/data/ProfileLokalne.ts`. `localStorage` zawiera także metadane konta offline i właściciela danych, a `sessionStorage` przechowuje CSRF. Nie traktuj danych witryny jako publicznych ani nie eksportuj ich do raportów agentów.
 
 ## Backup i import
 
-1. Otwórz **Ustawienia → Backup i import**.
-2. Kliknij **Eksportuj pełną kopię**. Przeglądarka pobierze wersjonowany plik JSON.
-3. Przy imporcie wybierz plik i tryb:
-   - **Scal po ID** — dodaje rekordy i aktualizuje rekordy o tych samych identyfikatorach;
-   - **Nadpisz całą bazę** — najpierw usuwa bieżące dane i wymaga osobnego potwierdzenia.
+1. Otwórz **Ustawienia → Dane / Backup** i wybierz sekcje kopii.
+2. Ustaw hasło i zapisz zaszyfrowany plik JSON; zachowaj hasło poza aplikacją.
+3. Import odszyfrowuje i waliduje kopię przed podglądem. Obsługuje również starsze jawne formaty 1–3.
+4. Przed restore aplikacja zabezpiecza pełną kopię `before-restore` i wymaga właściwego potwierdzenia. Szczegóły zapisu na Androidzie i ograniczeń pobierania PWA: [Bezpieczeństwo kopii](docs/SECURITY.md).
 
 Pliki dokumentów przechowywane jako Blob są kodowane w backupie jako Base64.
 
@@ -84,6 +83,8 @@ PWA ma manifest, ikony, service worker i offline shell. Dane lokalne pozostają 
 
 - [Android: deploy, release i aktualizacje bez kabla](docs/ANDROID.md)
 - [Architektura](docs/ARCHITECTURE.md)
+- [Echo — aktualna implementacja](docs/ECHO.md)
+- [Upgrade 2026 — analiza i kolejne etapy](docs/UPGRADE_2026.md)
 - [Model danych](docs/DATA_MODEL.md)
 - [Specyfikacja v1](docs/SPECYFIKACJA_OGARNIACZ_V1.md)
 - [Otwarte decyzje](docs/OPEN_DECISIONS.md)

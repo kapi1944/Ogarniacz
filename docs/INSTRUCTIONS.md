@@ -17,11 +17,15 @@ Dobieraj najlepsze rozwiązanie techniczne. Minimalizuj zakres zmian, ale nie ko
 
 ## Proporcjonalność pracy agenta
 
+- Nazwy nowego kodu i komentarze zapisuj po polsku, z zachowaniem istniejących kontraktów bibliotek i transportu.
+- Przed dodaniem mechanizmu znajdź jego istniejący odpowiednik; mapa wejścia to `ARCHITECTURE.md`, a dla Echo `ECHO.md`.
 - Czytaj tylko dokumenty i kod potrzebne dla bieżącego zadania.
 - Pełny audyt repo wykonuj tylko wtedy, gdy zadanie tego wymaga.
 - Testuj najpierw zmieniony obszar. Pełną regresję uruchamiaj tylko przy zmianach przekrojowych, release albo gdy wąskie testy ujawnią problem.
 - Nie dodawaj testów, które tylko odtwarzają implementację.
 - Przy jednoznacznym i odwracalnym zadaniu działaj autonomicznie do kompletnego wyniku zamiast zatrzymywać się po planie.
+- Nowe API, integracje, automatyzacje i AI wdrażaj wyłącznie w zakresie jawnego zlecenia. Dopuszczalność techniczna z `API.md` nie jest zgodą na integrację, koszt, publikację ani deploy.
+- Zachowaj zastane zmiany użytkownika i prywatne kopie danych; nie zmieniaj historii Git ani nie publikuj bez odpowiedniego zlecenia.
 
 ## Nienegocjowalne
 - Brak sekretów w repo i froncie.

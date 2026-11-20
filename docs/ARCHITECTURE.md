@@ -25,7 +25,7 @@ Echo, synchronizacja, OTA, konta, signing, backup:
 - Backend może pełnić rolę proxy dla zewnętrznych API, żeby chronić klucze.
 
 ## Sposób pracy modeli
-- Najpierw diagnoza i plan, potem zmiana.
+- Najpierw rozpoznaj dotknięty przepływ; plan dobierz do złożoności. Prosta, odwracalna zmiana nie wymaga osobnej fazy planowania.
 - Uzasadniaj wybór rozwiązania (dlaczego API / biblioteka / refaktor).
 - Jeśli proponujesz coś poza zakresem — krótko wyjaśnij co i dlaczego.
 - Nie ukrywaj kompromisów: koszt, prywatność, vendor lock-in, dług techniczny.
@@ -33,11 +33,13 @@ Echo, synchronizacja, OTA, konta, signing, backup:
 
 ---
 
-# Architektura Ogarniacza v1
+# Aktualna mapa implementacji
+
+Stan sprawdzony w kodzie 2026-11-10. To mapa wejścia; szczegóły kontraktów danych, bezpieczeństwa i platform pozostają w dokumentach zasad i podlinkowanych implementacjach.
 
 ## Założenia
 
-Ogarniacz v1 jest aplikacją webową desktop-first i PWA. Działa local-first bez konta, backendu i zewnętrznego API. Kod UI nie komunikuje się bezpośrednio z IndexedDB: wszystkie operacje przechodzą przez repozytoria i serwisy.
+Ogarniacz jest aplikacją React + TypeScript + Vite, działającą local-first jako web/PWA, Android (Capacitor) i Windows (WebView2/.NET 8). Podstawowe dane lokalne są w IndexedDB. Opcjonalny backend Node.js z SQLite obsługuje konta, synchronizację i transport lokalnego modelu Echo. Warstwy domenowe korzystają z repozytoriów i serwisów; nie twórz obok nich drugiego magazynu.
 
 ## Warstwy
 
@@ -46,7 +48,20 @@ Ogarniacz v1 jest aplikacją webową desktop-first i PWA. Działa local-first be
 3. **Logika domenowa** — `src/services`; planer, recurrence, leki, przypomnienia, nawyki, backup, Echo i uprawnienia.
 4. **Model** — `src/domain`; spójne typy, ID i daty.
 5. **Dane lokalne** — `src/data`; Dexie, IndexedDB, migracje i repozytoria.
-6. **Granica przyszłej synchronizacji** — `DostawcaSynchronizacji` i `RepozytoriumZdalne`; brak fikcyjnego serwera.
+6. **Synchronizacja** — `KolejkaSynchronizacji`, `SyncEngine`, `RepozytoriumZdalneHttp` i backend `server/serwer.ts`; istnieją outbox, konflikty oraz ograniczenia tabel i danych prywatnych.
+
+## Gdzie zacząć
+
+| Zadanie | Istniejące wejście | Szczegóły na żądanie |
+|---|---|---|
+| Widok i formularz | `src/modules/`, `src/components/Interfejs.tsx`, `PoleDaty`, `PoleCzasu`, `PoleKwoty`, `PoleLiczbowe` | [Formularze](POLA_FORMULARZY.md), `src/styles/glowny.css`, właściwy skill UI/formularzy |
+| Dane i profile | `src/data/BazaOgarniacza.ts`, `Repozytorium.ts`, `ProfileLokalne.ts` | [Zasady danych](DATA.md); `src/domain/typy.ts` i `ustawienia.ts` |
+| Synchronizacja | `src/data/KolejkaSynchronizacji.ts`, `src/services/SyncEngine.ts`, `SynchronizacjaAplikacji.ts` | [Synchronizacja](SYNC_ARCHITECTURE.md), `src/data/RepozytoriumZdalneHttp.ts`, `server/serwer.ts` |
+| Echo i głos | `src/app/DostawcaSesjiEcho.tsx`, `src/services/EchoService.ts` | [Aktualna mapa Echo](ECHO.md) |
+| Backend | `server/main.ts` → `config.ts`, `baza.ts`, `serwer.ts`; migracje w `server/migracje.ts` | [Raspberry Pi](RASPBERRY_PI.md), `deploy/rpi/` |
+| Android | `capacitor.config.ts`, `android/app/build.gradle`, `src/platform/platforma.ts` | [Android](ANDROID.md), [wydania](ANDROID_RELEASE.md) |
+| Windows | `windows/Ogarniacz.Desktop/Program.cs`, `Ogarniacz.Desktop.csproj`, `windows/installer.iss` | Host ładuje skonfigurowany adres HTTPS w WebView2; brak osobnego silnika głosu Windows |
+| Testy | `package.json`, `vite.config.ts`, `src/testy/konfiguracja.ts`, testy przy implementacjach | [Strategia](TESTING.md); backend `server/*.test.ts`, skrypty `scripts/*.test.mjs`, Windows `windows/TestyAktualizacji/` |
 
 Przepływ zapisu:
 
@@ -77,12 +92,9 @@ src/
 
 ## IndexedDB i migracje
 
-Baza nazywa się `ogarniacz-v1`.
+Baza bazowa nazywa się `ogarniacz-v1`; aktywne profile mogą korzystać z odrębnych baz zarządzanych przez `ProfileLokalne.ts` i rejestr `ogarniacz-profile`. Aktualny schemat to **21** (`WERSJA_SCHEMATU_BAZY` w `BazaOgarniacza.ts`); wcześniejsze wersje są historią migracji, a nie bieżącą specyfikacją. Nie podnoś wersji bez zmiany wymagającej migracji.
 
-- **wersja 1** — historyczny minimalny rdzeń: zadania, leki, dziennik leków, ustawienia;
-- **wersja 2** — pełny zestaw encji Ogarniacza v1, indeksy i migracja brakujących pól zadania.
-
-Każda encja ma `id`, `createdAt`, `updatedAt` i opcjonalny `usunietoAt`. Repozytorium wykonuje soft-delete. Dzięki temu rekord usunięty pozostawia znacznik potrzebny przyszłej synchronizacji. Twarde czyszczenie jest dostępne wyłącznie w Ustawieniach po wpisaniu frazy potwierdzającej.
+Encje domenowe mają `id`, `createdAt`, `updatedAt` i opcjonalny `usunietoAt`. Repozytorium wykonuje soft-delete, pozostawiając znacznik dla synchronizacji. Nie utożsamiaj wszystkich tabel z encjami synchronizowanymi: listę wyjątków określa `KolejkaSynchronizacji.ts`, a transport Pul i Zobowiązań ma blokadę w `OchronaTransportuFz.ts`.
 
 ## Rejestr 2.0 — guardraile i Definition of Done
 
@@ -103,7 +115,7 @@ Przed migracją modułu potwierdź: (1) zachowanie dotychczasowej funkcjonalnoś
 
 ## Backup
 
-`BackupService` eksportuje wszystkie tabele do formatu `ogarniacz-backup` w wersji 1. Blob dokumentu jest kodowany Base64. Import jest walidowany przez Zod i obsługuje scalenie lub pełne nadpisanie po potwierdzeniu.
+`BackupService` buduje sekcje backupu w formacie **3**, z manifestem i checksum; import obsługuje migracje formatów 1–3 oraz walidację Zod. Bloby są kodowane Base64. UI szyfruje eksport i kopię `before-restore` przez istniejące AES-GCM/PBKDF2, a restore czeka na zabezpieczenie kopii. Szczegóły i ograniczenia platform: [SECURITY.md](SECURITY.md). Backup obejmuje także lokalną pamięć i dziennik Echo; nie oznacza to ich synchronizowania.
 
 ## Planer
 
@@ -115,13 +127,7 @@ Jedna encja `Przypomnienie` obsługuje czasy absolutne, względne i cykliczne. C
 
 ## Echo i ryzyko
 
-`EchoService` korzysta z wymiennego kontraktu `ProviderEcho`. Obecny `LokalnyProviderEcho` jest regułowy i nie używa sieci. `RyzykoDzialaniaService` klasyfikuje działania:
-
-- niskie — wykonanie bez dodatkowej zgody;
-- umiarkowane — modal potwierdzenia;
-- wysokie — potwierdzenie i przekierowanie do właściwego ekranu zamiast tekstowej automatyzacji.
-
-Ważne działania zapisują się w `DziennikEcho`.
+`EchoService` deleguje do `AgentEcho`, który korzysta z `ProviderModeluEcho`, ograniczonego kontekstu oraz rejestru narzędzi Zod. Wykonawca egzekwuje dostęp, ryzyko i potwierdzenie dla operacji umiarkowanych/wysokich; narzędzia korzystają z istniejącej domeny i repozytoriów. Istnieją provider ograniczony offline i adapter backendowego modelu lokalnego. Mapa przepływu, pamięci, głosu, ograniczeń i testów: [ECHO.md](ECHO.md).
 
 ## Uprawnienia
 

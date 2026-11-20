@@ -404,6 +404,7 @@ export class AgentEcho {
           odrzuc(new DOMException('Przekroczono czas odpowiedzi modelu', 'AbortError'))
         }, this.limitCzasuMs)
       })
+      this.onZmianaStanu?.('generuje')
       return await Promise.race([this.provider.odpowiedz(zadanie, kontroler.signal), limit])
     } finally {
       if (licznik) clearTimeout(licznik)

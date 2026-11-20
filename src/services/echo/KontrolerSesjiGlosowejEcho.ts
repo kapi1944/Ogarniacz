@@ -5,7 +5,7 @@ import type { PlatformaOgarniacza } from '../../platform/typy'
 import { KonfiguracjaRozmowyEcho } from './KonfiguracjaRozmowyEcho'
 import { zapiszDiagnostykeEcho } from './DiagnostykaEcho'
 
-export type StanSesjiGlosowejEcho = 'bezczynny' | 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'myslenie' | 'mowienie' | 'oczekiwanie' | 'oczekujeDoprecyzowania' | 'oczekujePotwierdzenia' | 'blad'
+export type StanSesjiGlosowejEcho = 'bezczynny' | 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'myslenie' | 'mowienie' | 'oczekiwanie' | 'oczekujeDoprecyzowania' | 'oczekujePotwierdzenia' | 'anulowanie' | 'blad'
 
 interface ObslugaSesjiGlosowej {
   zmienStan: (stan: StanSesjiGlosowejEcho) => void
@@ -101,12 +101,14 @@ export class KontrolerSesjiGlosowejEcho {
   }
 
   async anuluj() {
+    const bylaAktywna = this.aktywna || this.stan !== 'bezczynny'
     this.numerSesji += 1
     this.aktywna = false
     this.rozpoznawanieAktywne = false
     this.ostatniaCzesciowa = undefined
     this.kontrolerOdpowiedzi?.abort()
     this.kontrolerOdpowiedzi = undefined
+    if (bylaAktywna) this.ustawStan('anulowanie')
     await Promise.allSettled([
       this.zaleznosci.glos.anulujRozpoznawanie(),
       this.zaleznosci.glos.zatrzymajMowienie(),

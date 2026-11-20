@@ -1,5 +1,5 @@
 import { noweId } from '../../domain/fabryki'
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import {
   Bot,
   Mic,
@@ -22,7 +22,7 @@ import { Link } from "react-router-dom";
 import type { WynikNarzedziaEcho } from "../../services/echo/typyEcho";
 import { useAplikacja } from "../../app/KontekstAplikacji";
 import { useSesjaEcho, type WiadomoscEcho } from "../../app/DostawcaSesjiEcho";
-import type { StanSesjiGlosowejEcho } from "../../services/echo/KontrolerSesjiGlosowejEcho";
+import { agregujStanEcho, type StanPrezentacjiEcho } from "../../services/echo/AgregatorStanuEcho";
 
 function typWynikuNarzedzia(nazwa: string): string | undefined {
   if (nazwa.includes("task")) return "zadanie";
@@ -130,11 +130,13 @@ export function czyPokazacSugestieEcho(
 
 export function WidokEcho() {
   const { ustawienia } = useAplikacja();
-  const { echo, kontrolerGlosu, stan, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz } = useSesjaEcho();
+  const { echo, kontrolerGlosu, stan, stanAgenta, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, oczekujeDoprecyzowania, ustawOczekujeDoprecyzowania, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz } = useSesjaEcho();
   const [tekst, ustawTekst] = useState("");
   const [wysylanie, ustawWysylanie] = useState(false);
   const koniecRozmowy = useRef<HTMLDivElement>(null);
   const ostatnioOdczytana = useRef<string | undefined>(undefined);
+  const kontrolerTekstu = useRef<AbortController | undefined>(undefined);
+  const numerOdczytu = useRef(0);
   const { dane: dziennik } = useRepozytorium("dziennikEcho");
 
   useEffect(() => {
@@ -151,12 +153,24 @@ export function WidokEcho() {
       { id: noweId(), autor: "uzytkownik", tresc: wypowiedz },
     ]);
     ustawTekst("");
+    ustawOczekujeDoprecyzowania(false);
     ustawWysylanie(true);
+    const kontroler = new AbortController();
+    kontrolerTekstu.current = kontroler;
     try {
-      dodajOdpowiedz(await echo.obsluz(wypowiedz, zrodlo), zrodlo);
+      const odpowiedz = await echo.obsluz(wypowiedz, zrodlo, kontroler.signal);
+      if (!kontroler.signal.aborted) dodajOdpowiedz(odpowiedz, zrodlo);
     } finally {
-      ustawWysylanie(false);
+      if (kontrolerTekstu.current === kontroler) {
+        kontrolerTekstu.current = undefined;
+        ustawWysylanie(false);
+      }
     }
+  };
+
+  const anulujAktywnosc = () => {
+    kontrolerTekstu.current?.abort();
+    void kontrolerGlosu.anuluj();
   };
 
   const rozpocznijGlos = () => {
@@ -165,22 +179,46 @@ export function WidokEcho() {
       : kontrolerGlosu.rozpocznij());
   };
 
-  const przeczytaj = async (tresc: string) => {
+  const przeczytaj = useCallback(async (tresc: string) => {
+    const numer = ++numerOdczytu.current;
     await kontrolerGlosu.anuluj();
+    if (numer !== numerOdczytu.current) return;
     ustawBladGlosu("");
     ustawStan("mowienie");
     try {
       await platforma.glosEcho.mow(tresc);
-      ustawStan("bezczynny");
+      if (numer === numerOdczytu.current) ustawStan("bezczynny");
     } catch (blad) {
-      ustawStan("blad");
-      ustawBladGlosu(
-        blad instanceof Error
-          ? blad.message
-          : "Nie udało się odczytać odpowiedzi.",
-      );
+      if (numer === numerOdczytu.current) {
+        ustawStan("blad");
+        ustawBladGlosu(
+          blad instanceof Error
+            ? blad.message
+            : "Nie udało się odczytać odpowiedzi.",
+        );
+      }
     }
-  };
+  }, [kontrolerGlosu, ustawBladGlosu, ustawStan]);
+
+  useEffect(() => {
+    let usunSluchacza: (() => void) | undefined;
+    let anulowano = false;
+    void platforma.cyklZycia.nasluchuj((stanCyklu) => {
+      if (stanCyklu !== "aktywny") kontrolerTekstu.current?.abort();
+    }).then((usun) => {
+      if (anulowano) usun();
+      else usunSluchacza = usun;
+    });
+    return () => {
+      anulowano = true;
+      usunSluchacza?.();
+      kontrolerTekstu.current?.abort();
+      kontrolerTekstu.current = undefined;
+      numerOdczytu.current += 1;
+      void kontrolerGlosu.anuluj();
+      void platforma.glosEcho.zatrzymajMowienie();
+    };
+  }, [kontrolerGlosu]);
 
   useEffect(() => {
     const ostatnia = wiadomosci.at(-1);
@@ -195,18 +233,21 @@ export function WidokEcho() {
     ustawienia.automatycznyOdczytEcho,
     ustawienia.glosEcho,
     wiadomosci,
+    przeczytaj,
   ]);
 
   const potwierdz = async () => {
     if (!oczekujacaAkcja) return;
     const akcja = oczekujacaAkcja;
     ustawOczekujacaAkcje(undefined);
+    ustawOczekujeDoprecyzowania(false);
     dodajOdpowiedz(await echo.potwierdz(akcja), "tekst");
   };
 
   const anulujPotwierdzenie = () => {
     echo.anulujPotwierdzenie();
     ustawOczekujacaAkcje(undefined);
+    ustawOczekujeDoprecyzowania(false);
   };
 
   const sugestie = [
@@ -218,19 +259,20 @@ export function WidokEcho() {
     "Mam w tym miesiącu jakieś większe wydatki?",
   ];
 
-  const etykietyStanu: Record<StanSesjiGlosowejEcho, string> = {
+  const stanPrezentacji = agregujStanEcho({ stanSesji: stan, stanAgenta, tekstAktywny: wysylanie, oczekujePotwierdzenia: Boolean(oczekujacaAkcja), oczekujeDoprecyzowania });
+  const etykietyStanu: Record<StanPrezentacjiEcho, string> = {
     bezczynny: "Dotknij mikrofonu, aby porozmawiać",
-    sluchanie: "Słucham…",
-    mowiUzytkownik: "Mówisz…",
-    transkrypcja: "Przetwarzam wypowiedź…",
-    myslenie: "Przetwarzam…",
-    mowienie: "Mówię… Dotknij mikrofonu, aby mi przerwać.",
-    oczekiwanie: "Oczekuję na dalszą wypowiedź…",
-    oczekujeDoprecyzowania: "Oczekuję na doprecyzowanie…",
-    oczekujePotwierdzenia: "Oczekuję na potwierdzenie…",
+    nasluchiwanie: stan === "mowiUzytkownik" ? "Mówisz…" : stan === "oczekiwanie" ? "Oczekuję na dalszą wypowiedź…" : "Słucham…",
+    rozpoznawanie: "Rozpoznaję wypowiedź…",
+    przetwarzanie: "Przetwarzam…",
+    generowanieOdpowiedzi: "Układam odpowiedź…",
+    odtwarzanieGlosu: "Mówię… Dotknij mikrofonu, aby mi przerwać.",
+    oczekiwanieNaDoprecyzowanie: "Oczekuję na doprecyzowanie…",
+    oczekiwanieNaPotwierdzenie: "Oczekuję na potwierdzenie…",
+    anulowanie: "Anuluję…",
     blad: "Błąd rozmowy głosowej",
   };
-  const sesjaAktywna = !["bezczynny", "blad"].includes(stan);
+  const sesjaAktywna = !["bezczynny", "blad"].includes(stanPrezentacji);
 
   return (
     <div className="widok widok-echo">
@@ -240,8 +282,8 @@ export function WidokEcho() {
       />
       <section className="siatka-echo">
         <Karta klasa="panel-rozmowy">
-          <div className={`stan-glosu stan-glosu--${stan}`} aria-live="polite">
-            {wysylanie ? "Układam odpowiedź…" : `${etykietyStanu[stan]}${czesciowaWypowiedz ? ` ${czesciowaWypowiedz}` : ""}`}
+          <div className={`stan-glosu stan-glosu--${stanPrezentacji}`} aria-live="polite">
+            {`${etykietyStanu[stanPrezentacji]}${czesciowaWypowiedz ? ` ${czesciowaWypowiedz}` : ""}`}
           </div>
           <div
             className="wiadomosci"
@@ -398,7 +440,7 @@ export function WidokEcho() {
               <button
                 type="button"
                 className="przycisk przycisk--drugorzedny"
-                onClick={() => void kontrolerGlosu.anuluj()}
+                onClick={anulujAktywnosc}
               >
                 <Square aria-hidden="true" />
                 Anuluj rozmowę

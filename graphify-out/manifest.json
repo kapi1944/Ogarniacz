@@ -1,0 +1,3902 @@
+{
+  ".github/workflows/android-release-resume.yml": {
+    "mtime": 1793569675.2948804,
+    "seen": 1794534494.3497503,
+    "ast_hash": "5e5a96f69d95b91921df94ffcb13c327",
+    "semantic_hash": "5e5a96f69d95b91921df94ffcb13c327"
+  },
+  ".github/workflows/android-release.yml": {
+    "mtime": 1793569675.2958813,
+    "seen": 1794534494.3497565,
+    "ast_hash": "af7a806330986edf50d43ddafe9022a0",
+    "semantic_hash": "af7a806330986edf50d43ddafe9022a0"
+  },
+  ".github/workflows/auto-publish.yml": {
+    "mtime": 1793569675.296882,
+    "seen": 1794534494.3497593,
+    "ast_hash": "49d61896e50aed12a48ab355fcee1003",
+    "semantic_hash": "49d61896e50aed12a48ab355fcee1003"
+  },
+  ".github/workflows/ci.yml": {
+    "mtime": 1793569675.296882,
+    "seen": 1794534494.349761,
+    "ast_hash": "e10e5cf7b168d6a3ce6c3443d5eb7973",
+    "semantic_hash": "e10e5cf7b168d6a3ce6c3443d5eb7973"
+  },
+  ".github/workflows/test-build.yml": {
+    "mtime": 1793138620.6372635,
+    "seen": 1794534494.3497627,
+    "ast_hash": "c67d6dfb796ab0faf7be9f56893a119e",
+    "semantic_hash": "c67d6dfb796ab0faf7be9f56893a119e"
+  },
+  ".oxlintrc.json": {
+    "mtime": 1786672794.0,
+    "seen": 1794534494.349764,
+    "ast_hash": "029f4905006c1fffd96bc863e2d98d3e",
+    "semantic_hash": "029f4905006c1fffd96bc863e2d98d3e"
+  },
+  ".tmp-konta-ui/core-mock.mjs": {
+    "mtime": 1791894455.6655948,
+    "seen": 1794534494.3497655,
+    "ast_hash": "b1f416ab727ef1cb7e5ad53ae110637f",
+    "semantic_hash": "b1f416ab727ef1cb7e5ad53ae110637f"
+  },
+  ".tmp-konta-ui/vite.config.mjs": {
+    "mtime": 1791894585.3275752,
+    "seen": 1794534494.349767,
+    "ast_hash": "de608657a6ee5a731dd4c8315eb52584",
+    "semantic_hash": "de608657a6ee5a731dd4c8315eb52584"
+  },
+  "android/app/build.gradle": {
+    "mtime": 1793138620.6382651,
+    "seen": 1794534494.3497682,
+    "ast_hash": "04addc70268504f85c9182f7d3b61e86",
+    "semantic_hash": "04addc70268504f85c9182f7d3b61e86"
+  },
+  "android/app/capacitor.build.gradle": {
+    "mtime": 1793773259.2009642,
+    "seen": 1794534494.3497698,
+    "ast_hash": "023141a21ded06c677f63784aaa4daca",
+    "semantic_hash": "023141a21ded06c677f63784aaa4daca"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/AktualizacjePlugin.java": {
+    "mtime": 1793138620.6442697,
+    "seen": 1794534494.3497708,
+    "ast_hash": "854c8486f3056df4b2cc8922f2018040",
+    "semantic_hash": "854c8486f3056df4b2cc8922f2018040"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/BlokadaAplikacji.java": {
+    "mtime": 1793139952.4564402,
+    "seen": 1794534494.3497722,
+    "ast_hash": "85262c4bba4cc864f8e7a65a04fb15fd",
+    "semantic_hash": "85262c4bba4cc864f8e7a65a04fb15fd"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/BlokadaAplikacjiPlugin.java": {
+    "mtime": 1793139721.3265448,
+    "seen": 1794534494.3497736,
+    "ast_hash": "56dc709d4632134c7766769954e6ae3d",
+    "semantic_hash": "56dc709d4632134c7766769954e6ae3d"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/EchoGlosPlugin.java": {
+    "mtime": 1789221880.7928827,
+    "seen": 1794534494.3497748,
+    "ast_hash": "294e602bfee798239af637d73d1db9e8",
+    "semantic_hash": "294e602bfee798239af637d73d1db9e8"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/EksportPlikuPlugin.java": {
+    "mtime": 1792534638.3584487,
+    "seen": 1794534494.349776,
+    "ast_hash": "844472a0ab56ce192af5e1f50e9a2781",
+    "semantic_hash": "844472a0ab56ce192af5e1f50e9a2781"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/MainActivity.java": {
+    "mtime": 1793139899.4753263,
+    "seen": 1794534494.3497775,
+    "ast_hash": "3e27f71df28c592905ea46f7bc837dd2",
+    "semantic_hash": "3e27f71df28c592905ea46f7bc837dd2"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/MigracjaPozostalosciWebOta.java": {
+    "mtime": 1792441865.7833552,
+    "seen": 1794534494.3497784,
+    "ast_hash": "f74fe32ba3388158d8445539c45fc550",
+    "semantic_hash": "f74fe32ba3388158d8445539c45fc550"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/OdbiorUdostepnianiaPlugin.java": {
+    "mtime": 1788378411.149973,
+    "seen": 1794534494.3497796,
+    "ast_hash": "11baf72694bcdf9aaf241dcbd9f5eb4b",
+    "semantic_hash": "11baf72694bcdf9aaf241dcbd9f5eb4b"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/PobieranieApk.java": {
+    "mtime": 1792516724.0724764,
+    "seen": 1794534494.349781,
+    "ast_hash": "8f08385e64a58e7f701c505f1e78d0a3",
+    "semantic_hash": "8f08385e64a58e7f701c505f1e78d0a3"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/RuntimeConfigPlugin.java": {
+    "mtime": 1793138620.6452708,
+    "seen": 1794534494.3497822,
+    "ast_hash": "868cea57e5e0bc3531f950f5e37098dd",
+    "semantic_hash": "868cea57e5e0bc3531f950f5e37098dd"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/StanInstalacjiApk.java": {
+    "mtime": 1793138620.646272,
+    "seen": 1794534494.3497837,
+    "ast_hash": "8d59ccad18cd69daf0b1b206304aec52",
+    "semantic_hash": "8d59ccad18cd69daf0b1b206304aec52"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/WakeWordEchoPlugin.java": {
+    "mtime": 1789221859.081717,
+    "seen": 1794534494.3497846,
+    "ast_hash": "8f8ed66dcbd959421cad142dba02c0ac",
+    "semantic_hash": "8f8ed66dcbd959421cad142dba02c0ac"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/WeryfikacjaPliku.java": {
+    "mtime": 1792374819.7680533,
+    "seen": 1794534494.3497865,
+    "ast_hash": "40d5417857880ea7df76df8f335362a2",
+    "semantic_hash": "40d5417857880ea7df76df8f335362a2"
+  },
+  "android/app/src/main/java/pl/ogarniacz/app/WynikInstalacjiApkReceiver.java": {
+    "mtime": 1789906774.5413673,
+    "seen": 1794534494.3497877,
+    "ast_hash": "ac55c16c96a49119f3d6d8c875462a7b",
+    "semantic_hash": "ac55c16c96a49119f3d6d8c875462a7b"
+  },
+  "android/app/src/test/java/pl/ogarniacz/app/AktualizacjePluginTest.java": {
+    "mtime": 1793138620.6612854,
+    "seen": 1794534494.349789,
+    "ast_hash": "f1326c15dd6b3e4d2db1618ceccfbcb6",
+    "semantic_hash": "f1326c15dd6b3e4d2db1618ceccfbcb6"
+  },
+  "android/app/src/test/java/pl/ogarniacz/app/BlokadaAplikacjiTest.java": {
+    "mtime": 1793140030.7096334,
+    "seen": 1794534494.34979,
+    "ast_hash": "cb6db81f079fc67ca222ff6346dcead1",
+    "semantic_hash": "cb6db81f079fc67ca222ff6346dcead1"
+  },
+  "android/app/src/test/java/pl/ogarniacz/app/EksportPlikuPluginTest.java": {
+    "mtime": 1793140847.3888042,
+    "seen": 1794534494.3497913,
+    "ast_hash": "b601a6405521946a9666e8b314ec8f36",
+    "semantic_hash": "b601a6405521946a9666e8b314ec8f36"
+  },
+  "android/app/src/test/java/pl/ogarniacz/app/MigracjaPozostalosciWebOtaTest.java": {
+    "mtime": 1792441865.7848575,
+    "seen": 1794534494.3497925,
+    "ast_hash": "2f600a218ff550fc2f93efa229fbdf90",
+    "semantic_hash": "2f600a218ff550fc2f93efa229fbdf90"
+  },
+  "android/app/src/test/java/pl/ogarniacz/app/PobieranieApkTest.java": {
+    "mtime": 1792516724.0854886,
+    "seen": 1794534494.349794,
+    "ast_hash": "777b4532c7f3c9699d128d4ca853ea49",
+    "semantic_hash": "777b4532c7f3c9699d128d4ca853ea49"
+  },
+  "android/app/src/test/java/pl/ogarniacz/app/RuntimeConfigPluginTest.java": {
+    "mtime": 1792441468.700358,
+    "seen": 1794534494.349795,
+    "ast_hash": "b5dbed23725eff860c07e9f2e1d36c6a",
+    "semantic_hash": "b5dbed23725eff860c07e9f2e1d36c6a"
+  },
+  "android/app/src/test/java/pl/ogarniacz/app/WariantAndroidTest.java": {
+    "mtime": 1793138620.6622863,
+    "seen": 1794534494.349796,
+    "ast_hash": "70441fb1522e666764bf8161c0233f1e",
+    "semantic_hash": "70441fb1522e666764bf8161c0233f1e"
+  },
+  "android/build.gradle": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3497975,
+    "ast_hash": "682315a426653617c6a74fc12bef55b6",
+    "semantic_hash": "682315a426653617c6a74fc12bef55b6"
+  },
+  "android/capacitor.settings.gradle": {
+    "mtime": 1793773259.1999636,
+    "seen": 1794534494.3497987,
+    "ast_hash": "4e9cd0dc932a7cebacba875abcf414b5",
+    "semantic_hash": "4e9cd0dc932a7cebacba875abcf414b5"
+  },
+  "android/gradlew": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3497996,
+    "ast_hash": "794669d78aef1dd5c7d889ef618b311a",
+    "semantic_hash": "794669d78aef1dd5c7d889ef618b311a"
+  },
+  "android/settings.gradle": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.349801,
+    "ast_hash": "f6cd925b3f859e23c3d819fe2459e0e4",
+    "semantic_hash": "f6cd925b3f859e23c3d819fe2459e0e4"
+  },
+  "android/variables.gradle": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3498023,
+    "ast_hash": "4b3fce8ea2a515a9d2e47e74757172ec",
+    "semantic_hash": "4b3fce8ea2a515a9d2e47e74757172ec"
+  },
+  "capacitor.config.ts": {
+    "mtime": 1788142879.6442552,
+    "seen": 1794534494.3498034,
+    "ast_hash": "4a7d2c9a4b5cd583f1c6d22d69290651",
+    "semantic_hash": "4a7d2c9a4b5cd583f1c6d22d69290651"
+  },
+  "config/android-release.json": {
+    "mtime": 1789404145.5428338,
+    "seen": 1794534494.3498046,
+    "ast_hash": "130856912a2a9757804107b5198e79a2",
+    "semantic_hash": "130856912a2a9757804107b5198e79a2"
+  },
+  "multimedia/katalog.json": {
+    "mtime": 1792534408.06342,
+    "seen": 1794534494.3498058,
+    "ast_hash": "687bd31dbeb8b8b6c76afd0dbc6a5a97",
+    "semantic_hash": "687bd31dbeb8b8b6c76afd0dbc6a5a97"
+  },
+  "ogarniacz_etap1_patch/ogarniacz-etap1/aplikuj_etap1.py": {
+    "mtime": 1792769088.2093816,
+    "seen": 1794534494.349807,
+    "ast_hash": "0b1547e4bcdd8a4ab6b5e584f8c53e65",
+    "semantic_hash": "0b1547e4bcdd8a4ab6b5e584f8c53e65"
+  },
+  "package.json": {
+    "mtime": 1793569675.3038883,
+    "seen": 1794534494.3498085,
+    "ast_hash": "0d4c43cf1723bdf488de9ef5b0cf6dea",
+    "semantic_hash": "0d4c43cf1723bdf488de9ef5b0cf6dea"
+  },
+  "public/powiadomienia-sw.js": {
+    "mtime": 1791681673.2967572,
+    "seen": 1794534494.3498096,
+    "ast_hash": "703bce7fb9541b61908f631d47341cb5",
+    "semantic_hash": "703bce7fb9541b61908f631d47341cb5"
+  },
+  "scripts/aktualizuj-rpi.sh": {
+    "mtime": 1791017242.3339274,
+    "seen": 1794534494.3498106,
+    "ast_hash": "db15e0a0f85dd929b4d9f4d8d879cd4b",
+    "semantic_hash": "db15e0a0f85dd929b4d9f4d8d879cd4b"
+  },
+  "scripts/aktualizuj-rpi.test.mjs": {
+    "mtime": 1793138620.680303,
+    "seen": 1794534494.3498132,
+    "ast_hash": "8915585ec428d13535ed2723654be5b9",
+    "semantic_hash": "8915585ec428d13535ed2723654be5b9"
+  },
+  "scripts/android-beta.mjs": {
+    "mtime": 1793138620.6813037,
+    "seen": 1794534494.3498144,
+    "ast_hash": "25d3c68dba57e36af9a22bece793f571",
+    "semantic_hash": "25d3c68dba57e36af9a22bece793f571"
+  },
+  "scripts/android-beta.test.mjs": {
+    "mtime": 1793138620.6813037,
+    "seen": 1794534494.3498156,
+    "ast_hash": "10272ed966ebf15f4a0919add6245fcf",
+    "semantic_hash": "10272ed966ebf15f4a0919add6245fcf"
+  },
+  "scripts/android-release-przygotowanie.mjs": {
+    "mtime": 1793138620.6823044,
+    "seen": 1794534494.3498168,
+    "ast_hash": "69d47b21b5bcdd0bff82e415c2664c4e",
+    "semantic_hash": "69d47b21b5bcdd0bff82e415c2664c4e"
+  },
+  "scripts/android-release-przygotowanie.test.mjs": {
+    "mtime": 1793138620.6833055,
+    "seen": 1794534494.3498182,
+    "ast_hash": "d86c485ccd5d641e2fc86cebac4e40d1",
+    "semantic_hash": "d86c485ccd5d641e2fc86cebac4e40d1"
+  },
+  "scripts/android-release-publikacja.mjs": {
+    "mtime": 1793569675.304891,
+    "seen": 1794534494.3498192,
+    "ast_hash": "c78d2e2a7d4859b8db994ed8384f5076",
+    "semantic_hash": "c78d2e2a7d4859b8db994ed8384f5076"
+  },
+  "scripts/android-release-workflow.test.mjs": {
+    "mtime": 1793569675.3058915,
+    "seen": 1794534494.3498204,
+    "ast_hash": "be0f6a09caf2a8a3bc1fca0716e49128",
+    "semantic_hash": "be0f6a09caf2a8a3bc1fca0716e49128"
+  },
+  "scripts/android-wspolne.mjs": {
+    "mtime": 1792441803.9496727,
+    "seen": 1794534494.3498218,
+    "ast_hash": "1f9b5fedbc62fc669264f2df81491c3f",
+    "semantic_hash": "1f9b5fedbc62fc669264f2df81491c3f"
+  },
+  "scripts/android.mjs": {
+    "mtime": 1793569675.3068914,
+    "seen": 1794534494.3498235,
+    "ast_hash": "c9c131b9f8e9d408840dd6a82f1ea3f9",
+    "semantic_hash": "c9c131b9f8e9d408840dd6a82f1ea3f9"
+  },
+  "scripts/android.test.mjs": {
+    "mtime": 1792441803.9516845,
+    "seen": 1794534494.3498244,
+    "ast_hash": "df5422353bbaffe9bd537b7e34d3b24a",
+    "semantic_hash": "df5422353bbaffe9bd537b7e34d3b24a"
+  },
+  "scripts/configure-tailscale-rpi.sh": {
+    "mtime": 1789059037.206381,
+    "seen": 1794534494.3498259,
+    "ast_hash": "c00c903712201102b4c8609ba888ddbb",
+    "semantic_hash": "c00c903712201102b4c8609ba888ddbb"
+  },
+  "scripts/deploy-rpi.sh": {
+    "mtime": 1792441577.5562434,
+    "seen": 1794534494.349827,
+    "ast_hash": "dd396acced642eb04d20c65987c75818",
+    "semantic_hash": "dd396acced642eb04d20c65987c75818"
+  },
+  "scripts/deploy-rpi.test.mjs": {
+    "mtime": 1792441642.515528,
+    "seen": 1794534494.3498282,
+    "ast_hash": "5b465a152706770685f74b9670ea8d92",
+    "semantic_hash": "5b465a152706770685f74b9670ea8d92"
+  },
+  "scripts/desktop-dev.mjs": {
+    "mtime": 1793569675.307892,
+    "seen": 1794534494.3498294,
+    "ast_hash": "dbdb68089a569bcb3856ee8adab4a98a",
+    "semantic_hash": "dbdb68089a569bcb3856ee8adab4a98a"
+  },
+  "scripts/generuj-ikony-android.py": {
+    "mtime": 1793138620.6833055,
+    "seen": 1794534494.3498309,
+    "ast_hash": "c7f412777174b2f8b0cc924de78b39fc",
+    "semantic_hash": "c7f412777174b2f8b0cc924de78b39fc"
+  },
+  "scripts/generuj-ikony.py": {
+    "mtime": 1793138620.6843064,
+    "seen": 1794534494.3498318,
+    "ast_hash": "1f03068490fef69b2a65da3edbbe55e0",
+    "semantic_hash": "1f03068490fef69b2a65da3edbbe55e0"
+  },
+  "scripts/katalog-multimediow.mjs": {
+    "mtime": 1792534354.9182804,
+    "seen": 1794534494.3498333,
+    "ast_hash": "701310555e0eb34c1e28b6eac21922e7",
+    "semantic_hash": "701310555e0eb34c1e28b6eac21922e7"
+  },
+  "scripts/kontrast-formularzy.test.mjs": {
+    "mtime": 1793231507.185172,
+    "seen": 1794534494.3498342,
+    "ast_hash": "09244d6841d214e926e6105b80dee343",
+    "semantic_hash": "09244d6841d214e926e6105b80dee343"
+  },
+  "scripts/metadane-buildu.test.mjs": {
+    "mtime": 1793138620.6853073,
+    "seen": 1794534494.3498356,
+    "ast_hash": "947110edc77271464b2961777c3cc0a1",
+    "semantic_hash": "947110edc77271464b2961777c3cc0a1"
+  },
+  "scripts/metadane-buildu.ts": {
+    "mtime": 1793138620.686308,
+    "seen": 1794534494.3498366,
+    "ast_hash": "f7187a0273101591874c17e351744c62",
+    "semantic_hash": "f7187a0273101591874c17e351744c62"
+  },
+  "scripts/odzyskaj-konto-rpi.mjs": {
+    "mtime": 1792840050.7619731,
+    "seen": 1794534494.3498378,
+    "ast_hash": "98da43abde99b4b62db3b226c91cb4a9",
+    "semantic_hash": "98da43abde99b4b62db3b226c91cb4a9"
+  },
+  "scripts/platform-release-wspolne.mjs": {
+    "mtime": 1793569675.307892,
+    "seen": 1794534494.3498394,
+    "ast_hash": "76dc45a280a8b9c59ee680ba9cf35fbb",
+    "semantic_hash": "76dc45a280a8b9c59ee680ba9cf35fbb"
+  },
+  "scripts/platform-release.mjs": {
+    "mtime": 1793569675.3088927,
+    "seen": 1794534494.3498404,
+    "ast_hash": "f51f50af68787dbb5ce321afbae05610",
+    "semantic_hash": "f51f50af68787dbb5ce321afbae05610"
+  },
+  "scripts/platform-release.test.mjs": {
+    "mtime": 1793569675.3088927,
+    "seen": 1794534494.3498418,
+    "ast_hash": "4075d6b9b1d90aa6c7e269f53fb32ba3",
+    "semantic_hash": "4075d6b9b1d90aa6c7e269f53fb32ba3"
+  },
+  "scripts/powiadomienia-sw.test.mjs": {
+    "mtime": 1791682131.338017,
+    "seen": 1794534494.349843,
+    "ast_hash": "6930568e2887f81ff365f6b13db984c8",
+    "semantic_hash": "6930568e2887f81ff365f6b13db984c8"
+  },
+  "scripts/publikacja-klasyfikacja.mjs": {
+    "mtime": 1791016539.6893044,
+    "seen": 1794534494.3498442,
+    "ast_hash": "962a7abd42011b75ca1ffd67c48078ae",
+    "semantic_hash": "962a7abd42011b75ca1ffd67c48078ae"
+  },
+  "scripts/publikacja-klasyfikacja.test.mjs": {
+    "mtime": 1791017466.5816498,
+    "seen": 1794534494.3498454,
+    "ast_hash": "cd35447f5fd881b212717a8750770d36",
+    "semantic_hash": "cd35447f5fd881b212717a8750770d36"
+  },
+  "scripts/publikacja-rpi-stable.sh": {
+    "mtime": 1791015554.8211596,
+    "seen": 1794534494.3498466,
+    "ast_hash": "53279a553d3033a6e825695bd89205ee",
+    "semantic_hash": "53279a553d3033a6e825695bd89205ee"
+  },
+  "scripts/pwa-smoke.mjs": {
+    "mtime": 1793729053.2404425,
+    "seen": 1794534494.3498478,
+    "ast_hash": "fded28e4a5a291192fb15be96805e37d",
+    "semantic_hash": "fded28e4a5a291192fb15be96805e37d"
+  },
+  "scripts/rpi-bezpieczenstwo.mjs": {
+    "mtime": 1791017241.5710802,
+    "seen": 1794534494.3498487,
+    "ast_hash": "123906ebaf453eeaf52b4891e024a26f",
+    "semantic_hash": "123906ebaf453eeaf52b4891e024a26f"
+  },
+  "scripts/rpi-bezpieczenstwo.test.mjs": {
+    "mtime": 1791016159.3369796,
+    "seen": 1794534494.3498502,
+    "ast_hash": "70f7e3678cb52ac60ef43be13de2a562",
+    "semantic_hash": "70f7e3678cb52ac60ef43be13de2a562"
+  },
+  "scripts/sync-doctor.mjs": {
+    "mtime": 1790533346.3639176,
+    "seen": 1794534494.3498514,
+    "ast_hash": "8c7ac04d9d77565e9cf77ea8d12612e9",
+    "semantic_hash": "8c7ac04d9d77565e9cf77ea8d12612e9"
+  },
+  "scripts/synchronizacja-wspolne.mjs": {
+    "mtime": 1790549716.6301565,
+    "seen": 1794534494.3498523,
+    "ast_hash": "5de75481ae42b2f7f829d8c3bd720adf",
+    "semantic_hash": "5de75481ae42b2f7f829d8c3bd720adf"
+  },
+  "scripts/test-build.mjs": {
+    "mtime": 1793138620.686308,
+    "seen": 1794534494.3498538,
+    "ast_hash": "5a36d4695a48b216724e9c3991997705",
+    "semantic_hash": "5a36d4695a48b216724e9c3991997705"
+  },
+  "scripts/test-build.test.mjs": {
+    "mtime": 1793138620.6873097,
+    "seen": 1794534494.3498547,
+    "ast_hash": "5883c18f3d2e4acd29a8d928a56f547d",
+    "semantic_hash": "5883c18f3d2e4acd29a8d928a56f547d"
+  },
+  "scripts/web-ota-runtime-config.test.mjs": {
+    "mtime": 1792441612.5555022,
+    "seen": 1794534494.349856,
+    "ast_hash": "9fe371fe19f4f2f72c46fc9caa7e485e",
+    "semantic_hash": "9fe371fe19f4f2f72c46fc9caa7e485e"
+  },
+  "server/administracja-kont.ts": {
+    "mtime": 1791932914.7939913,
+    "seen": 1794534494.3498573,
+    "ast_hash": "14e34001407561ba5b8eb3142fa0e58c",
+    "semantic_hash": "14e34001407561ba5b8eb3142fa0e58c"
+  },
+  "server/aktualizacje-rpi.test.ts": {
+    "mtime": 1791016005.551265,
+    "seen": 1794534494.3498583,
+    "ast_hash": "2bba0dfa46d7439d64762542b1427af4",
+    "semantic_hash": "2bba0dfa46d7439d64762542b1427af4"
+  },
+  "server/aktualizacje-rpi.ts": {
+    "mtime": 1791017243.101139,
+    "seen": 1794534494.3498595,
+    "ast_hash": "2f2f8422dc24e2069afb81e4020ec3c5",
+    "semantic_hash": "2f2f8422dc24e2069afb81e4020ec3c5"
+  },
+  "server/baza.ts": {
+    "mtime": 1788175252.6805663,
+    "seen": 1794534494.3498607,
+    "ast_hash": "68586abf05f96de10d4e7fb62ebbef34",
+    "semantic_hash": "68586abf05f96de10d4e7fb62ebbef34"
+  },
+  "server/config.ts": {
+    "mtime": 1792250723.2228594,
+    "seen": 1794534494.3498619,
+    "ast_hash": "c8d1d34e21ca809248f5a0869d6cf436",
+    "semantic_hash": "c8d1d34e21ca809248f5a0869d6cf436"
+  },
+  "server/echo.ts": {
+    "mtime": 1788177913.880829,
+    "seen": 1794534494.3498628,
+    "ast_hash": "391c9d677e78a0f522d64a47d1a6601c",
+    "semantic_hash": "391c9d677e78a0f522d64a47d1a6601c"
+  },
+  "server/finanseWspolne.test.ts": {
+    "mtime": 1793230394.9910283,
+    "seen": 1794534494.3498642,
+    "ast_hash": "23a9b826c496149702e803644b166f12",
+    "semantic_hash": "23a9b826c496149702e803644b166f12"
+  },
+  "server/konta.test.ts": {
+    "mtime": 1793646519.9509516,
+    "seen": 1794534494.3498664,
+    "ast_hash": "5dfe92b50968f65817125bae61bdb11c",
+    "semantic_hash": "5dfe92b50968f65817125bae61bdb11c"
+  },
+  "server/konta.ts": {
+    "mtime": 1793644321.9745688,
+    "seen": 1794534494.3498678,
+    "ast_hash": "7dedf9fa365a409977a5b0b9403d551d",
+    "semantic_hash": "7dedf9fa365a409977a5b0b9403d551d"
+  },
+  "server/main.test.ts": {
+    "mtime": 1790520568.8523638,
+    "seen": 1794534494.349869,
+    "ast_hash": "59f0db5f033e408ac9766ec2ea08028e",
+    "semantic_hash": "59f0db5f033e408ac9766ec2ea08028e"
+  },
+  "server/main.ts": {
+    "mtime": 1790520524.5892,
+    "seen": 1794534494.3498704,
+    "ast_hash": "f7c769398cc8bcc9f6911ebbdc29424b",
+    "semantic_hash": "f7c769398cc8bcc9f6911ebbdc29424b"
+  },
+  "server/migracje.ts": {
+    "mtime": 1792250723.2238603,
+    "seen": 1794534494.3498716,
+    "ast_hash": "eddad76e29053e854750ce7743bdcd42",
+    "semantic_hash": "eddad76e29053e854750ce7743bdcd42"
+  },
+  "server/model-echo.test.ts": {
+    "mtime": 1790645280.9795122,
+    "seen": 1794534494.3498726,
+    "ast_hash": "c5c8f3538465c8e4a52e8dc12553b3ec",
+    "semantic_hash": "c5c8f3538465c8e4a52e8dc12553b3ec"
+  },
+  "server/model-echo.ts": {
+    "mtime": 1790645279.2524662,
+    "seen": 1794534494.349874,
+    "ast_hash": "a7d83d27298a8c06a19186d3de60e106",
+    "semantic_hash": "a7d83d27298a8c06a19186d3de60e106"
+  },
+  "server/odzyskiwanie-konta-rpi.test.ts": {
+    "mtime": 1792840923.1512444,
+    "seen": 1794534494.3498752,
+    "ast_hash": "c482014e467921af3d170257fb009f5a",
+    "semantic_hash": "c482014e467921af3d170257fb009f5a"
+  },
+  "server/pierwszy-administrator.ts": {
+    "mtime": 1791894870.0883083,
+    "seen": 1794534494.3498764,
+    "ast_hash": "06b7e460807ede4fc9c503e9a5a98f30",
+    "semantic_hash": "06b7e460807ede4fc9c503e9a5a98f30"
+  },
+  "server/poczta.test.ts": {
+    "mtime": 1792251278.622892,
+    "seen": 1794534494.3498776,
+    "ast_hash": "0d21e9c95d3f1f1f45675abaf69f5ac0",
+    "semantic_hash": "0d21e9c95d3f1f1f45675abaf69f5ac0"
+  },
+  "server/poczta.ts": {
+    "mtime": 1792250723.2218585,
+    "seen": 1794534494.3498788,
+    "ast_hash": "4e26c9d46a17c59b54086f9a4483b651",
+    "semantic_hash": "4e26c9d46a17c59b54086f9a4483b651"
+  },
+  "server/resetowanie-hasla.test.ts": {
+    "mtime": 1792252976.6435294,
+    "seen": 1794534494.3498797,
+    "ast_hash": "2d8636ea1b762206ef40c0a67afba223",
+    "semantic_hash": "2d8636ea1b762206ef40c0a67afba223"
+  },
+  "server/serwer.test.ts": {
+    "mtime": 1792250972.529073,
+    "seen": 1794534494.349881,
+    "ast_hash": "f0eff1a0cba46bc22fa7419390452ad2",
+    "semantic_hash": "f0eff1a0cba46bc22fa7419390452ad2"
+  },
+  "server/serwer.ts": {
+    "mtime": 1793230872.6299093,
+    "seen": 1794534494.3498821,
+    "ast_hash": "f8ced14e4e830e36abe9f7b0371891f9",
+    "semantic_hash": "f8ced14e4e830e36abe9f7b0371891f9"
+  },
+  "server/smart-home.test.ts": {
+    "mtime": 1792224577.6097248,
+    "seen": 1794534494.3498833,
+    "ast_hash": "89d13126b2fd61d1b9f6cde2eadc27fc",
+    "semantic_hash": "89d13126b2fd61d1b9f6cde2eadc27fc"
+  },
+  "server/smart-home.ts": {
+    "mtime": 1792224577.6097248,
+    "seen": 1794534494.3498845,
+    "ast_hash": "3a544997ab075638fb2e36d278d07b31",
+    "semantic_hash": "3a544997ab075638fb2e36d278d07b31"
+  },
+  "server/synchronizacja.ts": {
+    "mtime": 1793230872.6299093,
+    "seen": 1794534494.3498857,
+    "ast_hash": "3d21b405466d498afb497a28fd6c2ff5",
+    "semantic_hash": "3d21b405466d498afb497a28fd6c2ff5"
+  },
+  "server/tozsamosci.test.ts": {
+    "mtime": 1792251026.327457,
+    "seen": 1794534494.3498867,
+    "ast_hash": "a9145a3b926186382d18fda6cb2e2852",
+    "semantic_hash": "a9145a3b926186382d18fda6cb2e2852"
+  },
+  "server/wspolne/MagazynPul.ts": {
+    "mtime": 1793729053.2414434,
+    "seen": 1794534494.349888,
+    "ast_hash": "0d456395e209b2e548aa2154bffdd05a",
+    "semantic_hash": "0d456395e209b2e548aa2154bffdd05a"
+  },
+  "server/wspolne/ObliczeniaFinansowWspolnych.ts": {
+    "mtime": 1793229477.4695241,
+    "seen": 1794534494.349889,
+    "ast_hash": "d34e0528ec64819139d5e9d21a0bb2bb",
+    "semantic_hash": "d34e0528ec64819139d5e9d21a0bb2bb"
+  },
+  "server/wspolne/ObliczeniaPul.ts": {
+    "mtime": 1793729053.2424443,
+    "seen": 1794534494.3498902,
+    "ast_hash": "402353617e5894448942b4040d4d1d79",
+    "semantic_hash": "402353617e5894448942b4040d4d1d79"
+  },
+  "server/wspolne/ProjekcjePul.ts": {
+    "mtime": 1793729053.2424443,
+    "seen": 1794534494.3498914,
+    "ast_hash": "714d0d406b8a93c90c73a6a77cdefadf",
+    "semantic_hash": "714d0d406b8a93c90c73a6a77cdefadf"
+  },
+  "server/wspolne/SynchronizacjaFinansow.ts": {
+    "mtime": 1793230553.6145766,
+    "seen": 1794534494.3498924,
+    "ast_hash": "1183deb15b0242bc88f9cee3c89d6f4d",
+    "semantic_hash": "1183deb15b0242bc88f9cee3c89d6f4d"
+  },
+  "server/wspolne/WalidacjaFinansowa.ts": {
+    "mtime": 1793230820.4027262,
+    "seen": 1794534494.3498933,
+    "ast_hash": "392437f2c9ded3d4919284bf57d0d320",
+    "semantic_hash": "392437f2c9ded3d4919284bf57d0d320"
+  },
+  "server/wspolne/WalidacjaKopiiFinansowWspolnych.ts": {
+    "mtime": 1793229477.4735317,
+    "seen": 1794534494.3498948,
+    "ast_hash": "b4a9812585766ab08296cb6dacf349ac",
+    "semantic_hash": "b4a9812585766ab08296cb6dacf349ac"
+  },
+  "server/wspolne/WalidacjaPulZobowiazan.ts": {
+    "mtime": 1793729053.243445,
+    "seen": 1794534494.3498957,
+    "ast_hash": "b8b41d42f047ee80093ad09f76326353",
+    "semantic_hash": "b8b41d42f047ee80093ad09f76326353"
+  },
+  "server/wspolne/ZapisFinansowy.ts": {
+    "mtime": 1793230820.4137642,
+    "seen": 1794534494.349897,
+    "ast_hash": "60e8f654ece4e924003c7791854f9c3c",
+    "semantic_hash": "60e8f654ece4e924003c7791854f9c3c"
+  },
+  "server/wspolne/finanseWspolne.ts": {
+    "mtime": 1793229477.4675224,
+    "seen": 1794534494.349898,
+    "ast_hash": "89180a5eae85bf9b45c5d3f927c8891d",
+    "semantic_hash": "89180a5eae85bf9b45c5d3f927c8891d"
+  },
+  "server/wspolne/kwoty.ts": {
+    "mtime": 1793230820.4277813,
+    "seen": 1794534494.349899,
+    "ast_hash": "211395405b04b41f5fabcd5288cb0a93",
+    "semantic_hash": "211395405b04b41f5fabcd5288cb0a93"
+  },
+  "server/wspolne/modeleFinansowWspolnych.ts": {
+    "mtime": 1793729053.243445,
+    "seen": 1794534494.3499002,
+    "ast_hash": "ca32dafde9a7adaab6cdb072d1329d9e",
+    "semantic_hash": "ca32dafde9a7adaab6cdb072d1329d9e"
+  },
+  "server/wspolne/modelePulZobowiazan.ts": {
+    "mtime": 1793729053.2444465,
+    "seen": 1794534494.3499017,
+    "ast_hash": "a2e7ca941f291a7dd8643bf4e1820978",
+    "semantic_hash": "a2e7ca941f291a7dd8643bf4e1820978"
+  },
+  "server/wspolne/wersjaFinansowa.ts": {
+    "mtime": 1793729053.2454467,
+    "seen": 1794534494.3499029,
+    "ast_hash": "5bf2492949fba0559537af9e182d32e9",
+    "semantic_hash": "5bf2492949fba0559537af9e182d32e9"
+  },
+  "src/App.tsx": {
+    "mtime": 1793772666.3068576,
+    "seen": 1794534494.3499038,
+    "ast_hash": "fee23f14e2b775af077d93a30f46f43f",
+    "semantic_hash": "fee23f14e2b775af077d93a30f46f43f"
+  },
+  "src/app/AktualizacjaAndroid.test.tsx": {
+    "mtime": 1793138620.6883106,
+    "seen": 1794534494.349905,
+    "ast_hash": "7bcf74dfeb750e7d13dbb88dc3256a01",
+    "semantic_hash": "7bcf74dfeb750e7d13dbb88dc3256a01"
+  },
+  "src/app/AktualizacjaAndroid.tsx": {
+    "mtime": 1793138620.6893117,
+    "seen": 1794534494.3499062,
+    "ast_hash": "7eb3169db75d2d8eb289fc1392293b7a",
+    "semantic_hash": "7eb3169db75d2d8eb289fc1392293b7a"
+  },
+  "src/app/AktualizacjaPwa.test.tsx": {
+    "mtime": 1791574843.066745,
+    "seen": 1794534494.3499072,
+    "ast_hash": "ae9ddd1b5b1a856bef09397838600427",
+    "semantic_hash": "ae9ddd1b5b1a856bef09397838600427"
+  },
+  "src/app/AktualizacjaPwa.tsx": {
+    "mtime": 1793569675.3098938,
+    "seen": 1794534494.3499086,
+    "ast_hash": "3041ef2e48c820af17c56551a063cc97",
+    "semantic_hash": "3041ef2e48c820af17c56551a063cc97"
+  },
+  "src/app/DostawcaKonta.test.tsx": {
+    "mtime": 1792840192.490931,
+    "seen": 1794534494.3499095,
+    "ast_hash": "fc0882f13a585f61c27986f73c9ce576",
+    "semantic_hash": "fc0882f13a585f61c27986f73c9ce576"
+  },
+  "src/app/DostawcaKonta.tsx": {
+    "mtime": 1793772397.7668607,
+    "seen": 1794534494.3499105,
+    "ast_hash": "b8e8e71014bf9064117fa783abc29de4",
+    "semantic_hash": "b8e8e71014bf9064117fa783abc29de4"
+  },
+  "src/app/DostawcaSesjiEcho.tsx": {
+    "mtime": 1794291149.1167321,
+    "seen": 1794534494.3499117,
+    "ast_hash": "842e3d124563cbd9b3237fdccb96fefe",
+    "semantic_hash": "842e3d124563cbd9b3237fdccb96fefe"
+  },
+  "src/app/EkranMigracjiProfilu.tsx": {
+    "mtime": 1791893401.5942464,
+    "seen": 1794534494.349913,
+    "ast_hash": "5fb31b77ec11e36568d82f72493c4677",
+    "semantic_hash": "5fb31b77ec11e36568d82f72493c4677"
+  },
+  "src/app/KontekstAplikacji.test.tsx": {
+    "mtime": 1791737552.4759881,
+    "seen": 1794534494.349914,
+    "ast_hash": "550d2f3baf254ddb4908c6cbfea6f6da",
+    "semantic_hash": "550d2f3baf254ddb4908c6cbfea6f6da"
+  },
+  "src/app/KontekstAplikacji.tsx": {
+    "mtime": 1793772666.3078587,
+    "seen": 1794534494.349915,
+    "ast_hash": "90a98271a298d8085489459c57d916a1",
+    "semantic_hash": "90a98271a298d8085489459c57d916a1"
+  },
+  "src/app/OdzyskiwanieHasla.test.tsx": {
+    "mtime": 1792251025.9440272,
+    "seen": 1794534494.3499165,
+    "ast_hash": "45104352806d0c54388abf6cd32be90a",
+    "semantic_hash": "45104352806d0c54388abf6cd32be90a"
+  },
+  "src/app/OdzyskiwanieHasla.tsx": {
+    "mtime": 1792839591.869092,
+    "seen": 1794534494.3499177,
+    "ast_hash": "e811a04010a779ef9303087344b35f44",
+    "semantic_hash": "e811a04010a779ef9303087344b35f44"
+  },
+  "src/app/PanelAdministracjiKont.test.tsx": {
+    "mtime": 1791932953.5166032,
+    "seen": 1794534494.3499186,
+    "ast_hash": "15ed0f89c3ee89465ec46ba7a625f10a",
+    "semantic_hash": "15ed0f89c3ee89465ec46ba7a625f10a"
+  },
+  "src/app/PanelAdministracjiKont.tsx": {
+    "mtime": 1791932953.2088673,
+    "seen": 1794534494.34992,
+    "ast_hash": "0aec7fd411ddd753305217fa396365d1",
+    "semantic_hash": "0aec7fd411ddd753305217fa396365d1"
+  },
+  "src/app/PowiadomieniaSynchronizacji.test.tsx": {
+    "mtime": 1791575615.1710248,
+    "seen": 1794534494.3499212,
+    "ast_hash": "be8282ae34fef83ebc317c150dce66fa",
+    "semantic_hash": "be8282ae34fef83ebc317c150dce66fa"
+  },
+  "src/app/PowiadomieniaSynchronizacji.tsx": {
+    "mtime": 1793229566.4098265,
+    "seen": 1794534494.3499224,
+    "ast_hash": "1781fcb15c7c1d52f96e57b23667af4e",
+    "semantic_hash": "1781fcb15c7c1d52f96e57b23667af4e"
+  },
+  "src/app/PowiadomienieAktualizacji.tsx": {
+    "mtime": 1791574741.6066055,
+    "seen": 1794534494.3499236,
+    "ast_hash": "9585a4a19630a5767a4a03740124ae58",
+    "semantic_hash": "9585a4a19630a5767a4a03740124ae58"
+  },
+  "src/app/SilnikPrzypomnien.test.tsx": {
+    "mtime": 1791681814.1838083,
+    "seen": 1794534494.3499246,
+    "ast_hash": "782b2aa73d27586d1c85a5980f805f61",
+    "semantic_hash": "782b2aa73d27586d1c85a5980f805f61"
+  },
+  "src/app/SilnikPrzypomnien.tsx": {
+    "mtime": 1793772666.3088596,
+    "seen": 1794534494.3499255,
+    "ast_hash": "f87b4fa8c9830724bd615a41fbc4a2e0",
+    "semantic_hash": "f87b4fa8c9830724bd615a41fbc4a2e0"
+  },
+  "src/app/StanKlientaWeb.tsx": {
+    "mtime": 1791575276.8062494,
+    "seen": 1794534494.349927,
+    "ast_hash": "cf2a8ee8812117a9d9e578d6caa62139",
+    "semantic_hash": "cf2a8ee8812117a9d9e578d6caa62139"
+  },
+  "src/app/SzybkieDodawanie.test.tsx": {
+    "mtime": 1792794918.9625373,
+    "seen": 1794534494.349928,
+    "ast_hash": "8c4a180548c7644d5e2db38a93edcdcf",
+    "semantic_hash": "8c4a180548c7644d5e2db38a93edcdcf"
+  },
+  "src/app/SzybkieDodawanie.tsx": {
+    "mtime": 1792794435.5392017,
+    "seen": 1794534494.3499293,
+    "ast_hash": "0ff46154c0aa320241ce1cf23d4447dc",
+    "semantic_hash": "0ff46154c0aa320241ce1cf23d4447dc"
+  },
+  "src/app/UkladAplikacji.test.tsx": {
+    "mtime": 1793138620.6903126,
+    "seen": 1794534494.3499303,
+    "ast_hash": "6a5c193670928c7cff28108089c918ab",
+    "semantic_hash": "6a5c193670928c7cff28108089c918ab"
+  },
+  "src/app/UkladAplikacji.tsx": {
+    "mtime": 1793770981.5932772,
+    "seen": 1794534494.3499315,
+    "ast_hash": "62c106d635163cab3b27553310135e51",
+    "semantic_hash": "62c106d635163cab3b27553310135e51"
+  },
+  "src/app/WyszukiwanieGlobalne.test.tsx": {
+    "mtime": 1792230930.0731556,
+    "seen": 1794534494.3499324,
+    "ast_hash": "d678248740e0d54fc58235dd38d79778",
+    "semantic_hash": "d678248740e0d54fc58235dd38d79778"
+  },
+  "src/app/WyszukiwanieGlobalne.tsx": {
+    "mtime": 1789498697.7872598,
+    "seen": 1794534494.3499339,
+    "ast_hash": "41050c5016370078d7636d97b1e09d3f",
+    "semantic_hash": "41050c5016370078d7636d97b1e09d3f"
+  },
+  "src/components/EdytorPolaRejestru.test.ts": {
+    "mtime": 1793148645.4092946,
+    "seen": 1794534494.3499348,
+    "ast_hash": "3e3e7622874d3c4b01049b26f0809d51",
+    "semantic_hash": "3e3e7622874d3c4b01049b26f0809d51"
+  },
+  "src/components/EdytorPolaRejestru.tsx": {
+    "mtime": 1793148550.9325054,
+    "seen": 1794534494.3499362,
+    "ast_hash": "6d11545d6b4bb937f8fed2a6ac3295ca",
+    "semantic_hash": "6d11545d6b4bb937f8fed2a6ac3295ca"
+  },
+  "src/components/GranicaBledu.test.tsx": {
+    "mtime": 1789906256.5256355,
+    "seen": 1794534494.349937,
+    "ast_hash": "be6421108867d9cef6e096e1c8d99c07",
+    "semantic_hash": "be6421108867d9cef6e096e1c8d99c07"
+  },
+  "src/components/GranicaBledu.tsx": {
+    "mtime": 1789906256.5261362,
+    "seen": 1794534494.3499382,
+    "ast_hash": "a8097d7ebf21274875e8af4dcc7245c5",
+    "semantic_hash": "a8097d7ebf21274875e8af4dcc7245c5"
+  },
+  "src/components/Interfejs.tsx": {
+    "mtime": 1789498697.7892618,
+    "seen": 1794534494.349939,
+    "ast_hash": "babae24b53986b61f575fb2965f091b0",
+    "semantic_hash": "babae24b53986b61f575fb2965f091b0"
+  },
+  "src/components/PoleAutouzupelniania.test.tsx": {
+    "mtime": 1793148645.4092946,
+    "seen": 1794534494.3499403,
+    "ast_hash": "1e158ff8285e8f8b00ba34a936b3c532",
+    "semantic_hash": "1e158ff8285e8f8b00ba34a936b3c532"
+  },
+  "src/components/PoleAutouzupelniania.tsx": {
+    "mtime": 1793148968.4565146,
+    "seen": 1794534494.3499415,
+    "ast_hash": "7c76aae76701236282622ab0ead795bb",
+    "semantic_hash": "7c76aae76701236282622ab0ead795bb"
+  },
+  "src/components/PoleCzasu.test.tsx": {
+    "mtime": 1793146070.7571096,
+    "seen": 1794534494.3499427,
+    "ast_hash": "6dd94e39659e6e43c641d64cf5fa8771",
+    "semantic_hash": "6dd94e39659e6e43c641d64cf5fa8771"
+  },
+  "src/components/PoleCzasu.tsx": {
+    "mtime": 1793146060.816108,
+    "seen": 1794534494.3499439,
+    "ast_hash": "c62fab8ad4255f38d925aafe19f7055c",
+    "semantic_hash": "c62fab8ad4255f38d925aafe19f7055c"
+  },
+  "src/components/PoleDaty.test.tsx": {
+    "mtime": 1793142549.7090135,
+    "seen": 1794534494.349945,
+    "ast_hash": "13ec7b5ea7b726ab21b5416d2d4ba52a",
+    "semantic_hash": "13ec7b5ea7b726ab21b5416d2d4ba52a"
+  },
+  "src/components/PoleDaty.tsx": {
+    "mtime": 1793142528.662428,
+    "seen": 1794534494.349946,
+    "ast_hash": "3fec295c5d58e86ab26831af947ebca0",
+    "semantic_hash": "3fec295c5d58e86ab26831af947ebca0"
+  },
+  "src/components/PoleKwoty.test.tsx": {
+    "mtime": 1793146837.2602696,
+    "seen": 1794534494.3499472,
+    "ast_hash": "d1e3f4dfcca16ff4c47d8ed0cc5b41d6",
+    "semantic_hash": "d1e3f4dfcca16ff4c47d8ed0cc5b41d6"
+  },
+  "src/components/PoleKwoty.tsx": {
+    "mtime": 1793729053.2474508,
+    "seen": 1794534494.3499484,
+    "ast_hash": "9a8163a05a3f5f66915ae3641c838406",
+    "semantic_hash": "9a8163a05a3f5f66915ae3641c838406"
+  },
+  "src/components/PoleLiczbowe.test.tsx": {
+    "mtime": 1793147763.8474343,
+    "seen": 1794534494.3499496,
+    "ast_hash": "cf1da9483952cabed9c4cb9cdff2ef7e",
+    "semantic_hash": "cf1da9483952cabed9c4cb9cdff2ef7e"
+  },
+  "src/components/PoleLiczbowe.tsx": {
+    "mtime": 1793147569.6034918,
+    "seen": 1794534494.3499508,
+    "ast_hash": "5b53de3f142ba916b365a72cc08a7934",
+    "semantic_hash": "5b53de3f142ba916b365a72cc08a7934"
+  },
+  "src/components/RejestrPoczekalni.test.tsx": {
+    "mtime": 1793729053.2484498,
+    "seen": 1794534494.349952,
+    "ast_hash": "a35afad011c997ed30e5a0ae2c65d772",
+    "semantic_hash": "a35afad011c997ed30e5a0ae2c65d772"
+  },
+  "src/components/RejestrPoczekalni.tsx": {
+    "mtime": 1793146742.2761743,
+    "seen": 1794534494.349953,
+    "ast_hash": "feb6d06a0a444a5688e280731c0fb18c",
+    "semantic_hash": "feb6d06a0a444a5688e280731c0fb18c"
+  },
+  "src/components/RejestrSubskrypcji.test.tsx": {
+    "mtime": 1790725509.2305565,
+    "seen": 1794534494.3499544,
+    "ast_hash": "dac2d958b26e2323f80f0bcdc220cada",
+    "semantic_hash": "dac2d958b26e2323f80f0bcdc220cada"
+  },
+  "src/components/RejestrSubskrypcji.tsx": {
+    "mtime": 1793147802.9748993,
+    "seen": 1794534494.3499553,
+    "ast_hash": "537d7c6582576d292aa1aa41c36e9274",
+    "semantic_hash": "537d7c6582576d292aa1aa41c36e9274"
+  },
+  "src/components/WidokRejestru.test.tsx": {
+    "mtime": 1793146800.6273208,
+    "seen": 1794534494.3499565,
+    "ast_hash": "43b73c25f581d26ba1941ff761a4e18c",
+    "semantic_hash": "43b73c25f581d26ba1941ff761a4e18c"
+  },
+  "src/components/WidokRejestru.tsx": {
+    "mtime": 1793148550.933507,
+    "seen": 1794534494.3499577,
+    "ast_hash": "dfeeda97d2e0273d820603f3ceeedaef",
+    "semantic_hash": "dfeeda97d2e0273d820603f3ceeedaef"
+  },
+  "src/components/kalendarz/KafelekDnia.tsx": {
+    "mtime": 1792794757.1902163,
+    "seen": 1794534494.349959,
+    "ast_hash": "7cc36a749fb027d2193d207454d9d376",
+    "semantic_hash": "7cc36a749fb027d2193d207454d9d376"
+  },
+  "src/components/kalendarz/SkupienieDnia.tsx": {
+    "mtime": 1791571822.8446283,
+    "seen": 1794534494.3499599,
+    "ast_hash": "dedc65ca5318157493b62db829f60a50",
+    "semantic_hash": "dedc65ca5318157493b62db829f60a50"
+  },
+  "src/components/useWlasciwosciRejestru.tsx": {
+    "mtime": 1793147600.9174755,
+    "seen": 1794534494.3499613,
+    "ast_hash": "2c17898d2c5078352f7f03a9de05ffcd",
+    "semantic_hash": "2c17898d2c5078352f7f03a9de05ffcd"
+  },
+  "src/data/BazaOgarniacza.migracje.test.ts": {
+    "mtime": 1791682839.258504,
+    "seen": 1794534494.3499625,
+    "ast_hash": "68c799bddb7af3a4f448c960068ef6a0",
+    "semantic_hash": "68c799bddb7af3a4f448c960068ef6a0"
+  },
+  "src/data/BazaOgarniacza.ts": {
+    "mtime": 1793729053.2484498,
+    "seen": 1794534494.3499634,
+    "ast_hash": "94436152451764abe32c4eab30795384",
+    "semantic_hash": "94436152451764abe32c4eab30795384"
+  },
+  "src/data/DostawcaSynchronizacji.ts": {
+    "mtime": 1793229551.3906662,
+    "seen": 1794534494.349966,
+    "ast_hash": "0fabfb4f28b50814ba53ef7369e63a9e",
+    "semantic_hash": "0fabfb4f28b50814ba53ef7369e63a9e"
+  },
+  "src/data/FinanseWspolne.test.ts": {
+    "mtime": 1793229805.3449047,
+    "seen": 1794534494.3499672,
+    "ast_hash": "e509f6fb9d558fb68bdd5dabf2f92685",
+    "semantic_hash": "e509f6fb9d558fb68bdd5dabf2f92685"
+  },
+  "src/data/KolejkaSynchronizacji.ts": {
+    "mtime": 1793772310.7977839,
+    "seen": 1794534494.3499684,
+    "ast_hash": "96746e7f392d4f1f1ccd5a8a62af3bf0",
+    "semantic_hash": "96746e7f392d4f1f1ccd5a8a62af3bf0"
+  },
+  "src/data/OchronaTransportuFz.ts": {
+    "mtime": 1793729053.2504516,
+    "seen": 1794534494.3499696,
+    "ast_hash": "bee4e05da68c1a4630a9674e450407a1",
+    "semantic_hash": "bee4e05da68c1a4630a9674e450407a1"
+  },
+  "src/data/ProfileLokalne.test.ts": {
+    "mtime": 1791892850.3497064,
+    "seen": 1794534494.3499706,
+    "ast_hash": "2e78552e00b142123aa443e8e64560aa",
+    "semantic_hash": "2e78552e00b142123aa443e8e64560aa"
+  },
+  "src/data/ProfileLokalne.ts": {
+    "mtime": 1791893354.1159604,
+    "seen": 1794534494.349972,
+    "ast_hash": "22689136b468a36e258705abfcf5f5bf",
+    "semantic_hash": "22689136b468a36e258705abfcf5f5bf"
+  },
+  "src/data/Repozytorium.test.ts": {
+    "mtime": 1789498697.8057804,
+    "seen": 1794534494.349973,
+    "ast_hash": "07fe508c6dc983ee3e930ba264b66b62",
+    "semantic_hash": "07fe508c6dc983ee3e930ba264b66b62"
+  },
+  "src/data/Repozytorium.ts": {
+    "mtime": 1793729053.2504516,
+    "seen": 1794534494.3499742,
+    "ast_hash": "b098d85a8fb58a44e8c47585ce34e617",
+    "semantic_hash": "b098d85a8fb58a44e8c47585ce34e617"
+  },
+  "src/data/RepozytoriumElementowZadan.test.ts": {
+    "mtime": 1792795295.6509008,
+    "seen": 1794534494.3499758,
+    "ast_hash": "031b4c119dab08b53ca128240e24de98",
+    "semantic_hash": "031b4c119dab08b53ca128240e24de98"
+  },
+  "src/data/RepozytoriumElementowZadan.ts": {
+    "mtime": 1792795295.649899,
+    "seen": 1794534494.3499768,
+    "ast_hash": "bd6442f192a701f6756c8593d9ae5675",
+    "semantic_hash": "bd6442f192a701f6756c8593d9ae5675"
+  },
+  "src/data/RepozytoriumUstawien.ts": {
+    "mtime": 1793772310.798785,
+    "seen": 1794534494.349978,
+    "ast_hash": "b7d2dd955fb8f6baf7555c7e23adbc69",
+    "semantic_hash": "b7d2dd955fb8f6baf7555c7e23adbc69"
+  },
+  "src/data/RepozytoriumZdalneHttp.test.ts": {
+    "mtime": 1793569719.7323787,
+    "seen": 1794534494.3499792,
+    "ast_hash": "946ab95f202a0c2e79733547bed9a8cc",
+    "semantic_hash": "946ab95f202a0c2e79733547bed9a8cc"
+  },
+  "src/data/RepozytoriumZdalneHttp.ts": {
+    "mtime": 1793569738.1176581,
+    "seen": 1794534494.34998,
+    "ast_hash": "fc4b4a087ef6efe19696033adc7d288b",
+    "semantic_hash": "fc4b4a087ef6efe19696033adc7d288b"
+  },
+  "src/data/RepozytoriumZdalneInMemory.ts": {
+    "mtime": 1789498697.812787,
+    "seen": 1794534494.3499815,
+    "ast_hash": "5305a2d601833ad9dbb064b3e3b049ab",
+    "semantic_hash": "5305a2d601833ad9dbb064b3e3b049ab"
+  },
+  "src/data/ZdarzeniaDanych.ts": {
+    "mtime": 1789498697.814789,
+    "seen": 1794534494.3499827,
+    "ast_hash": "e357099cba4eef308bc33a1cd9f40943",
+    "semantic_hash": "e357099cba4eef308bc33a1cd9f40943"
+  },
+  "src/domain/adapterZadania.ts": {
+    "mtime": 1789498697.8157895,
+    "seen": 1794534494.3499837,
+    "ast_hash": "36a7afc3120f5524377dd08c84436897",
+    "semantic_hash": "36a7afc3120f5524377dd08c84436897"
+  },
+  "src/domain/badania.ts": {
+    "mtime": 1791716066.4509468,
+    "seen": 1794534494.349985,
+    "ast_hash": "fd2b9b9973b56aa9dc9333a30cfebf84",
+    "semantic_hash": "fd2b9b9973b56aa9dc9333a30cfebf84"
+  },
+  "src/domain/elementyOgarniacza.ts": {
+    "mtime": 1789498697.8167903,
+    "seen": 1794534494.3499858,
+    "ast_hash": "4caf0c9d7d0feda97db077ee23dc86db",
+    "semantic_hash": "4caf0c9d7d0feda97db077ee23dc86db"
+  },
+  "src/domain/fabryki.test.ts": {
+    "mtime": 1789906256.5326567,
+    "seen": 1794534494.349987,
+    "ast_hash": "3e281a3b24117698f902b222db9cdfcc",
+    "semantic_hash": "3e281a3b24117698f902b222db9cdfcc"
+  },
+  "src/domain/fabryki.ts": {
+    "mtime": 1789906256.5336573,
+    "seen": 1794534494.349988,
+    "ast_hash": "25871be6279425626193eebe37015ac2",
+    "semantic_hash": "25871be6279425626193eebe37015ac2"
+  },
+  "src/domain/finanseWspolne.ts": {
+    "mtime": 1793229477.4675224,
+    "seen": 1794534494.3499894,
+    "ast_hash": "091205e39030627e2cdc0dc9c1549d71",
+    "semantic_hash": "091205e39030627e2cdc0dc9c1549d71"
+  },
+  "src/domain/historiaZdrowia.ts": {
+    "mtime": 1791717708.4809706,
+    "seen": 1794534494.3499904,
+    "ast_hash": "a96b600365abe1b7ef2ca3963c1e9ada",
+    "semantic_hash": "a96b600365abe1b7ef2ca3963c1e9ada"
+  },
+  "src/domain/kokpit.test.ts": {
+    "mtime": 1793772692.0607429,
+    "seen": 1794534494.3499918,
+    "ast_hash": "9f61eadb5f58106409d33b55abbe271d",
+    "semantic_hash": "9f61eadb5f58106409d33b55abbe271d"
+  },
+  "src/domain/kokpit.ts": {
+    "mtime": 1793772932.3583167,
+    "seen": 1794534494.3499928,
+    "ast_hash": "c35132e0823c9ff574a97f1da4c947f1",
+    "semantic_hash": "c35132e0823c9ff574a97f1da4c947f1"
+  },
+  "src/domain/kwoty.test.ts": {
+    "mtime": 1793146927.0388422,
+    "seen": 1794534494.349994,
+    "ast_hash": "dd3273f2ebe800e3bec819966d1a7d4e",
+    "semantic_hash": "dd3273f2ebe800e3bec819966d1a7d4e"
+  },
+  "src/domain/kwoty.ts": {
+    "mtime": 1793229477.4705253,
+    "seen": 1794534494.349995,
+    "ast_hash": "ab5b76bb200b0a987d758c632c92939e",
+    "semantic_hash": "ab5b76bb200b0a987d758c632c92939e"
+  },
+  "src/domain/liczby.test.ts": {
+    "mtime": 1793147660.7035227,
+    "seen": 1794534494.3499963,
+    "ast_hash": "f6629504ef046e446a92db0210a421b1",
+    "semantic_hash": "f6629504ef046e446a92db0210a421b1"
+  },
+  "src/domain/liczby.ts": {
+    "mtime": 1793147569.6024907,
+    "seen": 1794534494.3499973,
+    "ast_hash": "9a422b70a5688f0361d1d4611b45cb86",
+    "semantic_hash": "9a422b70a5688f0361d1d4611b45cb86"
+  },
+  "src/domain/logikaTerminuZadania.test.ts": {
+    "mtime": 1789498697.8187919,
+    "seen": 1794534494.3499985,
+    "ast_hash": "baeb3f099ee1df248ccc2a0c3ac9ceda",
+    "semantic_hash": "baeb3f099ee1df248ccc2a0c3ac9ceda"
+  },
+  "src/domain/logikaTerminuZadania.ts": {
+    "mtime": 1789498697.819793,
+    "seen": 1794534494.3499997,
+    "ast_hash": "3a85f14edd1bdd84c9d8e77c36196cfb",
+    "semantic_hash": "3a85f14edd1bdd84c9d8e77c36196cfb"
+  },
+  "src/domain/modeleFinansowWspolnych.ts": {
+    "mtime": 1793230553.156877,
+    "seen": 1794534494.3500009,
+    "ast_hash": "87649efc0703e1cb45c56f0a6f4901a4",
+    "semantic_hash": "87649efc0703e1cb45c56f0a6f4901a4"
+  },
+  "src/domain/parserSzybkiegoDodawania.test.ts": {
+    "mtime": 1789498697.8278003,
+    "seen": 1794534494.3500018,
+    "ast_hash": "eb58f995d0a4f4f85ba5903fc2f15fb3",
+    "semantic_hash": "eb58f995d0a4f4f85ba5903fc2f15fb3"
+  },
+  "src/domain/parserSzybkiegoDodawania.ts": {
+    "mtime": 1789498697.8288014,
+    "seen": 1794534494.350003,
+    "ast_hash": "69fa1332e4e5b4d5766133f597ec586a",
+    "semantic_hash": "69fa1332e4e5b4d5766133f597ec586a"
+  },
+  "src/domain/personalizacja.test.ts": {
+    "mtime": 1792619552.1346824,
+    "seen": 1794534494.3500042,
+    "ast_hash": "8a3e00ca94e99fab43be6479d86cd9c0",
+    "semantic_hash": "8a3e00ca94e99fab43be6479d86cd9c0"
+  },
+  "src/domain/personalizacja.ts": {
+    "mtime": 1792619458.1617036,
+    "seen": 1794534494.3500054,
+    "ast_hash": "b7531e6e67dce1354e6d0c932d683d8c",
+    "semantic_hash": "b7531e6e67dce1354e6d0c932d683d8c"
+  },
+  "src/domain/psychoterapia.ts": {
+    "mtime": 1791685455.3806696,
+    "seen": 1794534494.3500066,
+    "ast_hash": "03cdf9c5a7b9dbfc2370b7d98afa52b1",
+    "semantic_hash": "03cdf9c5a7b9dbfc2370b7d98afa52b1"
+  },
+  "src/domain/rejestr.test.ts": {
+    "mtime": 1789498697.832805,
+    "seen": 1794534494.3500078,
+    "ast_hash": "0c9e76887549eebd7c1b15f248120fe7",
+    "semantic_hash": "0c9e76887549eebd7c1b15f248120fe7"
+  },
+  "src/domain/rejestr.ts": {
+    "mtime": 1793147569.6034918,
+    "seen": 1794534494.3500087,
+    "ast_hash": "1e2d6fe504b467e74c09cce5b637f3f4",
+    "semantic_hash": "1e2d6fe504b467e74c09cce5b637f3f4"
+  },
+  "src/domain/samopoczucie.ts": {
+    "mtime": 1791682978.7956395,
+    "seen": 1794534494.3500102,
+    "ast_hash": "8a9ce737d3a3212bae08b53ea858bea9",
+    "semantic_hash": "8a9ce737d3a3212bae08b53ea858bea9"
+  },
+  "src/domain/typy.ts": {
+    "mtime": 1793771098.2359319,
+    "seen": 1794534494.350011,
+    "ast_hash": "17d4e569db5849f3212b7aca36d7691d",
+    "semantic_hash": "17d4e569db5849f3212b7aca36d7691d"
+  },
+  "src/domain/ustaleniaGlosowe.test.ts": {
+    "mtime": 1789498697.8358078,
+    "seen": 1794534494.3500123,
+    "ast_hash": "0c2557b67c0d33afd9108f96244d7861",
+    "semantic_hash": "0c2557b67c0d33afd9108f96244d7861"
+  },
+  "src/domain/ustaleniaGlosowe.ts": {
+    "mtime": 1789498697.8368087,
+    "seen": 1794534494.3500137,
+    "ast_hash": "fd2286ab3e37925b1b8796dc462709db",
+    "semantic_hash": "fd2286ab3e37925b1b8796dc462709db"
+  },
+  "src/domain/ustawienia.test.ts": {
+    "mtime": 1792619615.3435202,
+    "seen": 1794534494.3500147,
+    "ast_hash": "974ce3d68e91caa501eff9b77c24978a",
+    "semantic_hash": "974ce3d68e91caa501eff9b77c24978a"
+  },
+  "src/domain/ustawienia.ts": {
+    "mtime": 1793771098.2369325,
+    "seen": 1794534494.350016,
+    "ast_hash": "a3410097e669327949f233575f763141",
+    "semantic_hash": "a3410097e669327949f233575f763141"
+  },
+  "src/hooks/usePodswietlenie.ts": {
+    "mtime": 1789498697.8408122,
+    "seen": 1794534494.350017,
+    "ast_hash": "844b92eb2bebd961e044930fdf09e7a0",
+    "semantic_hash": "844b92eb2bebd961e044930fdf09e7a0"
+  },
+  "src/hooks/useRepozytorium.ts": {
+    "mtime": 1791716002.385638,
+    "seen": 1794534494.3500183,
+    "ast_hash": "ea17c9c178859efa9333ffe36f9a33f4",
+    "semantic_hash": "ea17c9c178859efa9333ffe36f9a33f4"
+  },
+  "src/main.tsx": {
+    "mtime": 1793138620.6923141,
+    "seen": 1794534494.3500192,
+    "ast_hash": "8e80c2515e726f839580f0660777e5a5",
+    "semantic_hash": "8e80c2515e726f839580f0660777e5a5"
+  },
+  "src/modules/czas/WidokiCzasu.test.tsx": {
+    "mtime": 1793161222.1313393,
+    "seen": 1794534494.3500204,
+    "ast_hash": "d49a14bdb24da0861252b1c0527e3bf0",
+    "semantic_hash": "d49a14bdb24da0861252b1c0527e3bf0"
+  },
+  "src/modules/czas/WidokiCzasu.tsx": {
+    "mtime": 1793160957.321409,
+    "seen": 1794534494.3500216,
+    "ast_hash": "059836e06b8703bce74d4ea9ef7c7e99",
+    "semantic_hash": "059836e06b8703bce74d4ea9ef7c7e99"
+  },
+  "src/modules/dzisiaj/HoryzontTygodniowy.test.tsx": {
+    "mtime": 1791571822.848632,
+    "seen": 1794534494.3500226,
+    "ast_hash": "a030f6602489231831e927c3f98ba657",
+    "semantic_hash": "a030f6602489231831e927c3f98ba657"
+  },
+  "src/modules/dzisiaj/HoryzontTygodniowy.tsx": {
+    "mtime": 1792794757.1906445,
+    "seen": 1794534494.3500237,
+    "ast_hash": "335000cffc2e9df7437ae5174f93e547",
+    "semantic_hash": "335000cffc2e9df7437ae5174f93e547"
+  },
+  "src/modules/dzisiaj/PodsumowaniePoPracy.test.tsx": {
+    "mtime": 1793646519.9489498,
+    "seen": 1794534494.350025,
+    "ast_hash": "1f648ea6a6f88debd4e9a1a88485321a",
+    "semantic_hash": "1f648ea6a6f88debd4e9a1a88485321a"
+  },
+  "src/modules/dzisiaj/PodsumowaniePoPracy.tsx": {
+    "mtime": 1793646692.3227384,
+    "seen": 1794534494.350026,
+    "ast_hash": "efb3e64dc0e7f4c3463d00c8c04d776f",
+    "semantic_hash": "efb3e64dc0e7f4c3463d00c8c04d776f"
+  },
+  "src/modules/dzisiaj/WidokDzisiaj.test.tsx": {
+    "mtime": 1792794677.173714,
+    "seen": 1794534494.3500273,
+    "ast_hash": "797d7adf9b2b480d38220985dbbe4307",
+    "semantic_hash": "797d7adf9b2b480d38220985dbbe4307"
+  },
+  "src/modules/dzisiaj/WidokDzisiaj.tsx": {
+    "mtime": 1793644074.1032808,
+    "seen": 1794534494.3500283,
+    "ast_hash": "8fe14070d593d75ed82474b2abe0e4f1",
+    "semantic_hash": "8fe14070d593d75ed82474b2abe0e4f1"
+  },
+  "src/modules/dzisiaj/logikaHoryzontu.test.ts": {
+    "mtime": 1791571822.8511362,
+    "seen": 1794534494.3500295,
+    "ast_hash": "de7de7719a4e5245ea9e83b98b8a24f1",
+    "semantic_hash": "de7de7719a4e5245ea9e83b98b8a24f1"
+  },
+  "src/modules/dzisiaj/logikaHoryzontu.ts": {
+    "mtime": 1791571822.8526533,
+    "seen": 1794534494.3500307,
+    "ast_hash": "c969308b908cfcb623ae4806bd854a18",
+    "semantic_hash": "c969308b908cfcb623ae4806bd854a18"
+  },
+  "src/modules/dzisiaj/useSzybkieDzialaniaDnia.test.tsx": {
+    "mtime": 1792794401.0192015,
+    "seen": 1794534494.3500319,
+    "ast_hash": "595acb1dd3aab8f1c19d4452cd04fa0a",
+    "semantic_hash": "595acb1dd3aab8f1c19d4452cd04fa0a"
+  },
+  "src/modules/dzisiaj/useSzybkieDzialaniaDnia.ts": {
+    "mtime": 1792793930.601908,
+    "seen": 1794534494.3500328,
+    "ast_hash": "539065501d347299479fcdd716917bb5",
+    "semantic_hash": "539065501d347299479fcdd716917bb5"
+  },
+  "src/modules/echo/WidokEcho.test.ts": {
+    "mtime": 1792224577.6127279,
+    "seen": 1794534494.3500342,
+    "ast_hash": "65310271db506f01435aa50835ec5983",
+    "semantic_hash": "65310271db506f01435aa50835ec5983"
+  },
+  "src/modules/echo/WidokEcho.tsx": {
+    "mtime": 1794291173.2123687,
+    "seen": 1794534494.3500352,
+    "ast_hash": "9c9b67f4e8eb28aa7c3851bf33591f44",
+    "semantic_hash": "9c9b67f4e8eb28aa7c3851bf33591f44"
+  },
+  "src/modules/finanse/FormularzSprzedazyPuli.tsx": {
+    "mtime": 1793729053.2534547,
+    "seen": 1794534494.3500364,
+    "ast_hash": "0727300f7fe584aa6353b44974ac3033",
+    "semantic_hash": "0727300f7fe584aa6353b44974ac3033"
+  },
+  "src/modules/finanse/FormularzZwrotu.tsx": {
+    "mtime": 1793231994.1682818,
+    "seen": 1794534494.3500376,
+    "ast_hash": "49f5836964b38d9599d878b2fa0fc8b4",
+    "semantic_hash": "49f5836964b38d9599d878b2fa0fc8b4"
+  },
+  "src/modules/finanse/FormularzePul.tsx": {
+    "mtime": 1793729053.2544553,
+    "seen": 1794534494.3500388,
+    "ast_hash": "e94e0d2d776815336cdcf8892cc3c232",
+    "semantic_hash": "e94e0d2d776815336cdcf8892cc3c232"
+  },
+  "src/modules/finanse/FormularzeRozliczen.tsx": {
+    "mtime": 1793231808.8228667,
+    "seen": 1794534494.3500397,
+    "ast_hash": "9d3008c141cfdd66d88910899690b4ac",
+    "semantic_hash": "9d3008c141cfdd66d88910899690b4ac"
+  },
+  "src/modules/finanse/FormularzeZakupowPuli.tsx": {
+    "mtime": 1793729053.2544553,
+    "seen": 1794534494.3500412,
+    "ast_hash": "a41f05c4bc61d5b9b4e186b6b8f561cc",
+    "semantic_hash": "a41f05c4bc61d5b9b4e186b6b8f561cc"
+  },
+  "src/modules/finanse/WidokFinansow.test.tsx": {
+    "mtime": 1793729053.2554562,
+    "seen": 1794534494.350042,
+    "ast_hash": "44ad0d017f9b675c738a78a61d55a810",
+    "semantic_hash": "44ad0d017f9b675c738a78a61d55a810"
+  },
+  "src/modules/finanse/WidokFinansow.tsx": {
+    "mtime": 1793729053.2564576,
+    "seen": 1794534494.3500433,
+    "ast_hash": "5aa34a63bf0e1d5e9fd1338d1c424bfc",
+    "semantic_hash": "5aa34a63bf0e1d5e9fd1338d1c424bfc"
+  },
+  "src/modules/finanse/WidokPul.test.tsx": {
+    "mtime": 1793729053.2574582,
+    "seen": 1794534494.3500445,
+    "ast_hash": "5a26ad1cd9b98b076fea3c61eb9d32c6",
+    "semantic_hash": "5a26ad1cd9b98b076fea3c61eb9d32c6"
+  },
+  "src/modules/finanse/WidokPul.tsx": {
+    "mtime": 1793729053.2574582,
+    "seen": 1794534494.3500457,
+    "ast_hash": "c63b8229e82316d16754c755965ca819",
+    "semantic_hash": "c63b8229e82316d16754c755965ca819"
+  },
+  "src/modules/finanse/WidokRozliczen.test.tsx": {
+    "mtime": 1793232264.9750347,
+    "seen": 1794534494.3500466,
+    "ast_hash": "09ece24e90ba07bccf7d09038da63f47",
+    "semantic_hash": "09ece24e90ba07bccf7d09038da63f47"
+  },
+  "src/modules/finanse/WidokRozliczen.tsx": {
+    "mtime": 1793232218.634659,
+    "seen": 1794534494.350048,
+    "ast_hash": "1e450846aa03344788c8a854ab3da7ad",
+    "semantic_hash": "1e450846aa03344788c8a854ab3da7ad"
+  },
+  "src/modules/finanse/WidokSprzedazyPuli.test.tsx": {
+    "mtime": 1793729053.2584589,
+    "seen": 1794534494.350049,
+    "ast_hash": "08238f2c19bf0996ec7c9a50fe4ddde1",
+    "semantic_hash": "08238f2c19bf0996ec7c9a50fe4ddde1"
+  },
+  "src/modules/finanse/WidokSprzedazyPuli.tsx": {
+    "mtime": 1793729053.2584589,
+    "seen": 1794534494.3500502,
+    "ast_hash": "7518ef5ee926db75a0d48a4757ad2b17",
+    "semantic_hash": "7518ef5ee926db75a0d48a4757ad2b17"
+  },
+  "src/modules/finanse/WidokZakupowPuli.test.tsx": {
+    "mtime": 1793729053.25946,
+    "seen": 1794534494.3500514,
+    "ast_hash": "2f7445299f95d39ee03f42f5e0abc902",
+    "semantic_hash": "2f7445299f95d39ee03f42f5e0abc902"
+  },
+  "src/modules/finanse/WidokZakupowPuli.tsx": {
+    "mtime": 1793729053.25946,
+    "seen": 1794534494.3500524,
+    "ast_hash": "004d69ae89370b7b1d47ce365cd4b6ae",
+    "semantic_hash": "004d69ae89370b7b1d47ce365cd4b6ae"
+  },
+  "src/modules/finanse/pomocRozliczen.ts": {
+    "mtime": 1793232192.048134,
+    "seen": 1794534494.3500535,
+    "ast_hash": "bcc8c2bc79585d1b50d3683b22b93803",
+    "semantic_hash": "bcc8c2bc79585d1b50d3683b22b93803"
+  },
+  "src/modules/multimedia/WidokMultimediow.test.tsx": {
+    "mtime": 1792535018.329525,
+    "seen": 1794534494.350055,
+    "ast_hash": "be66fd783d7d4e4a1774a74032553fa1",
+    "semantic_hash": "be66fd783d7d4e4a1774a74032553fa1"
+  },
+  "src/modules/multimedia/WidokMultimediow.tsx": {
+    "mtime": 1792535162.4230714,
+    "seen": 1794534494.350056,
+    "ast_hash": "9e2127e9b3c38b1193443d28f707c820",
+    "semantic_hash": "9e2127e9b3c38b1193443d28f707c820"
+  },
+  "src/modules/multimedia/bibliotekaMultimediow.test.ts": {
+    "mtime": 1792535162.4240725,
+    "seen": 1794534494.350057,
+    "ast_hash": "c7fdb655cd5199d4304b46ccabb83923",
+    "semantic_hash": "c7fdb655cd5199d4304b46ccabb83923"
+  },
+  "src/modules/multimedia/bibliotekaMultimediow.ts": {
+    "mtime": 1792535162.4230714,
+    "seen": 1794534494.350058,
+    "ast_hash": "29c6814e60907f6be9e874c9e771cd77",
+    "semantic_hash": "29c6814e60907f6be9e874c9e771cd77"
+  },
+  "src/modules/organizacja/WidokiOrganizacji.tsx": {
+    "mtime": 1789498697.8518221,
+    "seen": 1794534494.3500593,
+    "ast_hash": "91baf4ee6bbc55213264b6c21a34ced2",
+    "semantic_hash": "91baf4ee6bbc55213264b6c21a34ced2"
+  },
+  "src/modules/panel/BlokiKokpitu.tsx": {
+    "mtime": 1793773505.193922,
+    "seen": 1794534494.3500602,
+    "ast_hash": "427d36256402e510c12f92916017c452",
+    "semantic_hash": "427d36256402e510c12f92916017c452"
+  },
+  "src/modules/panel/EdytorKokpitu.tsx": {
+    "mtime": 1793773607.99237,
+    "seen": 1794534494.350062,
+    "ast_hash": "0b5eb59902e41d3f4502fa1457da9166",
+    "semantic_hash": "0b5eb59902e41d3f4502fa1457da9166"
+  },
+  "src/modules/panel/KonfiguratorBloku.tsx": {
+    "mtime": 1793772932.3583167,
+    "seen": 1794534494.3500628,
+    "ast_hash": "eece8f7f9a85bf1da24e2586e067100a",
+    "semantic_hash": "eece8f7f9a85bf1da24e2586e067100a"
+  },
+  "src/modules/panel/KonfiguratorPrywatnosci.tsx": {
+    "mtime": 1793771854.3169692,
+    "seen": 1794534494.350064,
+    "ast_hash": "899c50d72ef32e8ea1467ef2db421a9c",
+    "semantic_hash": "899c50d72ef32e8ea1467ef2db421a9c"
+  },
+  "src/modules/panel/RendererUkladu.tsx": {
+    "mtime": 1793773607.98985,
+    "seen": 1794534494.3500652,
+    "ast_hash": "c4ea0c662104c9e5f02fadacf7ef0a22",
+    "semantic_hash": "c4ea0c662104c9e5f02fadacf7ef0a22"
+  },
+  "src/modules/panel/SekcjaDom.test.tsx": {
+    "mtime": 1792224577.6157303,
+    "seen": 1794534494.3500662,
+    "ast_hash": "7d85f22de89620b00e370b577eac4fe2",
+    "semantic_hash": "7d85f22de89620b00e370b577eac4fe2"
+  },
+  "src/modules/panel/SekcjaDom.tsx": {
+    "mtime": 1792224577.6157303,
+    "seen": 1794534494.3500674,
+    "ast_hash": "e1f14b2ac763d1dc78553466d745774b",
+    "semantic_hash": "e1f14b2ac763d1dc78553466d745774b"
+  },
+  "src/modules/panel/WidokPanelu.test.tsx": {
+    "mtime": 1793772692.0597417,
+    "seen": 1794534494.3500686,
+    "ast_hash": "5def7c38fccb7a0ff202a6211825005e",
+    "semantic_hash": "5def7c38fccb7a0ff202a6211825005e"
+  },
+  "src/modules/panel/WidokPanelu.tsx": {
+    "mtime": 1793773391.45511,
+    "seen": 1794534494.3500698,
+    "ast_hash": "d5e822f051e0a720664bdc58452badc9",
+    "semantic_hash": "d5e822f051e0a720664bdc58452badc9"
+  },
+  "src/modules/panel/obslugaKokpitu.ts": {
+    "mtime": 1793772825.8523118,
+    "seen": 1794534494.3500707,
+    "ast_hash": "50230611db11a22d4cb63d933d018328",
+    "semantic_hash": "50230611db11a22d4cb63d933d018328"
+  },
+  "src/modules/panel/useAkcjaKokpitu.ts": {
+    "mtime": 1793771989.747914,
+    "seen": 1794534494.3500721,
+    "ast_hash": "48b21fa44e23a1037d2b9896a60c7570",
+    "semantic_hash": "48b21fa44e23a1037d2b9896a60c7570"
+  },
+  "src/modules/panel/usePrywatnoscKokpitu.ts": {
+    "mtime": 1793773505.1929095,
+    "seen": 1794534494.350073,
+    "ast_hash": "e2dcc24256d7d43f71b4735e66b4140c",
+    "semantic_hash": "e2dcc24256d7d43f71b4735e66b4140c"
+  },
+  "src/modules/praca/RejestrZadan.test.tsx": {
+    "mtime": 1793773233.8026402,
+    "seen": 1794534494.3500743,
+    "ast_hash": "b400ba1d99d96502ffdcf3166c2b075c",
+    "semantic_hash": "b400ba1d99d96502ffdcf3166c2b075c"
+  },
+  "src/modules/praca/WidokiPracy.test.tsx": {
+    "mtime": 1791722510.0396097,
+    "seen": 1794534494.3500755,
+    "ast_hash": "5462608c4227508dd848cd1b9a2c2b82",
+    "semantic_hash": "5462608c4227508dd848cd1b9a2c2b82"
+  },
+  "src/modules/praca/WidokiPracy.tsx": {
+    "mtime": 1791686032.0778863,
+    "seen": 1794534494.3500767,
+    "ast_hash": "5f3ac3ad79e787a1842c227f9d68da95",
+    "semantic_hash": "5f3ac3ad79e787a1842c227f9d68da95"
+  },
+  "src/modules/pulpit/FormularzHarmonogramuDnia.test.tsx": {
+    "mtime": 1793160990.79721,
+    "seen": 1794534494.3500776,
+    "ast_hash": "11b07c79254f2631efe6c9b422a9922b",
+    "semantic_hash": "11b07c79254f2631efe6c9b422a9922b"
+  },
+  "src/modules/pulpit/FormularzHarmonogramuDnia.tsx": {
+    "mtime": 1793160957.3204072,
+    "seen": 1794534494.350079,
+    "ast_hash": "a8c37715733b083e815051a56c976271",
+    "semantic_hash": "a8c37715733b083e815051a56c976271"
+  },
+  "src/modules/pulpit/NawigatorDnia.test.tsx": {
+    "mtime": 1792446853.5951684,
+    "seen": 1794534494.35008,
+    "ast_hash": "2047c7ab9d89ccc063b95508c76bf3eb",
+    "semantic_hash": "2047c7ab9d89ccc063b95508c76bf3eb"
+  },
+  "src/modules/pulpit/NawigatorDnia.tsx": {
+    "mtime": 1792446791.520008,
+    "seen": 1794534494.3500812,
+    "ast_hash": "20ebe1203af7f2c422ae6e830846346c",
+    "semantic_hash": "20ebe1203af7f2c422ae6e830846346c"
+  },
+  "src/modules/pulpit/OsCzasu.tsx": {
+    "mtime": 1792794897.6767244,
+    "seen": 1794534494.3500826,
+    "ast_hash": "c8f653362571687c284b78df8bb4954d",
+    "semantic_hash": "c8f653362571687c284b78df8bb4954d"
+  },
+  "src/modules/pulpit/PlanWybranegoDnia.tsx": {
+    "mtime": 1792794563.243076,
+    "seen": 1794534494.3500836,
+    "ast_hash": "d549d41fdab01ed68f22c2404fad08c3",
+    "semantic_hash": "d549d41fdab01ed68f22c2404fad08c3"
+  },
+  "src/modules/pulpit/PrzegladTygodnia.test.tsx": {
+    "mtime": 1791571822.8551562,
+    "seen": 1794534494.3500848,
+    "ast_hash": "0432d9096e9a023773e95c86c096f046",
+    "semantic_hash": "0432d9096e9a023773e95c86c096f046"
+  },
+  "src/modules/pulpit/PrzegladTygodnia.tsx": {
+    "mtime": 1791571822.8566575,
+    "seen": 1794534494.350086,
+    "ast_hash": "d25cc454ded0553f41b223b6fe1c9c02",
+    "semantic_hash": "d25cc454ded0553f41b223b6fe1c9c02"
+  },
+  "src/modules/pulpit/SugestieEchoPulpitu.test.ts": {
+    "mtime": 1789498697.8718407,
+    "seen": 1794534494.3500872,
+    "ast_hash": "372048f3753c9c1a1c6cbad138c1ff73",
+    "semantic_hash": "372048f3753c9c1a1c6cbad138c1ff73"
+  },
+  "src/modules/pulpit/SugestieEchoPulpitu.ts": {
+    "mtime": 1789498697.8728414,
+    "seen": 1794534494.3500881,
+    "ast_hash": "8f5fc5c668912f6064b65f618c44be7d",
+    "semantic_hash": "8f5fc5c668912f6064b65f618c44be7d"
+  },
+  "src/modules/pulpit/WidokPulpitu.test.tsx": {
+    "mtime": 1792451344.9521635,
+    "seen": 1794534494.3500896,
+    "ast_hash": "8b5679bb8263a4382cc8538560e33499",
+    "semantic_hash": "8b5679bb8263a4382cc8538560e33499"
+  },
+  "src/modules/pulpit/WidokPulpitu.tsx": {
+    "mtime": 1792794563.246079,
+    "seen": 1794534494.3500907,
+    "ast_hash": "e79a9e5249e1dad2ecb428a286241a3f",
+    "semantic_hash": "e79a9e5249e1dad2ecb428a286241a3f"
+  },
+  "src/modules/pulpit/integracjeGlosowe.test.ts": {
+    "mtime": 1789498697.8588288,
+    "seen": 1794534494.3500917,
+    "ast_hash": "f7ac6c94218d1397bcd4b3a85eead4d2",
+    "semantic_hash": "f7ac6c94218d1397bcd4b3a85eead4d2"
+  },
+  "src/modules/pulpit/integracjeGlosowe.ts": {
+    "mtime": 1789498697.8598297,
+    "seen": 1794534494.350093,
+    "ast_hash": "a194d3b1ef306b749a665b36ea216bf5",
+    "semantic_hash": "a194d3b1ef306b749a665b36ea216bf5"
+  },
+  "src/modules/pulpit/logikaDanychDnia.test.ts": {
+    "mtime": 1791571822.85916,
+    "seen": 1794534494.350094,
+    "ast_hash": "d9d4960453e85674f9080fd8d8f371fc",
+    "semantic_hash": "d9d4960453e85674f9080fd8d8f371fc"
+  },
+  "src/modules/pulpit/logikaDanychDnia.ts": {
+    "mtime": 1792794677.173714,
+    "seen": 1794534494.350095,
+    "ast_hash": "a642a957b7e4abd9806d312393823f47",
+    "semantic_hash": "a642a957b7e4abd9806d312393823f47"
+  },
+  "src/modules/pulpit/logikaDniaPulpitu.test.ts": {
+    "mtime": 1792794401.0192015,
+    "seen": 1794534494.3500965,
+    "ast_hash": "247f45f4d3b1700aea3b0e570dc14465",
+    "semantic_hash": "247f45f4d3b1700aea3b0e570dc14465"
+  },
+  "src/modules/pulpit/logikaDniaPulpitu.ts": {
+    "mtime": 1792793884.93165,
+    "seen": 1794534494.3500977,
+    "ast_hash": "292302e27653337fe90ad778b228f5e8",
+    "semantic_hash": "292302e27653337fe90ad778b228f5e8"
+  },
+  "src/modules/pulpit/logikaKafelkow.test.ts": {
+    "mtime": 1789499000.8178308,
+    "seen": 1794534494.3500986,
+    "ast_hash": "66b0bd22a62354b74663f8307b745ab2",
+    "semantic_hash": "66b0bd22a62354b74663f8307b745ab2"
+  },
+  "src/modules/pulpit/logikaKafelkow.ts": {
+    "mtime": 1792794562.866738,
+    "seen": 1794534494.3500998,
+    "ast_hash": "1a02918f1279b1f73c4e8755b1b758f3",
+    "semantic_hash": "1a02918f1279b1f73c4e8755b1b758f3"
+  },
+  "src/modules/pulpit/logikaOsiCzasu.test.ts": {
+    "mtime": 1793643921.5950482,
+    "seen": 1794534494.350101,
+    "ast_hash": "be5fd33217864c6cd30b2ceb72eca734",
+    "semantic_hash": "be5fd33217864c6cd30b2ceb72eca734"
+  },
+  "src/modules/pulpit/logikaOsiCzasu.ts": {
+    "mtime": 1793643713.9208684,
+    "seen": 1794534494.3501022,
+    "ast_hash": "41a1ad4c8480b6610e178c40116aa93f",
+    "semantic_hash": "41a1ad4c8480b6610e178c40116aa93f"
+  },
+  "src/modules/pulpit/rozmieszczenieZnacznikow.test.ts": {
+    "mtime": 1792794401.021214,
+    "seen": 1794534494.3501036,
+    "ast_hash": "3e4e9a8c83e716584c193e5124a9d4ca",
+    "semantic_hash": "3e4e9a8c83e716584c193e5124a9d4ca"
+  },
+  "src/modules/pulpit/rozmieszczenieZnacznikow.ts": {
+    "mtime": 1792794149.2825377,
+    "seen": 1794534494.3501046,
+    "ast_hash": "6bbfd0727eda14e325b7c3383c3847af",
+    "semantic_hash": "6bbfd0727eda14e325b7c3383c3847af"
+  },
+  "src/modules/pulpit/skalaSnu.test.ts": {
+    "mtime": 1789498697.8708398,
+    "seen": 1794534494.3501058,
+    "ast_hash": "97b42ed41580972e07d7c1e78c8ca68c",
+    "semantic_hash": "97b42ed41580972e07d7c1e78c8ca68c"
+  },
+  "src/modules/pulpit/useDaneDni.test.tsx": {
+    "mtime": 1792794647.6481512,
+    "seen": 1794534494.3501072,
+    "ast_hash": "256a6cd5b1f21a45fb2a926d93796b7f",
+    "semantic_hash": "256a6cd5b1f21a45fb2a926d93796b7f"
+  },
+  "src/modules/pulpit/useDaneDni.ts": {
+    "mtime": 1791571822.862165,
+    "seen": 1794534494.3501084,
+    "ast_hash": "a745237cbf6820c924029db278d50a01",
+    "semantic_hash": "a745237cbf6820c924029db278d50a01"
+  },
+  "src/modules/pulpit/useElementyPlanuDnia.ts": {
+    "mtime": 1792794544.0735555,
+    "seen": 1794534494.3501093,
+    "ast_hash": "f9f620a4d65db5c10daaf9ee3ae48232",
+    "semantic_hash": "f9f620a4d65db5c10daaf9ee3ae48232"
+  },
+  "src/modules/pulpit/usePlanDniaPulpitu.ts": {
+    "mtime": 1791571822.8641672,
+    "seen": 1794534494.3501108,
+    "ast_hash": "bbf46392f14b72a423c8c34f0eef4425",
+    "semantic_hash": "bbf46392f14b72a423c8c34f0eef4425"
+  },
+  "src/modules/samochod/WidokSamochodu.test.tsx": {
+    "mtime": 1793148739.4356594,
+    "seen": 1794534494.350112,
+    "ast_hash": "ed8592879040ac192993801fdd91fbf9",
+    "semantic_hash": "ed8592879040ac192993801fdd91fbf9"
+  },
+  "src/modules/samochod/WidokSamochodu.tsx": {
+    "mtime": 1793148550.9350092,
+    "seen": 1794534494.350113,
+    "ast_hash": "0f33ab870cdcff681d5d1c731afb5b40",
+    "semantic_hash": "0f33ab870cdcff681d5d1c731afb5b40"
+  },
+  "src/modules/samochod/katalogPojazdow.test.ts": {
+    "mtime": 1793148645.4082937,
+    "seen": 1794534494.3501143,
+    "ast_hash": "d869048e4241f8b6dadddea526482998",
+    "semantic_hash": "d869048e4241f8b6dadddea526482998"
+  },
+  "src/modules/samochod/katalogPojazdow.ts": {
+    "mtime": 1793148535.2939947,
+    "seen": 1794534494.3501153,
+    "ast_hash": "1ca552a56d10201c9bb18c6068629029",
+    "semantic_hash": "1ca552a56d10201c9bb18c6068629029"
+  },
+  "src/modules/ustawienia/AktualizacjeUstawien.test.tsx": {
+    "mtime": 1793569675.311896,
+    "seen": 1794534494.3501165,
+    "ast_hash": "8d1dd540eea5bc3f6cd4b52b0aeac125",
+    "semantic_hash": "8d1dd540eea5bc3f6cd4b52b0aeac125"
+  },
+  "src/modules/ustawienia/BackupUstawien.test.tsx": {
+    "mtime": 1793138620.6943161,
+    "seen": 1794534494.350118,
+    "ast_hash": "79f0760a967aad417311e65960d901bf",
+    "semantic_hash": "79f0760a967aad417311e65960d901bf"
+  },
+  "src/modules/ustawienia/EdytorPersonalizacji.test.tsx": {
+    "mtime": 1792619552.1878917,
+    "seen": 1794534494.3501189,
+    "ast_hash": "a12b044a6bbed359958a58f397793743",
+    "semantic_hash": "a12b044a6bbed359958a58f397793743"
+  },
+  "src/modules/ustawienia/EdytorPersonalizacji.tsx": {
+    "mtime": 1793138620.6953173,
+    "seen": 1794534494.3501203,
+    "ast_hash": "fa30abed224248a6c22444c5c3f38eb8",
+    "semantic_hash": "fa30abed224248a6c22444c5c3f38eb8"
+  },
+  "src/modules/ustawienia/KonfliktSynchronizacji.test.tsx": {
+    "mtime": 1790644720.7872696,
+    "seen": 1794534494.3501213,
+    "ast_hash": "43326472378e2c2448ad9a51d5f426d7",
+    "semantic_hash": "43326472378e2c2448ad9a51d5f426d7"
+  },
+  "src/modules/ustawienia/KonfliktSynchronizacji.tsx": {
+    "mtime": 1793229731.4239483,
+    "seen": 1794534494.3501225,
+    "ast_hash": "ab07f2ce5792944377a0bc4f30c0fd33",
+    "semantic_hash": "ab07f2ce5792944377a0bc4f30c0fd33"
+  },
+  "src/modules/ustawienia/NawigacjaUstawien.test.tsx": {
+    "mtime": 1793729053.2624624,
+    "seen": 1794534494.350124,
+    "ast_hash": "267e647a7ebf334c0e72a2ed9f7b5b70",
+    "semantic_hash": "267e647a7ebf334c0e72a2ed9f7b5b70"
+  },
+  "src/modules/ustawienia/NawigacjaUstawien.tsx": {
+    "mtime": 1793138620.6963184,
+    "seen": 1794534494.3501248,
+    "ast_hash": "04afb7a50a311347f1bac8bda935613c",
+    "semantic_hash": "04afb7a50a311347f1bac8bda935613c"
+  },
+  "src/modules/ustawienia/PanelAktualizacji.tsx": {
+    "mtime": 1793569675.312897,
+    "seen": 1794534494.350126,
+    "ast_hash": "1934e9170a8b4e3fdb848a9b67545265",
+    "semantic_hash": "1934e9170a8b4e3fdb848a9b67545265"
+  },
+  "src/modules/ustawienia/PanelAktualizacjiRaspberry.test.tsx": {
+    "mtime": 1793569675.3138974,
+    "seen": 1794534494.3501272,
+    "ast_hash": "c50f4573b30dd82f44299737ada8db30",
+    "semantic_hash": "c50f4573b30dd82f44299737ada8db30"
+  },
+  "src/modules/ustawienia/PanelAktualizacjiRaspberry.tsx": {
+    "mtime": 1793569675.3138974,
+    "seen": 1794534494.3501284,
+    "ast_hash": "66b02c9814674267a3f2554f6dcda3b2",
+    "semantic_hash": "66b02c9814674267a3f2554f6dcda3b2"
+  },
+  "src/modules/ustawienia/PanelAktualizacjiTestowych.test.tsx": {
+    "mtime": 1793138620.697319,
+    "seen": 1794534494.3501296,
+    "ast_hash": "ccf46b9413de48552e3299930d5e0518",
+    "semantic_hash": "ccf46b9413de48552e3299930d5e0518"
+  },
+  "src/modules/ustawienia/PanelAktualizacjiTestowych.tsx": {
+    "mtime": 1793138620.6983192,
+    "seen": 1794534494.3501308,
+    "ast_hash": "1f620056533f2a98bdecf885b7dec8a8",
+    "semantic_hash": "1f620056533f2a98bdecf885b7dec8a8"
+  },
+  "src/modules/ustawienia/PanelBlokadyAplikacji.tsx": {
+    "mtime": 1793139721.3275454,
+    "seen": 1794534494.3501322,
+    "ast_hash": "476c8775458fce1e8bbae9d550c1b229",
+    "semantic_hash": "476c8775458fce1e8bbae9d550c1b229"
+  },
+  "src/modules/ustawienia/PanelUstawienAplikacji.tsx": {
+    "mtime": 1793644311.426051,
+    "seen": 1794534494.3501332,
+    "ast_hash": "8a9372dd51de31bdf4663b19a8af5f04",
+    "semantic_hash": "8a9372dd51de31bdf4663b19a8af5f04"
+  },
+  "src/modules/ustawienia/PodsumowaniePolaczeniaIAktualizacji.tsx": {
+    "mtime": 1793569675.3148987,
+    "seen": 1794534494.3501344,
+    "ast_hash": "3c4e3082766755c3a6d61ceae5694b1d",
+    "semantic_hash": "3c4e3082766755c3a6d61ceae5694b1d"
+  },
+  "src/modules/ustawienia/SekcjaPolaczeniaIAktualizacji.tsx": {
+    "mtime": 1793569675.3158991,
+    "seen": 1794534494.3501356,
+    "ast_hash": "111276cdd3bb0b86e596647dcb648b6f",
+    "semantic_hash": "111276cdd3bb0b86e596647dcb648b6f"
+  },
+  "src/modules/ustawienia/UstawieniaPowiadomienSynchronizacji.tsx": {
+    "mtime": 1791575276.8082528,
+    "seen": 1794534494.3501365,
+    "ast_hash": "c618e81e3e9ae2198a1a3d5f405f1d1d",
+    "semantic_hash": "c618e81e3e9ae2198a1a3d5f405f1d1d"
+  },
+  "src/modules/ustawienia/WidokUstawien.tsx": {
+    "mtime": 1793139899.4828353,
+    "seen": 1794534494.350138,
+    "ast_hash": "f041f7425a2f23d88e0ad1c19bb0c768",
+    "semantic_hash": "f041f7425a2f23d88e0ad1c19bb0c768"
+  },
+  "src/modules/ustawienia/WyborStyluInterfejsu.tsx": {
+    "mtime": 1792530574.2894332,
+    "seen": 1794534494.350139,
+    "ast_hash": "cada7e4a42c93c348419d33e0ad7db24",
+    "semantic_hash": "cada7e4a42c93c348419d33e0ad7db24"
+  },
+  "src/modules/ustawienia/kategorieUstawien.ts": {
+    "mtime": 1793643921.5950482,
+    "seen": 1794534494.3501403,
+    "ast_hash": "5cecccb506b5ca82db4497de0828ccee",
+    "semantic_hash": "5cecccb506b5ca82db4497de0828ccee"
+  },
+  "src/modules/wiedza/RejestrNotatek.test.tsx": {
+    "mtime": 1789498971.4088075,
+    "seen": 1794534494.3501415,
+    "ast_hash": "49c7370090a22ee136f548c317c9b2d4",
+    "semantic_hash": "49c7370090a22ee136f548c317c9b2d4"
+  },
+  "src/modules/wiedza/WidokiWiedzy.tsx": {
+    "mtime": 1789498697.892361,
+    "seen": 1794534494.3501427,
+    "ast_hash": "76abe00ea7047973ae62f170b9702349",
+    "semantic_hash": "76abe00ea7047973ae62f170b9702349"
+  },
+  "src/modules/zdrowie/BadaniaDokumenty.test.tsx": {
+    "mtime": 1791716002.3735876,
+    "seen": 1794534494.3501463,
+    "ast_hash": "df300502813d8e98f032dfca36584cf8",
+    "semantic_hash": "df300502813d8e98f032dfca36584cf8"
+  },
+  "src/modules/zdrowie/BadaniaDokumenty.tsx": {
+    "mtime": 1791715731.7127886,
+    "seen": 1794534494.3501472,
+    "ast_hash": "e0e44e8c3a5733b983a32bb62f450266",
+    "semantic_hash": "e0e44e8c3a5733b983a32bb62f450266"
+  },
+  "src/modules/zdrowie/HistoriaZdrowia.test.tsx": {
+    "mtime": 1791718120.611623,
+    "seen": 1794534494.3501487,
+    "ast_hash": "4baba4c314364b97a34cc3d7016ddae1",
+    "semantic_hash": "4baba4c314364b97a34cc3d7016ddae1"
+  },
+  "src/modules/zdrowie/HistoriaZdrowia.tsx": {
+    "mtime": 1791719314.988896,
+    "seen": 1794534494.3501499,
+    "ast_hash": "569559b30fdcbd0f48a3038971c6d46d",
+    "semantic_hash": "569559b30fdcbd0f48a3038971c6d46d"
+  },
+  "src/modules/zdrowie/PrzypomnieniaDawek.tsx": {
+    "mtime": 1791682011.2558525,
+    "seen": 1794534494.350151,
+    "ast_hash": "f44023d1b33b36687e825213e43270d7",
+    "semantic_hash": "f44023d1b33b36687e825213e43270d7"
+  },
+  "src/modules/zdrowie/SesjePsychoterapii.test.tsx": {
+    "mtime": 1791685810.4832394,
+    "seen": 1794534494.3501523,
+    "ast_hash": "8f8c516dc1b816798b6027bda4112585",
+    "semantic_hash": "8f8c516dc1b816798b6027bda4112585"
+  },
+  "src/modules/zdrowie/SesjePsychoterapii.tsx": {
+    "mtime": 1791719248.370361,
+    "seen": 1794534494.3501534,
+    "ast_hash": "50fa11f8716ab7940b47698d0a793838",
+    "semantic_hash": "50fa11f8716ab7940b47698d0a793838"
+  },
+  "src/modules/zdrowie/WidokSamopoczucia.test.tsx": {
+    "mtime": 1791682978.7966409,
+    "seen": 1794534494.350155,
+    "ast_hash": "d8146b5fdfc1e84b0dcc08c18e871232",
+    "semantic_hash": "d8146b5fdfc1e84b0dcc08c18e871232"
+  },
+  "src/modules/zdrowie/WidokSamopoczucia.tsx": {
+    "mtime": 1791719248.369861,
+    "seen": 1794534494.350156,
+    "ast_hash": "9c1dde95149eb7342123e62e57a7e86e",
+    "semantic_hash": "9c1dde95149eb7342123e62e57a7e86e"
+  },
+  "src/modules/zdrowie/WidokiZdrowia.test.tsx": {
+    "mtime": 1791682092.6717143,
+    "seen": 1794534494.3501573,
+    "ast_hash": "e8430cc7bf901403592039fb68573643",
+    "semantic_hash": "e8430cc7bf901403592039fb68573643"
+  },
+  "src/modules/zdrowie/WidokiZdrowia.tsx": {
+    "mtime": 1791718100.4408455,
+    "seen": 1794534494.3501587,
+    "ast_hash": "48284ed68496f5d4ca37cbf05906aea3",
+    "semantic_hash": "48284ed68496f5d4ca37cbf05906aea3"
+  },
+  "src/platform/AktualizacjePrzeplyw.test.ts": {
+    "mtime": 1793138620.7018242,
+    "seen": 1794534494.35016,
+    "ast_hash": "28f271df6a7dd2801f82cab18023e874",
+    "semantic_hash": "28f271df6a7dd2801f82cab18023e874"
+  },
+  "src/platform/AktualizacjeService.test.ts": {
+    "mtime": 1789498697.8953633,
+    "seen": 1794534494.350161,
+    "ast_hash": "7b69955d54add32b56fc78d05ea11c3f",
+    "semantic_hash": "7b69955d54add32b56fc78d05ea11c3f"
+  },
+  "src/platform/AktualizacjeService.ts": {
+    "mtime": 1793138620.7028258,
+    "seen": 1794534494.3501623,
+    "ast_hash": "c4f0ecc1188da3a8c7b4f7bb330f4135",
+    "semantic_hash": "c4f0ecc1188da3a8c7b4f7bb330f4135"
+  },
+  "src/platform/AktualizacjeTestoweService.test.ts": {
+    "mtime": 1793138620.703827,
+    "seen": 1794534494.3501635,
+    "ast_hash": "0adce2147ad79d466b284fc02c9acc62",
+    "semantic_hash": "0adce2147ad79d466b284fc02c9acc62"
+  },
+  "src/platform/AktualizacjeTestoweService.ts": {
+    "mtime": 1793138620.703827,
+    "seen": 1794534494.3501647,
+    "ast_hash": "a8432f7e01aa5b32a5700663ddb35d47",
+    "semantic_hash": "a8432f7e01aa5b32a5700663ddb35d47"
+  },
+  "src/platform/EksportPlikuAndroid.ts": {
+    "mtime": 1792534512.6093884,
+    "seen": 1794534494.350166,
+    "ast_hash": "79387a63cda1fb54d39e6a7615fca20b",
+    "semantic_hash": "79387a63cda1fb54d39e6a7615fca20b"
+  },
+  "src/platform/FileService.test.ts": {
+    "mtime": 1792535121.419315,
+    "seen": 1794534494.350167,
+    "ast_hash": "a624f5e06d1c440b90384703cfbd8291",
+    "semantic_hash": "a624f5e06d1c440b90384703cfbd8291"
+  },
+  "src/platform/FileService.ts": {
+    "mtime": 1792534512.610389,
+    "seen": 1794534494.3501706,
+    "ast_hash": "99261961d501d51b62b9a95c6f0cdd79",
+    "semantic_hash": "99261961d501d51b62b9a95c6f0cdd79"
+  },
+  "src/platform/GlosEchoService.test.ts": {
+    "mtime": 1794290870.877273,
+    "seen": 1794534494.3501718,
+    "ast_hash": "cc5cb7b2ef15d26add81ca3437adef08",
+    "semantic_hash": "cc5cb7b2ef15d26add81ca3437adef08"
+  },
+  "src/platform/GlosEchoService.ts": {
+    "mtime": 1794291055.7434993,
+    "seen": 1794534494.3501732,
+    "ast_hash": "f716df10ef2c785edd4696727c42aa9d",
+    "semantic_hash": "f716df10ef2c785edd4696727c42aa9d"
+  },
+  "src/platform/HapticsService.ts": {
+    "mtime": 1789498697.90237,
+    "seen": 1794534494.3501744,
+    "ast_hash": "7d8e384532697dd599bd76821f2c65f1",
+    "semantic_hash": "7d8e384532697dd599bd76821f2c65f1"
+  },
+  "src/platform/HarmonogramPrzypomnienAndroid.test.ts": {
+    "mtime": 1791738069.8530636,
+    "seen": 1794534494.3501754,
+    "ast_hash": "259866dd5b756d90e0564140ad72054e",
+    "semantic_hash": "259866dd5b756d90e0564140ad72054e"
+  },
+  "src/platform/HarmonogramPrzypomnienAndroid.ts": {
+    "mtime": 1793643788.3209422,
+    "seen": 1794534494.3501768,
+    "ast_hash": "dabb6f5ac644f357ad42bfd3fbec20ce",
+    "semantic_hash": "dabb6f5ac644f357ad42bfd3fbec20ce"
+  },
+  "src/platform/LifecycleService.ts": {
+    "mtime": 1789498697.9063735,
+    "seen": 1794534494.3501782,
+    "ast_hash": "962d9cf4d8eece99f32e58180711d31f",
+    "semantic_hash": "962d9cf4d8eece99f32e58180711d31f"
+  },
+  "src/platform/NawigacjaPlatformy.test.tsx": {
+    "mtime": 1791738667.1821003,
+    "seen": 1794534494.3501797,
+    "ast_hash": "af626cbf54542be959f10279635811cf",
+    "semantic_hash": "af626cbf54542be959f10279635811cf"
+  },
+  "src/platform/NawigacjaPlatformy.tsx": {
+    "mtime": 1793643788.3229437,
+    "seen": 1794534494.3501809,
+    "ast_hash": "769d2f7a5ea4e9a1d68226f02b35d981",
+    "semantic_hash": "769d2f7a5ea4e9a1d68226f02b35d981"
+  },
+  "src/platform/NotificationService.test.ts": {
+    "mtime": 1793644138.75747,
+    "seen": 1794534494.3501818,
+    "ast_hash": "9038480a7ac6a2a77319cf3821265148",
+    "semantic_hash": "9038480a7ac6a2a77319cf3821265148"
+  },
+  "src/platform/NotificationService.ts": {
+    "mtime": 1793643788.3209422,
+    "seen": 1794534494.3501832,
+    "ast_hash": "e660dea44269653b68f3574fddbc90ab",
+    "semantic_hash": "e660dea44269653b68f3574fddbc90ab"
+  },
+  "src/platform/ObslugaCelowPlatformy.test.ts": {
+    "mtime": 1789498697.9103768,
+    "seen": 1794534494.3501842,
+    "ast_hash": "bbfbc9136623aea366ddaaaaf35e5f5c",
+    "semantic_hash": "bbfbc9136623aea366ddaaaaf35e5f5c"
+  },
+  "src/platform/ObslugaCelowPlatformy.ts": {
+    "mtime": 1789498697.912379,
+    "seen": 1794534494.3501854,
+    "ast_hash": "5f3706e53b9b14106bc64600ee1633a5",
+    "semantic_hash": "5f3706e53b9b14106bc64600ee1633a5"
+  },
+  "src/platform/ShareService.test.ts": {
+    "mtime": 1792374979.9865675,
+    "seen": 1794534494.3501866,
+    "ast_hash": "cc8b2bfad3083165105dad792cebe126",
+    "semantic_hash": "cc8b2bfad3083165105dad792cebe126"
+  },
+  "src/platform/ShareService.ts": {
+    "mtime": 1792374786.8425045,
+    "seen": 1794534494.3501892,
+    "ast_hash": "7668f5862be4ea75f5ec540907766130",
+    "semantic_hash": "7668f5862be4ea75f5ec540907766130"
+  },
+  "src/platform/WakeWordEchoService.ts": {
+    "mtime": 1789498697.9222703,
+    "seen": 1794534494.3501906,
+    "ast_hash": "bad67aafa8d0bf75a57e52a4cb343f81",
+    "semantic_hash": "bad67aafa8d0bf75a57e52a4cb343f81"
+  },
+  "src/platform/WidgetBridgeService.ts": {
+    "mtime": 1791893431.7715945,
+    "seen": 1794534494.3501916,
+    "ast_hash": "1091db9f7f971487312803944b0c7ca0",
+    "semantic_hash": "1091db9f7f971487312803944b0c7ca0"
+  },
+  "src/platform/obslugaWstecz.test.ts": {
+    "mtime": 1789498697.9133804,
+    "seen": 1794534494.3501928,
+    "ast_hash": "73dcab042aba10728fae3d54450b768e",
+    "semantic_hash": "73dcab042aba10728fae3d54450b768e"
+  },
+  "src/platform/obslugaWstecz.ts": {
+    "mtime": 1789498697.9143808,
+    "seen": 1794534494.3501942,
+    "ast_hash": "995688c6553c9a269f7ce3e9b2b1aab2",
+    "semantic_hash": "995688c6553c9a269f7ce3e9b2b1aab2"
+  },
+  "src/platform/platforma.ts": {
+    "mtime": 1791015023.1049302,
+    "seen": 1794534494.3501952,
+    "ast_hash": "b5c5d9be7da7cbcf4f5ab41f613eaeec",
+    "semantic_hash": "b5c5d9be7da7cbcf4f5ab41f613eaeec"
+  },
+  "src/platform/trasy.test.ts": {
+    "mtime": 1793644138.75747,
+    "seen": 1794534494.3501964,
+    "ast_hash": "7f4b37a03e0096c4f79fa899a995f5b3",
+    "semantic_hash": "7f4b37a03e0096c4f79fa899a995f5b3"
+  },
+  "src/platform/trasy.ts": {
+    "mtime": 1793729053.263463,
+    "seen": 1794534494.3501976,
+    "ast_hash": "3fa3ef5a0479423163b1d6fb422afa35",
+    "semantic_hash": "3fa3ef5a0479423163b1d6fb422afa35"
+  },
+  "src/platform/typy.ts": {
+    "mtime": 1793643788.3199413,
+    "seen": 1794534494.3501987,
+    "ast_hash": "e382151da969bbf8820ec286a433c667",
+    "semantic_hash": "e382151da969bbf8820ec286a433c667"
+  },
+  "src/providers/DostawcaFinansowPulpitu.test.ts": {
+    "mtime": 1789498697.9242759,
+    "seen": 1794534494.3501997,
+    "ast_hash": "d07c57f942ab64ba6cf97360590eb5a1",
+    "semantic_hash": "d07c57f942ab64ba6cf97360590eb5a1"
+  },
+  "src/providers/DostawcaFinansowPulpitu.ts": {
+    "mtime": 1789498697.925277,
+    "seen": 1794534494.3502011,
+    "ast_hash": "8a267c5cddfbd949724db94edcf3bf81",
+    "semantic_hash": "8a267c5cddfbd949724db94edcf3bf81"
+  },
+  "src/providers/DostawcaLekowPulpitu.test.ts": {
+    "mtime": 1789498697.9262812,
+    "seen": 1794534494.350202,
+    "ast_hash": "17da86ac8713602fb322162bd1da3e82",
+    "semantic_hash": "17da86ac8713602fb322162bd1da3e82"
+  },
+  "src/providers/DostawcaLekowPulpitu.ts": {
+    "mtime": 1791673762.0810654,
+    "seen": 1794534494.3502033,
+    "ast_hash": "ef98989317fb31299f419d143df72e4b",
+    "semantic_hash": "ef98989317fb31299f419d143df72e4b"
+  },
+  "src/providers/DostawcaNotatekPulpitu.test.ts": {
+    "mtime": 1789498697.9282868,
+    "seen": 1794534494.3502045,
+    "ast_hash": "265e627d04597b73bea77dcec33ceabd",
+    "semantic_hash": "265e627d04597b73bea77dcec33ceabd"
+  },
+  "src/providers/DostawcaNotatekPulpitu.ts": {
+    "mtime": 1789498697.9297905,
+    "seen": 1794534494.3502057,
+    "ast_hash": "1fb1dd2a4a08a888ab47713ecce44b10",
+    "semantic_hash": "1fb1dd2a4a08a888ab47713ecce44b10"
+  },
+  "src/providers/DostawcaPoczekalniPulpitu.test.ts": {
+    "mtime": 1789498697.9302926,
+    "seen": 1794534494.350207,
+    "ast_hash": "fa568b15ed3f8091da021b02fd34f3e2",
+    "semantic_hash": "fa568b15ed3f8091da021b02fd34f3e2"
+  },
+  "src/providers/DostawcaPoczekalniPulpitu.ts": {
+    "mtime": 1789498697.9317958,
+    "seen": 1794534494.350208,
+    "ast_hash": "1da135d45718a9d3fb59670b404e2f24",
+    "semantic_hash": "1da135d45718a9d3fb59670b404e2f24"
+  },
+  "src/providers/DostawcaSamochoduPulpitu.test.ts": {
+    "mtime": 1789498697.9322977,
+    "seen": 1794534494.350209,
+    "ast_hash": "084aec2384d94a48df2a3f7a790e3e44",
+    "semantic_hash": "084aec2384d94a48df2a3f7a790e3e44"
+  },
+  "src/providers/DostawcaSamochoduPulpitu.ts": {
+    "mtime": 1789498697.9332988,
+    "seen": 1794534494.3502102,
+    "ast_hash": "f549a8a450355f2accbbc10ec9069ad1",
+    "semantic_hash": "f549a8a450355f2accbbc10ec9069ad1"
+  },
+  "src/providers/DostawcaWizytPulpitu.test.ts": {
+    "mtime": 1789498697.9342997,
+    "seen": 1794534494.3502116,
+    "ast_hash": "d1b8444143fae099faba5bbce038ff48",
+    "semantic_hash": "d1b8444143fae099faba5bbce038ff48"
+  },
+  "src/providers/DostawcaWizytPulpitu.ts": {
+    "mtime": 1789498697.9353008,
+    "seen": 1794534494.3502128,
+    "ast_hash": "4af01352fe724d19891a8255d6fe1a1c",
+    "semantic_hash": "4af01352fe724d19891a8255d6fe1a1c"
+  },
+  "src/providers/DostawcaZadanPulpitu.ts": {
+    "mtime": 1789498697.936302,
+    "seen": 1794534494.350214,
+    "ast_hash": "0f79d728bc660978eb6799f10a5cf2b2",
+    "semantic_hash": "0f79d728bc660978eb6799f10a5cf2b2"
+  },
+  "src/providers/DostawcaZakupowPulpitu.test.ts": {
+    "mtime": 1789498697.937303,
+    "seen": 1794534494.3502152,
+    "ast_hash": "f29f83bf70c44304bf93132da6132c4f",
+    "semantic_hash": "f29f83bf70c44304bf93132da6132c4f"
+  },
+  "src/providers/DostawcaZakupowPulpitu.ts": {
+    "mtime": 1789498697.944309,
+    "seen": 1794534494.3502162,
+    "ast_hash": "e945672d5c0d64b48eb0e1e171553e4c",
+    "semantic_hash": "e945672d5c0d64b48eb0e1e171553e4c"
+  },
+  "src/services/AndroidBeta.test.ts": {
+    "mtime": 1793138620.7078307,
+    "seen": 1794534494.3502178,
+    "ast_hash": "9663ade1a98140b93be9a38820f3068c",
+    "semantic_hash": "9663ade1a98140b93be9a38820f3068c"
+  },
+  "src/services/BackupProfili.test.ts": {
+    "mtime": 1791893841.1149223,
+    "seen": 1794534494.3502188,
+    "ast_hash": "379016c3ecd4f49488d5f0929ed45aba",
+    "semantic_hash": "379016c3ecd4f49488d5f0929ed45aba"
+  },
+  "src/services/BackupPulZobowiazan.ts": {
+    "mtime": 1793729053.263463,
+    "seen": 1794534494.3502197,
+    "ast_hash": "6ab911c61482b121203b18d4c285c7bb",
+    "semantic_hash": "6ab911c61482b121203b18d4c285c7bb"
+  },
+  "src/services/BackupService.test.ts": {
+    "mtime": 1793772353.7795582,
+    "seen": 1794534494.3502212,
+    "ast_hash": "7e90d817ff4046c2cc701b0d13498e71",
+    "semantic_hash": "7e90d817ff4046c2cc701b0d13498e71"
+  },
+  "src/services/BackupService.ts": {
+    "mtime": 1793772353.7785568,
+    "seen": 1794534494.350222,
+    "ast_hash": "7705469d88372de301a960a23f7d7a9e",
+    "semantic_hash": "7705469d88372de301a960a23f7d7a9e"
+  },
+  "src/services/BadaniaService.test.ts": {
+    "mtime": 1791737314.706256,
+    "seen": 1794534494.3502233,
+    "ast_hash": "ffa879eab819c2ef4d9433d739ebef06",
+    "semantic_hash": "ffa879eab819c2ef4d9433d739ebef06"
+  },
+  "src/services/BadaniaService.ts": {
+    "mtime": 1791720056.9606612,
+    "seen": 1794534494.3502245,
+    "ast_hash": "f065e16d738e7f9a1f3751ef788d288c",
+    "semantic_hash": "f065e16d738e7f9a1f3751ef788d288c"
+  },
+  "src/services/BriefingDniaService.test.ts": {
+    "mtime": 1789498697.9843464,
+    "seen": 1794534494.3502257,
+    "ast_hash": "9df846565f09b8db12313ff6899de8f8",
+    "semantic_hash": "9df846565f09b8db12313ff6899de8f8"
+  },
+  "src/services/BriefingDniaService.ts": {
+    "mtime": 1789498697.9853473,
+    "seen": 1794534494.3502283,
+    "ast_hash": "14d361211d9f9c121bf02de555cbf312",
+    "semantic_hash": "14d361211d9f9c121bf02de555cbf312"
+  },
+  "src/services/DaneDemonstracyjneService.ts": {
+    "mtime": 1789498697.9863486,
+    "seen": 1794534494.3502295,
+    "ast_hash": "375af9c2f81cba056fcc9acc0543f5ce",
+    "semantic_hash": "375af9c2f81cba056fcc9acc0543f5ce"
+  },
+  "src/services/DiagnostykaSynchronizacji.test.ts": {
+    "mtime": 1792627917.8962598,
+    "seen": 1794534494.3502307,
+    "ast_hash": "fd461a7d027d937525bcd07e4cf49d03",
+    "semantic_hash": "fd461a7d027d937525bcd07e4cf49d03"
+  },
+  "src/services/DiagnostykaSynchronizacji.ts": {
+    "mtime": 1792627895.1658695,
+    "seen": 1794534494.350232,
+    "ast_hash": "67fc02a399c4b1f13074022cd197a978",
+    "semantic_hash": "67fc02a399c4b1f13074022cd197a978"
+  },
+  "src/services/EchoService.ts": {
+    "mtime": 1789498697.9873497,
+    "seen": 1794534494.3502333,
+    "ast_hash": "d67a3d1526653048ff8a49df055197d6",
+    "semantic_hash": "d67a3d1526653048ff8a49df055197d6"
+  },
+  "src/services/FinanseService.test.ts": {
+    "mtime": 1793146837.2612703,
+    "seen": 1794534494.3502345,
+    "ast_hash": "06647c450cf2f063294f654be6d6b453",
+    "semantic_hash": "06647c450cf2f063294f654be6d6b453"
+  },
+  "src/services/FinanseService.ts": {
+    "mtime": 1793146800.622308,
+    "seen": 1794534494.3502357,
+    "ast_hash": "7b81064f00d07ed699ec90426098a0eb",
+    "semantic_hash": "7b81064f00d07ed699ec90426098a0eb"
+  },
+  "src/services/FundamentFz.test.ts": {
+    "mtime": 1793729053.2664669,
+    "seen": 1794534494.3502367,
+    "ast_hash": "47017d7d42849abcc57db76be2768c55",
+    "semantic_hash": "47017d7d42849abcc57db76be2768c55"
+  },
+  "src/services/HistoriaZdrowiaService.test.ts": {
+    "mtime": 1793202311.299365,
+    "seen": 1794534494.3502376,
+    "ast_hash": "cb2769910ff435243bde12a4c522f1bd",
+    "semantic_hash": "cb2769910ff435243bde12a4c522f1bd"
+  },
+  "src/services/HistoriaZdrowiaService.ts": {
+    "mtime": 1791720096.9927535,
+    "seen": 1794534494.350239,
+    "ast_hash": "be513c3fd0a7d8005749880068a56297",
+    "semantic_hash": "be513c3fd0a7d8005749880068a56297"
+  },
+  "src/services/HistoriaZmianService.test.ts": {
+    "mtime": 1789498697.9913528,
+    "seen": 1794534494.3502402,
+    "ast_hash": "65a962896d737e3ee89346185cce2495",
+    "semantic_hash": "65a962896d737e3ee89346185cce2495"
+  },
+  "src/services/HistoriaZmianService.ts": {
+    "mtime": 1793729053.2674675,
+    "seen": 1794534494.3502412,
+    "ast_hash": "e069cb0c0eb5160d5a4c0a25919448ef",
+    "semantic_hash": "e069cb0c0eb5160d5a4c0a25919448ef"
+  },
+  "src/services/InstallationService.test.ts": {
+    "mtime": 1789906256.5491996,
+    "seen": 1794534494.3502426,
+    "ast_hash": "d98fcd01ecf9927c6466679ed36fa82f",
+    "semantic_hash": "d98fcd01ecf9927c6466679ed36fa82f"
+  },
+  "src/services/InstallationService.ts": {
+    "mtime": 1789906256.5502,
+    "seen": 1794534494.3502436,
+    "ast_hash": "f112b50422c21e33fe9da4b77986cdbe",
+    "semantic_hash": "f112b50422c21e33fe9da4b77986cdbe"
+  },
+  "src/services/KalendarzPracyService.test.ts": {
+    "mtime": 1789498697.9958599,
+    "seen": 1794534494.3502445,
+    "ast_hash": "2bc55f73c01e40b44d252b0bcbd9a6a4",
+    "semantic_hash": "2bc55f73c01e40b44d252b0bcbd9a6a4"
+  },
+  "src/services/KalendarzPracyService.ts": {
+    "mtime": 1789498697.9968607,
+    "seen": 1794534494.350246,
+    "ast_hash": "14d069575b9c2d1fcf82a30f5fccb5bf",
+    "semantic_hash": "14d069575b9c2d1fcf82a30f5fccb5bf"
+  },
+  "src/services/KonfiguracjaSynchronizacji.test.ts": {
+    "mtime": 1790549719.7371001,
+    "seen": 1794534494.3502471,
+    "ast_hash": "3dcd240c1740958024b549d40acb76f6",
+    "semantic_hash": "3dcd240c1740958024b549d40acb76f6"
+  },
+  "src/services/KonfiguracjaSynchronizacji.ts": {
+    "mtime": 1793138620.7078307,
+    "seen": 1794534494.350248,
+    "ast_hash": "c432ede3935f1a0955f4431d03ce4636",
+    "semantic_hash": "c432ede3935f1a0955f4431d03ce4636"
+  },
+  "src/services/KontaService.test.ts": {
+    "mtime": 1792840361.482457,
+    "seen": 1794534494.3502495,
+    "ast_hash": "23eb4cd73fd6e076f2bada678a3d4ff2",
+    "semantic_hash": "23eb4cd73fd6e076f2bada678a3d4ff2"
+  },
+  "src/services/KontaService.ts": {
+    "mtime": 1792840361.4811554,
+    "seen": 1794534494.3502507,
+    "ast_hash": "fd792ac55e3a93039d0e69fd5c35ccbe",
+    "semantic_hash": "fd792ac55e3a93039d0e69fd5c35ccbe"
+  },
+  "src/services/KontekstProfilu.test.ts": {
+    "mtime": 1792230616.642567,
+    "seen": 1794534494.350252,
+    "ast_hash": "40de25c7dbb1c81efc76b0fd8a009036",
+    "semantic_hash": "40de25c7dbb1c81efc76b0fd8a009036"
+  },
+  "src/services/KontekstProfilu.ts": {
+    "mtime": 1791894946.627128,
+    "seen": 1794534494.3502533,
+    "ast_hash": "b68cd7f238791beab6a59bca7e453ae1",
+    "semantic_hash": "b68cd7f238791beab6a59bca7e453ae1"
+  },
+  "src/services/KontraktPolSystemowychRejestru.test.ts": {
+    "mtime": 1789498698.000864,
+    "seen": 1794534494.3502543,
+    "ast_hash": "88abd89b3bc9e54ad3b075de0bf0d27e",
+    "semantic_hash": "88abd89b3bc9e54ad3b075de0bf0d27e"
+  },
+  "src/services/KontraktPolSystemowychRejestru.ts": {
+    "mtime": 1789498698.0018651,
+    "seen": 1794534494.3502557,
+    "ast_hash": "1193c67528d1ea3a71d7d6eaca26a68e",
+    "semantic_hash": "1193c67528d1ea3a71d7d6eaca26a68e"
+  },
+  "src/services/KontrolaAktualizacjiAplikacji.test.ts": {
+    "mtime": 1793138620.7088315,
+    "seen": 1794534494.3502567,
+    "ast_hash": "5d56f3193406cafeede7ba110914469a",
+    "semantic_hash": "5d56f3193406cafeede7ba110914469a"
+  },
+  "src/services/KontrolaAktualizacjiAplikacji.ts": {
+    "mtime": 1793138620.7098324,
+    "seen": 1794534494.3502579,
+    "ast_hash": "ce3f242ad63cc749036fb2bd7e79075b",
+    "semantic_hash": "ce3f242ad63cc749036fb2bd7e79075b"
+  },
+  "src/services/LekiOcrParser.test.ts": {
+    "mtime": 1789498698.0038676,
+    "seen": 1794534494.3502593,
+    "ast_hash": "3f888e5d5070265703ebc02e07002708",
+    "semantic_hash": "3f888e5d5070265703ebc02e07002708"
+  },
+  "src/services/LekiOcrParser.ts": {
+    "mtime": 1789498698.0058694,
+    "seen": 1794534494.3502603,
+    "ast_hash": "7ee5129bf7f6891cd63b22500cab9e56",
+    "semantic_hash": "7ee5129bf7f6891cd63b22500cab9e56"
+  },
+  "src/services/LekiOcrService.ts": {
+    "mtime": 1789498698.00687,
+    "seen": 1794534494.3502614,
+    "ast_hash": "d5719641d7d96041bbb5299393ac8f48",
+    "semantic_hash": "d5719641d7d96041bbb5299393ac8f48"
+  },
+  "src/services/LekiService.test.ts": {
+    "mtime": 1791673762.077561,
+    "seen": 1794534494.3502626,
+    "ast_hash": "799509de83030aa302335336c9a80017",
+    "semantic_hash": "799509de83030aa302335336c9a80017"
+  },
+  "src/services/LekiService.ts": {
+    "mtime": 1791719347.168288,
+    "seen": 1794534494.3502638,
+    "ast_hash": "67c961b068ef96704731f185489ffaf9",
+    "semantic_hash": "67c961b068ef96704731f185489ffaf9"
+  },
+  "src/services/MiejscaService.test.ts": {
+    "mtime": 1789498698.0098722,
+    "seen": 1794534494.350265,
+    "ast_hash": "0f1a98582581526149134754cdec34f5",
+    "semantic_hash": "0f1a98582581526149134754cdec34f5"
+  },
+  "src/services/MiejscaService.ts": {
+    "mtime": 1789498698.010873,
+    "seen": 1794534494.3502662,
+    "ast_hash": "2e9563632869e70c12ee22a82291b861",
+    "semantic_hash": "2e9563632869e70c12ee22a82291b861"
+  },
+  "src/services/MigracjaProfili.test.ts": {
+    "mtime": 1791893160.3930304,
+    "seen": 1794534494.3502674,
+    "ast_hash": "54ef4e22ae95871ebb3cb376ed5e86c6",
+    "semantic_hash": "54ef4e22ae95871ebb3cb376ed5e86c6"
+  },
+  "src/services/MigracjaProfili.ts": {
+    "mtime": 1791893431.0468051,
+    "seen": 1794534494.3502684,
+    "ast_hash": "bff4c47427b1bb2770c23765e7731ac2",
+    "semantic_hash": "bff4c47427b1bb2770c23765e7731ac2"
+  },
+  "src/services/MotoryzacjaService.test.ts": {
+    "mtime": 1789498698.0128756,
+    "seen": 1794534494.3502698,
+    "ast_hash": "c81141c86d0b3b08c5108bdc2debe3cd",
+    "semantic_hash": "c81141c86d0b3b08c5108bdc2debe3cd"
+  },
+  "src/services/MotoryzacjaService.ts": {
+    "mtime": 1789498698.0138757,
+    "seen": 1794534494.3502707,
+    "ast_hash": "a9f0c98286167021ade1c3947c8790ef",
+    "semantic_hash": "a9f0c98286167021ade1c3947c8790ef"
+  },
+  "src/services/NawykiService.test.ts": {
+    "mtime": 1789498698.014877,
+    "seen": 1794534494.3502717,
+    "ast_hash": "312efd9185a2017f790d2b4f916f3747",
+    "semantic_hash": "312efd9185a2017f790d2b4f916f3747"
+  },
+  "src/services/NawykiService.ts": {
+    "mtime": 1789498698.0158782,
+    "seen": 1794534494.3502731,
+    "ast_hash": "14e70bc30dbcd2f546d4952261638b48",
+    "semantic_hash": "14e70bc30dbcd2f546d4952261638b48"
+  },
+  "src/services/ObliczeniaFinansowWspolnych.test.ts": {
+    "mtime": 1793167217.755252,
+    "seen": 1794534494.350274,
+    "ast_hash": "6f1a72c168bed9ad6e4313426f165850",
+    "semantic_hash": "6f1a72c168bed9ad6e4313426f165850"
+  },
+  "src/services/ObliczeniaFinansowWspolnych.ts": {
+    "mtime": 1793229477.4695241,
+    "seen": 1794534494.3502753,
+    "ast_hash": "1a2def47d0293947e56e038a07e607ef",
+    "semantic_hash": "1a2def47d0293947e56e038a07e607ef"
+  },
+  "src/services/PlanerService.test.ts": {
+    "mtime": 1789498698.01788,
+    "seen": 1794534494.3502765,
+    "ast_hash": "f70ee19a863a07073af3e7eb736b9a7e",
+    "semantic_hash": "f70ee19a863a07073af3e7eb736b9a7e"
+  },
+  "src/services/PlanerService.ts": {
+    "mtime": 1790648386.098324,
+    "seen": 1794534494.3502777,
+    "ast_hash": "11e88f456682c81d89034ef6b451ef9e",
+    "semantic_hash": "11e88f456682c81d89034ef6b451ef9e"
+  },
+  "src/services/PoczekalniaInbox.test.ts": {
+    "mtime": 1789498698.0198815,
+    "seen": 1794534494.3502786,
+    "ast_hash": "891afb52cd670d2ddb2d60e26cb66627",
+    "semantic_hash": "891afb52cd670d2ddb2d60e26cb66627"
+  },
+  "src/services/PoczekalniaService.test.ts": {
+    "mtime": 1789498698.0218837,
+    "seen": 1794534494.3502803,
+    "ast_hash": "034d727cc465927bc09676175d1ac379",
+    "semantic_hash": "034d727cc465927bc09676175d1ac379"
+  },
+  "src/services/PoczekalniaService.ts": {
+    "mtime": 1789498698.0228844,
+    "seen": 1794534494.3502812,
+    "ast_hash": "83f00add6fcd173b89c3e467d269329c",
+    "semantic_hash": "83f00add6fcd173b89c3e467d269329c"
+  },
+  "src/services/PodpowiedziFormularzy.ts": {
+    "mtime": 1793148535.2909918,
+    "seen": 1794534494.3502824,
+    "ast_hash": "f03dd31310ab6dca4a30fd433d7aa58c",
+    "semantic_hash": "f03dd31310ab6dca4a30fd433d7aa58c"
+  },
+  "src/services/PodsumowaniePoPracyService.test.ts": {
+    "mtime": 1793646692.327262,
+    "seen": 1794534494.3502839,
+    "ast_hash": "3502934fc4ac3504ee339f11e4c2c54e",
+    "semantic_hash": "3502934fc4ac3504ee339f11e4c2c54e"
+  },
+  "src/services/PodsumowaniePoPracyService.ts": {
+    "mtime": 1793644311.4250495,
+    "seen": 1794534494.3502848,
+    "ast_hash": "af9e6c4db7dc739fd020360c5b64efbf",
+    "semantic_hash": "af9e6c4db7dc739fd020360c5b64efbf"
+  },
+  "src/services/PolskieSwietaService.ts": {
+    "mtime": 1789498698.0248861,
+    "seen": 1794534494.350286,
+    "ast_hash": "e0493af708f652b63d881107e55e08ce",
+    "semantic_hash": "e0493af708f652b63d881107e55e08ce"
+  },
+  "src/services/PowiadomieniaSynchronizacji.ts": {
+    "mtime": 1791575615.1705248,
+    "seen": 1794534494.3502872,
+    "ast_hash": "102f0143c01339cc1b5aeac4d20d295c",
+    "semantic_hash": "102f0143c01339cc1b5aeac4d20d295c"
+  },
+  "src/services/PowtarzanieService.ts": {
+    "mtime": 1789498698.025887,
+    "seen": 1794534494.3502884,
+    "ast_hash": "7ede84bec5e9fd5b168dc8ca736bc81a",
+    "semantic_hash": "7ede84bec5e9fd5b168dc8ca736bc81a"
+  },
+  "src/services/PrywatnoscKokpitu.test.ts": {
+    "mtime": 1793771854.3189707,
+    "seen": 1794534494.3502896,
+    "ast_hash": "c8b506f62f8518f85fd6093eeab8fc2e",
+    "semantic_hash": "c8b506f62f8518f85fd6093eeab8fc2e"
+  },
+  "src/services/PrywatnoscKokpitu.ts": {
+    "mtime": 1793771924.2849617,
+    "seen": 1794534494.3502908,
+    "ast_hash": "e6ea0ccaa5be232023ff43cb0ae7e453",
+    "semantic_hash": "e6ea0ccaa5be232023ff43cb0ae7e453"
+  },
+  "src/services/PrywatnoscZdrowia.test.ts": {
+    "mtime": 1791737696.8217857,
+    "seen": 1794534494.350292,
+    "ast_hash": "703446691018c80e2796ed78f35cfd94",
+    "semantic_hash": "703446691018c80e2796ed78f35cfd94"
+  },
+  "src/services/PrzypomnieniaLekow.test.ts": {
+    "mtime": 1791682131.3360147,
+    "seen": 1794534494.350293,
+    "ast_hash": "c7adba2b9aaf2d902e47f5b0cc5f11d6",
+    "semantic_hash": "c7adba2b9aaf2d902e47f5b0cc5f11d6"
+  },
+  "src/services/PrzypomnieniaLekow.ts": {
+    "mtime": 1791720290.7441287,
+    "seen": 1794534494.3502944,
+    "ast_hash": "f04c6e337b3990975401abb190abc92a",
+    "semantic_hash": "f04c6e337b3990975401abb190abc92a"
+  },
+  "src/services/PrzypomnieniaService.test.ts": {
+    "mtime": 1789498698.0268874,
+    "seen": 1794534494.3502953,
+    "ast_hash": "fb71313172e1dfb9f83973c2929eb1f5",
+    "semantic_hash": "fb71313172e1dfb9f83973c2929eb1f5"
+  },
+  "src/services/PrzypomnieniaService.ts": {
+    "mtime": 1789498698.0278888,
+    "seen": 1794534494.3502965,
+    "ast_hash": "4e28efd83b913055252f3db0bbd0faf7",
+    "semantic_hash": "4e28efd83b913055252f3db0bbd0faf7"
+  },
+  "src/services/PsychoterapiaService.test.ts": {
+    "mtime": 1791719474.5226233,
+    "seen": 1794534494.3502977,
+    "ast_hash": "dd1a2e608dbbbcb83acd48c283576b17",
+    "semantic_hash": "dd1a2e608dbbbcb83acd48c283576b17"
+  },
+  "src/services/PsychoterapiaService.ts": {
+    "mtime": 1791720056.9616632,
+    "seen": 1794534494.350299,
+    "ast_hash": "7b989726378c2dc846adb60950997131",
+    "semantic_hash": "7b989726378c2dc846adb60950997131"
+  },
+  "src/services/PuleFinansowe.test.ts": {
+    "mtime": 1793729053.268468,
+    "seen": 1794534494.3503,
+    "ast_hash": "754ea2f60a3701844193165635e0b40a",
+    "semantic_hash": "754ea2f60a3701844193165635e0b40a"
+  },
+  "src/services/PuleService.ts": {
+    "mtime": 1793729053.269469,
+    "seen": 1794534494.3503015,
+    "ast_hash": "05121dd62647f5ac409019faed5bb5a7",
+    "semantic_hash": "05121dd62647f5ac409019faed5bb5a7"
+  },
+  "src/services/PuleZakupowe.test.ts": {
+    "mtime": 1793729053.2704704,
+    "seen": 1794534494.3503027,
+    "ast_hash": "ab189848d3c54944eba3f5decfb62703",
+    "semantic_hash": "ab189848d3c54944eba3f5decfb62703"
+  },
+  "src/services/RejestrPolSystemowychFinansow.test.ts": {
+    "mtime": 1789498698.028893,
+    "seen": 1794534494.3503036,
+    "ast_hash": "13c4440c5173f168da3111cdc9d672ef",
+    "semantic_hash": "13c4440c5173f168da3111cdc9d672ef"
+  },
+  "src/services/RejestrPolSystemowychFinansow.ts": {
+    "mtime": 1789498698.0308917,
+    "seen": 1794534494.350305,
+    "ast_hash": "56242c4711b1dd0832acea95b6bb6634",
+    "semantic_hash": "56242c4711b1dd0832acea95b6bb6634"
+  },
+  "src/services/RejestrPolSystemowychPoczekalni.ts": {
+    "mtime": 1789587225.8836536,
+    "seen": 1794534494.350306,
+    "ast_hash": "0e420f22afb39b507176e12599139cb1",
+    "semantic_hash": "0e420f22afb39b507176e12599139cb1"
+  },
+  "src/services/RejestrPolSystemowychZadan.ts": {
+    "mtime": 1789498698.0328932,
+    "seen": 1794534494.3503072,
+    "ast_hash": "db0aab54a40532f087dd9dc46c9f1f51",
+    "semantic_hash": "db0aab54a40532f087dd9dc46c9f1f51"
+  },
+  "src/services/RejestrService.test.ts": {
+    "mtime": 1793147711.9233434,
+    "seen": 1794534494.3503084,
+    "ast_hash": "1c2f5bb28625b8ed0d5063203bdce7c5",
+    "semantic_hash": "1c2f5bb28625b8ed0d5063203bdce7c5"
+  },
+  "src/services/RejestrService.ts": {
+    "mtime": 1793147601.1411698,
+    "seen": 1794534494.3503096,
+    "ast_hash": "d7709802bee55afffa83456891b21431",
+    "semantic_hash": "d7709802bee55afffa83456891b21431"
+  },
+  "src/services/RozliczeniaService.ts": {
+    "mtime": 1793231957.2801085,
+    "seen": 1794534494.3503106,
+    "ast_hash": "0126c786fefdffc9802eb32e9427ccd2",
+    "semantic_hash": "0126c786fefdffc9802eb32e9427ccd2"
+  },
+  "src/services/RuntimeConfigService.test.ts": {
+    "mtime": 1793138620.7098324,
+    "seen": 1794534494.350312,
+    "ast_hash": "d947966df4bc1a7f0a2f38edf1e44907",
+    "semantic_hash": "d947966df4bc1a7f0a2f38edf1e44907"
+  },
+  "src/services/RuntimeConfigService.ts": {
+    "mtime": 1793138620.7108333,
+    "seen": 1794534494.3503132,
+    "ast_hash": "3b7970d73a120d2fbaa8247966d94405",
+    "semantic_hash": "3b7970d73a120d2fbaa8247966d94405"
+  },
+  "src/services/RyzykoDzialaniaService.ts": {
+    "mtime": 1789498698.0388987,
+    "seen": 1794534494.3503141,
+    "ast_hash": "b258d896447ed02f471d98a3a3e2a8b0",
+    "semantic_hash": "b258d896447ed02f471d98a3a3e2a8b0"
+  },
+  "src/services/SamopoczucieService.test.ts": {
+    "mtime": 1791682916.168993,
+    "seen": 1794534494.3503153,
+    "ast_hash": "171910dae68326149b8040a3ec30c7e7",
+    "semantic_hash": "171910dae68326149b8040a3ec30c7e7"
+  },
+  "src/services/SamopoczucieService.ts": {
+    "mtime": 1791719248.366858,
+    "seen": 1794534494.3503163,
+    "ast_hash": "ed785bc8fffcab21afd04e19397d3a21",
+    "semantic_hash": "ed785bc8fffcab21afd04e19397d3a21"
+  },
+  "src/services/SplatyRozliczen.test.ts": {
+    "mtime": 1793232146.20961,
+    "seen": 1794534494.3503175,
+    "ast_hash": "2ac8fe357e1461ba441b2033705bb2cb",
+    "semantic_hash": "2ac8fe357e1461ba441b2033705bb2cb"
+  },
+  "src/services/SprzedazPulService.test.ts": {
+    "mtime": 1793729053.271471,
+    "seen": 1794534494.3503187,
+    "ast_hash": "9406d37b726a30081eb2e7b8e567fd17",
+    "semantic_hash": "9406d37b726a30081eb2e7b8e567fd17"
+  },
+  "src/services/SprzedazPulService.ts": {
+    "mtime": 1793729053.272472,
+    "seen": 1794534494.3503199,
+    "ast_hash": "b848c5a012dc4e094afc208205074186",
+    "semantic_hash": "b848c5a012dc4e094afc208205074186"
+  },
+  "src/services/SyncEngine.test.ts": {
+    "mtime": 1793569771.7508123,
+    "seen": 1794534494.350321,
+    "ast_hash": "29cca8c1b688eeec8a10a0fb66f57ff1",
+    "semantic_hash": "29cca8c1b688eeec8a10a0fb66f57ff1"
+  },
+  "src/services/SyncEngine.ts": {
+    "mtime": 1793729053.2734728,
+    "seen": 1794534494.3503222,
+    "ast_hash": "a6273f85801265dd2829ccb91dd11df8",
+    "semantic_hash": "a6273f85801265dd2829ccb91dd11df8"
+  },
+  "src/services/SynchronizacjaAplikacji.test.ts": {
+    "mtime": 1793569807.667758,
+    "seen": 1794534494.3503234,
+    "ast_hash": "0e0c7460381c0235893007687a16d8f7",
+    "semantic_hash": "0e0c7460381c0235893007687a16d8f7"
+  },
+  "src/services/SynchronizacjaAplikacji.ts": {
+    "mtime": 1791893318.4230442,
+    "seen": 1794534494.3503244,
+    "ast_hash": "280b0dd5466d611f300231cdc8d62c03",
+    "semantic_hash": "280b0dd5466d611f300231cdc8d62c03"
+  },
+  "src/services/SynchronizacjaFinansowWspolnych.test.ts": {
+    "mtime": 1793232146.2356436,
+    "seen": 1794534494.3503256,
+    "ast_hash": "045e19d27481f7714f26dd44982803ff",
+    "semantic_hash": "045e19d27481f7714f26dd44982803ff"
+  },
+  "src/services/SynchronizacjaWeb.test.ts": {
+    "mtime": 1792425537.9163802,
+    "seen": 1794534494.3503268,
+    "ast_hash": "5443f531ae7ade6211441d93d6031fd6",
+    "semantic_hash": "5443f531ae7ade6211441d93d6031fd6"
+  },
+  "src/services/TransferUstawienService.test.ts": {
+    "mtime": 1792691153.7121842,
+    "seen": 1794534494.3503277,
+    "ast_hash": "ef3e9d4ff025107bb2bdafa0ebdd1b3c",
+    "semantic_hash": "ef3e9d4ff025107bb2bdafa0ebdd1b3c"
+  },
+  "src/services/TransferUstawienService.ts": {
+    "mtime": 1791719561.9825225,
+    "seen": 1794534494.3503292,
+    "ast_hash": "2bf3849a070964765f4219b7a6ce71f0",
+    "semantic_hash": "2bf3849a070964765f4219b7a6ce71f0"
+  },
+  "src/services/UprawnieniaService.test.ts": {
+    "mtime": 1789498698.0459049,
+    "seen": 1794534494.35033,
+    "ast_hash": "57416b05a375523d078dfb2b63452078",
+    "semantic_hash": "57416b05a375523d078dfb2b63452078"
+  },
+  "src/services/UprawnieniaService.ts": {
+    "mtime": 1793729053.2734728,
+    "seen": 1794534494.3503313,
+    "ast_hash": "2b0400a7c357de9a150642c1cf3f1b76",
+    "semantic_hash": "2b0400a7c357de9a150642c1cf3f1b76"
+  },
+  "src/services/UrlopyService.ts": {
+    "mtime": 1789498698.048908,
+    "seen": 1794534494.3503325,
+    "ast_hash": "9eee9d5bcfc01c341e86634c880b8416",
+    "semantic_hash": "9eee9d5bcfc01c341e86634c880b8416"
+  },
+  "src/services/WalidacjaKopiiFinansowWspolnych.ts": {
+    "mtime": 1793229477.4735317,
+    "seen": 1794534494.3503335,
+    "ast_hash": "5c6104d60504de14cf91333acde8ddb4",
+    "semantic_hash": "5c6104d60504de14cf91333acde8ddb4"
+  },
+  "src/services/WersjeDawkowania.test.ts": {
+    "mtime": 1791674701.5653634,
+    "seen": 1794534494.3503346,
+    "ast_hash": "1aa467f23bf4d0c38eefb7a2bf5e4398",
+    "semantic_hash": "1aa467f23bf4d0c38eefb7a2bf5e4398"
+  },
+  "src/services/WidgetSnapshotService.test.ts": {
+    "mtime": 1789498698.049909,
+    "seen": 1794534494.3503358,
+    "ast_hash": "a326e3d888f3063f06b867bcae64910a",
+    "semantic_hash": "a326e3d888f3063f06b867bcae64910a"
+  },
+  "src/services/WidgetSnapshotService.ts": {
+    "mtime": 1791893431.5283325,
+    "seen": 1794534494.350337,
+    "ast_hash": "be9d2d57ab7d3473ad1afd2c8ac2c801",
+    "semantic_hash": "be9d2d57ab7d3473ad1afd2c8ac2c801"
+  },
+  "src/services/WspolneFinanseService.test.ts": {
+    "mtime": 1793729053.2744732,
+    "seen": 1794534494.350338,
+    "ast_hash": "0ac337dd79149f5e2a2633b57a18df16",
+    "semantic_hash": "0ac337dd79149f5e2a2633b57a18df16"
+  },
+  "src/services/WspolneKasyService.ts": {
+    "mtime": 1793729053.2754745,
+    "seen": 1794534494.3503394,
+    "ast_hash": "93ca614206c8fa8a2b5f1cb8fc78f802",
+    "semantic_hash": "93ca614206c8fa8a2b5f1cb8fc78f802"
+  },
+  "src/services/WyszukiwanieService.test.ts": {
+    "mtime": 1789498698.0519106,
+    "seen": 1794534494.3503406,
+    "ast_hash": "51817dc90850439c8ebcbafc8ee6ce6c",
+    "semantic_hash": "51817dc90850439c8ebcbafc8ee6ce6c"
+  },
+  "src/services/WyszukiwanieService.ts": {
+    "mtime": 1789498698.052912,
+    "seen": 1794534494.3503416,
+    "ast_hash": "a092f5560074c5ca895ba154d91b5d60",
+    "semantic_hash": "a092f5560074c5ca895ba154d91b5d60"
+  },
+  "src/services/ZadaniaService.test.ts": {
+    "mtime": 1789498698.0539122,
+    "seen": 1794534494.350343,
+    "ast_hash": "14127ad03337cc3cc38a53bb26b58a31",
+    "semantic_hash": "14127ad03337cc3cc38a53bb26b58a31"
+  },
+  "src/services/ZadaniaService.ts": {
+    "mtime": 1789498698.0559142,
+    "seen": 1794534494.350344,
+    "ast_hash": "b5165d0443f34383c7c35e36bb95006b",
+    "semantic_hash": "b5165d0443f34383c7c35e36bb95006b"
+  },
+  "src/services/ZapisFinansowWspolnych.ts": {
+    "mtime": 1793729053.2764754,
+    "seen": 1794534494.350345,
+    "ast_hash": "e2b78e5d05427cfcbc7250ec5fa42902",
+    "semantic_hash": "e2b78e5d05427cfcbc7250ec5fa42902"
+  },
+  "src/services/echo/AgentEcho.test.ts": {
+    "mtime": 1790648864.645596,
+    "seen": 1794534494.350346,
+    "ast_hash": "f9cceb15ecf8b9d945fe6237b2605b02",
+    "semantic_hash": "f9cceb15ecf8b9d945fe6237b2605b02"
+  },
+  "src/services/echo/AgentEcho.ts": {
+    "mtime": 1794290362.8079898,
+    "seen": 1794534494.3503473,
+    "ast_hash": "58e0807f63e1e07c8ec4b760c116fc8e",
+    "semantic_hash": "58e0807f63e1e07c8ec4b760c116fc8e"
+  },
+  "src/services/echo/AgregatorStanuEcho.test.ts": {
+    "mtime": 1794291162.343261,
+    "seen": 1794534494.3503482,
+    "ast_hash": "8473e06dc09901906e31cffa300185e1",
+    "semantic_hash": "8473e06dc09901906e31cffa300185e1"
+  },
+  "src/services/echo/AgregatorStanuEcho.ts": {
+    "mtime": 1794291162.343261,
+    "seen": 1794534494.3503494,
+    "ast_hash": "18faae5f81d2133335c904f7c89077b7",
+    "semantic_hash": "18faae5f81d2133335c904f7c89077b7"
+  },
+  "src/services/echo/AutonomiaEcho.test.ts": {
+    "mtime": 1789498697.9483125,
+    "seen": 1794534494.3503506,
+    "ast_hash": "f80b338924d3cd93a8bd32a20dde47ff",
+    "semantic_hash": "f80b338924d3cd93a8bd32a20dde47ff"
+  },
+  "src/services/echo/BriefingEcho.test.ts": {
+    "mtime": 1789498697.9493134,
+    "seen": 1794534494.3503516,
+    "ast_hash": "c367186f40657629007a925b6c4a2834",
+    "semantic_hash": "c367186f40657629007a925b6c4a2834"
+  },
+  "src/services/echo/DawkiEcho.test.ts": {
+    "mtime": 1791674388.4605317,
+    "seen": 1794534494.3503525,
+    "ast_hash": "dccb7bc7cfde0831440d22912844e771",
+    "semantic_hash": "dccb7bc7cfde0831440d22912844e771"
+  },
+  "src/services/echo/DiagnostykaEcho.ts": {
+    "mtime": 1789498697.9503145,
+    "seen": 1794534494.3503542,
+    "ast_hash": "774a357264ab5b8ef31eb503b2d23ea5",
+    "semantic_hash": "774a357264ab5b8ef31eb503b2d23ea5"
+  },
+  "src/services/echo/KonfiguracjaRozmowyEcho.ts": {
+    "mtime": 1789498697.9523165,
+    "seen": 1794534494.3503551,
+    "ast_hash": "4388a6dcd6a1b866dac883a59a47c247",
+    "semantic_hash": "4388a6dcd6a1b866dac883a59a47c247"
+  },
+  "src/services/echo/KontekstPlanowaniaEcho.test.ts": {
+    "mtime": 1790648557.1394985,
+    "seen": 1794534494.3503566,
+    "ast_hash": "9104fdf6a3fa5f76dfe594325da4f8fa",
+    "semantic_hash": "9104fdf6a3fa5f76dfe594325da4f8fa"
+  },
+  "src/services/echo/KontekstPlanowaniaEcho.ts": {
+    "mtime": 1790648462.223473,
+    "seen": 1794534494.3503575,
+    "ast_hash": "f3045dec48ef7704a125e864c9df5ff2",
+    "semantic_hash": "f3045dec48ef7704a125e864c9df5ff2"
+  },
+  "src/services/echo/KontekstRozmowyEcho.ts": {
+    "mtime": 1789498697.9543183,
+    "seen": 1794534494.3503587,
+    "ast_hash": "94ec30f0bc334d88b8702ae6321982e4",
+    "semantic_hash": "94ec30f0bc334d88b8702ae6321982e4"
+  },
+  "src/services/echo/KontrolerSesjiGlosowejEcho.test.ts": {
+    "mtime": 1789498697.9553187,
+    "seen": 1794534494.35036,
+    "ast_hash": "658c64172e99eff7dd43cba417b01bfb",
+    "semantic_hash": "658c64172e99eff7dd43cba417b01bfb"
+  },
+  "src/services/echo/KontrolerSesjiGlosowejEcho.ts": {
+    "mtime": 1794290362.8079898,
+    "seen": 1794534494.350361,
+    "ast_hash": "012f535b840061e7c6595dd63139a577",
+    "semantic_hash": "012f535b840061e7c6595dd63139a577"
+  },
+  "src/services/echo/KontrolerWakeWordEcho.test.ts": {
+    "mtime": 1789498697.9583225,
+    "seen": 1794534494.350362,
+    "ast_hash": "38ebe2512d8cd65ed317f5878e39ffab",
+    "semantic_hash": "38ebe2512d8cd65ed317f5878e39ffab"
+  },
+  "src/services/echo/KontrolerWakeWordEcho.ts": {
+    "mtime": 1789498697.959323,
+    "seen": 1794534494.3503635,
+    "ast_hash": "d64366f02f21d5a7079fdec2266b67ff",
+    "semantic_hash": "d64366f02f21d5a7079fdec2266b67ff"
+  },
+  "src/services/echo/LokalnyModelProviderEcho.test.ts": {
+    "mtime": 1790648846.185252,
+    "seen": 1794534494.3503644,
+    "ast_hash": "5ed5033d54b484fb96a7d371eef7e724",
+    "semantic_hash": "5ed5033d54b484fb96a7d371eef7e724"
+  },
+  "src/services/echo/LokalnyModelProviderEcho.ts": {
+    "mtime": 1790781872.1310673,
+    "seen": 1794534494.3503656,
+    "ast_hash": "3d07bbf70a973408aec88fba95d1f4b1",
+    "semantic_hash": "3d07bbf70a973408aec88fba95d1f4b1"
+  },
+  "src/services/echo/LokalnySemantycznyProviderEcho.ts": {
+    "mtime": 1792224577.6207352,
+    "seen": 1794534494.350367,
+    "ast_hash": "30a08e704610a061e3a06fa6021d3bd3",
+    "semantic_hash": "30a08e704610a061e3a06fa6021d3bd3"
+  },
+  "src/services/echo/NarzedziaEcho.test.ts": {
+    "mtime": 1791017879.6936316,
+    "seen": 1794534494.350368,
+    "ast_hash": "77806740b93d8db7f0acec490aca08c3",
+    "semantic_hash": "77806740b93d8db7f0acec490aca08c3"
+  },
+  "src/services/echo/NarzedziaEcho.ts": {
+    "mtime": 1792224577.6217358,
+    "seen": 1794534494.3503692,
+    "ast_hash": "89a5f6ef138570f7e6d8bcb59c5abde0",
+    "semantic_hash": "89a5f6ef138570f7e6d8bcb59c5abde0"
+  },
+  "src/services/echo/NaturalneIntencjeZadanEcho.test.ts": {
+    "mtime": 1789498697.9683316,
+    "seen": 1794534494.3503704,
+    "ast_hash": "e0ba2e1895f2ec8030bd6ef47c150827",
+    "semantic_hash": "e0ba2e1895f2ec8030bd6ef47c150827"
+  },
+  "src/services/echo/PamiecPreferencjiEcho.test.ts": {
+    "mtime": 1789498697.969332,
+    "seen": 1794534494.3503716,
+    "ast_hash": "f0d5d0140c0cf3397cf0f6dc949a28e2",
+    "semantic_hash": "f0d5d0140c0cf3397cf0f6dc949a28e2"
+  },
+  "src/services/echo/PamiecPreferencjiEcho.ts": {
+    "mtime": 1789498697.9703326,
+    "seen": 1794534494.3503726,
+    "ast_hash": "0cae20eeaee8a68cdc76cf7f28980476",
+    "semantic_hash": "0cae20eeaee8a68cdc76cf7f28980476"
+  },
+  "src/services/echo/PlanWykonaniaEcho.test.ts": {
+    "mtime": 1789498697.973336,
+    "seen": 1794534494.350374,
+    "ast_hash": "5067a8bb5713cd26d1d75f6aa52f03a8",
+    "semantic_hash": "5067a8bb5713cd26d1d75f6aa52f03a8"
+  },
+  "src/services/echo/PlanWykonaniaEcho.ts": {
+    "mtime": 1789906256.5562055,
+    "seen": 1794534494.350375,
+    "ast_hash": "bea20d06e4106edc5e2fa0f0c26b5730",
+    "semantic_hash": "bea20d06e4106edc5e2fa0f0c26b5730"
+  },
+  "src/services/echo/PlanowanieDniaEcho.test.ts": {
+    "mtime": 1789498697.9723346,
+    "seen": 1794534494.3503761,
+    "ast_hash": "eb328f7cca15a2347c6ed99e37408976",
+    "semantic_hash": "eb328f7cca15a2347c6ed99e37408976"
+  },
+  "src/services/echo/PolitykaDzialanEcho.ts": {
+    "mtime": 1789498697.9753375,
+    "seen": 1794534494.3503773,
+    "ast_hash": "12b4cabb69d9628f9075bddc4dbf4627",
+    "semantic_hash": "12b4cabb69d9628f9075bddc4dbf4627"
+  },
+  "src/services/echo/RozmowaNaturalnaEcho.test.ts": {
+    "mtime": 1790781872.1475837,
+    "seen": 1794534494.3503783,
+    "ast_hash": "78ad67e8bd040edd7237bb3d6377a5f8",
+    "semantic_hash": "78ad67e8bd040edd7237bb3d6377a5f8"
+  },
+  "src/services/echo/SilnikWakeWordEcho.ts": {
+    "mtime": 1789498697.9773397,
+    "seen": 1794534494.3503795,
+    "ast_hash": "9eb69f3a423beb2b4680387c3ae93f34",
+    "semantic_hash": "9eb69f3a423beb2b4680387c3ae93f34"
+  },
+  "src/services/echo/StanPrzedAkcjaEcho.test.ts": {
+    "mtime": 1789498697.979342,
+    "seen": 1794534494.3503807,
+    "ast_hash": "cb2b1056486e9c1a23f0fc16ccac89e6",
+    "semantic_hash": "cb2b1056486e9c1a23f0fc16ccac89e6"
+  },
+  "src/services/echo/TworzenieGlosoweEcho.test.ts": {
+    "mtime": 1792224577.6217358,
+    "seen": 1794534494.3503819,
+    "ast_hash": "b7789dcc6f426e01fbb8445d949ecfa3",
+    "semantic_hash": "b7789dcc6f426e01fbb8445d949ecfa3"
+  },
+  "src/services/echo/typyEcho.ts": {
+    "mtime": 1794290362.8069885,
+    "seen": 1794534494.3503828,
+    "ast_hash": "fbacb43f43d01a87e471c86f235cb235",
+    "semantic_hash": "fbacb43f43d01a87e471c86f235cb235"
+  },
+  "src/testy/konfiguracja.ts": {
+    "mtime": 1792224577.6247382,
+    "seen": 1794534494.3503842,
+    "ast_hash": "0227a9bd1ebc4eb1a8c428d20b1af2c4",
+    "semantic_hash": "0227a9bd1ebc4eb1a8c428d20b1af2c4"
+  },
+  "src/vite-env.d.ts": {
+    "mtime": 1793138620.7128353,
+    "seen": 1794534494.3503852,
+    "ast_hash": "f7492102874e705504e724462f3b6cb6",
+    "semantic_hash": "f7492102874e705504e724462f3b6cb6"
+  },
+  "tsconfig.app.json": {
+    "mtime": 1786672961.0,
+    "seen": 1794534494.3503861,
+    "ast_hash": "1bd1ba27d5b81b00fc8d15ab2f1ddab7",
+    "semantic_hash": "1bd1ba27d5b81b00fc8d15ab2f1ddab7"
+  },
+  "tsconfig.json": {
+    "mtime": 1786672794.0,
+    "seen": 1794534494.3503876,
+    "ast_hash": "a3d39fa780ebff65444de257f291ce6c",
+    "semantic_hash": "a3d39fa780ebff65444de257f291ce6c"
+  },
+  "tsconfig.node.json": {
+    "mtime": 1786672794.0,
+    "seen": 1794534494.3503885,
+    "ast_hash": "f9cb81ddcea69ffdab672fc8c48dca66",
+    "semantic_hash": "f9cb81ddcea69ffdab672fc8c48dca66"
+  },
+  "tsconfig.server.json": {
+    "mtime": 1788175252.6845858,
+    "seen": 1794534494.3503897,
+    "ast_hash": "0bd8fb480b679486957120196b218fe3",
+    "semantic_hash": "0bd8fb480b679486957120196b218fe3"
+  },
+  "vite.config.ts": {
+    "mtime": 1793138620.713837,
+    "seen": 1794534494.3503926,
+    "ast_hash": "a3f1b3bb2693ae421b8ac83696b2d0bc",
+    "semantic_hash": "a3f1b3bb2693ae421b8ac83696b2d0bc"
+  },
+  "windows/Ogarniacz.Desktop/DiagnostykaAktualizacji.cs": {
+    "mtime": 1793569675.3169012,
+    "seen": 1794534494.3503935,
+    "ast_hash": "aa4c9630a879a35cae250626a80fdabf",
+    "semantic_hash": "aa4c9630a879a35cae250626a80fdabf"
+  },
+  "windows/Ogarniacz.Desktop/Ogarniacz.Desktop.csproj": {
+    "mtime": 1793569675.3179016,
+    "seen": 1794534494.350395,
+    "ast_hash": "aafb8030354ace0b69bf08d4992ed286",
+    "semantic_hash": "aafb8030354ace0b69bf08d4992ed286"
+  },
+  "windows/Ogarniacz.Desktop/Program.cs": {
+    "mtime": 1793569675.3189023,
+    "seen": 1794534494.350396,
+    "ast_hash": "2fbc1c9c885892f079984e81abe747a8",
+    "semantic_hash": "2fbc1c9c885892f079984e81abe747a8"
+  },
+  "windows/TestyAktualizacji/Program.cs": {
+    "mtime": 1793569675.319903,
+    "seen": 1794534494.350397,
+    "ast_hash": "ab361ecdfa9ccc9bd81aa973cd646d9a",
+    "semantic_hash": "ab361ecdfa9ccc9bd81aa973cd646d9a"
+  },
+  "windows/TestyAktualizacji/TestyAktualizacji.csproj": {
+    "mtime": 1793569675.319903,
+    "seen": 1794534494.3503985,
+    "ast_hash": "fc3b231a0b54662c6a4d353d8a2a9d0f",
+    "semantic_hash": "fc3b231a0b54662c6a4d353d8a2a9d0f"
+  },
+  ".agents/skills/ogarniacz-debugger/SKILL.md": {
+    "mtime": 1793236381.7903965,
+    "seen": 1794534494.3503995,
+    "ast_hash": "c5b3192a40dd8a1be719cf56f2127818",
+    "semantic_hash": "c5b3192a40dd8a1be719cf56f2127818"
+  },
+  ".agents/skills/ogarniacz-github-workflow/SKILL.md": {
+    "mtime": 1793236483.7922812,
+    "seen": 1794534494.3504007,
+    "ast_hash": "f2466d8a4925d942583a5d58a50f7a24",
+    "semantic_hash": "f2466d8a4925d942583a5d58a50f7a24"
+  },
+  ".agents/skills/ogarniacz-module-builder/SKILL.md": {
+    "mtime": 1794284238.631019,
+    "seen": 1794534494.3504019,
+    "ast_hash": "a4d6c0fd8b61faba373908ac30f4bfbd",
+    "semantic_hash": "a4d6c0fd8b61faba373908ac30f4bfbd"
+  },
+  ".agents/skills/ogarniacz-smart-forms/SKILL.md": {
+    "mtime": 1793236381.7861102,
+    "seen": 1794534494.350403,
+    "ast_hash": "277d755c27d229dbd3480ee50084bbdf",
+    "semantic_hash": "277d755c27d229dbd3480ee50084bbdf"
+  },
+  ".agents/skills/ogarniacz-test-selector/SKILL.md": {
+    "mtime": 1794284238.6320207,
+    "seen": 1794534494.350404,
+    "ast_hash": "192dc87edd25a94a6be40d16a3e17cb7",
+    "semantic_hash": "192dc87edd25a94a6be40d16a3e17cb7"
+  },
+  ".agents/skills/ogarniacz-ui-design-system/SKILL.md": {
+    "mtime": 1793236381.7873933,
+    "seen": 1794534494.3504055,
+    "ast_hash": "6a62442e47829385dc7abac9509a0561",
+    "semantic_hash": "6a62442e47829385dc7abac9509a0561"
+  },
+  ".github/copilot-instructions.md": {
+    "mtime": 1789311818.095178,
+    "seen": 1794534494.3504064,
+    "ast_hash": "2e6fc9ccb9ccd7bdb3a453fbb1e934ff",
+    "semantic_hash": "2e6fc9ccb9ccd7bdb3a453fbb1e934ff"
+  },
+  ".tmp-konta-ui/index.html": {
+    "mtime": 1791894584.957325,
+    "seen": 1794534494.3504076,
+    "ast_hash": "f7e9d368ba0337b6a532d56b349ab0b3",
+    "semantic_hash": "f7e9d368ba0337b6a532d56b349ab0b3"
+  },
+  "AGENTS.md": {
+    "mtime": 1794284238.633021,
+    "seen": 1794534494.350409,
+    "ast_hash": "8651201f1b12833e07987422e40389ba",
+    "semantic_hash": "8651201f1b12833e07987422e40389ba"
+  },
+  "Backup Ogarniacza 3.txt": {
+    "mtime": 1792326315.5112717,
+    "seen": 1794534494.35041,
+    "ast_hash": "9176702ab1ec1da49295b755a4feb34d",
+    "semantic_hash": "9176702ab1ec1da49295b755a4feb34d"
+  },
+  "CLAUDE.md": {
+    "mtime": 1794284238.633021,
+    "seen": 1794534494.3504112,
+    "ast_hash": "a081b3efc8403f25a1f6ed26d29afcf2",
+    "semantic_hash": "a081b3efc8403f25a1f6ed26d29afcf2"
+  },
+  "README.md": {
+    "mtime": 1794284312.165413,
+    "seen": 1794534494.3504128,
+    "ast_hash": "6b6a3a5357ce1e194e5680305d163725",
+    "semantic_hash": "6b6a3a5357ce1e194e5680305d163725"
+  },
+  "android/app/src/main/assets/echo/README.md": {
+    "mtime": 1788844057.927509,
+    "seen": 1794534494.3504138,
+    "ast_hash": "874b2bc24a6065ab983670acff01625c",
+    "semantic_hash": "874b2bc24a6065ab983670acff01625c"
+  },
+  "assets/branding/README.md": {
+    "mtime": 1793138620.6632874,
+    "seen": 1794534494.350415,
+    "ast_hash": "d2746f9583156a23e18cf0fcb5311586",
+    "semantic_hash": "d2746f9583156a23e18cf0fcb5311586"
+  },
+  "docs/AKTUALIZACJE_TESTOWE.md": {
+    "mtime": 1793138620.664288,
+    "seen": 1794534494.3504164,
+    "ast_hash": "874a9728f0a2e16402e66852a0b9d073",
+    "semantic_hash": "874a9728f0a2e16402e66852a0b9d073"
+  },
+  "docs/ANDROID.md": {
+    "mtime": 1793139899.4607952,
+    "seen": 1794534494.3504176,
+    "ast_hash": "415e79af6a09a780dd2fa654be848bb7",
+    "semantic_hash": "415e79af6a09a780dd2fa654be848bb7"
+  },
+  "docs/ANDROID_IKONA_LUXURY.md": {
+    "mtime": 1793138620.665289,
+    "seen": 1794534494.3504188,
+    "ast_hash": "f03a33da193d3430124b28e662ce7585",
+    "semantic_hash": "f03a33da193d3430124b28e662ce7585"
+  },
+  "docs/ANDROID_RELEASE.md": {
+    "mtime": 1793569675.297883,
+    "seen": 1794534494.3504202,
+    "ast_hash": "a957e8cf703b36d3c4ebc1ea3199afe3",
+    "semantic_hash": "a957e8cf703b36d3c4ebc1ea3199afe3"
+  },
+  "docs/API.md": {
+    "mtime": 1789311053.0350537,
+    "seen": 1794534494.3504212,
+    "ast_hash": "a766144ec665cdc2f60a9eeec599f267",
+    "semantic_hash": "a766144ec665cdc2f60a9eeec599f267"
+  },
+  "docs/ARCHITECTURE.md": {
+    "mtime": 1794284238.6340227,
+    "seen": 1794534494.3504226,
+    "ast_hash": "4c6255db6d779b630b2fcf70b257a36b",
+    "semantic_hash": "4c6255db6d779b630b2fcf70b257a36b"
+  },
+  "docs/ARCHITEKTURA_SERWER_SYNC.md": {
+    "mtime": 1790533441.3295324,
+    "seen": 1794534494.3504236,
+    "ast_hash": "988c764fe2aae635a5936db3ea2c0f69",
+    "semantic_hash": "988c764fe2aae635a5936db3ea2c0f69"
+  },
+  "docs/AUDYT_AKTUALIZACJI_DOSTEPU_2026-09-27.md": {
+    "mtime": 1790615967.758647,
+    "seen": 1794534494.3504248,
+    "ast_hash": "b987c947cfc832adeb8c48843165d7e0",
+    "semantic_hash": "b987c947cfc832adeb8c48843165d7e0"
+  },
+  "docs/AUDYT_ECHO_ANDROID_2026-09-30.md": {
+    "mtime": 1790781872.1060457,
+    "seen": 1794534494.350426,
+    "ast_hash": "0e5d7bc757f50e16c2f2715a50781e3e",
+    "semantic_hash": "0e5d7bc757f50e16c2f2715a50781e3e"
+  },
+  "docs/AUTOUZUPELNIANIE_POJAZDOW.md": {
+    "mtime": 1793148968.4575167,
+    "seen": 1794534494.3504272,
+    "ast_hash": "7b21d5d51a26cd45e571443f8189288d",
+    "semantic_hash": "7b21d5d51a26cd45e571443f8189288d"
+  },
+  "docs/BADANIA_DOKUMENTY.md": {
+    "mtime": 1791716273.5856447,
+    "seen": 1794534494.350428,
+    "ast_hash": "bcb50211d45639420740b51419f2de2a",
+    "semantic_hash": "bcb50211d45639420740b51419f2de2a"
+  },
+  "docs/DATA.md": {
+    "mtime": 1793729053.2384405,
+    "seen": 1794534494.3504293,
+    "ast_hash": "f014c37eaf6a2bbdf5b29819d196f706",
+    "semantic_hash": "f014c37eaf6a2bbdf5b29819d196f706"
+  },
+  "docs/DATA_MODEL.md": {
+    "mtime": 1786675169.0,
+    "seen": 1794534494.3504307,
+    "ast_hash": "37ff569460a8bf9d8d942162fa46ae3a",
+    "semantic_hash": "37ff569460a8bf9d8d942162fa46ae3a"
+  },
+  "docs/DIAGNOSTYKA_ANDROID_T2_1.md": {
+    "mtime": 1793569891.4848924,
+    "seen": 1794534494.3504317,
+    "ast_hash": "44f80c1352d71d1738f81e1bd6eb4888",
+    "semantic_hash": "44f80c1352d71d1738f81e1bd6eb4888"
+  },
+  "docs/DZIENNIK_SAMOPOCZUCIA.md": {
+    "mtime": 1791683035.5986536,
+    "seen": 1794534494.350433,
+    "ast_hash": "bb7c183b5a62a7e83e3aafcfc6865ff4",
+    "semantic_hash": "bb7c183b5a62a7e83e3aafcfc6865ff4"
+  },
+  "docs/ECHO.md": {
+    "mtime": 1794291217.1411133,
+    "seen": 1794534494.3504343,
+    "ast_hash": "3d3e78feae674c4a9294134c849a0b16",
+    "semantic_hash": "3d3e78feae674c4a9294134c849a0b16"
+  },
+  "docs/ECHO_AGENT_ARCHITEKTURA.md": {
+    "mtime": 1794284238.635023,
+    "seen": 1794534494.3504353,
+    "ast_hash": "d1e86b63455e3e62b8684b417b3fad6e",
+    "semantic_hash": "d1e86b63455e3e62b8684b417b3fad6e"
+  },
+  "docs/ETAP_1_WERYFIKACJA_2026-10-23.md": {
+    "mtime": 1792769785.3054934,
+    "seen": 1794534494.3504367,
+    "ast_hash": "b09c87c9863cfd20ad8864de626f8026",
+    "semantic_hash": "b09c87c9863cfd20ad8864de626f8026"
+  },
+  "docs/FINANSE_FZ2.md": {
+    "mtime": 1793729053.2394416,
+    "seen": 1794534494.3504376,
+    "ast_hash": "a325c27dbf0f3e3a3b4485fe9d8c9544",
+    "semantic_hash": "a325c27dbf0f3e3a3b4485fe9d8c9544"
+  },
+  "docs/FINANSE_FZ3.md": {
+    "mtime": 1793729053.2394416,
+    "seen": 1794534494.3504388,
+    "ast_hash": "7b1e459ae5227c4aacdc0b039293f0fb",
+    "semantic_hash": "7b1e459ae5227c4aacdc0b039293f0fb"
+  },
+  "docs/FINANSE_FZ4.md": {
+    "mtime": 1793729053.2404425,
+    "seen": 1794534494.3504403,
+    "ast_hash": "76a6ee6b92b670cc608c741e05aa346a",
+    "semantic_hash": "76a6ee6b92b670cc608c741e05aa346a"
+  },
+  "docs/FINANSE_KASY_I_ROZLICZENIA.md": {
+    "mtime": 1793232407.6345272,
+    "seen": 1794534494.3504412,
+    "ast_hash": "4ad4cb82cd641a05632d9c4343c12161",
+    "semantic_hash": "4ad4cb82cd641a05632d9c4343c12161"
+  },
+  "docs/FINANSE_PULE_ZOBOWIAZANIA.md": {
+    "mtime": 1793652369.5439627,
+    "seen": 1794534494.3504424,
+    "ast_hash": "ed0a0a5c03c012e12bea86dee0b058db",
+    "semantic_hash": "ed0a0a5c03c012e12bea86dee0b058db"
+  },
+  "docs/HEALTH_ANDROID_AKCEPTACJA.md": {
+    "mtime": 1791738952.3987515,
+    "seen": 1794534494.3504436,
+    "ast_hash": "4bff33e67d5f9b0ef9d411ef2bc60c9d",
+    "semantic_hash": "4bff33e67d5f9b0ef9d411ef2bc60c9d"
+  },
+  "docs/HISTORIA_ZDROWIA.md": {
+    "mtime": 1791718165.98586,
+    "seen": 1794534494.3504448,
+    "ast_hash": "dc1683a2538366cd4c59bda57d38fddc",
+    "semantic_hash": "dc1683a2538366cd4c59bda57d38fddc"
+  },
+  "docs/HOME_ASSISTANT.md": {
+    "mtime": 1792224577.605721,
+    "seen": 1794534494.3504457,
+    "ast_hash": "6e6a8dd18f9998f0d323200a2fda33fb",
+    "semantic_hash": "6e6a8dd18f9998f0d323200a2fda33fb"
+  },
+  "docs/INSTRUCTIONS.md": {
+    "mtime": 1794284238.635023,
+    "seen": 1794534494.3504472,
+    "ast_hash": "f984684f44364bda9ed8ac47c52ec5c3",
+    "semantic_hash": "f984684f44364bda9ed8ac47c52ec5c3"
+  },
+  "docs/KOKPIT_2.md": {
+    "mtime": 1793772932.6914747,
+    "seen": 1794534494.3504481,
+    "ast_hash": "0294f76f473bac26175ded13eb49ef3f",
+    "semantic_hash": "0294f76f473bac26175ded13eb49ef3f"
+  },
+  "docs/KONTA_PROFILE.md": {
+    "mtime": 1791933939.9229643,
+    "seen": 1794534494.3504493,
+    "ast_hash": "ce31a8a324cc907c57aab8492d8dee52",
+    "semantic_hash": "ce31a8a324cc907c57aab8492d8dee52"
+  },
+  "docs/ODZYSKIWANIE_HASLA_EMAIL.md": {
+    "mtime": 1792253149.197344,
+    "seen": 1794534494.3504505,
+    "ast_hash": "6b7d3809f6b957e7f88fcc721aaa46ca",
+    "semantic_hash": "6b7d3809f6b957e7f88fcc721aaa46ca"
+  },
+  "docs/ODZYSKIWANIE_KONTA_RPI.md": {
+    "mtime": 1792840432.2123544,
+    "seen": 1794534494.3504517,
+    "ast_hash": "6ec2a1da143662cabd94d7b9ae65f673",
+    "semantic_hash": "6ec2a1da143662cabd94d7b9ae65f673"
+  },
+  "docs/OPEN_DECISIONS.md": {
+    "mtime": 1792769366.376716,
+    "seen": 1794534494.350453,
+    "ast_hash": "7002d47b8ec70651a859248d4f87d90b",
+    "semantic_hash": "7002d47b8ec70651a859248d4f87d90b"
+  },
+  "docs/PLATFORM_RELEASE.md": {
+    "mtime": 1793569675.2988837,
+    "seen": 1794534494.350454,
+    "ast_hash": "222278d69a6c45171fa5b76759614f51",
+    "semantic_hash": "222278d69a6c45171fa5b76759614f51"
+  },
+  "docs/POWIADOMIENIA_SYNCHRONIZACJI.md": {
+    "mtime": 1791575615.1720257,
+    "seen": 1794534494.350455,
+    "ast_hash": "c59cd2e9b13db41b5b2a1b8c2e19669b",
+    "semantic_hash": "c59cd2e9b13db41b5b2a1b8c2e19669b"
+  },
+  "docs/PRYWATNOSC_ZDROWIA.md": {
+    "mtime": 1791720568.2864811,
+    "seen": 1794534494.3504562,
+    "ast_hash": "c89267d51be3b4d13237e58ee92cff06",
+    "semantic_hash": "c89267d51be3b4d13237e58ee92cff06"
+  },
+  "docs/PRZYGOTOWANIE_WYDANIA_1_0_17.md": {
+    "mtime": 1792373881.0947356,
+    "seen": 1794534494.3504577,
+    "ast_hash": "39b08afcd5d9698d07473ea0d0af3466",
+    "semantic_hash": "39b08afcd5d9698d07473ea0d0af3466"
+  },
+  "docs/PRZYPOMNIENIA_LEKOW.md": {
+    "mtime": 1791682189.139855,
+    "seen": 1794534494.3504586,
+    "ast_hash": "61647be3f28e26d3eebdb802737668f9",
+    "semantic_hash": "61647be3f28e26d3eebdb802737668f9"
+  },
+  "docs/PSYCHOTERAPIA.md": {
+    "mtime": 1791686263.6294315,
+    "seen": 1794534494.3504598,
+    "ast_hash": "162d7e5774eac50f463199d9135b3fa4",
+    "semantic_hash": "162d7e5774eac50f463199d9135b3fa4"
+  },
+  "docs/RASPBERRY_PI.md": {
+    "mtime": 1792441942.16502,
+    "seen": 1794534494.350461,
+    "ast_hash": "37e87b310000fd0649b58c72a9494bf4",
+    "semantic_hash": "37e87b310000fd0649b58c72a9494bf4"
+  },
+  "docs/ROADMAP.md": {
+    "mtime": 1792769366.0719514,
+    "seen": 1794534494.3504622,
+    "ast_hash": "80f43fbe62fcacd78493b8efb53a5726",
+    "semantic_hash": "80f43fbe62fcacd78493b8efb53a5726"
+  },
+  "docs/SECURITY.md": {
+    "mtime": 1792769190.193164,
+    "seen": 1794534494.3504634,
+    "ast_hash": "45f7de6f2cbfc9fd8a7c1a7da7206f7c",
+    "semantic_hash": "45f7de6f2cbfc9fd8a7c1a7da7206f7c"
+  },
+  "docs/SMOKE_ANDROID_WEB_RASPBERRY.md": {
+    "mtime": 1792769190.1911626,
+    "seen": 1794534494.3504646,
+    "ast_hash": "589bbff4f01f9277e397336e013cc243",
+    "semantic_hash": "589bbff4f01f9277e397336e013cc243"
+  },
+  "docs/SPECYFIKACJA_OGARNIACZ_V1.md": {
+    "mtime": 1786675169.0,
+    "seen": 1794534494.3504658,
+    "ast_hash": "d953d2214cf7dd0c95c328e3033571d9",
+    "semantic_hash": "d953d2214cf7dd0c95c328e3033571d9"
+  },
+  "docs/SYNC_ARCHITECTURE.md": {
+    "mtime": 1791858655.5350797,
+    "seen": 1794534494.3504667,
+    "ast_hash": "5538a8135c826390ab25279910e5b392",
+    "semantic_hash": "5538a8135c826390ab25279910e5b392"
+  },
+  "docs/TESTING.md": {
+    "mtime": 1789311696.2293508,
+    "seen": 1794534494.3504682,
+    "ast_hash": "6048c73f16f9dcd0b1acc2209263827a",
+    "semantic_hash": "6048c73f16f9dcd0b1acc2209263827a"
+  },
+  "docs/TESTY_AKTUALIZACJI_R1_4.md": {
+    "mtime": 1793569675.2988837,
+    "seen": 1794534494.350469,
+    "ast_hash": "c5e21cdfd4833bb5fc20e26cb3c86b55",
+    "semantic_hash": "c5e21cdfd4833bb5fc20e26cb3c86b55"
+  },
+  "docs/UPGRADE_2026.md": {
+    "mtime": 1794311753.685337,
+    "seen": 1794534494.3504703,
+    "ast_hash": "37f9deaad120b16f8acddf79cae0a1d6",
+    "semantic_hash": "37f9deaad120b16f8acddf79cae0a1d6"
+  },
+  "docs/VOICE_CHECKPOINT_2026-08-27.md": {
+    "mtime": 1787783794.4269621,
+    "seen": 1794534494.3504715,
+    "ast_hash": "a729ab0f08d05d148b6f65b3013864ed",
+    "semantic_hash": "a729ab0f08d05d148b6f65b3013864ed"
+  },
+  "docs/WINDOWS_PWA.md": {
+    "mtime": 1791574792.3410516,
+    "seen": 1794534494.3504727,
+    "ast_hash": "7093ff91266d0c6c5fa3fa0228bc0793",
+    "semantic_hash": "7093ff91266d0c6c5fa3fa0228bc0793"
+  },
+  "docs/echo-model-lokalny.md": {
+    "mtime": 1790645029.6380112,
+    "seen": 1794534494.3504736,
+    "ast_hash": "7fee76b237537e440528cd3a6ae99838",
+    "semantic_hash": "7fee76b237537e440528cd3a6ae99838"
+  },
+  "index.html": {
+    "mtime": 1793231347.9760327,
+    "seen": 1794534494.350475,
+    "ast_hash": "c658f4336f31791c97affde2837b65a4",
+    "semantic_hash": "c658f4336f31791c97affde2837b65a4"
+  },
+  "informacje-o-wydaniu-1.0.17.md": {
+    "mtime": 1792444838.140246,
+    "seen": 1794534494.3504763,
+    "ast_hash": "c17dea32d8db148031b9abca1e8b96ba",
+    "semantic_hash": "c17dea32d8db148031b9abca1e8b96ba"
+  },
+  "informacje-o-wydaniu-1.0.6.md": {
+    "mtime": 1788742285.2105236,
+    "seen": 1794534494.3504772,
+    "ast_hash": "b1721c912574cd0ce60d550a5599560a",
+    "semantic_hash": "b1721c912574cd0ce60d550a5599560a"
+  },
+  "informacje-o-wydaniu-1.0.7.md": {
+    "mtime": 1788985257.2378569,
+    "seen": 1794534494.3504786,
+    "ast_hash": "1dc73406a6361c309c01405b9a4df5cb",
+    "semantic_hash": "1dc73406a6361c309c01405b9a4df5cb"
+  },
+  "informacje-o-wydaniu-1.0.8.md": {
+    "mtime": 1789230363.513529,
+    "seen": 1794534494.3504796,
+    "ast_hash": "7a7694a89fe4a5ee38b17e9fe537c32a",
+    "semantic_hash": "7a7694a89fe4a5ee38b17e9fe537c32a"
+  },
+  "multimedia/README.md": {
+    "mtime": 1792535162.4250731,
+    "seen": 1794534494.3504808,
+    "ast_hash": "dda5a02ba13ab5950e75d022f201e4f0",
+    "semantic_hash": "dda5a02ba13ab5950e75d022f201e4f0"
+  },
+  ".codex-remote-attachments/01a12afa-e182-73d0-ba4e-9be4b0ad87f8/7a80ad99-d0be-4fb0-8bfa-7c80d35e867e/1-1000107186.jpg": {
+    "mtime": 1791725138.7323294,
+    "seen": 1794534494.350482,
+    "ast_hash": "598780802bc3451cfec9049a2eedad43",
+    "semantic_hash": "598780802bc3451cfec9049a2eedad43"
+  },
+  ".codex-remote-attachments/01a12afa-e182-73d0-ba4e-9be4b0ad87f8/7a80ad99-d0be-4fb0-8bfa-7c80d35e867e/2-1000107188.jpg": {
+    "mtime": 1791725139.3348527,
+    "seen": 1794534494.3504832,
+    "ast_hash": "037c605a2c0a12e2801ea6ed0ced2def",
+    "semantic_hash": "037c605a2c0a12e2801ea6ed0ced2def"
+  },
+  ".codex-remote-attachments/01a15624-bb57-7310-928c-0ebd7232a7bc/7d971858-81b0-4d0e-b657-3de2ea224ba3/1-1000108016.jpg": {
+    "mtime": 1792446672.3213017,
+    "seen": 1794534494.3504844,
+    "ast_hash": "be601282714a835ddc5f117c4c633ef5",
+    "semantic_hash": "be601282714a835ddc5f117c4c633ef5"
+  },
+  ".codex-remote-attachments/01a15624-bb57-7310-928c-0ebd7232a7bc/7d971858-81b0-4d0e-b657-3de2ea224ba3/2-1000108018.jpg": {
+    "mtime": 1792446672.7411163,
+    "seen": 1794534494.3504856,
+    "ast_hash": "1390a4d98924df9d6ba2d143b4215b12",
+    "semantic_hash": "1390a4d98924df9d6ba2d143b4215b12"
+  },
+  "Obraz ChatGPT 20 pa\u017a 2026, 22_45_02.png": {
+    "mtime": 1792529113.1248348,
+    "seen": 1794534494.3504877,
+    "ast_hash": "63e8595742cca1377ab96dc5494853f8",
+    "semantic_hash": "63e8595742cca1377ab96dc5494853f8"
+  },
+  "android/app/src/main/res/drawable-land-hdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504891,
+    "ast_hash": "f7a80786dd355bd39014e58027aa6e19",
+    "semantic_hash": "f7a80786dd355bd39014e58027aa6e19"
+  },
+  "android/app/src/main/res/drawable-land-mdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504903,
+    "ast_hash": "acc976d4a36479233371a53021525c0c",
+    "semantic_hash": "acc976d4a36479233371a53021525c0c"
+  },
+  "android/app/src/main/res/drawable-land-xhdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504913,
+    "ast_hash": "b8c72969bc1f78aab71a76035360d4af",
+    "semantic_hash": "b8c72969bc1f78aab71a76035360d4af"
+  },
+  "android/app/src/main/res/drawable-land-xxhdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504927,
+    "ast_hash": "f87e988387b07d843905f38b084929fb",
+    "semantic_hash": "f87e988387b07d843905f38b084929fb"
+  },
+  "android/app/src/main/res/drawable-land-xxxhdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504937,
+    "ast_hash": "055a69553b16b0bf5f72094a2e459fc7",
+    "semantic_hash": "055a69553b16b0bf5f72094a2e459fc7"
+  },
+  "android/app/src/main/res/drawable-port-hdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504949,
+    "ast_hash": "5eb10d16c81338abe8bbc033d49638a8",
+    "semantic_hash": "5eb10d16c81338abe8bbc033d49638a8"
+  },
+  "android/app/src/main/res/drawable-port-mdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.350496,
+    "ast_hash": "d855a76a5070c8e6fcfd83a27549bdce",
+    "semantic_hash": "d855a76a5070c8e6fcfd83a27549bdce"
+  },
+  "android/app/src/main/res/drawable-port-xhdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504972,
+    "ast_hash": "df100b2a36bdb98b711cca58941728de",
+    "semantic_hash": "df100b2a36bdb98b711cca58941728de"
+  },
+  "android/app/src/main/res/drawable-port-xxhdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504982,
+    "ast_hash": "2c1b668364e815256f67b71dcdfa4d6e",
+    "semantic_hash": "2c1b668364e815256f67b71dcdfa4d6e"
+  },
+  "android/app/src/main/res/drawable-port-xxxhdpi/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3504996,
+    "ast_hash": "b5b1b22b59abe686c1df0d74a423d034",
+    "semantic_hash": "b5b1b22b59abe686c1df0d74a423d034"
+  },
+  "android/app/src/main/res/drawable/splash.png": {
+    "mtime": 1785512756.0,
+    "seen": 1794534494.3505008,
+    "ast_hash": "acc976d4a36479233371a53021525c0c",
+    "semantic_hash": "acc976d4a36479233371a53021525c0c"
+  },
+  "android/app/src/main/res/mipmap-hdpi/ic_launcher.png": {
+    "mtime": 1793138620.6472723,
+    "seen": 1794534494.3505018,
+    "ast_hash": "38bfb1639f43ca2f9c4a9633bdaf9a14",
+    "semantic_hash": "38bfb1639f43ca2f9c4a9633bdaf9a14"
+  },
+  "android/app/src/main/res/mipmap-hdpi/ic_launcher_foreground.png": {
+    "mtime": 1793138620.6482737,
+    "seen": 1794534494.3505032,
+    "ast_hash": "d563656ebeef9c667603588485f4b05f",
+    "semantic_hash": "d563656ebeef9c667603588485f4b05f"
+  },
+  "android/app/src/main/res/mipmap-hdpi/ic_launcher_round.png": {
+    "mtime": 1793138620.6492748,
+    "seen": 1794534494.3505042,
+    "ast_hash": "5bc7dc00b98a7641f5c2fa197036c2a7",
+    "semantic_hash": "5bc7dc00b98a7641f5c2fa197036c2a7"
+  },
+  "android/app/src/main/res/mipmap-mdpi/ic_launcher.png": {
+    "mtime": 1793138620.6492748,
+    "seen": 1794534494.3505056,
+    "ast_hash": "63a68fa0020ed438597e6f55e761f1fa",
+    "semantic_hash": "63a68fa0020ed438597e6f55e761f1fa"
+  },
+  "android/app/src/main/res/mipmap-mdpi/ic_launcher_foreground.png": {
+    "mtime": 1793138620.6502757,
+    "seen": 1794534494.3505065,
+    "ast_hash": "513a72c145f2f4b2ed6468d98f7b8dbc",
+    "semantic_hash": "513a72c145f2f4b2ed6468d98f7b8dbc"
+  },
+  "android/app/src/main/res/mipmap-mdpi/ic_launcher_round.png": {
+    "mtime": 1793138620.6512764,
+    "seen": 1794534494.3505077,
+    "ast_hash": "f6b665444863c3778dbdd64583dfb03e",
+    "semantic_hash": "f6b665444863c3778dbdd64583dfb03e"
+  },
+  "android/app/src/main/res/mipmap-xhdpi/ic_launcher.png": {
+    "mtime": 1793138620.652277,
+    "seen": 1794534494.3505087,
+    "ast_hash": "56f799cbb5484964a1783030b05eb37c",
+    "semantic_hash": "56f799cbb5484964a1783030b05eb37c"
+  },
+  "android/app/src/main/res/mipmap-xhdpi/ic_launcher_foreground.png": {
+    "mtime": 1793138620.652277,
+    "seen": 1794534494.3505101,
+    "ast_hash": "41e1ff441a8211ff76c6c2312af66e2d",
+    "semantic_hash": "41e1ff441a8211ff76c6c2312af66e2d"
+  },
+  "android/app/src/main/res/mipmap-xhdpi/ic_launcher_round.png": {
+    "mtime": 1793138620.653278,
+    "seen": 1794534494.350511,
+    "ast_hash": "3c1e88509d99b73306ed780f1e0192ca",
+    "semantic_hash": "3c1e88509d99b73306ed780f1e0192ca"
+  },
+  "android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png": {
+    "mtime": 1793138620.6542816,
+    "seen": 1794534494.3505123,
+    "ast_hash": "4adf1e681286d4ea2a642dcc1ab57f44",
+    "semantic_hash": "4adf1e681286d4ea2a642dcc1ab57f44"
+  },
+  "android/app/src/main/res/mipmap-xxhdpi/ic_launcher_foreground.png": {
+    "mtime": 1793138620.6552804,
+    "seen": 1794534494.3505135,
+    "ast_hash": "cbdb3dbacac4bd329f32ad30d2ab0b66",
+    "semantic_hash": "cbdb3dbacac4bd329f32ad30d2ab0b66"
+  },
+  "android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png": {
+    "mtime": 1793138620.6562805,
+    "seen": 1794534494.3505147,
+    "ast_hash": "1d32db633b7169ed31e711041be51971",
+    "semantic_hash": "1d32db633b7169ed31e711041be51971"
+  },
+  "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png": {
+    "mtime": 1793138620.6572819,
+    "seen": 1794534494.350516,
+    "ast_hash": "02e40eaf6fb2eb354867cc9f3e742e9f",
+    "semantic_hash": "02e40eaf6fb2eb354867cc9f3e742e9f"
+  },
+  "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png": {
+    "mtime": 1793138620.6582825,
+    "seen": 1794534494.350517,
+    "ast_hash": "03a4a701cb3ebb52b8b0915577f8ec19",
+    "semantic_hash": "03a4a701cb3ebb52b8b0915577f8ec19"
+  },
+  "android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png": {
+    "mtime": 1793138620.6592836,
+    "seen": 1794534494.3505182,
+    "ast_hash": "825bf6891d19d9532584b49fdb03d2e1",
+    "semantic_hash": "825bf6891d19d9532584b49fdb03d2e1"
+  },
+  "assets/branding/Ikona m\u00f3zg\u2013\u017car\u00f3wka w zieleni i z\u0142ocie_PRO.png": {
+    "mtime": 1792527827.6008542,
+    "seen": 1794534494.3505201,
+    "ast_hash": "2cbb31a0c58652b86dd6900c4368e669",
+    "semantic_hash": "2cbb31a0c58652b86dd6900c4368e669"
+  },
+  "multimedia/Arkusz specyfikacji neonowych ikon m\u00f3zgu i \u017car\u00f3wki_PRO.png": {
+    "mtime": 1792529836.1653335,
+    "seen": 1794534494.3505216,
+    "ast_hash": "845a7db41cf6a2698887320ac469fa1e",
+    "semantic_hash": "845a7db41cf6a2698887320ac469fa1e"
+  },
+  "multimedia/Ikona m\u00f3zg\u2013\u017car\u00f3wka w zieleni i z\u0142ocie.png": {
+    "mtime": 1792527518.0939343,
+    "seen": 1794534494.3505232,
+    "ast_hash": "cba28a08553b85741fd709d42ad6a2e0",
+    "semantic_hash": "cba28a08553b85741fd709d42ad6a2e0"
+  },
+  "multimedia/OGARNIACZ_IKONA_KAFEL.png": {
+    "mtime": 1792526814.0386899,
+    "seen": 1794534494.3505242,
+    "ast_hash": "593f0c6e5b6d325a40b2dfe46d1f2418",
+    "semantic_hash": "593f0c6e5b6d325a40b2dfe46d1f2418"
+  },
+  "multimedia/Ogarniacz_Luxury_Android.png": {
+    "mtime": 1793138620.676299,
+    "seen": 1794534494.3505254,
+    "ast_hash": "f8f9a2555d1e3b59aea8ee4868e2f9d2",
+    "semantic_hash": "f8f9a2555d1e3b59aea8ee4868e2f9d2"
+  },
+  "multimedia/fe430fc5-4404-4c36-a922-fc3cc5e60f4b.png": {
+    "mtime": 1792532003.3693933,
+    "seen": 1794534494.3505268,
+    "ast_hash": "62d9c979075003ffa9ecb8dacb759619",
+    "semantic_hash": "62d9c979075003ffa9ecb8dacb759619"
+  },
+  "ogarniacz_mapa.svg": {
+    "mtime": 1792770696.267635,
+    "seen": 1794534494.3505278,
+    "ast_hash": "128ae5163bce5970f1953705fd25e3e2",
+    "semantic_hash": "128ae5163bce5970f1953705fd25e3e2"
+  },
+  "public/apple-touch-icon.png": {
+    "mtime": 1792528688.4983993,
+    "seen": 1794534494.350529,
+    "ast_hash": "bcc7a2bc4e8b24d8ce7d1df89ae4cf07",
+    "semantic_hash": "bcc7a2bc4e8b24d8ce7d1df89ae4cf07"
+  },
+  "public/favicon-16.png": {
+    "mtime": 1792528688.4621327,
+    "seen": 1794534494.3505304,
+    "ast_hash": "7335e3c5d9a85df31b45fe627c2a1849",
+    "semantic_hash": "7335e3c5d9a85df31b45fe627c2a1849"
+  },
+  "public/favicon-32.png": {
+    "mtime": 1792528688.4746666,
+    "seen": 1794534494.3505316,
+    "ast_hash": "695619f365e2c2231ee6577022df46d1",
+    "semantic_hash": "695619f365e2c2231ee6577022df46d1"
+  },
+  "public/favicon.svg": {
+    "mtime": 1792528688.7235577,
+    "seen": 1794534494.3505325,
+    "ast_hash": "0c913922b5bd2089814dd77e6763d654",
+    "semantic_hash": "0c913922b5bd2089814dd77e6763d654"
+  },
+  "public/ikona-192.png": {
+    "mtime": 1792528688.519425,
+    "seen": 1794534494.350534,
+    "ast_hash": "9dfe5d8037bfd7153d4acb079f1b39e2",
+    "semantic_hash": "9dfe5d8037bfd7153d4acb079f1b39e2"
+  },
+  "public/ikona-512.png": {
+    "mtime": 1792528688.5765014,
+    "seen": 1794534494.350535,
+    "ast_hash": "128a99fdf5b248807576bd076cc5f021",
+    "semantic_hash": "128a99fdf5b248807576bd076cc5f021"
+  },
+  "public/logo-flat.png": {
+    "mtime": 1792532214.3323886,
+    "seen": 1794534494.350536,
+    "ast_hash": "8e460d86b5653e1b0724a08464bc76ce",
+    "semantic_hash": "8e460d86b5653e1b0724a08464bc76ce"
+  },
+  "public/logo-premium.png": {
+    "mtime": 1792532232.9516325,
+    "seen": 1794534494.3505373,
+    "ast_hash": "59b6e274176c313acf103f37665c7746",
+    "semantic_hash": "59b6e274176c313acf103f37665c7746"
+  }
+}

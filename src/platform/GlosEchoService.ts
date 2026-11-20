@@ -2,6 +2,21 @@ import { registerPlugin, type PluginListenerHandle } from '@capacitor/core'
 
 export type StanNatywnegoGlosu = 'sluchanie' | 'mowiUzytkownik' | 'transkrypcja' | 'mowienie' | 'bargeIn'
 
+export interface RozpoznawanieMowyEcho {
+  rozpoznaj: (limitMs?: number, limitPauzyMs?: number, odebranoCzesciowy?: (tekst: string) => void) => Promise<string>
+  anulujRozpoznawanie: () => Promise<void>
+}
+export interface SyntezaMowyEcho {
+  mow: (tekst: string) => Promise<void>
+  zatrzymajMowienie: () => Promise<void>
+}
+
+export interface UslugaGlosuEcho extends RozpoznawanieMowyEcho, SyntezaMowyEcho {
+  readonly natywna: boolean
+  sprawdzDostepnosc: () => Promise<{ rozpoznawanie: boolean; mowienie: boolean; zgoda: string }>
+  nasluchujStanu: (obsluga: (stan: StanNatywnegoGlosu, tekst?: string) => void) => Promise<() => void>
+}
+
 interface EchoGlosPlugin {
   sprawdzDostepnosc: () => Promise<{ rozpoznawanie: boolean; mowienie: boolean; zgoda: string }>
   rozpocznijNasluchiwanie: (opcje: { limitMs: number; limitPauzyMs?: number }) => Promise<{ tekst: string }>
@@ -34,6 +49,7 @@ function konstruktorRozpoznawania() {
 
 export function utworzUslugeGlosuEcho(czyAndroid: boolean) {
   let rozpoznawaniePrzegladarki: RozpoznawanieMowyPrzegladarki | undefined
+  let zakonczSyntezePrzegladarki: (() => void) | undefined
 
   return {
     natywna: czyAndroid,
@@ -89,16 +105,27 @@ export function utworzUslugeGlosuEcho(czyAndroid: boolean) {
       if (czyAndroid) return wtyczka.mow({ tekst })
       if (!('speechSynthesis' in window)) throw new Error('Odczytywanie odpowiedzi nie jest dostępne.')
       await new Promise<void>((rozwiaz, odrzuc) => {
+        zakonczSyntezePrzegladarki?.()
         const wypowiedz = new SpeechSynthesisUtterance(tekst)
+        let zakonczone = false
+        const zakoncz = (wynik: () => void) => {
+          if (zakonczone) return
+          zakonczone = true
+          if (zakonczSyntezePrzegladarki === anuluj) zakonczSyntezePrzegladarki = undefined
+          wynik()
+        }
+        const anuluj = () => zakoncz(rozwiaz)
+        zakonczSyntezePrzegladarki = anuluj
         wypowiedz.lang = 'pl-PL'
-        wypowiedz.onend = () => rozwiaz()
-        wypowiedz.onerror = () => odrzuc(new Error('Nie udało się odczytać odpowiedzi.'))
+        wypowiedz.onend = () => zakoncz(rozwiaz)
+        wypowiedz.onerror = () => zakoncz(() => odrzuc(new Error('Nie udało się odczytać odpowiedzi.')))
         speechSynthesis.cancel()
         speechSynthesis.speak(wypowiedz)
       })
     },
     async zatrzymajMowienie() {
       if (czyAndroid) return wtyczka.zatrzymajMowienie()
+      zakonczSyntezePrzegladarki?.()
       if ('speechSynthesis' in window) speechSynthesis.cancel()
     },
     async nasluchujStanu(obsluga: (stan: StanNatywnegoGlosu, tekst?: string) => void) {
@@ -108,5 +135,3 @@ export function utworzUslugeGlosuEcho(czyAndroid: boolean) {
     },
   }
 }
-
-export type UslugaGlosuEcho = ReturnType<typeof utworzUslugeGlosuEcho>

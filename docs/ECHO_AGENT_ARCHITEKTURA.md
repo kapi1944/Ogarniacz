@@ -1,5 +1,7 @@
 # Echo — architektura centralnego agenta Ogarniacza
 
+> Aktualna mapa implementacji i ograniczeń: [ECHO.md](ECHO.md), zweryfikowana 2026-11-10. Poniższe sekcje 1–16 dokumentują kolejne decyzje i starsze etapy; wzmianki o przyszłym providerze, kontrolerze głosu, pamięci i sześciu narzędziach nie są aktualnym inwentarzem. Szczegóły domenowe oraz sekcja Echo P1 pozostają materiałem uzupełniającym. Aktualny plan: [UPGRADE_2026.md](UPGRADE_2026.md).
+
 ## 1. Wizja
 
 Echo jest długoterminowo centralnym inteligentnym asystentem Ogarniacza, a nie parserem komend ani osobnym chatbotem. Użytkownik opisuje naturalnie cel, Echo utrzymuje kontekst rozmowy, pobiera tylko potrzebne dane, wnioskuje, proponuje lub wykonuje dozwolone działania i odpowiada tym samym agentem w kanale tekstowym oraz głosowym.
