@@ -394,39 +394,20 @@ const schematSurowegoBackupu = z.object({
 }).strict()
 
 function bajtyNaBase64(bajty: Uint8Array): string {
-  const alfabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  let wynik = ''
-  for (let indeks = 0; indeks < bajty.length; indeks += 3) {
-    const pierwszy = bajty[indeks] ?? 0
-    const drugi = bajty[indeks + 1] ?? 0
-    const trzeci = bajty[indeks + 2] ?? 0
-    const liczba = (pierwszy << 16) | (drugi << 8) | trzeci
-    wynik += alfabet[(liczba >> 18) & 63]
-    wynik += alfabet[(liczba >> 12) & 63]
-    wynik += indeks + 1 < bajty.length ? alfabet[(liczba >> 6) & 63] : '='
-    wynik += indeks + 2 < bajty.length ? alfabet[liczba & 63] : '='
+  // Porcje po 32 KiB: natywne btoa jest wielokrotnie szybsze niż ręczne sklejanie znaków dla dużych plików.
+  let binarny = ''
+  for (let indeks = 0; indeks < bajty.length; indeks += 0x8000) {
+    binarny += String.fromCharCode(...bajty.subarray(indeks, indeks + 0x8000))
   }
-  return wynik
+  return btoa(binarny)
 }
 
 function base64NaBajty(base64: string): Uint8Array<ArrayBuffer> {
-  const alfabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
   const oczyszczony = base64.replace(/=+$/, '')
-  const wynik = new Uint8Array(Math.floor((oczyszczony.length * 6) / 8))
-  let bufor = 0
-  let liczbaBitow = 0
-  let indeksWyniku = 0
-  for (const znak of oczyszczony) {
-    const wartosc = alfabet.indexOf(znak)
-    if (wartosc < 0) throw new BladBackupu('Backup zawiera niepoprawne dane pliku.', 'MODEL_DANYCH')
-    bufor = (bufor << 6) | wartosc
-    liczbaBitow += 6
-    if (liczbaBitow >= 8) {
-      liczbaBitow -= 8
-      wynik[indeksWyniku] = (bufor >> liczbaBitow) & 255
-      indeksWyniku += 1
-    }
-  }
+  if (!/^[A-Za-z0-9+/]*$/.test(oczyszczony) || oczyszczony.length % 4 === 1) throw new BladBackupu('Backup zawiera niepoprawne dane pliku.', 'MODEL_DANYCH')
+  const binarny = atob(oczyszczony)
+  const wynik = new Uint8Array(binarny.length)
+  for (let indeks = 0; indeks < binarny.length; indeks += 1) wynik[indeks] = binarny.charCodeAt(indeks)
   return wynik
 }
 
