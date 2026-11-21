@@ -1,4 +1,4 @@
-import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
+import { pobierzRepozytoriumWspoldzielone, type Repozytorium } from '../data/Repozytorium'
 import type { DostawcaElementowPulpitu, ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { Notatka } from '../domain/typy'
 
@@ -7,7 +7,7 @@ type ZrodloListy = Pick<Repozytorium<Notatka>, 'lista'>
 export class DostawcaNotatekPulpitu implements DostawcaElementowPulpitu {
   readonly id = 'notatki'
 
-  constructor(private readonly repozytoriumNotatek: ZrodloListy = pobierzRepozytorium('notatki')) {}
+  constructor(private readonly repozytoriumNotatek: ZrodloListy = pobierzRepozytoriumWspoldzielone('notatki')) {}
 
   async pobierzElementy(zakres: ZakresDat): Promise<ElementOgarniacza<'notatka'>[]> {
     const notatki = await this.repozytoriumNotatek.lista()

@@ -21,3 +21,13 @@ it('pokazuje błąd operacji asynchronicznej bez usuwania widoku', () => {
   expect(screen.getByRole('alert')).toHaveTextContent('Sprawdź jej wynik')
   expect(screen.getByText('Ustawienia')).toBeInTheDocument()
 })
+
+it('nie pokazuje alertu dla błędu sieci w tle, ale pokazuje dla innych odrzuceń', () => {
+  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  render(<KomunikatBleduAsynchronicznego />)
+  const odrzucenie = (powod: unknown) => Object.assign(new Event('unhandledrejection'), { reason: powod })
+  fireEvent(window, odrzucenie(new TypeError('Failed to fetch')))
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  fireEvent(window, odrzucenie(new Error('Zapis nie powiódł się')))
+  expect(screen.getByRole('alert')).toBeInTheDocument()
+})

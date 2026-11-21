@@ -1,4 +1,4 @@
-import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
+import { pobierzRepozytoriumWspoldzielone, type Repozytorium } from '../data/Repozytorium'
 import type { ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { Pojazd } from '../domain/typy'
 
@@ -8,7 +8,7 @@ type RodzajTerminu = NonNullable<NonNullable<ElementOgarniacza<'samochod'>['dane
 export class DostawcaSamochoduPulpitu {
   readonly id = 'samochod'
 
-  constructor(private readonly repozytoriumPojazdow: ZrodloListy<Pojazd> = pobierzRepozytorium('pojazdy')) {}
+  constructor(private readonly repozytoriumPojazdow: ZrodloListy<Pojazd> = pobierzRepozytoriumWspoldzielone('pojazdy')) {}
 
   async pobierzElementy(zakres: ZakresDat): Promise<ElementOgarniacza<'samochod'>[]> {
     const pojazdy = await this.repozytoriumPojazdow.lista()

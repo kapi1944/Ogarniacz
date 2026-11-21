@@ -4,9 +4,9 @@ import { schematWynikuBadania } from '../domain/badania'
 import type { Dokument, EncjaBazowa, MapaTabel, NazwaModulu, NazwaTabeli, Przypomnienie } from '../domain/typy'
 import { terazIso } from '../domain/fabryki'
 import { baza } from './BazaOgarniacza'
-import type { Table } from 'dexie'
+import Dexie, { type Table } from 'dexie'
 import { czyHistoriaWlaczona, zbudujWpisHistorii } from '../services/HistoriaZmianService'
-import { powiadomOZmianieDanych } from './ZdarzeniaDanych'
+import { nasluchujZmianDanych, powiadomOZmianieDanych } from './ZdarzeniaDanych'
 import { dodajDoKolejkiSynchronizacji, tabelaKolejki, uzgodnijPrywatnoscDokumentow } from './KolejkaSynchronizacji'
 import { czyPrywatnaPsychoterapia, schematSzczegolowPsychoterapii } from '../domain/psychoterapia'
 import { czyBiezacyDostep, zakresDanychZdrowotnych, czyTabelaFinansowWspolnych, czyDostepFinansowWspolnych } from '../services/UprawnieniaService'
@@ -389,4 +389,28 @@ class RepozytoriumDexie<T extends EncjaBazowa> implements Repozytorium<T> {
 export function pobierzRepozytorium<K extends NazwaTabeli>(nazwa: K, dostepDoDanychPrywatnych?: (operacja: 'odczyt' | 'edycja') => boolean): Repozytorium<MapaTabel[K]> {
   if (czyTabelaFinansowWspolnych(nazwa)) throw new Error('Wspólne finanse wymagają dedykowanego serwisu finansowego.')
   return new RepozytoriumDexie<MapaTabel[K]>(nazwa, dostepDoDanychPrywatnych)
+}
+
+// Współdzielenie trwających odczytów: kilka zapytań Pulpitu, uruchomionych tą samą zmianą danych, czyta tabelę raz.
+// Wpis żyje tylko do zakończenia odczytu i jest unieważniany przy każdej zmianie danych (zanim ruszą ponowione zapytania).
+const trwajaceListy = new Map<string, Promise<unknown[]>>()
+const uniewaznListy = () => trwajaceListy.clear()
+Dexie.on('storagemutated', uniewaznListy)
+nasluchujZmianDanych(uniewaznListy)
+
+export function pobierzRepozytoriumWspoldzielone<K extends NazwaTabeli>(nazwa: K): Repozytorium<MapaTabel[K]> {
+  const repozytorium = pobierzRepozytorium(nazwa)
+  const wspoldzielone = Object.create(repozytorium) as Repozytorium<MapaTabel[K]>
+  wspoldzielone.lista = async () => {
+    const klucz = `${baza.name}|${nazwa}`
+    let odczyt = trwajaceListy.get(klucz) as Promise<MapaTabel[K][]> | undefined
+    if (!odczyt) {
+      odczyt = repozytorium.lista()
+      trwajaceListy.set(klucz, odczyt)
+      const zwolnij = () => { if (trwajaceListy.get(klucz) === odczyt) trwajaceListy.delete(klucz) }
+      void odczyt.then(zwolnij, zwolnij)
+    }
+    return [...await odczyt] // własna kopia tablicy: odbiorca może ją sortować
+  }
+  return wspoldzielone
 }

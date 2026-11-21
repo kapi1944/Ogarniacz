@@ -1,5 +1,5 @@
 import { noweId } from '../domain/fabryki'
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react'
 import { useAplikacja } from './KontekstAplikacji'
 import { platforma } from '../platform/platforma'
 import { EchoService } from '../services/EchoService'
@@ -83,7 +83,8 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
   const [czesciowaWypowiedz, ustawCzesciowaWypowiedz] = useState('')
   const [stanWakeWord, ustawStanWakeWord] = useState<StanSilnikaWakeWordEcho>('zatrzymany')
   const [komunikatWakeWord, ustawKomunikatWakeWord] = useState<string>()
-  useEffect(() => {
+  // Układ, a nie zwykły efekt: konfiguracja musi mieć aktualny tryb przed jakimkolwiek efektem pasywnym i malowaniem.
+  useLayoutEffect(() => {
     konfiguracjaRozmowy.ustawTrybRozmowy(ustawienia.trybRozmowyEcho)
     ustawTrybRozmowyStan(ustawienia.trybRozmowyEcho)
   }, [konfiguracjaRozmowy, ustawienia.trybRozmowyEcho])
@@ -118,18 +119,18 @@ export function DostawcaSesjiEcho({ children }: { children: ReactNode }) {
   }, [kontrolerGlosu, kontrolerWakeWord])
 
   useEffect(() => {
-    if (!ustawienia.glosEcho) { void kontrolerGlosu.anuluj(); return }
-    void kontrolerGlosu.inicjalizuj()
-    return () => { void kontrolerGlosu.zniszcz() }
+    if (!ustawienia.glosEcho) { void kontrolerGlosu.anuluj().catch(() => undefined); return }
+    void kontrolerGlosu.inicjalizuj().catch(() => undefined)
+    return () => { void kontrolerGlosu.zniszcz().catch(() => undefined) }
   }, [kontrolerGlosu, ustawienia.glosEcho])
 
   useEffect(() => {
     if (!ustawienia.hejEcho || !ustawienia.glosEcho) {
-      void kontrolerWakeWord.zatrzymaj().then(() => kontrolerWakeWord.sprawdzStan())
+      void kontrolerWakeWord.zatrzymaj().then(() => kontrolerWakeWord.sprawdzStan()).catch(() => undefined)
       return
     }
-    void kontrolerWakeWord.uruchom()
-    return () => { void kontrolerWakeWord.zniszcz() }
+    void kontrolerWakeWord.uruchom().catch(() => undefined)
+    return () => { void kontrolerWakeWord.zniszcz().catch(() => undefined) }
   }, [kontrolerWakeWord, ustawienia.glosEcho, ustawienia.hejEcho])
 
   return <KontekstSesjiEcho.Provider value={{ echo, kontrolerGlosu, kontrolerWakeWord, stanWakeWord, komunikatWakeWord, testujWakeWord: () => kontrolerWakeWord.testuj(), stan, stanAgenta, ustawStan, tryb, trybRozmowy, ustawTrybRozmowy, wiadomosci, ustawWiadomosci, oczekujacaAkcja, ustawOczekujacaAkcje, oczekujeDoprecyzowania, ustawOczekujeDoprecyzowania, bladGlosu, ustawBladGlosu, czesciowaWypowiedz, dodajOdpowiedz }}>{children}</KontekstSesjiEcho.Provider>

@@ -1,4 +1,4 @@
-import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
+import { pobierzRepozytoriumWspoldzielone, type Repozytorium } from '../data/Repozytorium'
 import type { DostawcaElementowPulpitu, ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { Przypomnienie, Wizyta } from '../domain/typy'
 import { czasUruchomienia } from '../services/PrzypomnieniaService'
@@ -25,8 +25,8 @@ export class DostawcaWizytPulpitu implements DostawcaElementowPulpitu {
   readonly id = 'wizyty'
 
   constructor(
-    private readonly repozytoriumWizyt: ZrodloListy<Wizyta> = pobierzRepozytorium('wizyty'),
-    private readonly repozytoriumPrzypomnien: ZrodloListy<Przypomnienie> = pobierzRepozytorium('przypomnienia'),
+    private readonly repozytoriumWizyt: ZrodloListy<Wizyta> = pobierzRepozytoriumWspoldzielone('wizyty'),
+    private readonly repozytoriumPrzypomnien: ZrodloListy<Przypomnienie> = pobierzRepozytoriumWspoldzielone('przypomnienia'),
   ) {}
 
   async pobierzElementy(zakres: ZakresDat): Promise<ElementOgarniacza<'wizyta'>[]> {

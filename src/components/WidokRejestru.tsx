@@ -46,7 +46,11 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
     ...zewnetrznePola,
   ]
 
+  // Najnowsze pola i właściwości trzymamy w ref, żeby `otworz` miało stabilną tożsamość.
+  const aktualneRef = useRef({ polaDoEdycji, wlasciwosci })
+  aktualneRef.current = { polaDoEdycji, wlasciwosci }
   const otworz = useCallback((element?: T) => {
+    const { polaDoEdycji, wlasciwosci } = aktualneRef.current
     ustawEdytowany(element)
     const wartosciPoczatkowe = Object.fromEntries(polaDoEdycji.map((pole) => [pole.definicja.id, wartoscFormularzaPola(element, pole)]))
     const waluty = Object.fromEntries(polaDoEdycji.filter((pole) => pole.definicja.typ === 'kwota' && pole.definicja.kluczWaluty).map((pole) => [
@@ -62,7 +66,7 @@ export function WidokRejestru<T extends EncjaBazowa>(wlasciwosci: Wlasciwosci<T>
     ustawFormularz({ ...formularzZUzupelnieniem, ...waluty })
     ustawBlad('')
     ustawFormularzOtwarty(true)
-  }, [polaDoEdycji, wlasciwosci])
+  }, [])
 
   useEffect(() => {
     const wybranyElementId = wlasciwosci.wybranyElementId

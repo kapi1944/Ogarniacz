@@ -1,5 +1,5 @@
 import { endOfMonth, format, parseISO } from 'date-fns'
-import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
+import { pobierzRepozytoriumWspoldzielone, type Repozytorium } from '../data/Repozytorium'
 import type { ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { Budzet, Rachunek, Wydatek } from '../domain/typy'
 import { obliczWykorzystanieBudzetow } from '../services/FinanseService'
@@ -27,9 +27,9 @@ export class DostawcaFinansowPulpitu {
   readonly id = 'finanse'
 
   constructor(
-    private readonly repozytoriumRachunkow: ZrodloListy<Rachunek> = pobierzRepozytorium('rachunki'),
-    private readonly repozytoriumWydatkow: ZrodloListy<Wydatek> = pobierzRepozytorium('wydatki'),
-    private readonly repozytoriumBudzetow: ZrodloListy<Budzet> = pobierzRepozytorium('budzety'),
+    private readonly repozytoriumRachunkow: ZrodloListy<Rachunek> = pobierzRepozytoriumWspoldzielone('rachunki'),
+    private readonly repozytoriumWydatkow: ZrodloListy<Wydatek> = pobierzRepozytoriumWspoldzielone('wydatki'),
+    private readonly repozytoriumBudzetow: ZrodloListy<Budzet> = pobierzRepozytoriumWspoldzielone('budzety'),
   ) {}
 
   async pobierzElementy(zakres: ZakresDat): Promise<ElementOgarniacza<'platnosc' | 'wydatek'>[]> {

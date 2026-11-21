@@ -1,4 +1,4 @@
-import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
+import { pobierzRepozytoriumWspoldzielone, type Repozytorium } from '../data/Repozytorium'
 import type { ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { ListaZakupow, PozycjaZakupow } from '../domain/typy'
 
@@ -8,8 +8,8 @@ export class DostawcaZakupowPulpitu {
   readonly id = 'zakupy'
 
   constructor(
-    private readonly repozytoriumList: ZrodloListy<ListaZakupow> = pobierzRepozytorium('listyZakupow'),
-    private readonly repozytoriumPozycji: ZrodloListy<PozycjaZakupow> = pobierzRepozytorium('pozycjeZakupow'),
+    private readonly repozytoriumList: ZrodloListy<ListaZakupow> = pobierzRepozytoriumWspoldzielone('listyZakupow'),
+    private readonly repozytoriumPozycji: ZrodloListy<PozycjaZakupow> = pobierzRepozytoriumWspoldzielone('pozycjeZakupow'),
   ) {}
 
   async pobierzElementy(zakres: ZakresDat): Promise<ElementOgarniacza<'zakupy'>[]> {

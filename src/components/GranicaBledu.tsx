@@ -16,10 +16,25 @@ export class GranicaBledu extends Component<{ children: ReactNode }, { blad: boo
   }
 }
 
+/** Błędy sieci i anulowania w tle (synchronizacja, sprawdzanie aktualizacji) nie oznaczają porażki operacji użytkownika. */
+export function czyBladTla(powod: unknown): boolean {
+  if (!powod || typeof powod !== 'object') return false
+  const { name, message } = powod as { name?: unknown; message?: unknown }
+  if (name === 'AbortError') return true
+  return name === 'TypeError' && typeof message === 'string' && /failed to fetch|load failed|networkerror|network request failed/i.test(message)
+}
+
 export function KomunikatBleduAsynchronicznego() {
   const [blad, ustawBlad] = useState(false)
   useEffect(() => {
-    const pokazBlad = () => ustawBlad(true)
+    const pokazBlad = (zdarzenie: Event) => {
+      const powod = (zdarzenie as PromiseRejectionEvent).reason
+      if (czyBladTla(powod)) {
+        console.warn('Pominięto błąd w tle:', powod)
+        return
+      }
+      ustawBlad(true)
+    }
     window.addEventListener('unhandledrejection', pokazBlad)
     return () => window.removeEventListener('unhandledrejection', pokazBlad)
   }, [])

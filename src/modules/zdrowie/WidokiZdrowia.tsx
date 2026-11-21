@@ -2,7 +2,7 @@ import { dokumentyWizyty, zapiszWizyteZDokumentami, type DostepZrodel } from '..
 import { SesjePsychoterapii } from './SesjePsychoterapii'
 import './psychoterapia.css'
 import { EdytorPolaRejestru, normalizujStarePolaRejestru, type DefinicjaPola } from '../../components/EdytorPolaRejestru'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { Link, useSearchParams } from 'react-router-dom'
 import { BellPlus, CalendarClock, ClipboardList, Edit3, FileText, History, Pill, Plus, ScanLine, ShieldAlert, Stethoscope, Trash2 } from 'lucide-react'
@@ -305,7 +305,10 @@ function RejestrLekow({ leki, repozytorium, wybranyElementId, harmonogram }: { l
     ustawSzkic({ ...szkic, nazwa: wynikOcr.nazwa.wartosc ?? szkic.nazwa, moc: wynikOcr.moc.wartosc ?? szkic.moc, postac: postac ?? szkic.postac, jednostka, dodawanyZapas: wynikOcr.opakowanie.wartosc ? String(wynikOcr.opakowanie.wartosc.ilosc) : szkic.dodawanyZapas })
     ustawWynikOcr(undefined)
   }
-  useEffect(() => { const lek = leki.find((element) => element.id === wybranyElementId); if (lek && !otwarty) otworz(lek) }, [wybranyElementId, leki, otwarty])
+  // Efekt ma zawsze wywołać aktualną wersję `otworz`, ale nie uruchamiać się ponownie przy każdym renderze.
+  const otworzRef = useRef(otworz)
+  otworzRef.current = otworz
+  useEffect(() => { const lek = leki.find((element) => element.id === wybranyElementId); if (lek && !otwarty) otworzRef.current(lek) }, [wybranyElementId, leki, otwarty])
   const data = dzisiajIso()
   const poleLeku = (klucz: Exclude<keyof SzkicLeku, 'dawki'>, etykieta: string, opcje: Omit<DefinicjaPola, 'klucz' | 'etykieta'> = {}) => {
     const [pole] = normalizujStarePolaRejestru([{ klucz, etykieta, ...opcje }])

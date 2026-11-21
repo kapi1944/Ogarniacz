@@ -1,4 +1,4 @@
-import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
+import { pobierzRepozytoriumWspoldzielone, type Repozytorium } from '../data/Repozytorium'
 import type { DostawcaElementowPulpitu, ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { ElementPoczekalni } from '../domain/typy'
 import { czyElementPoczekalniDoKlasyfikacji } from '../services/PoczekalniaService'
@@ -10,7 +10,7 @@ export const PROG_STARZENIA_POCZEKALNI_DNI = 7
 export class DostawcaPoczekalniPulpitu implements DostawcaElementowPulpitu {
   readonly id = 'poczekalnia'
 
-  constructor(private readonly repozytoriumSkrzynki: ZrodloListy = pobierzRepozytorium('skrzynka')) {}
+  constructor(private readonly repozytoriumSkrzynki: ZrodloListy = pobierzRepozytoriumWspoldzielone('skrzynka')) {}
 
   async pobierzElementy(_zakres: ZakresDat): Promise<ElementOgarniacza<'poczekalnia'>[]> {
     const nieprzetworzone = (await this.repozytoriumSkrzynki.lista())

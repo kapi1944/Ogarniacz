@@ -1,5 +1,5 @@
 import { eachDayOfInterval, format, parseISO } from 'date-fns'
-import { pobierzRepozytorium, type Repozytorium } from '../data/Repozytorium'
+import { pobierzRepozytoriumWspoldzielone, type Repozytorium } from '../data/Repozytorium'
 import type { DostawcaElementowPulpitu, ElementOgarniacza, ZakresDat } from '../domain/elementyOgarniacza'
 import type { DziennikLeku, Lek, Przypomnienie } from '../domain/typy'
 import { generujDawkiDnia, przewidywanaDataWyczerpania } from '../services/LekiService'
@@ -29,9 +29,9 @@ export class DostawcaLekowPulpitu implements DostawcaElementowPulpitu {
   readonly id = 'leki'
 
   constructor(
-    private readonly repozytoriumLekow: ZrodloListy<Lek> = pobierzRepozytorium('leki'),
-    private readonly repozytoriumDziennika: ZrodloListy<DziennikLeku> = pobierzRepozytorium('dziennikLekow'),
-    private readonly repozytoriumPrzypomnien: ZrodloListy<Przypomnienie> = pobierzRepozytorium('przypomnienia'),
+    private readonly repozytoriumLekow: ZrodloListy<Lek> = pobierzRepozytoriumWspoldzielone('leki'),
+    private readonly repozytoriumDziennika: ZrodloListy<DziennikLeku> = pobierzRepozytoriumWspoldzielone('dziennikLekow'),
+    private readonly repozytoriumPrzypomnien: ZrodloListy<Przypomnienie> = pobierzRepozytoriumWspoldzielone('przypomnienia'),
   ) {}
 
   async pobierzElementy(zakres: ZakresDat): Promise<ElementOgarniacza<'lek'>[]> {

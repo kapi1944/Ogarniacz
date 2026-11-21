@@ -31,8 +31,11 @@ it('zapisuje offline kwotę i walutę, ponownie je odczytuje i pokazuje rozdziel
   const zapisane = (await repozytorium.lista()).find((rekord) => rekord.opis === 'Zakup EUR')!
   expect(zapisane).toMatchObject({ kwota: 125.5, waluta: 'EUR' })
   expect((await repozytorium.pobierz('stara'))?.waluta).toBeUndefined()
-  expect(screen.getByText('Bilans okresu').parentElement?.textContent).toContain('-100,00')
-  expect(screen.getByText('Transakcje EUR').parentElement?.textContent).toContain('125,50')
+  // Podsumowania odświeża asynchroniczne zapytanie na żywo, więc czekamy na ich aktualizację.
+  await waitFor(() => {
+    expect(screen.getByText('Bilans okresu').parentElement?.textContent).toContain('-100,00')
+    expect(screen.getByText('Transakcje EUR').parentElement?.textContent).toContain('125,50')
+  })
   unmount()
   render(<MemoryRouter><WidokFinansow /></MemoryRouter>)
   const wiersz = (await screen.findByText('Zakup EUR')).closest('article')!
