@@ -155,3 +155,36 @@ export async function zapiszBladKolejki(ids: string[], blad: string): Promise<vo
     zmiana.updatedAt = teraz
   })
 }
+
+/** Odrzucone przez serwer zmiany zostają w kolejce (rekord lokalny jest nienaruszony), ale nie są wysyłane. */
+export async function oznaczKwarantanne(ids: string[], powod: string, komunikat: string): Promise<void> {
+  if (ids.length === 0) return
+  const teraz = new Date().toISOString()
+  await tabelaKolejki().where('id').anyOf(ids).modify((zmiana) => {
+    zmiana.kwarantanna = { powod, czas: teraz }
+    zmiana.ostatniBlad = komunikat
+    zmiana.liczbaProb += 1
+    zmiana.updatedAt = teraz
+  })
+}
+
+export async function pobierzZmianyWKwarantannie(): Promise<ZmianaKolejkiSynchronizacji[]> {
+  return (await tabelaKolejki().orderBy('createdAt').toArray()).filter((zmiana) => zmiana.kwarantanna)
+}
+
+/** „Ponów”: zmiana wraca do zwykłej kolejki i zostanie wysłana przy następnej synchronizacji. */
+export async function zwolnijZKwarantanny(ids?: string[]): Promise<void> {
+  const teraz = new Date().toISOString()
+  const kolekcja = ids ? tabelaKolejki().where('id').anyOf(ids) : tabelaKolejki().toCollection()
+  await kolekcja.modify((zmiana) => {
+    if (!zmiana.kwarantanna) return
+    delete zmiana.kwarantanna
+    zmiana.updatedAt = teraz
+  })
+}
+
+/** „Odrzuć”: usuwa wyłącznie wpis kolejki z kwarantanny; rekord pozostaje na tym urządzeniu. */
+export async function odrzucZmianeZKwarantanny(id: string): Promise<void> {
+  const zmiana = await tabelaKolejki().get(id)
+  if (zmiana?.kwarantanna) await tabelaKolejki().delete(id)
+}

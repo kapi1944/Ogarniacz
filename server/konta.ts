@@ -49,6 +49,20 @@ const MODUL_TABELI: Record<string, string> = {
   uprawnienia: 'ustawienia', edytorzy: 'ustawienia', ustawienia: 'ustawienia',
 }
 
+/** Tabele konfiguracji rejestru należą do modułu rejestru wskazanego w `rekord.rejestrId`. */
+const TABELE_KONFIGURACJI_REJESTRU = new Set(['definicjeWlasnychPolRejestru', 'widokiRejestru'])
+const MODUL_REJESTRU: Record<string, string> = {
+  zadania: 'zadania', notatki: 'notatki', poczekalnia: 'skrzynka', subskrypcje: 'finanse',
+}
+
+export function modulTabeli(tabela: string, rekord?: Record<string, unknown>): string | undefined {
+  if (TABELE_KONFIGURACJI_REJESTRU.has(tabela)) {
+    const rejestrId = rekord?.rejestrId
+    return typeof rejestrId === 'string' && Object.hasOwn(MODUL_REJESTRU, rejestrId) ? MODUL_REJESTRU[rejestrId] : undefined
+  }
+  return Object.hasOwn(MODUL_TABELI, tabela) ? MODUL_TABELI[tabela] : undefined
+}
+
 export interface KontekstDostepu {
   uzytkownikId: string
   wlascicielId: string
@@ -252,7 +266,7 @@ export function czyDozwolonaTabela(
   if (['wspolneKasy', 'operacjeKas', 'rozliczenia', 'wydatkiGrupowe', 'zwrotyRozliczen'].includes(tabela)) return kontekst.rola === 'wlasciciel' && kontekst.uzytkownikId === kontekst.wlascicielId
   if (kontekst.rola === 'wlasciciel') return true
   if (tabela === 'przypomnienia' && (rekord?.echoPoPracy || typeof rekord?.id === 'string' && rekord.id.startsWith('echo-po-pracy:'))) return false
-  const modul = MODUL_TABELI[tabela]
+  const modul = modulTabeli(tabela, rekord)
   if (!modul || modul === 'ustawienia' || modul === 'echo') return false
   const sekcja = tabela === 'wpisyTerapii' || tabela === 'zadania' && rekord && 'sesjaTerapiiId' in rekord ? 'psychoterapia'
     : tabela === 'dokumenty' && rekord && ('medyczne' in rekord && rekord.medyczne !== undefined || Array.isArray(rekord.powiazania) && rekord.powiazania.some((relacja) => relacja && ['zdrowie', 'wizyty', 'skierowania', 'leki'].includes(relacja.typ))) ? 'dokumentacja' : undefined

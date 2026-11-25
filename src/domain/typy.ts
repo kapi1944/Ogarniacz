@@ -628,8 +628,10 @@ export interface StanSynchronizacji extends EncjaBazowa {
   ostatniPush?: string
   ostatniaProba?: string
   polaczenie?: 'dostepne' | 'niedostepne' | 'offline'
-  kodOstatniegoBledu?: 'brak_sesji' | 'sesja_wygasla' | 'csrf' | 'brak_polaczenia' | 'konflikt' | 'blad_synchronizacji'
+  kodOstatniegoBledu?: 'brak_sesji' | 'sesja_wygasla' | 'csrf' | 'brak_polaczenia' | 'konflikt' | 'zmiana_odrzucona' | 'blad_synchronizacji'
   czasOstatniegoBledu?: string
+  /** Tabela i ID rekordu ostatniej zmiany odrzuconej przez serwer (bez treści); tylko przy `zmiana_odrzucona`. */
+  odrzuconaZmiana?: { tabela: string; rekordId?: string }
   sesjaWymagaLogowania?: boolean
   liczbaKonfliktow: number
   liczbaOczekujacych: number
@@ -647,6 +649,8 @@ export interface ZmianaKolejkiSynchronizacji extends EncjaBazowa {
   bazowyUpdatedAt?: string
   liczbaProb: number
   ostatniBlad?: string
+  /** Zmiana odrzucona przez serwer: nie jest wysyłana ponownie, dopóki użytkownik jej nie ponowi lub nie edytuje rekordu. */
+  kwarantanna?: { powod: string; czas: string }
 }
 
 export interface KonfliktSynchronizacji extends EncjaBazowa {

@@ -11,6 +11,7 @@ import { walidujObrazFinansowy } from '../../server/wspolne/SynchronizacjaFinans
 import { utworzBackup, przygotujBackupDoPrzywracania, przywrocBackup } from './BackupService'
 import { RejestrProfili, zarejestrujProfilSesji, otworzBazeProfilu, aktywujProfil } from '../data/ProfileLokalne'
 import { pobierzKonfiguracjeRuntime } from './RuntimeConfigService'
+import { BladSynchronizacjiHttp } from '../data/RepozytoriumZdalneHttp'
 import type { KontoUzytkownika } from './KontaService'
 
 class AtrapaFinansow extends RepozytoriumZdalneInMemory {
@@ -90,7 +91,8 @@ it('ponawia tę samą zmianę po utracie odpowiedzi bez dodatkowej operacji i hi
   vi.spyOn(serwer, 'wyslijZmiany').mockImplementation(async (zmiany) => {
     proby.push(zmiany.map(({ zmianaId }) => zmianaId!))
     await wyslij(zmiany)
-    if (proby.length === 1) throw new Error('Utrata odpowiedzi')
+    // Utrata odpowiedzi po zapisie: błąd transportu bez statusu HTTP, który SyncEngine ponawia.
+    if (proby.length === 1) throw new BladSynchronizacjiHttp('brak_polaczenia', 'Utrata odpowiedzi')
   })
   await silnik('A').synchronizuj(serwer)
   expect(proby).toHaveLength(2)

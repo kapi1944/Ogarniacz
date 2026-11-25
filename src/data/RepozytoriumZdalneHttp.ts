@@ -1,6 +1,6 @@
 import { CapacitorHttp, type HttpResponse } from '@capacitor/core'
 import { czyKanalBeta } from '../services/RuntimeConfigService'
-import { BladKonfliktuSynchronizacji, type RepozytoriumZdalne, type ZmianaSynchronizacji } from './DostawcaSynchronizacji'
+import { BladKonfliktuSynchronizacji, type OdrzuconaZmianaSynchronizacji, type RepozytoriumZdalne, type WynikWysylaniaZmian, type ZmianaSynchronizacji } from './DostawcaSynchronizacji'
 import { odtworzWartoscZTransportu, przygotujWartoscDoTransportu } from '../services/BackupService'
 import { pobierzInstallationId } from '../services/InstallationService'
 import { BladKonta, pobierzCsrfKonta, pobierzKontoOffline, pobierzSesjeKonta } from '../services/KontaService'
@@ -15,13 +15,32 @@ interface OdpowiedzZmian {
   liczbaRekordowFinansowych?: number
 }
 
-export type RodzajBleduSynchronizacji = 'brak_sesji' | 'sesja_wygasla' | 'csrf' | 'brak_polaczenia' | 'blad_synchronizacji'
+export type RodzajBleduSynchronizacji = 'brak_sesji' | 'sesja_wygasla' | 'csrf' | 'brak_polaczenia' | 'zmiana_odrzucona' | 'blad_synchronizacji'
+
+export interface SzczegolyBleduSynchronizacji {
+  /** Status HTTP odpowiedzi; brak oznacza błąd transportu (sieć, timeout). */
+  status?: number
+  /** Tabela i ID rekordu odrzuconego przez serwer — bez treści rekordu. */
+  tabela?: string
+  rekordId?: string
+}
 
 export class BladSynchronizacjiHttp extends Error {
-  constructor(public readonly rodzaj: RodzajBleduSynchronizacji, komunikat: string) {
+  readonly status?: number
+  readonly tabela?: string
+  readonly rekordId?: string
+
+  constructor(public readonly rodzaj: RodzajBleduSynchronizacji, komunikat: string, szczegoly: SzczegolyBleduSynchronizacji = {}) {
     super(komunikat)
     this.name = 'BladSynchronizacjiHttp'
+    this.status = szczegoly.status
+    this.tabela = szczegoly.tabela
+    this.rekordId = szczegoly.rekordId
   }
+}
+
+function krotkiIdentyfikator(wartosc: unknown): string | undefined {
+  return typeof wartosc === 'string' && wartosc.length > 0 && wartosc.length <= 200 ? wartosc : undefined
 }
 
 function polaczAdres(baza: string, sciezka: string): string {
@@ -73,13 +92,14 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
 
   pobierzObslugiwaneTabeleFinansowe(): readonly string[] { return this.tabeleFinansowe }
 
-  async wyslijZmiany(zmiany: ZmianaSynchronizacji[], od = '1970-01-01T00:00:00.000Z'): Promise<void> {
+  async wyslijZmiany(zmiany: ZmianaSynchronizacji[], od = '1970-01-01T00:00:00.000Z'): Promise<WynikWysylaniaZmian> {
     await this.zapewnijSesje()
     if (zmiany.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) {
       sprawdzDostepFinansowWspolnych('edycja')
       if (!TABELE_FINANSOW_WSPOLNYCH.every((tabela) => this.tabeleFinansowe.includes(tabela))) throw new Error('Backend nie obsługuje wspólnych finansów. Zmiany pozostają lokalne.')
     }
-    const dane = await przygotujWartoscDoTransportu({ od, installationId: this.installationId(), zmiany })
+    // `obslugujeOdrzucone` pozwala serwerowi zapisać poprawne zmiany i zwrócić listę odrzuconych zamiast 400 dla całej paczki.
+    const dane = await przygotujWartoscDoTransportu({ od, installationId: this.installationId(), obslugujeOdrzucone: true, zmiany })
     const wyslij = () => this.wykonajZadanie(async () => {
       if (zmiany.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) sprawdzDostepFinansowWspolnych('edycja')
       return CapacitorHttp.post({
@@ -96,8 +116,23 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
       await this.odswiezSesjePoBledzieCsrf()
       odpowiedz = await wyslij()
     }
-    const potwierdzenie = await this.odczytajOdpowiedz(odpowiedz) as { pominiete?: { tabela: string }[] }
+    const potwierdzenie = await this.odczytajOdpowiedz(odpowiedz) as { pominiete?: { tabela: string }[]; odrzucone?: unknown }
     if (potwierdzenie.pominiete?.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) throw new Error('Serwer pominął dane finansowe; zachowano kolejkę.')
+    if (potwierdzenie.odrzucone === undefined) return {}
+    if (!Array.isArray(potwierdzenie.odrzucone)) throw new BladSynchronizacjiHttp('blad_synchronizacji', 'Serwer zwrócił niepoprawną listę odrzuconych zmian.', { status: odpowiedz.status })
+    const odrzucone: OdrzuconaZmianaSynchronizacji[] = potwierdzenie.odrzucone.flatMap((wpis: unknown) => {
+      if (!wpis || typeof wpis !== 'object') return []
+      const { tabela, rekordId, zmianaId, powod } = wpis as Record<string, unknown>
+      return [{
+        ...(krotkiIdentyfikator(tabela) ? { tabela: krotkiIdentyfikator(tabela) } : {}),
+        ...(krotkiIdentyfikator(rekordId) ? { rekordId: krotkiIdentyfikator(rekordId) } : {}),
+        ...(krotkiIdentyfikator(zmianaId) ? { zmianaId: krotkiIdentyfikator(zmianaId) } : {}),
+        powod: krotkiIdentyfikator(powod) ?? 'nieznany',
+      }]
+    })
+    // Finanse wspólne są niepodzielne: częściowy zapis oznaczałby niespójny obraz salda.
+    if (odrzucone.some((wpis) => wpis.tabela && czyTabelaFinansowa(wpis.tabela))) throw new Error('Serwer odrzucił dane finansowe; zachowano kolejkę.')
+    return { odrzucone }
   }
 
   private naglowki(czyZapis: boolean): Record<string, string> {
@@ -144,15 +179,23 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   }
 
   private async odczytajOdpowiedz(odpowiedz: HttpResponse): Promise<unknown> {
-    const dane = odpowiedz.data && typeof odpowiedz.data === 'object' ? odpowiedz.data as { error?: string } : {}
+    const dane = odpowiedz.data && typeof odpowiedz.data === 'object' ? odpowiedz.data as { error?: string; kod?: unknown; tabela?: unknown; rekordId?: unknown } : {}
     if (odpowiedz.status === 409) throw new BladKonfliktuSynchronizacji(dane.error)
     if (odpowiedz.status === 401) {
       if (czyProfileUruchomione() && this.profil) window.dispatchEvent(new Event('ogarniacz:sesja-wygasla'))
       throw new BladSynchronizacjiHttp('sesja_wygasla', 'Sesja wygasła. Zaloguj się ponownie.')
     }
     if (this.czyBladCsrf(odpowiedz)) throw new BladSynchronizacjiHttp('csrf', 'Sesja wymaga odświeżenia przed zapisem.')
+    if (odpowiedz.status === 400 && dane.kod === 'zmiana_odrzucona') {
+      const tabela = krotkiIdentyfikator(dane.tabela)
+      throw new BladSynchronizacjiHttp('zmiana_odrzucona', `Serwer odrzucił zmianę${tabela ? ` w tabeli ${tabela}` : ''}.`, {
+        status: 400,
+        tabela,
+        rekordId: krotkiIdentyfikator(dane.rekordId),
+      })
+    }
     if (odpowiedz.status < 200 || odpowiedz.status >= 300) {
-      throw new BladSynchronizacjiHttp('blad_synchronizacji', dane.error || `Serwer synchronizacji zwrócił ${odpowiedz.status}.`)
+      throw new BladSynchronizacjiHttp('blad_synchronizacji', dane.error || `Serwer synchronizacji zwrócił ${odpowiedz.status}.`, { status: odpowiedz.status })
     }
     return dane
   }
@@ -171,7 +214,7 @@ export class RepozytoriumZdalneHttp implements RepozytoriumZdalne {
   private mapujBladPolaczenia(blad: unknown): BladSynchronizacjiHttp {
     if (blad instanceof BladSynchronizacjiHttp) return blad
     if (blad instanceof BladKonta) {
-      return new BladSynchronizacjiHttp('blad_synchronizacji', `Serwer kont zwrócił HTTP ${blad.status}.`)
+      return new BladSynchronizacjiHttp('blad_synchronizacji', `Serwer kont zwrócił HTTP ${blad.status}.`, { status: blad.status })
     }
     const komunikat = blad instanceof Error ? blad.message
       : typeof blad === 'object' && blad !== null && 'message' in blad ? String(blad.message) : ''

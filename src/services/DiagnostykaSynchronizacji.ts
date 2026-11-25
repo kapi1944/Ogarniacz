@@ -8,6 +8,7 @@ export const komunikatyBledowSynchronizacji = {
   csrf: 'Nie udało się odświeżyć sesji. Zaloguj się ponownie.',
   brak_polaczenia: 'Nie można połączyć się z backendem. Sprawdź internet i połączenie Tailscale.',
   konflikt: 'Serwer zgłosił konflikt. Ponów synchronizację i sprawdź panel konfliktów.',
+  zmiana_odrzucona: 'Serwer odrzucił zmianę z kolejki. Oczekujące zmiany pozostają na urządzeniu; zaktualizuj serwer lub aplikację.',
   blad_synchronizacji: 'Nie udało się zsynchronizować danych. Spróbuj ponownie.',
 } as const
 
@@ -30,7 +31,7 @@ export interface DaneDiagnostykiSynchronizacji {
   ostatniaProba?: string
   liczbaOczekujacych: number
   liczbaKonfliktow: number
-  ostatniBlad?: { kod: string; komunikat: string; czas?: string }
+  ostatniBlad?: { kod: string; komunikat: string; czas?: string; tabela?: string; rekordId?: string }
   wymaganeLogowanie: boolean
   stanSynchronizacji?: StanSynchronizacji['stan']
   rola: 'Właściciel' | 'Edytor' | 'brak'
@@ -66,6 +67,12 @@ function formatujLiczbeRaportu(wartosc: number): string {
   return Number.isSafeInteger(wartosc) && wartosc >= 0 ? String(wartosc) : '0'
 }
 
+/** Opis „tabela X, rekord Y” — wyłącznie identyfikatory, bez treści rekordu. */
+export function opisOdrzuconejZmiany(blad: { tabela?: string; rekordId?: string } | undefined): string | undefined {
+  if (!blad?.tabela) return undefined
+  return `tabela ${blad.tabela}${blad.rekordId ? `, rekord ${blad.rekordId}` : ''}`
+}
+
 export function utworzTekstRaportuDiagnostycznego(dane: DaneDiagnostykiSynchronizacji, wygenerowano = new Date()): string {
   const platforma = dane.srodowisko === 'Android' ? 'Android' : 'Web'
   const konfiguracja = dane.stanPolaczenia === 'brak konfiguracji' ? 'brak konfiguracji' : 'skonfigurowana'
@@ -95,6 +102,7 @@ export function utworzTekstRaportuDiagnostycznego(dane: DaneDiagnostykiSynchroni
     `Oczekujące zmiany: ${formatujLiczbeRaportu(dane.liczbaOczekujacych)}`,
     `Konflikty: ${formatujLiczbeRaportu(dane.liczbaKonfliktow)}`,
     `Kod ostatniego błędu: ${kodBledu}`,
+    ...(kodBledu === 'zmiana_odrzucona' ? [`Odrzucona zmiana: ${opisOdrzuconejZmiany(dane.ostatniBlad) ?? 'brak szczegółów'}`] : []),
     `Wygenerowano: ${czasWygenerowania}`,
   ].join('\n')
 }
@@ -127,7 +135,12 @@ export function utworzDiagnostykeSynchronizacji({
   }
   const kod = stan?.kodOstatniegoBledu
   const ostatniBlad = kod && Object.hasOwn(komunikatyBledowSynchronizacji, kod)
-    ? { kod, komunikat: komunikatyBledowSynchronizacji[kod], czas: stan?.czasOstatniegoBledu }
+    ? {
+      kod,
+      komunikat: komunikatyBledowSynchronizacji[kod],
+      czas: stan?.czasOstatniegoBledu,
+      ...(kod === 'zmiana_odrzucona' && stan?.odrzuconaZmiana ? { tabela: stan.odrzuconaZmiana.tabela, rekordId: stan.odrzuconaZmiana.rekordId } : {}),
+    }
     : undefined
   const wymaganeLogowanie = !konto?.zalogowany || stan?.sesjaWymagaLogowania === true
   return {
