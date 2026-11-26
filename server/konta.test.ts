@@ -20,6 +20,31 @@ test('Echo po pracy pozostaje prywatne mimo grantu Edytora do przypomnień', () 
   } finally { baza.close() }
 })
 
+test('Edytor ma dostęp do konfiguracji rejestru wyłącznie przez grant modułu wskazanego w rejestrId', () => {
+  const baza = new DatabaseSync(':memory:')
+  try {
+    uruchomMigracje(baza)
+    const teraz = '2026-11-25T12:00:00.000Z'
+    for (const [id, email] of [['wlasciciel', 'owner@example.test'], ['edytor', 'editor@example.test']]) {
+      baza.prepare('INSERT INTO uzytkownicy (id, email, haslo_hash, utworzono_at, zaktualizowano_at) VALUES (?, ?, ?, ?, ?)').run(id, email, 'hash', teraz, teraz)
+    }
+    const grant = baza.prepare("INSERT INTO granty_dostepu (id, wlasciciel_id, edytor_id, modul, sekcja, odczyt, edycja, status, utworzono_at, zaktualizowano_at) VALUES (?, 'wlasciciel', 'edytor', ?, '', ?, ?, 'aktywne', ?, ?)")
+    grant.run('grant-zadania', 'zadania', 1, 0, teraz, teraz)
+    grant.run('grant-notatki', 'notatki', 1, 1, teraz, teraz)
+    const edytor = { uzytkownikId: 'edytor', wlascicielId: 'wlasciciel', rola: 'edytor' as const }
+    for (const tabela of ['definicjeWlasnychPolRejestru', 'widokiRejestru']) {
+      assert.equal(czyDozwolonaTabela(baza, edytor, tabela, 'odczyt', { id: 'a', rejestrId: 'zadania' }), true)
+      assert.equal(czyDozwolonaTabela(baza, edytor, tabela, 'edycja', { id: 'a', rejestrId: 'zadania' }), false)
+      assert.equal(czyDozwolonaTabela(baza, edytor, tabela, 'edycja', { id: 'b', rejestrId: 'notatki' }), true)
+      assert.equal(czyDozwolonaTabela(baza, edytor, tabela, 'odczyt', { id: 'c', rejestrId: 'subskrypcje' }), false)
+      assert.equal(czyDozwolonaTabela(baza, edytor, tabela, 'odczyt', { id: 'd', rejestrId: 'nieznany' }), false)
+      assert.equal(czyDozwolonaTabela(baza, edytor, tabela, 'odczyt', { id: 'e' }), false)
+      assert.equal(czyDozwolonaTabela(baza, edytor, tabela, 'odczyt', { id: 'f', rejestrId: 'constructor' }), false)
+      assert.equal(czyDozwolonaTabela(baza, { ...edytor, uzytkownikId: 'wlasciciel', rola: 'wlasciciel' }, tabela, 'edycja', { id: 'g', rejestrId: 'subskrypcje' }), true)
+    }
+  } finally { baza.close() }
+})
+
 test('pierwszy administrator wymaga jawnego aktywnego konta i nie zmienia danych ani grantów', () => {
   const baza = new DatabaseSync(':memory:')
   try {

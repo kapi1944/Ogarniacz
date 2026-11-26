@@ -11,9 +11,9 @@ import type {
   WynikSynchronizacji,
   ZmianaSynchronizacji,
 } from '../data/DostawcaSynchronizacji'
-import { BladKonfliktuSynchronizacji } from '../data/DostawcaSynchronizacji'
+import { BladKonfliktuSynchronizacji, type OdrzuconaZmianaSynchronizacji } from '../data/DostawcaSynchronizacji'
 import { powiadomOZmianieDanych } from '../data/ZdarzeniaDanych'
-import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji, policzZmianyDoSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki, zachowajLokalneSamopoczucie } from '../data/KolejkaSynchronizacji'
+import { czyTabelaSynchronizowana, dodajDoKolejkiSynchronizacji, oznaczKwarantanne, pobierzZmianyWKwarantannie, pobierzKolejkeSynchronizacji, policzZmianyDoSynchronizacji, tabelaKolejki, usunWyslaneZmiany, zapiszBladKolejki, zachowajLokalneSamopoczucie } from '../data/KolejkaSynchronizacji'
 import { utworzMetadane } from '../domain/fabryki'
 import { czyPrywatnaPsychoterapia } from '../domain/psychoterapia'
 import type { EncjaBazowa, KonfliktSynchronizacji, StanSynchronizacji } from '../domain/typy'
@@ -86,6 +86,46 @@ function walidujZmianyZdalne(zmiany: ZmianaSynchronizacji[]): void {
       throw new Error('Provider zwrócił niepoprawną paczkę synchronizacji.')
     }
   }
+}
+
+function statusHttpBledu(blad: unknown): number | undefined {
+  const status = typeof blad === 'object' && blad !== null && 'status' in blad ? blad.status : undefined
+  return typeof status === 'number' ? status : undefined
+}
+
+/**
+ * Ponawiamy wyłącznie błędy przejściowe: brak sieci, timeout, błąd transportu bez statusu i 5xx.
+ * Odpowiedzi 4xx (400, 403, 404, 409, 413…) są deterministyczne — ponowienie tej samej paczki nic nie zmieni.
+ */
+export function czyBladPrzejsciowy(blad: unknown): boolean {
+  if (blad instanceof BladKonfliktuSynchronizacji) return false
+  const kod = sklasyfikujBladSynchronizacji(blad)
+  if (kod === 'brak_polaczenia') return true
+  const rodzaj = typeof blad === 'object' && blad !== null && 'rodzaj' in blad ? blad.rodzaj : undefined
+  if (typeof rodzaj !== 'string') return false
+  if (kod !== 'blad_synchronizacji') return false
+  const status = statusHttpBledu(blad)
+  return status === undefined || status >= 500
+}
+
+function dopasujOdrzucone(wyslane: ZmianaSynchronizacji[], odrzucone: OdrzuconaZmianaSynchronizacji[]): { idsOdrzuconych: Set<string>; wszystkieRozpoznane: boolean } {
+  const idsOdrzuconych = new Set<string>()
+  let wszystkieRozpoznane = true
+  for (const odrzucona of odrzucone) {
+    const zmiana = wyslane.find((kandydat) => kandydat.zmianaId && (odrzucona.zmianaId
+      ? kandydat.zmianaId === odrzucona.zmianaId
+      : kandydat.tabela === odrzucona.tabela && kandydat.rekord.id === odrzucona.rekordId))
+    if (zmiana?.zmianaId) idsOdrzuconych.add(zmiana.zmianaId)
+    else wszystkieRozpoznane = false
+  }
+  return { idsOdrzuconych, wszystkieRozpoznane }
+}
+
+function odrzuconaZmianaZBledu(blad: unknown): StanSynchronizacji['odrzuconaZmiana'] {
+  if (typeof blad !== 'object' || blad === null) return undefined
+  const { tabela, rekordId } = blad as { tabela?: unknown; rekordId?: unknown }
+  if (typeof tabela !== 'string' || !tabela) return undefined
+  return { tabela, ...(typeof rekordId === 'string' && rekordId ? { rekordId } : {}) }
 }
 
 async function pobierzLokalneZmiany(installationId: string): Promise<ZmianaSynchronizacji[]> {
@@ -427,8 +467,11 @@ export class SyncEngine implements DostawcaSynchronizacji {
       }
 
       const konfliktoweKlucze = new Set(konflikty.map(({ lokalna }) => kluczZmiany(lokalna)))
+      // Zmiany w kwarantannie zostają w `lokalne` (chronią rekord przed nadpisaniem przez pull), ale nie są wysyłane.
+      const wKwarantannie = new Set((await pobierzZmianyWKwarantannie()).map((zmiana) => zmiana.id))
       const doWyslania = dozwoloneLokalne.filter((zmiana) =>
-        !konfliktoweKlucze.has(kluczZmiany(zmiana)) && !zgodneKlucze.has(kluczZmiany(zmiana)))
+        !konfliktoweKlucze.has(kluczZmiany(zmiana)) && !zgodneKlucze.has(kluczZmiany(zmiana))
+        && !(zmiana.zmianaId && wKwarantannie.has(zmiana.zmianaId)))
       const doPobrania = zdalne.filter((zmiana) =>
         !konfliktoweKlucze.has(kluczZmiany(zmiana))
         && !zgodneKlucze.has(kluczZmiany(zmiana))
@@ -438,9 +481,10 @@ export class SyncEngine implements DostawcaSynchronizacji {
       try { await this.walidujLokalnyObraz(doPobrania) }
       catch (blad) { await this.zapiszStan({ finanseWspolneNiekompletne: true }); throw blad }
 
+      let liczbaOdrzuconych = 0
       if (doWyslania.length > 0) {
         this.powiadomOEtapie('wysylanie')
-        await this.zPonowieniami(() => {
+        const wynikWysylki = await this.zPonowieniami(() => {
           if (!czyKontoZgodneZDanymiLokalnymi()) throw new Error('Konto zmieniło się przed wysłaniem danych.')
           this.sprawdzKontekst()
           if (doWyslania.some((zmiana) => czyTabelaFinansowa(zmiana.tabela))) sprawdzDostepFinansowWspolnych('edycja')
@@ -449,7 +493,19 @@ export class SyncEngine implements DostawcaSynchronizacji {
         this.sprawdzKontekst()
         await this.zapiszStan({ ostatniPush: this.teraz(), polaczenie: 'dostepne', sesjaWymagaLogowania: false })
         this.sprawdzKontekst()
-        await usunWyslaneZmiany(doWyslania.flatMap((zmiana) => zmiana.zmianaId ? [zmiana.zmianaId] : []))
+        const odrzucone = wynikWysylki?.odrzucone ?? []
+        const { idsOdrzuconych, wszystkieRozpoznane } = dopasujOdrzucone(doWyslania, odrzucone)
+        liczbaOdrzuconych = idsOdrzuconych.size
+        if (odrzucone.length) {
+          await oznaczKwarantanne([...idsOdrzuconych], odrzucone[0].powod, komunikatyBledowSynchronizacji.zmiana_odrzucona)
+          await this.zapiszStan({
+            kodOstatniegoBledu: 'zmiana_odrzucona',
+            czasOstatniegoBledu: this.teraz(),
+            odrzuconaZmiana: odrzuconaZmianaZBledu(odrzucone[0]),
+          })
+        }
+        // Nierozpoznane odrzucenie: nie usuwamy niczego, by nie zgubić zmiany; poprawne zostaną wysłane ponownie idempotentnie.
+        if (wszystkieRozpoznane) await usunWyslaneZmiany(doWyslania.flatMap((zmiana) => zmiana.zmianaId && !idsOdrzuconych.has(zmiana.zmianaId) ? [zmiana.zmianaId] : []))
       }
       this.sprawdzKontekst()
       await usunWyslaneZmiany([...zgodneKlucze].flatMap((klucz) => lokalnePoKluczu.get(klucz)?.zmianaId ? [lokalnePoKluczu.get(klucz)!.zmianaId!] : []))
@@ -465,7 +521,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
         ograniczenieFinansowWspolnych,
         ...(obslugujeFinanse ? { finanseWspolneNiekompletne: undefined } : {}),
       })
-      return { wyslane: doWyslania.length + klasyfikacje.length, pobrane: doPobrania.length, konflikty: konflikty.length, stan }
+      return { wyslane: doWyslania.length - liczbaOdrzuconych + klasyfikacje.length, pobrane: doPobrania.length, konflikty: konflikty.length, stan }
     } catch (blad) {
       this.sprawdzKontekst()
       if (blad instanceof BladDanychFinansowych) await this.zapiszStan({ finanseWspolneNiekompletne: true })
@@ -474,6 +530,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       await this.zapiszStan({
         kodOstatniegoBledu: kod,
         czasOstatniegoBledu: this.teraz(),
+        odrzuconaZmiana: kod === 'zmiana_odrzucona' ? odrzuconaZmianaZBledu(blad) : undefined,
         ...(kod === 'brak_polaczenia' ? { polaczenie: 'niedostepne' as const } : {}),
         ...(kod === 'sesja_wygasla' || kod === 'csrf' || kod === 'konflikt' ? { polaczenie: 'dostepne' as const } : {}),
         ...(kod === 'brak_sesji' || kod === 'sesja_wygasla' || kod === 'csrf' ? { sesjaWymagaLogowania: true } : {}),
@@ -629,8 +686,7 @@ export class SyncEngine implements DostawcaSynchronizacji {
       try {
         return await operacja()
       } catch (blad) {
-        const kod = sklasyfikujBladSynchronizacji(blad)
-        if (kod === 'brak_sesji' || kod === 'sesja_wygasla' || kod === 'csrf') throw blad
+        if (!czyBladPrzejsciowy(blad)) throw blad
         ostatniBlad = blad
         if (proba < this.liczbaProb && this.opoznieniePonowieniaMs > 0) {
           await new Promise((rozwiaz) => setTimeout(rozwiaz, this.opoznieniePonowieniaMs * proba))

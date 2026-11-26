@@ -24,6 +24,20 @@ Opcjonalne metadane diagnostyczne są dopisywane do istniejącego lokalnego `sta
 
 Diagnostyka nie kopiuje rekordów, treści odpowiedzi, stack trace, emaila konta, cookies, haseł ani tokenów. Komunikaty błędów pochodzą wyłącznie ze słownika kontrolowanych kategorii; starszy surowy błąd nie jest wyświetlany. Endpoint pomija credentials, ścieżkę, query i fragment, a CSRF pokazuje wyłącznie dostępność.
 
+## Lista tabel i odrzucone zmiany
+
+Jedynym źródłem listy tabel przyjmowanych przez serwer jest `server/wspolne/tabeleSynchronizacji.ts`. **Nowa tabela synchronizowana = wpis w tym pliku + zielony test parytetu** `src/services/ParytetTabelSynchronizacji.test.ts`, który porównuje go z `nazwyTabelSynchronizowanych` w `SyncEngine`. Brak wpisu zatrzymał push od 29.10.2026 (`definicjeWlasnychPolRejestru`, `widokiRejestru`).
+
+Gdy zmiana jest niepoprawna, serwer zwraca `400` z `{ error, kod: 'zmiana_odrzucona', tabela, rekordId, powod }` (`nieobslugiwana_tabela`, `niepoprawna_zmiana`, `niepoprawna_klasyfikacja`) i loguje w journald wyłącznie tabelę, ID rekordu i powód — bez treści rekordu. Klient mapuje to na kod `zmiana_odrzucona` i pokazuje tabelę oraz ID rekordu w panelu Synchronizacja i raporcie diagnostycznym.
+
+Aktualny klient wysyła w paczce `obslugujeOdrzucone: true`. Wtedy serwer zapisuje poprawne zmiany, a błędne zwraca w `200 { zapisano, pominiete, odrzucone: [{ tabela, rekordId, zmianaId, powod }] }`. Klient usuwa z kolejki tylko zapisane zmiany; odrzucone trafiają do kwarantanny (opcjonalne pole `kwarantanna` wpisu kolejki, bez zmiany schematu Dexie). Kwarantanna nie jest wysyłana ponownie, ale nadal chroni rekord przed nadpisaniem przez pull. Panel pozwala ją ponowić albo odrzucić; odrzucenie usuwa tylko wpis kolejki, rekord zostaje na urządzeniu. Nowa edycja rekordu tworzy zwykłą zmianę. Jeśli odrzucenia nie da się dopasować do wysłanej zmiany, klient niczego nie usuwa.
+
+Starsze klienty bez `obslugujeOdrzucone` nadal dostają `400` dla całej paczki, bo uznałyby `200` za wysłanie wszystkiego i po cichu usunęły odrzucone wpisy z kolejki. Wspólne finanse i FZ pozostają „wszystko albo nic”: ich błąd zawsze odrzuca całą paczkę, a klient nie akceptuje częściowego zapisu finansów.
+
+`SyncEngine` ponawia wyłącznie błędy przejściowe: brak sieci, timeout, błąd transportu bez statusu i `5xx`. Odpowiedzi `4xx` (400, 403, 404, 409, 413) nie są ponawiane w tym samym przebiegu.
+
+Tabele konfiguracji rejestru (`definicjeWlasnychPolRejestru`, `widokiRejestru`) należą do modułu z `rekord.rejestrId`: `zadania` → Zadania, `notatki` → Notatki, `poczekalnia` → Skrzynka, `subskrypcje` → Finanse. Nieznany rejestr jest niedostępny dla Edytora.
+
 ## Konflikty
 
 ### Health 2.0 — prywatne źródła dokumentów i starsze APK

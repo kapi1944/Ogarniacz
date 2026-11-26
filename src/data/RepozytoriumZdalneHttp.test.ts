@@ -55,6 +55,35 @@ describe('RepozytoriumZdalneHttp przez sesję', () => {
     await expect(repo.pobierzZmiany('1970-01-01')).rejects.toMatchObject({ rodzaj: 'brak_polaczenia' })
   })
 
+  it('mapuje 400 zmiana_odrzucona na osobny rodzaj z tabelą i ID rekordu', async () => {
+    vi.mocked(CapacitorHttp.post).mockResolvedValue(odpowiedz(400, {
+      error: 'Nieobsługiwana tabela synchronizacji.', kod: 'zmiana_odrzucona', tabela: 'widokiRejestru', rekordId: 'widok:zadania:domyslny', powod: 'nieobslugiwana_tabela',
+    }))
+    const repo = new RepozytoriumZdalneHttp('https://serwer.example.test')
+    await expect(repo.wyslijZmiany([])).rejects.toMatchObject({
+      rodzaj: 'zmiana_odrzucona', status: 400, tabela: 'widokiRejestru', rekordId: 'widok:zadania:domyslny',
+    })
+  })
+
+  it('deklaruje obsługę odrzuconych zmian i zwraca ich listę', async () => {
+    vi.mocked(CapacitorHttp.post).mockResolvedValue(odpowiedz(200, { zapisano: 1, pominiete: [], odrzucone: [{ tabela: 'widokiRejestru', rekordId: 'w1', zmianaId: 'zmiana-w1-123', powod: 'nieobslugiwana_tabela', tresc: 'ignorowana' }] }))
+    const repo = new RepozytoriumZdalneHttp('https://serwer.example.test')
+    await expect(repo.wyslijZmiany([])).resolves.toEqual({ odrzucone: [{ tabela: 'widokiRejestru', rekordId: 'w1', zmianaId: 'zmiana-w1-123', powod: 'nieobslugiwana_tabela' }] })
+    expect(vi.mocked(CapacitorHttp.post).mock.calls[0][0].data).toMatchObject({ obslugujeOdrzucone: true })
+  })
+
+  it('nie akceptuje częściowego zapisu wspólnych finansów', async () => {
+    vi.mocked(CapacitorHttp.post).mockResolvedValue(odpowiedz(200, { zapisano: 0, pominiete: [], odrzucone: [{ tabela: 'wspolneKasy', rekordId: 'k', powod: 'niepoprawna_zmiana' }] }))
+    const repo = new RepozytoriumZdalneHttp('https://serwer.example.test')
+    await expect(repo.wyslijZmiany([])).rejects.toThrow('Serwer odrzucił dane finansowe')
+  })
+
+  it.each([400, 404, 413, 503])('zachowuje status HTTP %s w ogólnym błędzie synchronizacji', async (status) => {
+    vi.mocked(CapacitorHttp.post).mockResolvedValue(odpowiedz(status, { error: 'Niepoprawne dane synchronizacji.' }))
+    const repo = new RepozytoriumZdalneHttp('https://serwer.example.test')
+    await expect(repo.wyslijZmiany([])).rejects.toMatchObject({ rodzaj: 'blad_synchronizacji', status })
+  })
+
   it('zachowuje błąd serwera podczas odświeżania CSRF', async () => {
     vi.mocked(CapacitorHttp.post).mockResolvedValue(odpowiedz(403, { error: 'Sesja wymaga odświeżenia.' }))
     vi.mocked(pobierzSesjeKonta).mockRejectedValue(new BladKonta(503, 'Network error'))

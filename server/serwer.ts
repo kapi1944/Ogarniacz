@@ -9,7 +9,7 @@ import { BladModeluEcho, odczytajZadanieModeluEcho, utworzObslugeModeluEcho, typ
 import { czyDozwolonaTabela, obsluzKonta, pobierzKontekstDostepu, sprawdzCsrf } from './konta.ts'
 import { utworzAktualizacjeRpi, type AktualizacjeRpi } from './aktualizacje-rpi.ts'
 import { utworzDostawceSmartHome, type DostawcaSmartHome } from './smart-home.ts'
-import { odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
+import { BladZmianySynchronizacji, odczytajPaczkeSynchronizacji, pobierzInstallationIdZNaglowka, pobierzZmianySynchronizacji, zapewnijProfilSynchronizacji, zapiszZmianySynchronizacji } from './synchronizacja.ts'
 import { czyTabelaFinansowa, TABELE_FINANSOW_WSPOLNYCH } from './wspolne/SynchronizacjaFinansow.ts'
 
 const METODY_SYNCHRONIZACJI = 'GET, POST, PUT, OPTIONS'
@@ -270,13 +270,37 @@ export function utworzSerwer(
             return
           }
           const zapisano = zapiszZmianySynchronizacji(baza, kontekst.wlascicielId, paczka)
+          if (paczka.odrzucone) {
+            // Log zawiera wyłącznie tabelę, ID rekordu i powód — nigdy treść rekordu.
+            for (const odrzucona of paczka.odrzucone) {
+              console.error(`[sync] zmiana_odrzucona tabela=${odrzucona.tabela ?? '-'} rekordId=${odrzucona.rekordId ?? '-'} powod=${odrzucona.powod}`)
+            }
+            odpowiedzJson(odpowiedz, 200, { zapisano, pominiete, odrzucone: paczka.odrzucone })
+            return
+          }
           odpowiedzJson(odpowiedz, 200, { zapisano, pominiete })
           return
         }
         odpowiedzJson(odpowiedz, 404, { error: 'Nie znaleziono zasobu synchronizacji.' })
       } catch (blad) {
         const konflikt = blad instanceof Error && blad.message.startsWith('KONFLIKT_SYNC:')
-        odpowiedzJson(odpowiedz, konflikt ? 409 : 400, { error: konflikt ? 'Serwer wykrył nowszą wersję rekordu. Pobierz zmiany i rozstrzygnij konflikt.' : 'Niepoprawne dane synchronizacji.' })
+        if (konflikt) {
+          odpowiedzJson(odpowiedz, 409, { error: 'Serwer wykrył nowszą wersję rekordu. Pobierz zmiany i rozstrzygnij konflikt.' })
+        } else if (blad instanceof BladZmianySynchronizacji) {
+          // Log zawiera wyłącznie tabelę, ID rekordu i powód — nigdy treść rekordu.
+          console.error(`[sync] 400 zmiana_odrzucona tabela=${blad.tabela ?? '-'} rekordId=${blad.rekordId ?? '-'} powod=${blad.powod}`)
+          odpowiedzJson(odpowiedz, 400, {
+            error: blad.message,
+            kod: 'zmiana_odrzucona',
+            ...(blad.tabela ? { tabela: blad.tabela } : {}),
+            ...(blad.rekordId ? { rekordId: blad.rekordId } : {}),
+            powod: blad.powod,
+          })
+        } else {
+          // Komunikat innych błędów (np. JSON.parse) może cytować fragment paczki, więc logujemy tylko typ.
+          console.error(`[sync] 400 ${zadanie.method ?? '-'} ${zadanie.url?.split('?')[0] ?? '-'} blad=${blad instanceof Error ? blad.name : typeof blad}`)
+          odpowiedzJson(odpowiedz, 400, { error: 'Niepoprawne dane synchronizacji.' })
+        }
       }
       return
     }

@@ -34,6 +34,8 @@ Serwer, nie UI, wyznacza z sesji `uzytkownikId`, `wlascicielId` i rolę. Właśc
 
 Rekord serwerowy przechowuje właściciela, tabelę, `id`, JSON danych, `createdAt`, `updatedAt`, wersję, tombstone i ostatnią instalację. `zmianaId` ma unikalność w obrębie właściciela, dlatego retry tej samej paczki nie duplikuje encji ani nie zwiększa wersji drugi raz.
 
+Serwer przyjmuje wyłącznie tabele z `server/wspolne/tabeleSynchronizacji.ts` (wspólna lista dla serwera i testu parytetu klienta). Nowa tabela synchronizowana wymaga wpisu w tym pliku i zielonego `src/services/ParytetTabelSynchronizacji.test.ts`. Niepoprawna zmiana kończy się kodem `zmiana_odrzucona` z tabelą i ID rekordu (bez treści w logu); klient deklarujący `obslugujeOdrzucone` otrzymuje zamiast tego listę `odrzucone`, a poprawne zmiany są zapisywane. Szczegóły: [SYNC_ARCHITECTURE.md](./SYNC_ARCHITECTURE.md#lista-tabel-i-odrzucone-zmiany).
+
 Serwer przyjmuje zmianę tylko wtedy, gdy jej baza odpowiada bieżącej wersji. Równoległa edycja zwraca HTTP 409; klient ponownie pobiera rekord i zapisuje obie wersje jako jawny konflikt. Edycja kontra usunięcie również nie jest rozstrzygana przez ślepe LWW. Szczegółowe reguły i zachowanie offline opisuje [SYNC_ARCHITECTURE.md](./SYNC_ARCHITECTURE.md).
 
 ## Dostęp zdalny i operacje

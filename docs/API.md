@@ -30,3 +30,9 @@
 - Preferuj darmowe i lokalne.
 - Możesz zaproponować płatną opcję, jeśli daje istotną przewagę (jakość, koszt utrzymania, niezawodność).
 - Nie aktywuj żadnych kosztów bez zgody użytkownika.
+
+## Własne API synchronizacji (`/api/sync/changes`)
+- Lista przyjmowanych tabel: `server/wspolne/tabeleSynchronizacji.ts`. Nowa tabela synchronizowana = wpis w tym pliku + test parytetu `src/services/ParytetTabelSynchronizacji.test.ts`.
+- `400` z `kod: 'zmiana_odrzucona'` zawiera `tabela`, `rekordId` i `powod` (`nieobslugiwana_tabela`, `niepoprawna_zmiana`, `niepoprawna_klasyfikacja`), nigdy treść rekordu.
+- Paczka z `obslugujeOdrzucone: true` dostaje `200 { zapisano, pominiete, odrzucone }`; poprawne zmiany są zapisane. Finanse wspólne i FZ pozostają „wszystko albo nic”.
+- Kontrakt i zachowanie klienta: [SYNC_ARCHITECTURE.md](SYNC_ARCHITECTURE.md#lista-tabel-i-odrzucone-zmiany).
