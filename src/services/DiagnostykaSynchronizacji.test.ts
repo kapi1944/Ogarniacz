@@ -78,4 +78,27 @@ describe('DiagnostykaSynchronizacji', () => {
     expect(raport).toContain('Kod ostatniego błędu: brak')
     expect(raport).not.toMatch(/\b(?:undefined|null)\b/)
   })
+
+  it('wskazuje w raporcie i diagnostyce tabelę oraz rekord odrzuconej zmiany, bez treści', () => {
+    const diagnostyka = utworzDiagnostykeSynchronizacji({
+      czyAndroid: true,
+      adresApi: 'https://rpi.example.ts.net',
+      csrfDostepny: true,
+      installationId: 'instalacja-testowa',
+      stan: {
+        ...utworzMetadane('glowny'),
+        stan: 'blad',
+        liczbaOczekujacych: 37,
+        liczbaKonfliktow: 0,
+        kodOstatniegoBledu: 'zmiana_odrzucona',
+        czasOstatniegoBledu: '2026-10-29T10:00:00.000Z',
+        odrzuconaZmiana: { tabela: 'definicjeWlasnychPolRejestru', rekordId: 'custom:pole-1' },
+      },
+    })
+    expect(diagnostyka.ostatniBlad).toMatchObject({ kod: 'zmiana_odrzucona', tabela: 'definicjeWlasnychPolRejestru', rekordId: 'custom:pole-1' })
+    const raport = utworzTekstRaportuDiagnostycznego(diagnostyka, new Date('2026-10-29T10:01:00.000Z'))
+    expect(raport).toContain('Kod ostatniego błędu: zmiana_odrzucona')
+    expect(raport).toContain('Odrzucona zmiana: tabela definicjeWlasnychPolRejestru, rekord custom:pole-1')
+    expect(raport).toContain('Oczekujące zmiany: 37')
+  })
 })

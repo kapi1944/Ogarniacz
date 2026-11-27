@@ -1,26 +1,21 @@
 ---
 name: ogarniacz-github-workflow
-description: Obsługuj Git i GitHub Ogarniacza przy sprawdzaniu gałęzi, przygotowaniu commita, autoryzowanym pushu lub PR oraz odczycie CI dla SHA. Nie traktuj tego procesu jako zgody na publikację APK, aktualizację Raspberry Pi ani deploy.
+description: Sprawdź bazę nowego zadania Ogarniacza, chroń istniejące worktree i obsługuj commit, push, PR, CI oraz porządkowanie gałęzi. Publikacja i wdrożenie wymagają osobnego zlecenia.
 ---
 
 # Git i GitHub Ogarniacza
 
-## Aktywacja
+Stosuj [zasady pracy z Git](../../../docs/INSTRUCTIONS.md#git-i-github) przy rozpoczynaniu edycji oraz przy zadaniach dotyczących commita, pushu, PR, CI lub porządkowania gałęzi.
 
-Użyj przy zadaniu dotyczącym historii Git, gałęzi, commita, pushu, PR lub statusu CI. Sama lokalna edycja pliku nie wymaga tego skilla.
+## Start
 
-## Wykonanie
+1. Sprawdź repozytorium i remote. Jeśli zadanie wymaga aktualnej bazy i masz dostęp do origin, wykonaj `git fetch origin`. Następnie sprawdź `git status --porcelain=v1 -b`, `git branch -vv` i `git worktree list`. `node scripts/check-git-workflow.mjs --nowe-zadanie` porównuje zapisane referencje bez sieci. Offline oznacz świeżość bazy jako niepotwierdzoną.
+2. Dla nowego zadania użyj zweryfikowanego `origin/main` lub uzasadnionej bazy z instrukcji. Sprawdź istniejące gałęzie, PR i zakres już wykonanej pracy. Przy nowej gałęzi wskaż bazę jawnie, np. ``git switch --no-track -c <gałąź> origin/main``. Ustaw upstream na odpowiadającą jej gałąź przy pierwszym pushu.
+3. Przy detached HEAD, rozbieżności ahead/behind, starej bazie lub niezacommitowanych zmianach sprawdź, co jest unikalne i czy trwa merge lub rebase. Jeśli zadanie zaczęło się na starej gałęzi, zachowaj wykonaną pracę i użyj osobnego worktree z właściwej bazy przed przeniesieniem wyłącznie zmian zadania. Przy konflikcie lub nieudanym merge zachowaj dane i ustal stan rozpoczętej operacji. Nie resetuj, nie używaj domyślnie stashu i nie przerywaj operacji rozpoczętych przez użytkownika.
 
-1. Sprawdź repozytorium, gałąź, remote, status i indeks. Zachowaj zastane zmiany; nie dołączaj ich do własnego commita. Gdy zadanie wymaga aktualnego `main`, pobierz referencję i sprawdź relację historii przed integracją. Nie rozwiązuj rozbieżności przez nadpisanie pracy użytkownika.
-2. Ustal dozwolone działania z bieżącego polecenia: commit, push, PR i release są osobnymi operacjami. Istniejąca wyraźna zgoda nie wymaga ponownego potwierdzenia. Dobierz weryfikację według [TESTING.md](../../../docs/TESTING.md) i `ogarniacz-test-selector`.
-3. Przy zleconym commicie przejrzyj diff, dodaj do indeksu wyłącznie pliki zadania i sprawdź diff indeksu oraz błędy białych znaków. Wykonaj commit z żądaną wiadomością i zapisz SHA.
-4. Jeśli push jest zlecony, wyślij commit na wskazaną gałąź bez wymuszania historii. Przy odrzuceniu sprawdź aktualny stan; nie wykonuj ślepych ponowień ani automatycznego rozwiązywania konfliktów. PR twórz tylko w zakresie zlecenia, z opisem końcowej zmiany i jej weryfikacji.
-5. Po pushu lub przy zleconej kontroli CI odczytaj istniejące uruchomienia dla dokładnego SHA. Użyj dostępnego narzędzia GitHub; jeśli nie obsługuje zdarzeń `push`, użyj `gh run list --commit <SHA>`. Konfiguracja jest w [.github/workflows](../../../.github/workflows/); sprawdzaj tylko workflow związany z zadaniem. Nie uruchamiaj ręcznie publikacji w celu uzyskania wyniku CI.
+## Commit, PR i zakończenie
 
-## Odwołania i granice
-
-[INSTRUCTIONS.md](../../../docs/INSTRUCTIONS.md) i [AGENTS.md](../../../AGENTS.md) zachowują nadrzędność. Jeśli zadanie obejmuje release lub signing, wczytaj wskazane tam dokumenty bezpieczeństwa i właściwej platformy przed działaniem. Zwykły commit lub push nie upoważnia do publikacji APK, aktualizacji Raspberry Pi, tagowania wydania ani wdrożenia. Nie zmieniaj konfiguracji workflow przy samym odczycie CI.
-
-## Zakończenie
-
-Raport opisuje wykonane operacje: dla commita podaj zakres i SHA, dla pushu wynik, dla kontroli CI status z odnośnikiem do danego SHA. Rozróżnij sukces, błąd, oczekiwanie oraz brak uruchomienia; brak workflow nie oznacza zielonego CI. Potwierdź końcowy status i zachowanie zastanych zmian.
+1. Dobierz weryfikację według [TESTING.md](../../../docs/TESTING.md) i skilla `ogarniacz-test-selector`. Przy zleconym commicie sprawdź pełny diff oraz `git diff --cached --check`. Dodaj tylko pliki zadania i zapisz SHA.
+2. Wykonuj push, utworzenie i scalenie PR w granicach zlecenia. Przy odrzuceniu pushu sprawdź przyczynę. Przed PR potwierdź jawną bazę, diff, testy i brak duplikatu. Przy scalaniu zachowaj strategię repozytorium.
+3. Sprawdź istniejące CI dla dokładnego SHA i zdarzenia. Raportuj sukces, błąd, oczekiwanie lub brak uruchomienia. Po scaleniu potwierdź kod w gałęzi docelowej. W przypadku squasha porównaj treść z PR i kolejnymi zmianami w bazie. Przed usunięciem zbędnej gałęzi zapisz SHA i sprawdź PR, CI, upstreamy, worktree oraz wykorzystanie w workflow. Zachowaj gałąź przy nierozstrzygniętych zmianach.
+4. Raportuj wynik pushu, PR i CI oraz końcowy stan katalogu. Operacje Git i kontrole CI nie upoważniają do publikacji, tagowania, aktualizacji `rpi-stable` ani wdrożenia.

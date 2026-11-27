@@ -10,7 +10,7 @@ import { utworzZadanie } from './ZadaniaService'
 import { nazwyTabelSynchronizowanych, oznaczSynchronizacjeOffline, odtworzOczekujacaSynchronizacje, pobierzStanSynchronizacji, SyncEngine } from './SyncEngine'
 import { BladSynchronizacjiHttp } from '../data/RepozytoriumZdalneHttp'
 import { utworzDiagnostykeSynchronizacji } from './DiagnostykaSynchronizacji'
-import { dodajDoKolejkiSynchronizacji, pobierzKolejkeSynchronizacji } from '../data/KolejkaSynchronizacji'
+import { dodajDoKolejkiSynchronizacji, odrzucZmianeZKwarantanny, oznaczKwarantanne, pobierzKolejkeSynchronizacji, zwolnijZKwarantanny } from '../data/KolejkaSynchronizacji'
 
 const CZAS_SYNCHRONIZACJI = '2026-09-01T12:00:00.000Z'
 
@@ -439,15 +439,50 @@ describe.sequential('SyncEngine', () => {
     expect(await zdalne.pobierzWszystkie()).toHaveLength(1)
   })
 
-  it('ponawia chwilowo nieudaną operację dostawcy', async () => {
+  it.each([
+    ['brak sieci', new BladSynchronizacjiHttp('brak_polaczenia', 'Serwer jest niedostępny.')],
+    ['timeout', new BladSynchronizacjiHttp('brak_polaczenia', 'Przekroczono czas połączenia.')],
+    ['błąd transportu bez statusu', new BladSynchronizacjiHttp('blad_synchronizacji', 'Nieznany błąd gniazda.')],
+    ['HTTP 503', new BladSynchronizacjiHttp('blad_synchronizacji', 'Serwer synchronizacji zwrócił 503.', { status: 503 })],
+  ])('ponawia przejściowy błąd dostawcy: %s', async (_opis, blad) => {
     const zdalne = new RepozytoriumZdalneInMemory()
     const pobierzZmiany = vi.spyOn(zdalne, 'pobierzZmiany')
-      .mockRejectedValueOnce(new Error('Chwilowy błąd'))
+      .mockRejectedValueOnce(blad)
       .mockResolvedValueOnce([])
 
     await utworzSilnik().synchronizuj(zdalne)
 
     expect(pobierzZmiany).toHaveBeenCalledTimes(2)
+  })
+
+  it.each([400, 403, 404, 413])('nie ponawia deterministycznej odpowiedzi HTTP %s', async (status) => {
+    const rekord = zadanie(`odrzucone-${status}`, 'Czeka', CZAS_SYNCHRONIZACJI)
+    await pobierzRepozytorium('zadania').zapisz(rekord)
+    const pobierzZmiany = vi.fn().mockResolvedValue([])
+    const wyslijZmiany = vi.fn().mockRejectedValue(new BladSynchronizacjiHttp('blad_synchronizacji', `Serwer synchronizacji zwrócił ${status}.`, { status }))
+
+    await expect(utworzSilnik().synchronizuj({ pobierzZmiany, wyslijZmiany })).rejects.toMatchObject({ status })
+
+    expect(wyslijZmiany).toHaveBeenCalledTimes(1)
+    expect(await pobierzKolejkeSynchronizacji()).toMatchObject([{ rekordId: rekord.id }])
+  })
+
+  it('nie ponawia odrzuconej zmiany i zapisuje w stanie wyłącznie tabelę oraz ID rekordu', async () => {
+    const rekord = zadanie('zadanie-z-kolejki', 'Prywatny tytuł', CZAS_SYNCHRONIZACJI)
+    await pobierzRepozytorium('zadania').zapisz(rekord)
+    const wyslijZmiany = vi.fn().mockRejectedValue(new BladSynchronizacjiHttp('zmiana_odrzucona', 'Serwer odrzucił zmianę.', { status: 400, tabela: 'widokiRejestru', rekordId: 'widok:zadania:domyslny' }))
+
+    await expect(utworzSilnik().synchronizuj({ pobierzZmiany: vi.fn().mockResolvedValue([]), wyslijZmiany })).rejects.toMatchObject({ rodzaj: 'zmiana_odrzucona' })
+
+    expect(wyslijZmiany).toHaveBeenCalledTimes(1)
+    const stan = await pobierzStanSynchronizacji()
+    expect(stan).toMatchObject({ stan: 'blad', kodOstatniegoBledu: 'zmiana_odrzucona', odrzuconaZmiana: { tabela: 'widokiRejestru', rekordId: 'widok:zadania:domyslny' }, liczbaOczekujacych: 1 })
+    expect(JSON.stringify(stan)).not.toContain('Prywatny tytuł')
+    expect(utworzDiagnostykeSynchronizacji({ czyAndroid: true, adresApi: 'https://rpi.example.ts.net', csrfDostepny: true, installationId: 'instalacja-test', stan }).ostatniBlad)
+      .toMatchObject({ kod: 'zmiana_odrzucona', tabela: 'widokiRejestru', rekordId: 'widok:zadania:domyslny' })
+
+    await utworzSilnik().synchronizuj({ pobierzZmiany: vi.fn().mockRejectedValue(new BladSynchronizacjiHttp('brak_polaczenia', 'Offline.')), wyslijZmiany: vi.fn() }).catch(() => undefined)
+    expect((await pobierzStanSynchronizacji()).odrzuconaZmiana).toBeUndefined()
   })
 
   it.each(['brak_sesji', 'sesja_wygasla', 'csrf'] as const)('nie ponawia %s bez poprawienia sesji i zachowuje kolejkę', async (rodzaj) => {
@@ -461,6 +496,53 @@ describe.sequential('SyncEngine', () => {
     expect(wyslijZmiany).not.toHaveBeenCalled()
     expect(await baza.tabela('zadania').get(rekord.id)).toEqual(zapisany)
     expect(await pobierzKolejkeSynchronizacji()).toMatchObject([{ rekordId: rekord.id, rekord: zapisany }])
+  })
+
+  it('zapisuje poprawne zmiany, a odrzuconą przenosi do kwarantanny bez ponownej wysyłki', async () => {
+    await pobierzRepozytorium('zadania').zapisz(zadanie('dobre', 'Dobre', CZAS_SYNCHRONIZACJI))
+    await pobierzRepozytorium('zadania').zapisz(zadanie('odrzucone', 'Odrzucone', CZAS_SYNCHRONIZACJI))
+    const kolejka = await pobierzKolejkeSynchronizacji()
+    const idOdrzuconej = kolejka.find((zmiana) => zmiana.rekordId === 'odrzucone')!.id
+    const wyslijZmiany = vi.fn().mockResolvedValueOnce({ odrzucone: [{ tabela: 'zadania', rekordId: 'odrzucone', zmianaId: idOdrzuconej, powod: 'niepoprawna_zmiana' }] })
+    const pobierzZmiany = vi.fn().mockResolvedValue([])
+
+    const wynik = await utworzSilnik().synchronizuj({ pobierzZmiany, wyslijZmiany })
+
+    expect(wynik).toMatchObject({ wyslane: 1, stan: 'oczekuje' })
+    expect(await pobierzKolejkeSynchronizacji()).toMatchObject([{ id: idOdrzuconej, rekordId: 'odrzucone', kwarantanna: { powod: 'niepoprawna_zmiana' } }])
+    expect(await pobierzStanSynchronizacji()).toMatchObject({ kodOstatniegoBledu: 'zmiana_odrzucona', odrzuconaZmiana: { tabela: 'zadania', rekordId: 'odrzucone' } })
+    expect(await baza.tabela('zadania').get('odrzucone')).toMatchObject({ tytul: 'Odrzucone' })
+
+    wyslijZmiany.mockClear()
+    await utworzSilnik().synchronizuj({ pobierzZmiany, wyslijZmiany })
+    expect(wyslijZmiany).not.toHaveBeenCalled()
+
+    await zwolnijZKwarantanny()
+    wyslijZmiany.mockResolvedValue({ odrzucone: [] })
+    await utworzSilnik().synchronizuj({ pobierzZmiany, wyslijZmiany })
+    expect(wyslijZmiany).toHaveBeenCalledWith([expect.objectContaining({ zmianaId: idOdrzuconej })], expect.any(String))
+    expect(await pobierzKolejkeSynchronizacji()).toEqual([])
+  })
+
+  it('nowa edycja rekordu z kwarantanny tworzy zwykłą zmianę, a odrzucenie usuwa tylko wpis kolejki', async () => {
+    await pobierzRepozytorium('zadania').zapisz(zadanie('kwarantanna', 'Wersja 1', CZAS_SYNCHRONIZACJI))
+    const [wpis] = await pobierzKolejkeSynchronizacji()
+    await oznaczKwarantanne([wpis.id], 'niepoprawna_zmiana', 'Odrzucono.')
+    await pobierzRepozytorium('zadania').zapisz({ ...(await baza.tabela('zadania').get('kwarantanna'))!, tytul: 'Wersja 2' })
+    const [poEdycji] = await pobierzKolejkeSynchronizacji()
+    expect(poEdycji.kwarantanna).toBeUndefined()
+
+    await oznaczKwarantanne([poEdycji.id], 'niepoprawna_zmiana', 'Odrzucono.')
+    await odrzucZmianeZKwarantanny(poEdycji.id)
+    expect(await pobierzKolejkeSynchronizacji()).toEqual([])
+    expect(await baza.tabela('zadania').get('kwarantanna')).toMatchObject({ tytul: 'Wersja 2' })
+  })
+
+  it('nie usuwa żadnej wysłanej zmiany, gdy serwer odrzucił zmianę, której nie da się dopasować', async () => {
+    await pobierzRepozytorium('zadania').zapisz(zadanie('a', 'A', CZAS_SYNCHRONIZACJI))
+    const wyslijZmiany = vi.fn().mockResolvedValue({ odrzucone: [{ powod: 'niepoprawna_zmiana' }] })
+    await utworzSilnik().synchronizuj({ pobierzZmiany: vi.fn().mockResolvedValue([]), wyslijZmiany })
+    expect(await pobierzKolejkeSynchronizacji()).toMatchObject([{ rekordId: 'a' }])
   })
 
   it('przenosi aktualny rekord z urządzenia A na urządzenie B', async () => {

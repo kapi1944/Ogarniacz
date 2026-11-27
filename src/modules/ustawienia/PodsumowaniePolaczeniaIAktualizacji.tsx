@@ -1,7 +1,7 @@
 import { useRef, useState, useSyncExternalStore } from 'react'
 import { Karta, Znacznik } from '../../components/Interfejs'
 import { nasluchujKontroliAktualizacji, pobierzStanKontroliAktualizacji, type StanKontroliAktualizacji } from '../../services/KontrolaAktualizacjiAplikacji'
-import { utworzTekstRaportuDiagnostycznego, type DaneDiagnostykiSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
+import { opisOdrzuconejZmiany, utworzTekstRaportuDiagnostycznego, type DaneDiagnostykiSynchronizacji } from '../../services/DiagnostykaSynchronizacji'
 
 export interface PodsumowaniePolaczeniaIAktualizacjiProps {
   synchronizacjaSkonfigurowana: boolean
@@ -27,7 +27,7 @@ export function ustalPodsumowaniePolaczeniaIAktualizacji(
     return { tytul: 'Zmiany czekają na synchronizację', opis: `Oczekujące rekordy: ${diagnostyka.liczbaOczekujacych}. Sprawdź stan i ostatni błąd poniżej.`, wariant: 'informacja' as const }
   }
   if (diagnostyka?.stanSynchronizacji === 'blad') {
-    return { tytul: 'Nie udało się zsynchronizować danych', opis: diagnostyka.ostatniBlad?.komunikat ?? 'Ponów synchronizację i sprawdź szczegóły poniżej.', wariant: 'blad' as const }
+    return { tytul: 'Nie udało się zsynchronizować danych', opis: diagnostyka.ostatniBlad ? [diagnostyka.ostatniBlad.komunikat, opisOdrzuconejZmiany(diagnostyka.ostatniBlad) && `Dotyczy: ${opisOdrzuconejZmiany(diagnostyka.ostatniBlad)}.`].filter(Boolean).join(' ') : 'Ponów synchronizację i sprawdź szczegóły poniżej.', wariant: 'blad' as const }
   }
   if (synchronizacjaSkonfigurowana && diagnostyka && !diagnostyka.ostatniPull) {
     return { tytul: 'Nie potwierdzono synchronizacji', opis: 'Brak zapisanego udanego pobrania danych. Sprawdź ostatnią próbę lub wybierz „Synchronizuj teraz”.', wariant: 'informacja' as const }

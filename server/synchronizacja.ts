@@ -2,18 +2,39 @@ import type { IncomingMessage } from 'node:http'
 import type { DatabaseSync } from 'node:sqlite'
 import { czyTabelaFinansowa, TABELE_FINANSOW_WSPOLNYCH, walidujObrazFinansowy, sprawdzKontynuacjeHistorii } from './wspolne/SynchronizacjaFinansow.ts'
 import { kanonicznyZapis } from './wspolne/ZapisFinansowy.ts'
+import { czyTabelaObslugiwanaPrzezSerwer } from './wspolne/tabeleSynchronizacji.ts'
+import { TABELE_FZ } from './wspolne/modelePulZobowiazan.ts'
 
 const MAKSYMALNY_ROZMIAR_PACZKI = 25 * 1024 * 1024
 const POCZATEK_SYNCHRONIZACJI = '1970-01-01T00:00:00.000Z'
-const TABELE_SYNCHRONIZOWANE = new Set([
-  'zadania', 'projekty', 'skrzynka', 'blokiCzasu', 'grafikPracy', 'wyjatkiGrafiku', 'urlopy',
-  'nawyki', 'dziennikNawykow', 'leki', 'dziennikLekow', 'wizyty', 'przypomnienia', 'listyZakupow',
-  'pozycjeZakupow', 'rachunki', 'platnosciRachunkow', 'notatki', 'pomysly', 'naPozniej', 'cele',
-  'kontakty', 'dokumenty', 'wydatki', 'budzety', 'kontaFinansowe', 'miejsca', 'pojazdy', 'terminyWaznosci', 'uprawnienia',
-  'edytorzy', 'ustawienia', 'skierowania', 'recepty', 'terapie', 'wpisyTerapii',
-  'platnosciStale', 'planyRat', 'raty',
-  ...TABELE_FINANSOW_WSPOLNYCH,
-])
+
+export type PowodOdrzuceniaZmiany = 'nieobslugiwana_tabela' | 'niepoprawna_zmiana' | 'niepoprawna_klasyfikacja'
+
+const KOMUNIKATY_ODRZUCENIA: Record<PowodOdrzuceniaZmiany, string> = {
+  nieobslugiwana_tabela: 'Nieobsługiwana tabela synchronizacji.',
+  niepoprawna_zmiana: 'Niepoprawna zmiana synchronizacji.',
+  niepoprawna_klasyfikacja: 'Niepoprawna klasyfikacja dokumentu.',
+}
+
+/** Bezpieczny identyfikator do logu i odpowiedzi: bez treści rekordu, ograniczony zestaw znaków. */
+function bezpiecznyIdentyfikator(wartosc: unknown): string | undefined {
+  if (typeof wartosc !== 'string' || wartosc.length === 0) return undefined
+  return wartosc.slice(0, 120).replace(/[^\p{L}\p{N}_:.-]/gu, '_')
+}
+
+/** Odrzucenie pojedynczej zmiany; niesie wyłącznie tabelę, ID rekordu i kontrolowany powód. */
+export class BladZmianySynchronizacji extends Error {
+  readonly powod: PowodOdrzuceniaZmiany
+  readonly tabela?: string
+  readonly rekordId?: string
+  constructor(powod: PowodOdrzuceniaZmiany, tabela?: unknown, rekordId?: unknown) {
+    super(KOMUNIKATY_ODRZUCENIA[powod])
+    this.name = 'BladZmianySynchronizacji'
+    this.powod = powod
+    this.tabela = bezpiecznyIdentyfikator(tabela)
+    this.rekordId = bezpiecznyIdentyfikator(rekordId)
+  }
+}
 
 interface RekordSynchronizacji {
   id: string
@@ -31,10 +52,30 @@ interface ZmianaSynchronizacjiApi {
   installationId: string
 }
 
+export interface OdrzuconaZmiana {
+  tabela?: string
+  rekordId?: string
+  zmianaId?: string
+  powod: PowodOdrzuceniaZmiany
+}
+
 interface PaczkaSynchronizacji {
   od: string
   installationId: string
   zmiany: ZmianaSynchronizacjiApi[]
+  /** Klient deklaruje obsługę listy `odrzucone`; bez tego paczka z błędną zmianą jest odrzucana w całości (starsze klienty). */
+  obslugujeOdrzucone?: boolean
+  /** Tylko w trybie częściowym: zmiany odrzucone przy walidacji, pominięte przed zapisem. */
+  odrzucone?: OdrzuconaZmiana[]
+}
+
+/** Finanse wspólne i FZ pozostają „wszystko albo nic”: ich błąd zawsze odrzuca całą paczkę. */
+function czyTabelaNiepodzielna(tabela: unknown): boolean {
+  return typeof tabela === 'string' && (czyTabelaFinansowa(tabela) || (TABELE_FZ as readonly string[]).includes(tabela))
+}
+
+function bezpieczneZmianaId(wartosc: unknown): string | undefined {
+  return typeof wartosc === 'string' && /^[\w:.-]{8,200}$/.test(wartosc) ? wartosc : undefined
 }
 
 function poprawnyIso(wartosc: unknown): wartosc is string {
@@ -59,17 +100,39 @@ export async function odczytajPaczkeSynchronizacji(zadanie: IncomingMessage): Pr
   if (!poprawnyIso(dane.od) || typeof dane.installationId !== 'string' || !Array.isArray(dane.zmiany)) {
     throw new Error('Niepoprawna paczka synchronizacji.')
   }
-  for (const zmiana of dane.zmiany) walidujZmiane(zmiana, dane.installationId)
-  return dane as PaczkaSynchronizacji
+  if (dane.obslugujeOdrzucone !== true) {
+    for (const zmiana of dane.zmiany) walidujZmiane(zmiana, dane.installationId)
+    return dane as PaczkaSynchronizacji
+  }
+  const poprawne: ZmianaSynchronizacjiApi[] = []
+  const odrzucone: OdrzuconaZmiana[] = []
+  for (const zmiana of dane.zmiany as unknown[]) {
+    try {
+      walidujZmiane(zmiana, dane.installationId)
+      poprawne.push(zmiana)
+    } catch (blad) {
+      const kandydat = zmiana && typeof zmiana === 'object' ? zmiana as Partial<ZmianaSynchronizacjiApi> : {}
+      if (!(blad instanceof BladZmianySynchronizacji) || czyTabelaNiepodzielna(kandydat.tabela)) throw blad
+      const zmianaId = bezpieczneZmianaId(kandydat.zmianaId)
+      odrzucone.push({
+        ...(blad.tabela ? { tabela: blad.tabela } : {}),
+        ...(blad.rekordId ? { rekordId: blad.rekordId } : {}),
+        ...(zmianaId ? { zmianaId } : {}),
+        powod: blad.powod,
+      })
+    }
+  }
+  return { od: dane.od, installationId: dane.installationId, zmiany: poprawne, odrzucone }
 }
 
 function walidujZmiane(zmiana: unknown, installationId: string): asserts zmiana is ZmianaSynchronizacjiApi {
-  if (!zmiana || typeof zmiana !== 'object') throw new Error('Niepoprawna zmiana synchronizacji.')
+  if (!zmiana || typeof zmiana !== 'object') throw new BladZmianySynchronizacji('niepoprawna_zmiana')
   const kandydat = zmiana as Partial<ZmianaSynchronizacjiApi>
   const rekord = kandydat.rekord
+  const rekordId = rekord && typeof rekord === 'object' ? rekord.id : undefined
+  if (!czyTabelaObslugiwanaPrzezSerwer(kandydat.tabela)) throw new BladZmianySynchronizacji('nieobslugiwana_tabela', kandydat.tabela, rekordId)
   if (
-    !TABELE_SYNCHRONIZOWANE.has(kandydat.tabela ?? '')
-    || kandydat.installationId !== installationId
+    kandydat.installationId !== installationId
     || (kandydat.zmianaId !== undefined && (typeof kandydat.zmianaId !== 'string' || kandydat.zmianaId.length < 8 || kandydat.zmianaId.length > 200))
     || (kandydat.bazowyUpdatedAt !== undefined && !poprawnyIso(kandydat.bazowyUpdatedAt))
     || !rekord
@@ -77,9 +140,9 @@ function walidujZmiane(zmiana: unknown, installationId: string): asserts zmiana 
     || !poprawnyIso(rekord.createdAt)
     || !poprawnyIso(rekord.updatedAt)
     || (rekord.usunietoAt !== undefined && !poprawnyIso(rekord.usunietoAt))
-  ) throw new Error('Niepoprawna zmiana synchronizacji.')
+  ) throw new BladZmianySynchronizacji('niepoprawna_zmiana', kandydat.tabela, rekordId)
   if (kandydat.tabela === 'dokumenty' && rekord.sekcjePrywatnosci !== undefined
-    && (!Array.isArray(rekord.sekcjePrywatnosci) || rekord.sekcjePrywatnosci.some((sekcja) => !['dokumentacja', 'psychoterapia'].includes(sekcja)))) throw new Error('Niepoprawna klasyfikacja dokumentu.')
+    && (!Array.isArray(rekord.sekcjePrywatnosci) || rekord.sekcjePrywatnosci.some((sekcja) => !['dokumentacja', 'psychoterapia'].includes(sekcja)))) throw new BladZmianySynchronizacji('niepoprawna_klasyfikacja', kandydat.tabela, rekordId)
 }
 
 export function zapewnijProfilSynchronizacji(baza: DatabaseSync, userId: string, installationId: string): void {

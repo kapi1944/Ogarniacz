@@ -39,7 +39,20 @@ export interface RepozytoriumZdalne {
   pobierzObslugiwaneTabeleFinansowe?(): readonly string[]
   pobierzZmiany(od: string): Promise<ZmianaSynchronizacji[]>
   pobierzKursor?(): string | undefined
-  wyslijZmiany(zmiany: ZmianaSynchronizacji[], od?: string): Promise<void>
+  /** Może zwrócić zmiany odrzucone przez serwer; pozostałe wysłane zmiany zostały zapisane. */
+  wyslijZmiany(zmiany: ZmianaSynchronizacji[], od?: string): Promise<void | WynikWysylaniaZmian>
+}
+
+/** Odrzucenie pojedynczej zmiany przez serwer — wyłącznie identyfikatory i kontrolowany powód. */
+export interface OdrzuconaZmianaSynchronizacji {
+  tabela?: string
+  rekordId?: string
+  zmianaId?: string
+  powod: string
+}
+
+export interface WynikWysylaniaZmian {
+  odrzucone?: OdrzuconaZmianaSynchronizacji[]
 }
 
 export interface DostawcaSynchronizacji {
